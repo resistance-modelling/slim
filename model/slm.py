@@ -90,11 +90,10 @@ def chooseFish(df):
     if [len(cg),len(fm)] != [1,1]:
         return print('Error - grouping malfunctioned, farms & cages', fm, cg)
     else:
-        a = [None]*len(df.index)
-        for i in range(len(df.index)+1):
-            if df.stage[i] > 2:###########################################
-                a[i] = np.random.choice(range(1,fish0[*fm-1][*cg-1]+1))#######
-        return a 
+        fishbcage = all_fish[(all_fish.Farm==fm) & (all_fish.Cage==cg),'Fish']
+        dfout = df.copy()
+        dfout.loc[df.stage>2,'Fish'] = np.random.choice(fishbcage)
+        return dfout.Fish
 
 #----------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------
@@ -102,8 +101,8 @@ def chooseFish(df):
 
 #Input Data------------------------------------------------------------------------------------
 oban_avetemp = np.array([8.2,7.5,7.4,8.2,9.6,11.3,13.1,13.7,13.6,12.8,11.7,9.8]) #www.seatemperature.org
-ncages = 2
-fish0 = np.array([[3,3]])
+ncages = 2 ##############
+fish0 = np.array([[3,4]])
 mort_rates = np.array([0.17, 0.22, 0.008, 0.05, 0.02, 0.06]) # L1,L2,L3,L4,L5f,L5m
 fb_mort = 0.00057
 lice_coef = -2.4334
@@ -114,18 +113,26 @@ tau = 1 ###############################################
 t = 0        #Day 0
 cur_date = start_date
 licepfish0 = 8
+licepcage = 24
 cur_fish = fish0.copy() 
+lice_tot = ncages*licepcage
 
-lice_tot = np.sum(licepfish0*fish0)
+#Initial Fish population
+all_fish = pd.DataFrame(columns=['Farm','Cage','Fish'])
+all_fish['Farm'] = np.repeat(1,ncages) ##########################
+all_fish['Cage'] = range(1,ncages+1) #######################
+all_fish['Fish'] = [range(1,fish0[all_fish.Farm[i]-1][all_fish.Cage[i]-1]+1)\
+                    for i in all_fish.index]
+    
 #Initial lice population
 lice = pd.DataFrame(columns=['Farm','Cage','Fish','MF','stage','stage_age','avail','resistanceT1'])
 lice['Farm'] = np.repeat(1,lice_tot)
-lice['Cage'] = np.array([np.repeat(i,licepfish0*fish0[j-1][i-1]) 
-                          for i in range(1,ncages+1) for j in lice.Farm.unique()]).flatten()
-lice['Fish'] = np.array(lice.groupby(['Farm','Cage']).apply(chooseFish)).flatten()                     
-lice['MF'] = np.random.choice(['F','M'],lice_tot)
+lice['Cage'] = np.array([np.repeat(i,licepcage) for i in range(1,ncages+1)]).flatten()
 #Based on median development time at 10 degrees from Aldrin et al 2017
 lice['stage'] = np.random.choice([1,2],lice_tot,p=[0.55,0.45]) 
+
+lice['Fish'] = np.array(lice.groupby(['Farm','Cage']).apply(chooseFish)).flatten()                     
+lice['MF'] = np.random.choice(['F','M'],lice_tot)
 
 p=stats.poisson.pmf(range(15),3)
 p = p/sum(p) #probs need to add up to one 
