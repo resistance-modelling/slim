@@ -116,10 +116,12 @@ cur_fish = fish0.copy()
 lice_tot = ncages*licepcage
 
 #Initial Fish population
+
+#####list in dataframe is a bad idea, try a different data type and update all corresponding entries!!!!!!!!!!!
 all_fish = pd.DataFrame(columns=['Farm','Cage','Fish'])
 all_fish['Farm'] = np.repeat(1,ncages) ##########################
 all_fish['Cage'] = range(1,ncages+1) #######################
-all_fish['Fish'] = [range(1,fish0[all_fish.Farm[i]-1][all_fish.Cage[i]-1]+1)\
+all_fish['Fish'] = [np.arange(1,fish0[all_fish.Farm[i]-1][all_fish.Cage[i]-1]+1)\
                     for i in all_fish.index]
     
 #Initial lice population
@@ -176,7 +178,8 @@ for farm in range(1, nfarms+1):
         inds_stage = [sum(cur_cage['stage']==i) for i in range(1,7)]
         Emort = np.multiply(mort_rates, inds_stage)
         mort_ents = np.random.poisson(Emort)
-        mort_inds = cur_cage.groupby('stage').apply(chooseDinds,nents_list=mort_ents) 
+        mort_inds = cur_cage.groupby('stage').apply(chooseDinds,nents_list=mort_ents)
+        mort_inds = [val for sublist in mort_inds for val in sublist]
                      
         #Development events----------------------------------------------------------------------------
         temp_now = oban_avetemp[cur_date.month-1] #change when farm location is available
@@ -209,13 +212,18 @@ for farm in range(1, nfarms+1):
          
         #Fish growth and death-------------------------------------------------------------------------
         wt = 10000/(1+exp(-0.01*(t.days-475)))
-        fish_fc = cur_cage.Fish.unique()
+        fish_fc = cur_cage.Fish.unique() #fish with lice
         adlicepg = np.array([(sum(cur_cage.loc[cur_cage['Fish']==i].stage>3))/wt 
                    for i in fish_fc])
         Plideath = 1/(1+np.exp(-19*(adlicepg-0.63)))
-        Efish_death = (fb_mort - np.log(1-Plideath))*tau*cur_fish[farm-1][cage-1]
-        fd_ents = np.random.poisson(Efish_death)
-        fd_inds = np.random.choice(fish_fc, fd_ents, p=Plideath/sum(Plideath), replace=False)
+        Ebf_death = fb_mort*tau*cur_fish[farm-1][cage-1]
+        Elf_death = -np.log(1-Plideath)*tau*len(fish_fc)   
+        bfd_ents = np.random.poisson(Ebf_death)
+        lfd_ents = np.random.poisson(Elf_death)
+        fd_inds = np.random.choice(fish_fc, lfd_ents, p=Plideath/sum(Plideath), replace=False)
+        fd_inds = np.append(fd_inds, np.random.choice(all_fish.loc[(all_fish.Farm==farm) & \
+                                                         (all_fish.Cage==cage), 'Fish'], \
+                                            bfd_ents, replace=False))
         
         #Infection events------------------------------------------------------------------------------
         eta_aldrin = -2.576 + log(cur_fish[farm-1][cage-1]) + 0.082*(log(wt)-0.55)
@@ -258,9 +266,7 @@ for farm in range(1, nfarms+1):
                            + 0.5*np.log(cur_cage.mate_resistanceT1[cur_cage.index==i]) + \
                            ranTruncNorm(mean=0, sd=2, low=-100000000, upp=0, length=1)/sqrt(2)
                 offs.loc[offs.index[k], 'resistanceT1'] = np.exp(underlying)
-                k = k + 1
-        
-                
+                k = k + 1                
         
         
         #Update cage info------------------------------------------------------------------------------
@@ -284,7 +290,11 @@ for farm in range(1, nfarms+1):
         lice.loc[(lice['Farm']==farm) & (lice['Cage']==cage)] = cur_cage
         
         #remove dead individuals
-        lice.drop(mort_inds)
-        lice.drop(lice.Fish.isin(fd_inds))
-        all_fish.drop((all_fish.Farm==farm) & (all_fish.Cage==cage) & all_fish.Fish.isin(fd_inds))
+        lice = lice.drop(mort_inds)
+        lice = lice.drop(lice.loc[lice.Fish.isin(fd_inds)].index)
+        fish = [i for j in all_fish.loc[(all_fish.Farm==farm) & (all_fish.Cage==cage),'Fish'] for i in j]
+        if len(fd_inds)>0:######################################################################################################
+            all_fish.loc[(all_fish.Farm==farm) & (all_fish.Cage==cage),'Fish'] = fish.remove(*fd_inds)###########################
+        cur_fish[farm-1,cage-1] = len(all_fish.loc[(all_fish.Farm==farm) & \
+                                                  (all_fish.Cage==cage), 'Fish'])
         
