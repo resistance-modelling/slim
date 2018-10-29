@@ -8,8 +8,7 @@
 ##stage, stage-age, resistanceT1, resitanceT2,...
 #Initialise by setting initial lice population for each cage and sample 
 ##resistance values from distribution for natural occurance of resistance 
-##***[INSERT APPROPRIATE DISTRIBUTION]*** and male/female=1.22 (cox et al 2017) maybe 1 
-##as females live longer
+##***[INSERT APPROPRIATE DISTRIBUTION]*** and male/female=1.22 (cox et al 2017) 
 
 
 #For each cage-subset simultaneously:
@@ -23,9 +22,8 @@
 ### 6-11 broods of 500 ova on average (see Costello 2006) extrude a pair every 3 days 
 ### Or constant production of 70 nauplii/day for 20 days post-mating
 #Update fish growth and death (remove all lice entries associated w dead fish) 
-#Migrate lice in L1/2 to other cages/farms within range 11-45km mean 27km Siegal et al 2003
-##biased random walk with different with constant speed and different prob for direction dep on 
-##prevalent wind direction, current and location of farms
+#Indicate farm that will be reached using probability matrix from Salama et al 2013 and sample
+##cage randomly
 
 #Update all values, add seasonal inputs e.g. treatment, wildlife reservoir (input from  
 ##reservoir can be changed to model use of skirt/closed cage) and run all cages again
@@ -140,9 +138,11 @@ while cur_date <= end_date:
         lice.loc[(lice.MF=='F') & (lice.avail>12), 'avail'] = 0
         lice.loc[(lice.MF=='F') & (lice.avail>12), 'mate_resistanceT1'] = None
          
-    offspring.stage_age = offspring.stage_age + tau
-    offspring.date = cur_date
+    offspring['stage_age'] = offspring['stage_age'] + tau
+    offspring['date'] = cur_date
     #Biased random walk of offspring-----------------------------------------------------------
+    ## get rid of proportion at the moment
+    
     ###########################################
     
     #------------------------------------------------------------------------------------------
@@ -322,7 +322,7 @@ while cur_date <= end_date:
             chalimi['avail'] = 0
             chalimi['MF'] = plankt_cage.loc[plankt_cage.stage==3, 'MF'].values
             chalimi['resistanceT1'] = plankt_cage.loc[plankt_cage.stage==3, 'resistanceT1'].values
-            chalimi.date = cur_date
+            chalimi['date'] = cur_date
                       
             file_path = 'M:/slm/model/cage'+str(cage)+'.txt'
             cur_cage.to_csv(file_path, sep='\t', mode='a')
