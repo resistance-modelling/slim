@@ -54,9 +54,8 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import datetime as dt
-from math import exp, log, sqrt
-import geopandas as gpd
-from shapely.geometry import Point, Polygon
+from math import exp, log, sqrt, ceil
+import time
 
 np.random.seed(545836870)
 
@@ -81,6 +80,9 @@ def aveDevDays(del_p, del_m10, del_s, temp_c):
     -0.001*sum([devTimeAldrin(del_p, del_m10, del_s, temp_c, i) 
     for i in np.arange(0,100.001,0.001)])
     
+def eudist(pointA,pointB):
+    return sqrt((pointA[0]-pointB[0])**2 + (pointA[1]-pointB[1])**2)
+    
 #----------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------
 
@@ -91,13 +93,16 @@ ncages = np.array([20,24,12,8,10,14,14,9,9,10])
 oban_avetemp = np.array([8.2,7.5,7.4,8.2,9.6,11.3,13.1,13.7,13.6,12.8,11.7,9.8]) #www.seatemperature.org
 fw_avetemp = np.array([8,7.4,7.1,8,9.3,11.1,12.9,13.5,13.3,12.5,11.3,9.6])
 #portree_avetemp = np.array([8.2,7.6,7.4,8,9.4,10.9,12.7,13.3,13,12.3,11.2,9.6])
-fID = ['f'+str(i) for i in range(1,nfarms+1)]
 xy_array = np.array([[206100,770600],[201300,764700],[207900,759500],[185200,752500],
                      [192500,749700],[186500,745300],[193400,741700],[184700,740000],
                      [186700,734100],[183500,730700]]) #Loch Linnhe
 #xy_array = np.array([[190300,665300],[192500,668200],[191800,669500],[186500,674500],
 #    [190400,676800],[186300,679600],[190800,681000],[195300,692200],[199800,698000]])
-farms_xy = dict(zip(fID,xy_array)) 
+farm_dist = np.array([eudist(i,j) for i in xy_array for j in xy_array]).reshape(nfarms,nfarms)
+hrs_travel = farm_dist/(0.05*60*60)
+prob_arrive = pd.read_csv('M:/slm/data/Linnhenetwork.csv',header=None)
+prop_arrive = np.array([prob_arrive[i][j]/exp(-0.01*hrs_travel[i][j]) for i in range(nfarms) 
+                                             for j in range(nfarms)]).reshape(nfarms,nfarms)
 
 fishf = [500000,500000,500000,900000,600000,600000,600000,600000,600000,600000]
 mort_rates = np.array([0.17, 0.22, 0.008, 0.05, 0.02, 0.06]) # L1,L2,L3,L4,L5f,L5m
@@ -105,10 +110,10 @@ fb_mort = 0.00057
 lice_coef = -2.4334
 eggspday = [50,50,40,40,50,60,80,80,80,80,70,50]
 d_hatching = [9,10,11,9,8,6,4,4,4,4,5,7]            
-ext_pressure = 1 #planktonic lice per day per cage/farm arriving from wildlife -> seasonal?
+ext_pressure = 10 #planktonic lice per day per cage/farm arriving from wildlife -> seasonal?
 
 start_date = dt.datetime(2016, 3, 1)
-end_date = dt.datetime(2016, 3, 8) #dt.datetime(2017, 9, 1)
+end_date = dt.datetime(2016, 3, 16) #dt.datetime(2017, 9, 1)
 tau = 1 ###############################################
 
 #Initial Values--------------------------------------------------------------------------------
@@ -123,7 +128,8 @@ lice = pd.DataFrame(columns=['Farm','Cage','Fish','MF','stage','stage_age','avai
                              'mate_resistanceT1','resistanceT1','date'])
 
 #Freefloating plantonic lice reservoir
-offspring = pd.DataFrame(columns=['lat','lon','MF','stage','stage_age','resistanceT1','date'])
+offspring = pd.DataFrame(columns=['Farm','Cage','MF','stage','stage_age','resistanceT1',\
+                                  'arrival','date'])
 
 
 #----------------------------------------------------------------------------------------------
@@ -131,9 +137,12 @@ offspring = pd.DataFrame(columns=['lat','lon','MF','stage','stage_age','resistan
 #--------------------------Simulation----------------------------------------------------------
 #----------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------
-
+tstmp = time.time()
+file=open('M:/slm/model/timings.txt','a+')
 while cur_date <= end_date: 
     
+    file.write(str(time.time() - tstmp) + ' 143 new day \n')
+    tstmp = time.time()
     cur_date = cur_date + dt.timedelta(days=tau)
     if not lice.empty:
         lice.date = cur_date
@@ -143,79 +152,67 @@ while cur_date <= end_date:
         lice.loc[(lice.MF=='F') & (lice.avail>d_hatching[cur_date.month-1]), 'avail'] = 0
         lice.loc[(lice.MF=='F') & (lice.avail>d_hatching[cur_date.month-1]), 'mate_resistanceT1'] = None
          
+   
     offspring['stage_age'] = offspring['stage_age'] + tau
     offspring['date'] = cur_date
-    #Biased random walk of offspring-----------------------------------------------------------
-    ## get rid of proportion at the moment
-    
-    ###########################################
+    nu_cppds = offspring.loc[offspring.stage_age>=offspring.arrival, offspring.columns!='arrival'].copy()
+    nu_cppds['avail'] = 0
+        
+    if not nu_cppds.empty:
+        lice = lice.append(nu_cppds, ignore_index=True, sort=False)
+        offspring = offspring.drop(nu_cppds.index)
     
     #------------------------------------------------------------------------------------------
     #Events during tau in cage-----------------------------------------------------------------
     #------------------------------------------------------------------------------------------
+    tstmp1 = time.time()
     for farm in range(1, nfarms+1):
         for cage in range(1, ncages[farm-1]+1): 
-            cur_cage = lice.loc[(lice['Farm']==farm) & (lice['Cage']==cage)].copy()
-                        
+            
+            file.write(str(time.time()-tstmp1) + ' 169 new cage \n')
+            tstmp1 = time.time()            
             #new planktonic stages arriving from wildlife reservoir
             nplankt = ext_pressure*tau
             plankt_cage = pd.DataFrame(columns=offspring.columns)
             plankt_cage['MF'] = np.random.choice(['F','M'],nplankt)
-            #Based on median development time at 10 degrees from Aldrin et al 2017
-            plankt_cage['stage'] = np.random.choice([1,2],nplankt,p=[0.55,0.45]) 
-            plankt_cage['lat'] = farms_xy['f'+str(farm)][0]
-            plankt_cage['lon'] = farms_xy['f'+str(farm)][1]
+            plankt_cage['stage'] = 2 
+            plankt_cage['Farm'] = farm
+            plankt_cage['Cage'] = cage
             p=stats.poisson.pmf(range(15),3)
             p = p/sum(p) #probs need to add up to one 
             plankt_cage['stage_age'] = np.random.choice(range(15),nplankt,p=p)
-            rands = ranTruncNorm(mean=-6, sd=2, low=-100000000, upp=0, length=nplankt)
+            plankt_cage['avail'] = 0
+            rands = ranTruncNorm(mean=-6, sd=2, low=-100000000, upp=0, length=nplankt) ########################################
             plankt_cage['resistanceT1'] = np.exp(rands)
             plankt_cage['date'] = cur_date
             
-            #planktonic stages arriving from other cages (or still around)
-            cage_shp = Point(farms_xy['f'+str(farm)]).buffer(0.0005)
+            lice = lice.append(plankt_cage, ignore_index=True, sort=False)
             
-            if offspring.lat.size>0:
-                plankt_pts = [Point([offspring.lat[i],offspring.lon[i]]) for i in offspring.index]
-                bool_pts = [cage_shp.contains(plankt_pts[i]) for i in range(len(plankt_pts))]
-                other_cages = offspring[bool_pts].copy()
-                plankt_cage = plankt_cage.append(other_cages, ignore_index=True)
-                offspring = offspring.drop(offspring[bool_pts].index)
+            cur_cage = lice.loc[(lice['Farm']==farm) & (lice['Cage']==cage)].copy()
             
+            file.write(str(time.time()-tstmp1) + ' 189 \n')
+            tstmp2 = time.time() ##
             #Background mortality events-------------------------------------------------------
-            inds_stage = [sum(plankt_cage['stage']==i) for i in range(1,3)]
-            inds_stage.extend([sum(cur_cage['stage']==i) for i in range(3,7)])
+            inds_stage = np.array([sum(cur_cage['stage']==i) for i in range(1,7)])
             Emort = np.multiply(mort_rates, inds_stage)
             mort_ents = np.random.poisson(Emort)
             mort_ents=[min(mort_ents[i],inds_stage[i]) for i in range(len(mort_ents))]
-            planktm_inds = []
-            for i in range(1,3):
-                df = plankt_cage.loc[plankt_cage.stage==i].copy()
-                if not df.empty:
-                    p = df.stage_age/np.sum(df.stage_age)
-                    p=pd.to_numeric(p)
-                    values = np.random.choice(df.index, mort_ents[i-1], p=p, replace=False).tolist()
-                    planktm_inds.extend(values)
             mort_inds = []
-            for i in range(3,7):
+            for i in range(1,7):
                 df = cur_cage.loc[cur_cage.stage==i].copy()
                 if not df.empty:
-                    p = df.stage_age/np.sum(df.stage_age)
-                    p=pd.to_numeric(p)
-                    values = np.random.choice(df.index, mort_ents[i-1], p=p, replace=False).tolist()
+                    if np.sum(df.stage_age)>0:
+                        p = df.stage_age/np.sum(df.stage_age)
+                        p = pd.to_numeric(p)
+                        values = np.random.choice(df.index, mort_ents[i-1], p=p, replace=False).tolist()
+                    else:
+                        values = np.random.choice(df.index, mort_ents[i-1], replace=False).tolist()                    
                     mort_inds.extend(values)
                          
+            file.write(str(time.time()-tstmp2) + ' 207 \n')
+            tstmp3 = time.time()
             #Development events----------------------------------------------------------------
             temp_now = oban_avetemp[cur_date.month-1] #change when farm location is available
-            if inds_stage[0]>0:
-                L1toL2 = [devTimeAldrin(0.401,3.948,18.869,temp_now, i) 
-                         for i in plankt_cage.loc[plankt_cage['stage']==1].stage_age]
-                L1toL2_ents = np.random.poisson(sum(L1toL2))
-                L1toL2_ents = min(L1toL2_ents, inds_stage[0])
-                L1toL2_inds = np.random.choice(plankt_cage.loc[plankt_cage['stage']==1].index, \
-                                               L1toL2_ents, p=L1toL2/sum(L1toL2), replace=False)
-            else:
-                L1toL2_inds = []
                 
             if inds_stage[2]>0:
                 L3toL4 = [devTimeAldrin(1.305,18.934,7.945,temp_now,i) 
@@ -236,7 +233,8 @@ while cur_date <= end_date:
                                                L4toL5_ents, p=L4toL5/sum(L4toL5), replace=False)
             else:
                 L4toL5_inds = []
-             
+            
+            
             #Fish growth and death-------------------------------------------------------------
             t = cur_date - start_date
             wt = 10000/(1+exp(-0.01*(t.days-475)))
@@ -248,25 +246,32 @@ while cur_date <= end_date:
             Ebf_death = fb_mort*tau*(nfish)
             Elf_death = np.sum(Plideath)*tau
             bfd_ents = np.random.poisson(Ebf_death)
-            lfd_ents = np.random.poisson(Elf_death)           
+            lfd_ents = np.random.poisson(Elf_death) 
+            
+            tstmp4 = time.time()
+            file.write(str(tstmp4-tstmp3) + ' 231 \n')
             if fish_fc.size>0:
                 dead_fish['f'+str(farm)+'c'+str(cage)].extend(np.random.choice(fish_fc, 
                           lfd_ents, p=Plideath/sum(Plideath), replace=False).tolist())
-            fsh = [i for i in range(1,fishf[farm]) if i not in dead_fish['f'+str(farm)+'c'+str(cage)]]
+            fsh = [i for i in range(1,fishf[farm-1]+1) if i not in dead_fish['f'+str(farm)+'c'+str(cage)]]
             dead_fish['f'+str(farm)+'c'+str(cage)].extend(np.random.choice(fsh, bfd_ents, replace=False).tolist())
             
+            tstmp5 = time.time()
+            file.write(str(tstmp5-tstmp4) + ' 250 \n')
             #Infection events------------------------------------------------------------------
-            if sum(plankt_cage['stage']==2)>0:
+            if sum(cur_cage['stage']==2)>0:
                 eta_aldrin = -2.576 + log(nfish) + 0.082*(log(wt)-0.55)
                 Einf = (exp(eta_aldrin)/(1+exp(eta_aldrin)))*tau*inds_stage[1]
                 inf_ents = np.random.poisson(Einf)
-                inf_ents = min(inf_ents,sum(plankt_cage['stage']==2))
-                inf_inds = np.random.choice(plankt_cage.loc[plankt_cage['stage']==2].index, inf_ents, replace=False)
+                inf_ents = min(inf_ents,sum(cur_cage['stage']==2))
+                inf_inds = np.random.choice(cur_cage.loc[cur_cage['stage']==2].index, inf_ents, replace=False)
             else:
                 inf_inds = []
             
             #Mating events---------------------------------------------------------------------
      
+            tstmp6 = time.time()
+            file.write(str(tstmp6-tstmp5) + ' 263 \n') ##
             #who is mating               
             females = cur_cage.loc[(cur_cage.stage==5) & (cur_cage.avail==0)].index
             males = cur_cage.loc[(cur_cage.stage==6) & (cur_cage.avail==0)].index
@@ -286,67 +291,65 @@ while cur_date <= end_date:
             cur_cage.loc[cur_cage.index.isin(dams),'mate_resistanceT1'] = \
             cur_cage.loc[cur_cage.index.isin(sires),'resistanceT1']
             
+            tstmp7 = time.time()
+            file.write(str(tstmp7-tstmp6) + ' 283 \n')
             #create offspring
-            offs = pd.DataFrame(columns=offspring.columns)
-            gravid_females = cur_cage.loc[cur_cage.avail>0].index
-            new_offs = eggspday[cur_date.month-1]*tau*len(gravid_females)
-            offs['MF'] = np.random.choice(['F','M'], new_offs)
-            offs['lat'] = farms_xy['f'+str(farm)][0]
-            offs['lon'] = farms_xy['f'+str(farm)][1]
-            offs['stage'] = np.repeat(1, new_offs)
-            offs['stage_age'] = np.repeat(0, new_offs)
-            offs['date'] = cur_date
-            k = 0
-            for i in gravid_females:
+            bv_lst = []
+            for i in dams:
                 for j in range(eggspday[cur_date.month-1]*tau):
                     underlying = 6 + 0.5*np.log(cur_cage.resistanceT1[cur_cage.index==i])\
                                + 0.5*np.log(cur_cage.mate_resistanceT1[cur_cage.index==i]) + \
                                ranTruncNorm(mean=0, sd=2, low=-100000000, upp=0, length=1)/sqrt(2)
-                    offs.loc[offs.index[k], 'resistanceT1'] = np.exp(underlying)
-                    k = k + 1                
-            offspring = offspring.append(offs, ignore_index=True)
+                    bv_lst.extend(np.exp(underlying))         
+            new_offs = len(bv_lst)
+            for f in range(1,nfarms+1):
+                arrivals = int(ceil(prop_arrive[farm-1][f-1]*new_offs))
+                if arrivals>0:
+                    offs = pd.DataFrame(columns=offspring.columns)
+                    offs['MF'] = np.random.choice(['F','M'], arrivals)
+                    offs['Farm'] = f
+                    offs['Cage'] = np.random.choice(range(1,ncages[farm-1]+1), arrivals)
+                    offs['stage'] = np.repeat(2, arrivals)
+                    offs['stage_age'] = np.repeat(-4, arrivals)
+                    ran_bvs = np.random.choice(range(new_offs),arrivals,replace=False)
+                    offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]
+                    for i in sorted(ran_bvs, reverse=True):
+                        del bv_lst[i]
+                    Earrival = (hrs_travel-3.63)/24
+                    offs['arrival'] = np.random.poisson(Earrival)
+                    offs['date'] = cur_date   
+                    offspring = offspring.append(offs, ignore_index=True, sort=False)
             
+                      
+                    
+            tstmp8 = time.time()
+            file.write(str(tstmp8-tstmp7) + ' 314 \n')
             #Update cage info------------------------------------------------------------------
             #----------------------------------------------------------------------------------
-            plankt_cage.loc[plankt_cage.index.isin(L1toL2_inds),'stage'] = 2
-            plankt_cage.loc[plankt_cage.index.isin(L1toL2_inds),'stage_age'] = 0
             cur_cage.loc[cur_cage.index.isin(L3toL4_inds),'stage'] = 4
             cur_cage.loc[cur_cage.index.isin(L3toL4_inds),'stage_age'] = 0
             cur_cage.loc[cur_cage.index.isin(L4toL5_inds) & (cur_cage.MF=='F'),'stage'] = 5
             cur_cage.loc[cur_cage.index.isin(L4toL5_inds) & (cur_cage.MF=='M'),'stage'] = 6
             cur_cage.loc[cur_cage.index.isin(L4toL5_inds),'stage_age'] = 0
             
-            plankt_cage.loc[plankt_cage.index.isin(inf_inds), 'stage'] = 3
-            plankt_cage.loc[plankt_cage.index.isin(inf_inds),'stage_age'] = 0
-            offspring = offspring.append(plankt_cage[plankt_cage.stage<3], ignore_index=True)
+            cur_cage.loc[cur_cage.index.isin(inf_inds), 'stage'] = 3
+            cur_cage.loc[cur_cage.index.isin(inf_inds),'stage_age'] = 0
+            cur_cage.loc[cur_cage.index.isin(inf_inds),'Fish'] = np.random.choice(fsh, len(inf_inds))                     
+            
                                  
-            chalimi = pd.DataFrame(columns=lice.columns)
-            chalimi['Fish'] = np.random.choice(fsh, len(inf_inds))
-            chalimi['Farm'] = farm
-            chalimi['Cage'] = cage
-            chalimi['stage'] = 3
-            chalimi['stage_age'] = 0
-            chalimi['avail'] = 0
-            chalimi['MF'] = plankt_cage.loc[plankt_cage.stage==3, 'MF'].values
-            chalimi['resistanceT1'] = plankt_cage.loc[plankt_cage.stage==3, 'resistanceT1'].values
-            chalimi['date'] = cur_date
-                      
             file_path = 'M:/slm/model/cage'+str(cage)+'f'+str(farm)+'.txt'
             cur_cage.to_csv(file_path, sep='\t', mode='a')
             
-            file_path = 'M:/slm/model/plankt_cage'+str(cage)+'f'+str(farm)+'.txt'
-            plankt_cage.to_csv(file_path, sep='\t', mode='a')
-            
+            tstmp9 = time.time()
+            file.write(str(tstmp9-tstmp8) + ' 331 \n')
             lice.loc[(lice['Farm']==farm) & (lice['Cage']==cage)] = cur_cage.copy()
                                    
             #remove dead individuals
             lice = lice.drop(mort_inds)
             lice = lice.drop(lice.loc[lice.Fish.isin(dead_fish['f'+str(farm)+'c'+str(cage)])].index)
             
-            
-            #Add new chalimi
-            lice = lice.append(chalimi, ignore_index=True)
-            
+                       
             lice.to_csv('M:/slm/model/lice.txt', sep='\t', mode='a')
             offspring.to_csv('M:/slm/model/offspring.txt', sep='\t', mode='a')
-        
+ 
+file.close()       
