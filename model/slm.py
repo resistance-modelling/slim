@@ -119,7 +119,7 @@ d_hatching = [9,10,11,9,8,6,4,4,4,4,5,7]
 ext_pressure = 10 #planktonic lice per day per cage/farm arriving from wildlife -> seasonal?
 
 start_date = dt.datetime(2016, 3, 1)
-end_date = dt.datetime(2016, 3, 16) #dt.datetime(2017, 9, 1)
+end_date = dt.datetime(2016, 7, 3)#dt.datetime(2017, 9, 1)
 tau = 1 ###############################################
 
 #Initial Values--------------------------------------------------------------------------------
@@ -158,7 +158,21 @@ while cur_date <= end_date:
     prev_time = time.time()
 #    lice.to_csv(file_path + 'lice.txt', sep='\t', mode='a')
 #    offspring.to_csv(file_path + 'offspring.txt', sep='\t', mode='a')
+  
     cur_date = cur_date + dt.timedelta(days=tau)
+    if cur_date.day==1:
+        femaleAL = [sum((lice.MF=='F') & (lice.Farm==i) & (lice.stage==5) & (lice.Cage==j))/fishf[i-1] \
+                    for i in range(1,nfarms+1)
+                    for j in range(1,ncages[i-1]+1)]
+        farms = [i for i in range(1,nfarms+1) for j in range(1,ncages[i-1]+1)]
+        femaleAL_df = pd.DataFrame({'femaleAL':femaleAL,'farms':farms})
+        file.write(str(cur_date))
+        file.write('All, mean, ' + str(femaleAL_df.femaleAL.mean()) + ', std, ' + str(femaleAL_df.femaleAL.std()))
+        file.write('North, mean, ' + str(femaleAL_df[femaleAL_df.farms<4].femaleAL.mean()) + ', std, ' + str(femaleAL_df[femaleAL_df.farms<4].femaleAL.std()))
+        file.write('South, mean, ' + str(femaleAL_df[femaleAL_df.farms>3].femaleAL.mean()) + ', std, ' + str(femaleAL_df[femaleAL_df.farms>3].femaleAL.std()))
+        file.write(str(femaleAL_df.groupby(farms).femaleAL.mean()))
+        file.write(str(femaleAL_df.groupby(farms).femaleAL.std()))
+ 
             
     if not lice.empty:
         lice.date = cur_date
@@ -286,8 +300,8 @@ while cur_date <= end_date:
                       sum(cur_cage.index.isin(males)))
             if nmating>0:
                 sires = np.random.choice(males, nmating, replace=False)
-                p_dams = 1 - (cur_cage.loc[cur_cage.index.isin(females),'stage_age']/
-                            sum(cur_cage.loc[cur_cage.index.isin(females),'stage_age']))
+                p_dams = 1 - ((cur_cage.loc[cur_cage.index.isin(females),'stage_age']+1)/
+                            sum(cur_cage.loc[cur_cage.index.isin(females),'stage_age']+1))
                 dams = np.random.choice(females, nmating, p=p_dams, replace=False)
             else:
                 sires = []
