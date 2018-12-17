@@ -1,0 +1,10 @@
+diff a/model/slm.py b/model/slm.py	(rejected hunks)
+@@ -69,7 +69,7 @@
+ 
+ #prob of developping after D days in a stage as given by Aldrin et al 2017
+ def devTimeAldrin(del_p, del_m10, del_s, temp_c, D):   
+-    unbounded = log(2)*log(del_s)*D**(del_s-1)*(del_m10*10**del_p/temp_c**del_p)**(-del_s)
++    unbounded = log(2)*del_s*D**(del_s-1)*(del_m10*10**del_p/temp_c**del_p)**(-del_s)
+     return min(unbounded,1)
+ 
+ #average dev days using devTimeAldrin, not used in model but handy to have
