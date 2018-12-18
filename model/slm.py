@@ -62,7 +62,6 @@ import sys
 file_in = sys.argv[1]
 inpt=__import__(file_in, globals(), locals(), ['*'])
 
-
 np.random.seed(545836870)
 
 #Functions-------------------------------------------------------------------------------------
@@ -178,7 +177,9 @@ while cur_date <= inpt.end_date:
         lice.loc[(lice.MF=='F') & (lice.avail>d_hatching[cur_date.month-1]), 'avail'] = 0
         lice.loc[(lice.MF=='F') & (lice.avail>d_hatching[cur_date.month-1]), 'mate_resistanceT1'] = None
          
-   
+    print('L181', time.time()-prev_time2, flush=True)
+    prev_time2 = time.time()
+    
     offspring['stage_age'] = offspring['stage_age'] + tau
     offspring['date'] = cur_date
     ave_temp = np.mean([inpt.temp_f(cur_date.month, inpt.xy_array[i][1]) for i in range(inpt.nfarms)])
@@ -213,6 +214,8 @@ while cur_date <= inpt.end_date:
         lice = lice.append(nu_cppds, ignore_index=True, sort=False)
         offspring = offspring.drop(nu_cppds.index)
     
+    print('L218', time.time()-prev_time2, flush=True)
+    prev_time2 = time.time()
     #------------------------------------------------------------------------------------------
     #Events during tau in cage-----------------------------------------------------------------
     #------------------------------------------------------------------------------------------
@@ -221,6 +224,9 @@ while cur_date <= inpt.end_date:
         if NSbool==True:
             for cage in range(1, inpt.ncages[farm-1]+1): 
                 
+                if (farm==1)&(cage==1):
+                    print('L229', time.time()-prev_time2, flush=True)
+                    prev_time2 = time.time()
                 #new planktonic stages arriving from wildlife reservoir
                 nplankt = inpt.ext_pressure*tau
                 plankt_cage = pd.DataFrame(columns=offspring.columns)
@@ -241,6 +247,9 @@ while cur_date <= inpt.end_date:
                 cur_cage = lice.loc[(lice['Farm']==farm) & (lice['Cage']==cage)].copy()
                 dead_fish = set([])
                 
+                if (farm==1)&(cage==1):
+                    print('L252', time.time()-prev_time2, flush=True)
+                    prev_time2 = time.time()
                 #Background mortality events-------------------------------------------------------
                 inds_stage = np.array([sum(cur_cage['stage']==i) for i in range(1,7)])
                 Emort = np.multiply(mort_rates, inds_stage)
@@ -258,7 +267,9 @@ while cur_date <= inpt.end_date:
                             values = np.random.choice(df.index, mort_ents[i-1], replace=False).tolist()                    
                         mort_inds.extend(values)
                              
-
+                if (farm==1)&(cage==1):
+                    print('L272', time.time()-prev_time2, flush=True)
+                    prev_time2 = time.time()
                 #Development events----------------------------------------------------------------
                 temp_now = inpt.temp_f(cur_date.month, inpt.xy_array[farm-1][1])
                     
@@ -282,6 +293,9 @@ while cur_date <= inpt.end_date:
                 else:
                     L4toL5_inds = []
                 
+                if (farm==1)&(cage==1):
+                    print('L298', time.time()-prev_time2, flush=True)
+                    prev_time2 = time.time()                
                 #Fish growth and death-------------------------------------------------------------
                 t = cur_date - inpt.start_date
                 wt = 10000/(1+exp(-0.01*(t.days-475)))
@@ -295,6 +309,9 @@ while cur_date <= inpt.end_date:
                 bfd_ents = np.random.poisson(Ebf_death)
                 lfd_ents = np.random.poisson(Elf_death) 
                            
+                if (farm==1)&(cage==1):
+                    print('L314', time.time()-prev_time2, flush=True)
+                    prev_time2 = time.time()
                 if fish_fc.size>0:
                     dead_fish.update(np.random.choice(fish_fc, 
                               lfd_ents, p=Plideath/sum(Plideath), replace=False).tolist())
@@ -304,6 +321,9 @@ while cur_date <= inpt.end_date:
                 if len(dead_fish)>0:
                     all_fish['f'+str(farm)+'c'+str(cage)] = [i for i in all_fish['f'+str(farm)+'c'+str(cage)] if i not in dead_fish]
                 
+                if (farm==1)&(cage==1):
+                    print('L326', time.time()-prev_time2, flush=True)
+                    prev_time2 = time.time()                
                 #Infection events------------------------------------------------------------------
                 if sum(cur_cage['stage']==2)>0:
                     eta_aldrin = -2.576 + log(nfish) + 0.082*(log(wt)-0.55)
@@ -315,7 +335,9 @@ while cur_date <= inpt.end_date:
                     inf_inds = []
                 
                 #Mating events---------------------------------------------------------------------
-                
+                if (farm==1)&(cage==1):
+                    print('340', time.time()-prev_time2, flush=True)
+                    prev_time2 = time.time()                
                 #who is mating               
                 females = cur_cage.loc[(cur_cage.stage==5) & (cur_cage.avail==0)].index
                 males = cur_cage.loc[(cur_cage.stage==6) & (cur_cage.avail==0)].index
@@ -335,7 +357,9 @@ while cur_date <= inpt.end_date:
                 cur_cage.loc[cur_cage.index.isin(dams),'mate_resistanceT1'] = \
                 cur_cage.loc[cur_cage.index.isin(sires),'resistanceT1'].values
                 
-
+                if (farm==1)&(cage==1):
+                    print('L361', time.time()-prev_time2, flush=True)
+                    prev_time2 = time.time()
                 #create offspring
                 bv_lst = []
                 for i in dams:
@@ -374,7 +398,9 @@ while cur_date <= inpt.end_date:
                         offs['date'] = cur_date   
                         offspring = offspring.append(offs, ignore_index=True, sort=False)                                             
             
-                
+                if (farm==1)&(cage==1):
+                    print('L402', time.time()-prev_time2, flush=True)
+                    prev_time2 = time.time()                
                 #Update cage info------------------------------------------------------------------
                 #----------------------------------------------------------------------------------
                 cur_cage.loc[cur_cage.index.isin(L3toL4_inds),'stage'] = 4
