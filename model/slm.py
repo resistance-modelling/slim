@@ -55,7 +55,6 @@ import pandas as pd
 from scipy import stats
 import datetime as dt
 from math import exp, log, sqrt, ceil
-from stats import mean
 import time
 import os
 import sys
@@ -143,9 +142,12 @@ except OSError:
     print('Error creating directory')
 file = open(inpt.file_path + 'timings.txt','a+') 
 prev_time = time.time() 
+prev_time2 = time.time()
 counter = 0 
 while cur_date <= inpt.end_date: 
     
+    print(cur_date, time.time()-prev_time2, flush=True)
+    prev_time2 = time.time()
     counter = counter + 1
     if (counter%7)==0:
         file.write(str((time.time()-prev_time)/60) + ' date ' + str(cur_date) + '\n')
@@ -179,35 +181,36 @@ while cur_date <= inpt.end_date:
    
     offspring['stage_age'] = offspring['stage_age'] + tau
     offspring['date'] = cur_date
-	ave_temp = mean([inpt.temp_f(cur_date.month, inpt.xy_array[i][1]) for i in range(nfarms)])
-	if sum(offspring.stage==1)>0:
-                L1toL2 = [devTimeAldrin(0.401,8.814,18.869,ave_temp, i) 
-                         for i in offspring.loc[offspring.stage==1,'stage_age']
-                L1toL2_ents = np.random.poisson(sum(L1toL2))
-                L1toL2_inds = np.random.choice(offspring.loc[offspring.stage==1].index, \
-                                               L1toL2_ents, p=L1toL2/sum(L1toL2), replace=False)
-				offspring.loc[offspring.index.isin(L1toL2_inds),'stage'] = 2
-                offspring.loc[offspring.index.isin(L1toL2_inds),'stage_age'] = 0
-	inds_st = np.array([sum(cur_cage['stage']==i) for i in range(1,3)])
-                Emort = np.multiply(mort_rates[], inds_st)###################################################################################################################################
-                mort_ents = np.random.poisson(Emort)
-                mort_ents=[min(mort_ents[i],inds_stage[i]) for i in range(len(mort_ents))]
-                mort_inds = []
-                for i in range(1,7):
-                    df = cur_cage.loc[cur_cage.stage==i].copy()
-                    if not df.empty:
-                        if np.sum(df.stage_age)>0:
-                            p = (df.stage_age+1)/np.sum(df.stage_age+1)
-                            p = pd.to_numeric(p)
-                            values = np.random.choice(df.index, mort_ents[i-1], p=p, replace=False).tolist()
-                        else:
-                            values = np.random.choice(df.index, mort_ents[i-1], replace=False).tolist()                    
-                        mort_inds.extend(values)
+    ave_temp = np.mean([inpt.temp_f(cur_date.month, inpt.xy_array[i][1]) for i in range(inpt.nfarms)])
+    if sum(offspring.stage==1)>0:
+        L1toL2 = [devTimeAldrin(0.401,8.814,18.869,ave_temp, i)
+                 for i in offspring.loc[offspring.stage==1,'stage_age']]
+        L1toL2_ents = np.random.poisson(sum(L1toL2))
+        L1toL2_inds = np.random.choice(offspring.loc[offspring.stage==1].index, \
+                                       L1toL2_ents, p=L1toL2/sum(L1toL2), replace=False)
+        offspring.loc[offspring.index.isin(L1toL2_inds),'stage'] = 2
+        offspring.loc[offspring.index.isin(L1toL2_inds),'stage_age'] = 0
+    inds_st = np.array([sum(offspring['stage']==i) for i in range(1,3)])
+    Emort = np.multiply(mort_rates[:2], inds_st)
+    mort_ents = np.random.poisson(Emort)
+    mort_ents=[min(mort_ents[i],inds_st[i]) for i in range(len(mort_ents))]
+    mort_inds = []
+    for i in range(1,3):
+        df = offspring.loc[offspring.stage==i].copy()
+        if not df.empty:
+            if np.sum(df.stage_age)>0:
+                p = (df.stage_age+1)/np.sum(df.stage_age+1)
+                p = pd.to_numeric(p)
+                values = np.random.choice(df.index, mort_ents[i-1], p=p, replace=False).tolist()
+            else:
+                values = np.random.choice(df.index, mort_ents[i-1], replace=False).tolist()                    
+            mort_inds.extend(values)
+    offspring = offspring.drop(mort_inds)
     nu_cppds = offspring.loc[(offspring.stage_age>=offspring.arrival) & (offspring.stage==2), offspring.columns!='arrival'].copy()
     nu_cppds['avail'] = 0
         
     if not nu_cppds.empty:
-        lice = lice.append(nu_cppds, ignore_index=True)
+        lice = lice.append(nu_cppds, ignore_index=True, sort=False)
         offspring = offspring.drop(nu_cppds.index)
     
     #------------------------------------------------------------------------------------------
@@ -233,7 +236,7 @@ while cur_date <= inpt.end_date:
                 plankt_cage['resistanceT1'] = np.exp(rands)
                 plankt_cage['date'] = cur_date
                 
-                lice = lice.append(plankt_cage, ignore_index=True)
+                lice = lice.append(plankt_cage, ignore_index=True, sort=False)
                 
                 cur_cage = lice.loc[(lice['Farm']==farm) & (lice['Cage']==cage)].copy()
                 dead_fish = set([])
@@ -369,7 +372,7 @@ while cur_date <= inpt.end_date:
                         Earrival = [hrs_travel[farm-1][i-1]/24 for i in offs.Farm]
                         offs['arrival'] = np.random.poisson(Earrival)
                         offs['date'] = cur_date   
-                        offspring = offspring.append(offs, ignore_index=True)                                             
+                        offspring = offspring.append(offs, ignore_index=True, sort=False)                                             
             
                 
                 #Update cage info------------------------------------------------------------------
