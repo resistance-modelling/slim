@@ -59,9 +59,12 @@ import time
 import os
 import sys
 
-#file_in = sys.argv[1]
-#inpt=__import__(file_in, globals(), locals(), ['*'])
-import tstF_xp500 as inpt
+file_in = sys.argv[1]
+inpt=__import__(file_in, globals(), locals(), ['*'])
+
+v_path = sys.argv[2]
+file_path = "./outputs/outputs" + dt.datetime.today().strftime('%Y%m%d') + v_path
+
 
 np.random.seed(545836870)
 
@@ -79,6 +82,8 @@ def fb_mort(jours):
 #prob of developping after D days in a stage as given by Aldrin et al 2017
 def devTimeAldrin(del_p, del_m10, del_s, temp_c, D):   
     unbounded = log(2)*del_s*D**(del_s-1)*(del_m10*10**del_p/temp_c**del_p)**(-del_s)
+    if unbounded==0:
+        unbounded = 10**(-30)
     return min(unbounded,1)
 
 #average dev days using devTimeAldrin, not used in model but handy to have
@@ -127,33 +132,36 @@ all_fish = dict(zip(fcID,fsh))
 df_list = [pd.DataFrame(columns=['Farm','Cage','Fish','MF','stage','stage_age','avail',\
                              'mate_resistanceT1','resistanceT1','date','arrival']) \
                               for i in range(inpt.nfarms) for j in range(inpt.ncages[i])]
-
+offspring = pd.DataFrame(columns=df_list[0].columns)
 
 #----------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------
 #--------------------------Simulation----------------------------------------------------------
 #----------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------
-directory = os.path.dirname(inpt.file_path)
+directory = os.path.dirname(file_path)
 try:
     if not os.path.exists(directory):
         os.makedirs(directory)
 except OSError:
     print('Error creating directory')
-file = open(inpt.file_path + 'timings.txt','a+') 
+file = open(file_path + 'timings.txt','a+') 
 prev_time = time.time() 
-prev_time2 = time.time()
 counter = 0 
 while cur_date <= inpt.end_date: 
     
-#    print(cur_date, time.time()-prev_time2, flush=True)
-    prev_time2 = time.time()
     counter = counter + 1
     if (counter%7)==0:
-        file.write(str((time.time()-prev_time)/60) + ' date ' + str(cur_date) + '\n')
+        print((time.time()-prev_time)/60, ' date ' + str(cur_date), file=file, flush=True)
         prev_time = time.time()
 
-        
+    #add new offspring to cages
+    k = -1
+    for f in range(1,inpt.nfarms+1):
+        for c in range(1,inpt.ncages[f-1]+1):
+            k = k + 1
+            df_list[k] = df_list[k].append(offspring[(offspring.Farm==f) & (offspring.Cage==c)].copy(), ignore_index=True)
+    offspring = pd.DataFrame(columns=df_list[0].columns)    
     cur_date = cur_date + dt.timedelta(days=tau)
         
     #------------------------------------------------------------------------------------------
@@ -172,11 +180,11 @@ while cur_date <= inpt.end_date:
                 
                 if cur_date.day==1:
                     femaleAL = np.append(femaleAL, sum((df_list[fc].MF=='F') & (df_list[fc].stage==5))/inpt.fishf[farm-1])
-                    #print(cur_date, farm, cage, femaleAL, sum((df_list[fc].MF=='F') & (df_list[fc].stage==5)), flush=True)
-                                          
+                                                              
                 if not df_list[fc].empty:
                     df_list[fc].date = cur_date
                     df_list[fc].stage_age = df_list[fc].stage_age + tau
+                    df_list[fc].arrival = df_list[fc].arrival - tau
                     df_list[fc].loc[df_list[fc].avail>0, 'avail'] = df_list[fc].avail + tau
                     df_list[fc].loc[(df_list[fc].MF=='M') & (df_list[fc].avail>4), 'avail'] = 0
                     df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching[cur_date.month-1]), 'avail'] = 0
@@ -190,7 +198,7 @@ while cur_date <= inpt.end_date:
                 plankt_cage['Farm'] = farm
                 plankt_cage['Cage'] = cage
                 p=stats.poisson.pmf(range(15),3)
-                p = p/sum(p) #probs need to add up to one 
+                p = p/np.sum(p) #probs need to add up to one 
                 plankt_cage['stage_age'] = np.random.choice(range(15),nplankt,p=p)
                 plankt_cage['avail'] = 0
                 rands = ranTruncNorm(mean=-6, sd=2, low=-100000000, upp=0, length=nplankt) ########################################
@@ -198,7 +206,7 @@ while cur_date <= inpt.end_date:
                 plankt_cage['date'] = cur_date
                 plankt_cage['avail'] = 0
                 plankt_cage['arrival'] = 0
-                               
+                           
                 df_list[fc] = df_list[fc].append(plankt_cage, ignore_index=True)
                 dead_fish = set([])
                 
@@ -229,7 +237,7 @@ while cur_date <= inpt.end_date:
                     L1toL2_ents = np.random.poisson(sum(L1toL2))
                     L1toL2_ents = min(L1toL2_ents, inds_stage[0])
                     L1toL2_inds = np.random.choice(df_list[fc].loc[df_list[fc].stage==1].index, \
-                                                   L1toL2_ents, p=L1toL2/sum(L1toL2), replace=False)
+                                                   L1toL2_ents, p=L1toL2/np.sum(L1toL2), replace=False)
                 else:
                     L1toL2_inds = []
                                         
@@ -239,7 +247,7 @@ while cur_date <= inpt.end_date:
                     L3toL4_ents = np.random.poisson(sum(L3toL4))
                     L3toL4_ents = min(L3toL4_ents, inds_stage[2])
                     L3toL4_inds = np.random.choice(df_list[fc].loc[df_list[fc]['stage']==3].index, \
-                                                   L3toL4_ents, p=L3toL4/sum(L3toL4), replace=False)
+                                                   L3toL4_ents, p=L3toL4/np.sum(L3toL4), replace=False)
                 else:
                     L3toL4_inds = []
                 
@@ -249,7 +257,7 @@ while cur_date <= inpt.end_date:
                     L4toL5_ents = np.random.poisson(sum(L4toL5))
                     L4toL5_ents = min(L4toL5_ents, inds_stage[3])
                     L4toL5_inds = np.random.choice(df_list[fc].loc[df_list[fc]['stage']==4].index, \
-                                                   L4toL5_ents, p=L4toL5/sum(L4toL5), replace=False)
+                                                   L4toL5_ents, p=L4toL5/np.sum(L4toL5), replace=False)
                 else:
                     L4toL5_inds = []
                 
@@ -268,7 +276,7 @@ while cur_date <= inpt.end_date:
                            
                 if fish_fc.size>0:
                     dead_fish.update(np.random.choice(fish_fc, 
-                              lfd_ents, p=Plideath/sum(Plideath), replace=False).tolist())
+                              lfd_ents, p=Plideath/np.sum(Plideath), replace=False).tolist())
                 if len(dead_fish)>0:
                     all_fish['f'+str(farm)+'c'+str(cage)] = [i for i in all_fish['f'+str(farm)+'c'+str(cage)] if i not in dead_fish]
                 dead_fish.update(np.random.choice(all_fish['f'+str(farm)+'c'+str(cage)], bfd_ents, replace=False).tolist())
@@ -296,8 +304,8 @@ while cur_date <= inpt.end_date:
                 if nmating>0:
                     sires = np.random.choice(males, nmating, replace=False)
                     p_dams = 1 - (df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']/
-                                sum(df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']+1))
-                    dams = np.random.choice(females, nmating, p=np.array(p_dams/sum(p_dams)).tolist(), replace=False)
+                                np.sum(df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']+1))
+                    dams = np.random.choice(females, nmating, p=np.array(p_dams/np.sum(p_dams)).tolist(), replace=False)
                 else:
                     sires = []
                     dams = []
@@ -318,7 +326,6 @@ while cur_date <= inpt.end_date:
                         bv_lst.extend(np.exp(underlying))  
                 new_offs = len(bv_lst)
                 num = 0
-                offspring = pd.DataFrame(columns=df_list[fc].columns)
                 for f in range(1,inpt.nfarms+1):
                     arrivals = np.random.poisson(prop_arrive[farm-1][f-1]*new_offs)
                     if arrivals>0:
@@ -369,14 +376,8 @@ while cur_date <= inpt.end_date:
                 df_list[fc] = df_list[fc].drop(mort_inds)
                 df_list[fc] = df_list[fc].drop(df_list[fc].loc[df_list[fc].Fish.isin(dead_fish)].index)
                 
-                #add new offspring to cages
-                k = -1
-                for f in range(1,inpt.nfarms+1):
-                    for c in range(1,inpt.ncages[f-1]+1):
-                        k = k + 1
-                        df_list[k] = df_list[k].append(offspring[(offspring.Farm==f) & (offspring.Cage==c)].copy(), ignore_index=True)
-                
-                df_list[fc].to_csv(inpt.file_path + 'lice_df.csv', mode='a')
+                               
+                df_list[fc].to_csv(file_path + 'lice_df.csv', mode='a')
                 
         if cur_date.day==1:
             print(cur_date, femaleAL.mean(), femaleAL.std(), file=file, flush=True)
