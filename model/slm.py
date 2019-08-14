@@ -59,11 +59,13 @@ import time
 import os
 import sys
 
+v_path = sys.argv[2]
+file_path = "./outputs" + v_path
+
+sys.path.append(file_path)
+
 file_in = sys.argv[1]
 inpt=__import__(file_in, globals(), locals(), ['*'])
-
-v_path = sys.argv[2]
-file_path = "./outputs/outputs" + dt.datetime.today().strftime('%Y%m%d') + v_path
 
 v_file = str(sys.argv[3])
 
@@ -77,7 +79,7 @@ def resistEMB(prp_ext, frms_muEMB, frms_sigEMB, length=1):
     for i in range(length):
         r = np.random.uniform(0,1,1)
         if r<prp_ext:
-            EMB_out.extend([np.random.normal(-3.5, 0.5)])        
+            EMB_out.extend([np.random.normal(inpt.f_muEMB, inpt.f_sigEMB)])        
         else:
             EMB_out.extend([np.random.normal(frms_muEMB, frms_sigEMB)])
     return EMB_out
@@ -138,8 +140,8 @@ offspring = pd.DataFrame(columns=df_list[0].columns)
 
 offs_len = 0
 env_sigEMB = 1.0
-farms_muEMB = [0]*inpt.nfarms
-farms_sigEMB = [0.7]*inpt.nfarms
+farms_muEMB = [inpt.f_muEMB]*inpt.nfarms
+farms_sigEMB = [inpt.f_sigEMB]*inpt.nfarms
 prev_muEMB = farms_muEMB.copy()
 prev_sigEMB = farms_sigEMB.copy()
 prop_ext = 1
@@ -155,7 +157,8 @@ try:
 except OSError:
     print('Error creating directory')
 file1 = open(file_path + 'lice_counts' + v_file + '.txt','a+')
-file2 = open(file_path + 'resistanceBVs' + v_file + '.txt','a+') 
+file2 = open(file_path + 'resistanceBVs' + v_file + '.csv','a+') 
+print('cur_date', 'muEMB', 'sigEMB', 'prop_ext', file=file2, sep=',', flush=True)
 #prev_time = time.time() 
 while cur_date <= inpt.end_date: 
     
@@ -183,6 +186,8 @@ while cur_date <= inpt.end_date:
     #------------------------------------------------------------------------------------------
     #Events during tau in cage-----------------------------------------------------------------
     #------------------------------------------------------------------------------------------
+    prev_femaleAL = [0]*inpt.nfarms
+    delta_treat = [0]*inpt.nfarms
     fc = -1
     for farm in range(1, inpt.nfarms+1):
         if cur_date.day==1:
@@ -201,7 +206,7 @@ while cur_date <= inpt.end_date:
                     resistanceT1.extend(df_list[i].resistanceT1)
             prev_muEMB[farm-1] = np.array(resistanceT1).mean()
             prev_sigEMB[farm-1] = np.array(resistanceT1).std()
-            print('resistEMB', cur_date, farms_muEMB[farm-1], farms_sigEMB[farm-1], prev_muEMB[farm-1], prev_sigEMB[farm-1], prop_ext, file=file2, flush=True)
+            print(cur_date, prev_muEMB[farm-1], prev_sigEMB[farm-1], prop_ext, file=file2, sep=',', flush=True)
         
         for cage in range(1, inpt.ncages[farm-1]+1):
             NSbool = eval(inpt.NSbool_str)
@@ -211,7 +216,7 @@ while cur_date <= inpt.end_date:
                                 
                 if cur_date.day==1:
                     femaleAL = np.append(femaleAL, sum((df_list[fc].MF=='F') & (df_list[fc].stage==5))/len(all_fish['f'+str(farm)+'c'+str(cage)]))
-                                                              
+                                                                                  
                 if not df_list[fc].empty:
                     df_list[fc].date = cur_date
                     df_list[fc].stage_age = df_list[fc].stage_age + tau
@@ -258,13 +263,15 @@ while cur_date <= inpt.end_date:
                         mort_inds.extend(values)
                         
                 #Treatment mortality events------------------------------------------------------
-                if cur_date in inpt.dates_list[farm-1]:
+                EMBsus = [1 if df_list[fc].stage[i]>2 else 0 for i in range(len(df_list[fc].index))]
+                if eval(inpt.bool_treat):
                     phenoEMB = df_list[fc].resistanceT1 + np.random.normal(0,env_sigEMB,len(df_list[fc].resistanceT1)) #add environmental deviation
                     phenoEMB = 1/(1 + np.exp(phenoEMB))  #1-resistance
+                    phenoEMB =  phenoEMB*EMBsus #remove stages that aren't susceptible to EMB
                     ETmort = sum(phenoEMB)*EMBmort 
                     Tmort_ents = np.random.poisson(ETmort)
                     Tmort_ents = min(Tmort_ents,len(df_list[fc].resistanceT1))
-                    p = (1-phenoEMB)/np.sum(1-phenoEMB)
+                    p = (phenoEMB)/np.sum(phenoEMB)
                     mort_inds.extend(np.random.choice(df_list[fc].index, Tmort_ents, p=p, replace=False).tolist())
                     mort_inds = list(set(mort_inds))
 
@@ -420,6 +427,8 @@ while cur_date <= inpt.end_date:
                 
         if cur_date.day==1:
             print(cur_date, femaleAL.mean(), femaleAL.std(), file=file1, flush=True)
+            delta_treat[farm-1] = femaleAL.mean() - prev_femaleAL[farm-1]
+            prev_femaleAL[farm-1] = femaleAL.mean()
             femaleAL = np.array([],dtype=float)
                 
 file1.close()  
