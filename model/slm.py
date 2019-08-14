@@ -65,20 +65,22 @@ inpt=__import__(file_in, globals(), locals(), ['*'])
 v_path = sys.argv[2]
 file_path = "./outputs/outputs" + dt.datetime.today().strftime('%Y%m%d') + v_path
 
+v_file = str(sys.argv[3])
 
-np.random.seed(545836870)
+#np.random.seed(545836870)
 
 #Functions-------------------------------------------------------------------------------------
 
-#random truncated normal variates with more easily readable inputs
-def resistEMB(days_in, prev_muEMB, farms_muEMB, length=1): 
-    if days_in<70:
-        muEMB = 3.5
-    else if (days_in%35):
-        muEMB = (farms_muEMB + Wext*prev_muEMB)/(1 + Wext)
-    else:
-        muEMB = prev_muEMB
-    return np.random.normal(muEMB, 0.5, length)
+#Update resistance distribution and sample from it 
+def resistEMB(prp_ext, frms_muEMB, frms_sigEMB, length=1): 
+    EMB_out = []
+    for i in range(length):
+        r = np.random.uniform(0,1,1)
+        if r<prp_ext:
+            EMB_out.extend([np.random.normal(-3.5, 0.5)])        
+        else:
+            EMB_out.extend([np.random.normal(frms_muEMB, frms_sigEMB)])
+    return EMB_out
                                
 #Fish background mortality rate, decreasing as in Soares et al 2011                           
 def fb_mort(jours):
@@ -109,7 +111,7 @@ def eudist(pointA,pointB):
 
 
 #Input Data------------------------------------------------------------------------------------
-Wext = 4
+EMBmort = 0.9
 
 hrs_travel = inpt.E_days*24
 prop_arrive = inpt.prob_arrive
@@ -134,8 +136,13 @@ df_list = [pd.DataFrame(columns=['Farm','Cage','Fish','MF','stage','stage_age','
                               for i in range(inpt.nfarms) for j in range(inpt.ncages[i])]
 offspring = pd.DataFrame(columns=df_list[0].columns)
 
-prev_muEMB = 3.5
-farms_muEMB = 0
+offs_len = 0
+env_sigEMB = 1.0
+farms_muEMB = [0]*inpt.nfarms
+farms_sigEMB = [0.7]*inpt.nfarms
+prev_muEMB = farms_muEMB.copy()
+prev_sigEMB = farms_sigEMB.copy()
+prop_ext = 1
 #----------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------
 #--------------------------Simulation----------------------------------------------------------
@@ -147,31 +154,32 @@ try:
         os.makedirs(directory)
 except OSError:
     print('Error creating directory')
-file = open(file_path + 'timings.txt','a+') 
-prev_time = time.time() 
-counter = 0 
+file1 = open(file_path + 'lice_counts' + v_file + '.txt','a+')
+file2 = open(file_path + 'resistanceBVs' + v_file + '.txt','a+') 
+#prev_time = time.time() 
 while cur_date <= inpt.end_date: 
     
-    if (counter%7)==0:
-        print((time.time()-prev_time)/60, ' date ' + str(cur_date), file=file, flush=True)
-        prev_time = time.time()
-
+    cur_date = cur_date + dt.timedelta(days=tau)
+    t = (cur_date - inpt.start_date).days
+    
+    # if (t%7)==0:
+        # print((time.time()-prev_time)/60, ' date ' + str(cur_date), file=file, flush=True)
+        # prev_time = time.time()
+        
+          
     #add new offspring to cages
     k = -1
     for f in range(1,inpt.nfarms+1):
         for c in range(1,inpt.ncages[f-1]+1):
             k = k + 1
             df_list[k] = df_list[k].append(offspring[(offspring.Farm==f) & (offspring.Cage==c)].copy(), ignore_index=True)
-    offspring = pd.DataFrame(columns=df_list[0].columns)    
-    cur_date = cur_date + dt.timedelta(days=tau)
-    t = (cur_date - inpt.start_date).days
-    
-    prev_muEMB = (farms_muEMB + Wext*prev_muEMB)/(1 + Wext)
-    nauplii_rEMB = []
-    for i in range(len(df_list)):
-        nauplii_rEMB.extend(df_list[i].resistanceT1)
-    farms_muEMB = np.mean(np.array(nauplii_rEMB))
-        
+            offs_len = offs_len + len(offspring.index)
+    offspring = pd.DataFrame(columns=df_list[0].columns) 
+
+    if (t%35)==0:
+        prop_ext = (sum(inpt.ncages)*inpt.ext_pressure)/(sum(inpt.ncages)*inpt.ext_pressure + offs_len/35)
+        offs_len = 0        
+            
     #------------------------------------------------------------------------------------------
     #Events during tau in cage-----------------------------------------------------------------
     #------------------------------------------------------------------------------------------
@@ -179,15 +187,30 @@ while cur_date <= inpt.end_date:
     for farm in range(1, inpt.nfarms+1):
         if cur_date.day==1:
             femaleAL = np.array([],dtype=float)
-            
-        NSbool = eval(inpt.NSbool_str)
-        if NSbool==True:
-            for cage in range(1, inpt.ncages[farm-1]+1): 
+        
+        #Estimate distribution params for external pressure that originated from farms
+        if (t%35)==0:
+            farms_muEMB[farm-1] = prev_muEMB[farm-1]
+            farms_sigEMB[farm-1] = prev_sigEMB[farm-1]
+            resistanceT1 = []
+            if farm==1:
+                for i in range(inpt.ncages[farm-1]):
+                    resistanceT1.extend(df_list[i].resistanceT1)
+            else:
+                for i in range(sum(inpt.ncages[0:farm-1])-1,sum(inpt.ncages[0:farm])):
+                    resistanceT1.extend(df_list[i].resistanceT1)
+            prev_muEMB[farm-1] = np.array(resistanceT1).mean()
+            prev_sigEMB[farm-1] = np.array(resistanceT1).std()
+            print('resistEMB', cur_date, farms_muEMB[farm-1], farms_sigEMB[farm-1], prev_muEMB[farm-1], prev_sigEMB[farm-1], prop_ext, file=file2, flush=True)
+        
+        for cage in range(1, inpt.ncages[farm-1]+1):
+            NSbool = eval(inpt.NSbool_str)
+            if NSbool==True: 
             
                 fc = fc + 1
                                 
                 if cur_date.day==1:
-                    femaleAL = np.append(femaleAL, sum((df_list[fc].MF=='F') & (df_list[fc].stage==5))/inpt.fishf[farm-1])
+                    femaleAL = np.append(femaleAL, sum((df_list[fc].MF=='F') & (df_list[fc].stage==5))/len(all_fish['f'+str(farm)+'c'+str(cage)]))
                                                               
                 if not df_list[fc].empty:
                     df_list[fc].date = cur_date
@@ -209,7 +232,7 @@ while cur_date <= inpt.end_date:
                 p = p/np.sum(p) #probs need to add up to one 
                 plankt_cage['stage_age'] = np.random.choice(range(15),nplankt,p=p)
                 plankt_cage['avail'] = 0
-                plankt_cage['resistanceT1'] = resistEMB(t, prev_muEMB, farms_muEMB, nplankt)
+                plankt_cage['resistanceT1'] = resistEMB(prop_ext, farms_muEMB[farm-1], farms_sigEMB[farm-1], nplankt)
                 plankt_cage['date'] = cur_date
                 plankt_cage['avail'] = 0
                 plankt_cage['arrival'] = 0
@@ -233,7 +256,17 @@ while cur_date <= inpt.end_date:
                         else:
                             values = np.random.choice(df.index, mort_ents[i-1], replace=False).tolist()                    
                         mort_inds.extend(values)
-                             
+                        
+                #Treatment mortality events------------------------------------------------------
+                if cur_date in inpt.dates_list[farm-1]:
+                    phenoEMB = df_list[fc].resistanceT1 + np.random.normal(0,env_sigEMB,len(df_list[fc].resistanceT1)) #add environmental deviation
+                    phenoEMB = 1/(1 + np.exp(phenoEMB))  #1-resistance
+                    ETmort = sum(phenoEMB)*EMBmort 
+                    Tmort_ents = np.random.poisson(ETmort)
+                    Tmort_ents = min(Tmort_ents,len(df_list[fc].resistanceT1))
+                    p = (1-phenoEMB)/np.sum(1-phenoEMB)
+                    mort_inds.extend(np.random.choice(df_list[fc].index, Tmort_ents, p=p, replace=False).tolist())
+                    mort_inds = list(set(mort_inds))
 
                 #Development events----------------------------------------------------------------
                 temp_now = inpt.temp_f(cur_date.month, inpt.xy_array[farm-1][1])
@@ -317,7 +350,7 @@ while cur_date <= inpt.end_date:
                     dams = []
                 df_list[fc].loc[df_list[fc].index.isin(dams),'avail'] = 1
                 df_list[fc].loc[df_list[fc].index.isin(sires),'avail'] = 1
-                #Add phenotype of sire to dam info
+                #Add genotype of sire to dam info
                 df_list[fc].loc[df_list[fc].index.isin(dams),'mate_resistanceT1'] = \
                 df_list[fc].loc[df_list[fc].index.isin(sires),'resistanceT1'].values
                 
@@ -328,7 +361,7 @@ while cur_date <= inpt.end_date:
                     for j in range(eggspday*tau):
                         underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
                                    + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
-                                   resistEMB(t, prev_muEMB, farms_muEMB, 1)/sqrt(2)
+                                   np.random.normal(0, farms_sigEMB[farm-1], 1)/np.sqrt(2)
                         bv_lst.extend(underlying)  
                 new_offs = len(bv_lst)
                 num = 0
@@ -352,7 +385,7 @@ while cur_date <= inpt.end_date:
                             for i in randams:
                                 underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
                                    + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
-                                   resistEMB(t, prev_muEMB, farms_muEMB, 1)/sqrt(2)
+                                   np.random.normal(0, farms_sigEMB[farm-1], 1)/np.sqrt(2)
                                 bv_lst.extend(underlying)  
                             offs['resistanceT1'] = [bv_lst[i] for i in range(len(arrivals))]                        
                         Earrival = [hrs_travel[farm-1][i-1]/24 for i in offs.Farm]
@@ -383,10 +416,11 @@ while cur_date <= inpt.end_date:
                 df_list[fc] = df_list[fc].drop(df_list[fc].loc[df_list[fc].Fish.isin(dead_fish)].index)
                 
                                
-                df_list[fc].to_csv(file_path + 'lice_df.csv', mode='a')
+                #df_list[fc].to_csv(file_path + 'lice_df.csv', mode='a')
                 
         if cur_date.day==1:
-            print(cur_date, femaleAL.mean(), femaleAL.std(), file=file, flush=True)
+            print(cur_date, femaleAL.mean(), femaleAL.std(), file=file1, flush=True)
             femaleAL = np.array([],dtype=float)
                 
-file.close()  
+file1.close()  
+file2.close() 
