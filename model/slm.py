@@ -122,7 +122,7 @@ hrs_travel.columns = [i for i in range(1,inpt.nfarms)]
 hrs_travel.insert(0,0,1) 
 
 mort_rates = np.array([0.17, 0.22, 0.008, 0.05, 0.02, 0.06]) # L1,L2,L3,L4,L5f,L5m
-eggspday = inpt.eggspday
+eggs = inpt.eggs
 d_hatching = inpt.d_hatching
 
 tau = 1 ###############################################
@@ -136,7 +136,7 @@ all_fish = dict(zip(fcID,fsh))
     
 #Lice population in farms
 df_list = [pd.DataFrame(columns=['Farm','Cage','Fish','MF','stage','stage_age','avail',\
-                             'mate_resistanceT1','resistanceT1','date','arrival']) \
+                             'mate_resistanceT1','resistanceT1','date','arrival','nmates']) \
                               for i in range(inpt.nfarms) for j in range(inpt.ncages[i])]
 offspring = pd.DataFrame(columns=df_list[0].columns)
 
@@ -154,6 +154,7 @@ df_list[0]['resistanceT1'] = np.random.normal(inpt.f_muEMB, inpt.f_sigEMB, nplan
 df_list[0]['date'] = cur_date
 df_list[0]['avail'] = 0
 df_list[0]['arrival'] = 0
+df_list[0]['nmates'] = 0
 
 #add initial planktonic stages from reservoir to cages #########################################################################################
 k = 0
@@ -173,8 +174,9 @@ for f in range(1,inpt.nfarms):
         df_list[k]['date'] = cur_date
         df_list[k]['avail'] = 0
         df_list[k]['arrival'] = 0
+        df_list[k]['nmates'] = 0
 
-
+lifemates = []
 offs_len = 0
 res_len = 0
 env_sigEMB = 1.0
@@ -208,20 +210,26 @@ while cur_date <= inpt.end_date:
         
           
     #add new offspring to cages #########################################################################################
+    res_len = res_len + len(offspring[offspring.Farm==0].index)
+    offs_len = offs_len + len(offspring[offspring.Farm>0].index)
+    
     k = -1
     for f in range(inpt.nfarms):
         for c in range(1,inpt.ncages[f]+1):
             k = k + 1
             df_list[k] = df_list[k].append(offspring[(offspring.Farm==f) & (offspring.Cage==c)].copy(), ignore_index=True)
-            if k==0:
-                res_len = res_len + len(offspring[offspring.Farm==0].index)
-            else:
-                offs_len = offs_len + len(offspring[offspring.Farm>0].index)
-    offspring = pd.DataFrame(columns=df_list[1].columns) 
-
+            offspring = offspring[(offspring.Farm!=f) & (offspring.Cage!=c)]
+            
+    if len(offspring.index)>0:
+        print('Warning not all offspring cleared!', flush=True)
+    
     if cur_date.day==1:
         prop_ext = (res_len/(res_len + offs_len)) 
-        offs_len = 0        
+        offs_len = 0   
+        res_len = 0
+        if len(lifemates)>0:
+            print(cur_date, len(lifemates), np.array(lifemates).mean(),flush=True)
+            lifemates=[]
             
     #------------------------------------------------------------------------------------------
     #Events during tau in cage-----------------------------------------------------------------
@@ -245,22 +253,26 @@ while cur_date <= inpt.end_date:
             print(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext, file=file2, sep=',', flush=True)          
             
         for cage in range(1, inpt.ncages[farm]+1):
+            fc = fc + 1
             NSbool = eval(inpt.NSbool_str)
             if NSbool==True: 
-            
-                fc = fc + 1
-                                
+                                    
                 if (cur_date.day==1)&(farm>0):
                     femaleAL = np.append(femaleAL, sum((df_list[fc].MF=='F') & (df_list[fc].stage==5))/len(all_fish['f'+str(farm)+'c'+str(cage)]))
+                
+                if farm==0:            
+                    temp_now = inpt.temp_f(cur_date.month, (inpt.xy_array[0][1]+inpt.xy_array[8][1])/2)
+                else:
+                    temp_now = inpt.temp_f(cur_date.month, inpt.xy_array[farm-1][1])
                                                                                   
                 if not df_list[fc].empty:
                     df_list[fc].date = cur_date
                     df_list[fc].stage_age = df_list[fc].stage_age + tau
                     df_list[fc].arrival = df_list[fc].arrival - tau
-                    df_list[fc].loc[df_list[fc].avail>0, 'avail'] = df_list[fc].avail + tau
+                    df_list[fc].loc[df_list[fc].avail>0, 'avail'] = df_list[fc].loc[df_list[fc].avail>0, 'avail'] + tau
                     df_list[fc].loc[(df_list[fc].MF=='M') & (df_list[fc].avail>4), 'avail'] = 0
-                    df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching[cur_date.month-1]), 'avail'] = 0
-                    df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching[cur_date.month-1]), 'mate_resistanceT1'] = None
+                    df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching(temp_now)), 'avail'] = 0
+                    df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching(temp_now)), 'mate_resistanceT1'] = None
         
                                                
                 dead_fish = set([])
@@ -277,10 +289,13 @@ while cur_date <= inpt.end_date:
                         if np.sum(df.stage_age)>0:
                             p = (df.stage_age+1)/np.sum(df.stage_age+1)
                             p = pd.to_numeric(p)
-                            values = np.random.choice(df.index, mort_ents[i-1], p=p, replace=False).tolist()
+                            values = np.random.choice(df.index, mort_ents[i-1], p=p, replace=False).tolist()                             
                         else:
                             values = np.random.choice(df.index, mort_ents[i-1], replace=False).tolist()                    
                         mort_inds.extend(values)
+                        if i==5:
+                            lifemates.extend(df.nmates[values])
+                    del df
                         
                 #Treatment mortality events------------------------------------------------------
                 if farm>0:
@@ -291,18 +306,15 @@ while cur_date <= inpt.end_date:
                         phenoEMB = 1/(1 + np.exp(phenoEMB))  #1-resistance
                         phenoEMB =  phenoEMB*EMBsus #remove stages that aren't susceptible to EMB
                         ETmort = sum(phenoEMB)*EMBmort 
-                        Tmort_ents = np.random.poisson(ETmort)
-                        Tmort_ents = min(Tmort_ents,len(df_list[fc].resistanceT1))
-                        p = (phenoEMB)/np.sum(phenoEMB)
-                        mort_inds.extend(np.random.choice(df_list[fc].index, Tmort_ents, p=p, replace=False).tolist())
-                        mort_inds = list(set(mort_inds))
+                        if ETmort>0:
+                            Tmort_ents = np.random.poisson(ETmort)
+                            Tmort_ents = min(Tmort_ents,len(df_list[fc].resistanceT1))
+                            p = (phenoEMB)/np.sum(phenoEMB)
+                            mort_inds.extend(np.random.choice(df_list[fc].index, Tmort_ents, p=p, replace=False).tolist())
+                            mort_inds = list(set(mort_inds))
 
                 #Development events----------------------------------------------------------------
-                if farm==0:            
-                    temp_now = inpt.temp_f(cur_date.month, (inpt.xy_array[0][1]+inpt.xy_array[8][1])/2)
-                else:
-                    temp_now = inpt.temp_f(cur_date.month, inpt.xy_array[farm-1][1])
-                
+                                
                 if inds_stage[0]>0:
                     L1toL2 = [devTimeAldrin(0.401,8.814,18.869,temp_now, i)
                              for i in df_list[fc].loc[df_list[fc].stage==1,'stage_age']]
@@ -361,7 +373,7 @@ while cur_date <= inpt.end_date:
                     if farm>0:
                         eta_aldrin = -2.576 + log(nfish) + 0.082*(log(wt)-0.55)
                     if farm==0:
-                        eta_aldrin = -2.576 + log(inpt.Enfish_res) + 0.082*(log(inpt.Ewt_res)-0.55)
+                        eta_aldrin = -2.576 + log(inpt.Enfish_res[cur_date.month-1]) + 0.082*(log(inpt.Ewt_res)-0.55)
                     Einf = (exp(eta_aldrin)/(1+exp(eta_aldrin)))*tau*cop_cage
                     inf_ents = np.random.poisson(Einf)
                     inf_ents = min(inf_ents,cop_cage)
@@ -386,6 +398,8 @@ while cur_date <= inpt.end_date:
                     dams = []
                 df_list[fc].loc[df_list[fc].index.isin(dams),'avail'] = 1
                 df_list[fc].loc[df_list[fc].index.isin(sires),'avail'] = 1
+                df_list[fc].loc[df_list[fc].index.isin(dams),'nmates'] = df_list[fc].loc[df_list[fc].index.isin(dams),'nmates'].values + 1
+                df_list[fc].loc[df_list[fc].index.isin(sires),'nmates'] = df_list[fc].loc[df_list[fc].index.isin(sires),'nmates'].values + 1
                 #Add genotype of sire to dam info
                 df_list[fc].loc[df_list[fc].index.isin(dams),'mate_resistanceT1'] = \
                 df_list[fc].loc[df_list[fc].index.isin(sires),'resistanceT1'].values
@@ -394,8 +408,17 @@ while cur_date <= inpt.end_date:
                 #create offspring
                 bv_lst = []
                 for i in dams:
-                    for j in range(eggspday[cur_date.month-1]*tau):
-                        underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
+                    for j in range(int(round(eggs*tau/d_hatching(temp_now)))):
+                        if farm==0:
+                            r = np.random.uniform(0,1,1)
+                            if r>inpt.prop_influx:
+                                underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
+                                   + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
+                                   np.random.normal(0, farms_sigEMB[farm], 1)/np.sqrt(2)
+                            else:
+                                underlying = np.random.normal(inpt.f_muEMB,inpt.f_sigEMB,1)
+                        else:
+                            underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
                                    + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
                                    np.random.normal(0, farms_sigEMB[farm], 1)/np.sqrt(2)
                         bv_lst.extend(underlying)  
@@ -414,21 +437,24 @@ while cur_date <= inpt.end_date:
                         if len(bv_lst)>=arrivals:
                             ran_bvs = np.random.choice(len(bv_lst),arrivals,replace=False)
                             offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]
-                            for i in sorted(ran_bvs, reverse=True):
-                                del bv_lst[i]
                         else:
-                            randams = np.random.choice(dams,arrivals)
+                            randams = np.random.choice(dams,arrivals-len(bv_lst))
                             for i in randams:
                                 underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
                                    + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
                                    np.random.normal(0, farms_sigEMB[farm], 1)/np.sqrt(2)
                                 bv_lst.extend(underlying)  
-                            offs['resistanceT1'] = [bv_lst[i] for i in range(arrivals)]                        
+                            ran_bvs = np.random.choice(len(bv_lst),arrivals,replace=False)
+                            offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]  
+                        for i in sorted(ran_bvs, reverse=True):
+                            del bv_lst[i]     
                         Earrival = [hrs_travel[farm][i] for i in offs.Farm]
                         offs['arrival'] = np.random.poisson(Earrival)
                         offs['avail'] = 0
                         offs['date'] = cur_date
+                        offs['nmates'] = 0
                         offspring = offspring.append(offs, ignore_index=True)
+                        del offs
             
                 
                 #Update cage info------------------------------------------------------------------
@@ -457,10 +483,17 @@ while cur_date <= inpt.end_date:
                 #df_list[fc].to_csv(file_path + 'lice_df.csv', mode='a')
                 
         if (cur_date.day==1)&(farm>0):      
-            print(cur_date, femaleAL.mean(), femaleAL.std(), file=file1, flush=True)
-            delta_treat[farm-1] = femaleAL.mean() - prev_femaleAL[farm-1]
-            prev_femaleAL[farm-1] = femaleAL.mean()
+            if (len(femaleAL)>0):
+                femaleALm = femaleAL.mean()
+                femaleALs = femaleAL.std()
+            else:
+                femaleALm = 0
+                femaleALs = 0
+            print(cur_date, femaleALm, femaleALs, file=file1, flush=True)
+            delta_treat[farm-1] = femaleALm - prev_femaleAL[farm-1]
+            prev_femaleAL[farm-1] = femaleALm
             femaleAL = np.array([],dtype=float)
+            
                 
 file1.close()  
 file2.close() 
