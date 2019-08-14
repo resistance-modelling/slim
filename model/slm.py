@@ -407,21 +407,21 @@ while cur_date <= inpt.end_date:
 
                 #create offspring
                 bv_lst = []
+                eggs_now = int(round(eggs*tau/d_hatching(temp_now)))
                 for i in dams:
-                    for j in range(int(round(eggs*tau/d_hatching(temp_now)))):
-                        if farm==0:
-                            r = np.random.uniform(0,1,1)
-                            if r>inpt.prop_influx:
-                                underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
-                                   + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
-                                   np.random.normal(0, farms_sigEMB[farm], 1)/np.sqrt(2)
-                            else:
-                                underlying = np.random.normal(inpt.f_muEMB,inpt.f_sigEMB,1)
+                    if farm==0:
+                        r = np.random.uniform(0,1,1)
+                        if r>inpt.prop_influx:
+                            underlying = 0.5*df_list[fc].loc[df_list[fc].index==i,'resistanceT1'].values\
+                               + 0.5*df_list[fc].loc[df_list[fc].index==i,'mate_resistanceT1'].values + \
+                               np.random.normal(0, farms_sigEMB[farm], eggs_now)/np.sqrt(2)
                         else:
-                            underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
-                                   + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
-                                   np.random.normal(0, farms_sigEMB[farm], 1)/np.sqrt(2)
-                        bv_lst.extend(underlying)  
+                            underlying = np.random.normal(inpt.f_muEMB,inpt.f_sigEMB,eggs_now)
+                    else:
+                        underlying = 0.5*df_list[fc].loc[df_list[fc].index==i,'resistanceT1'].values\
+                               + 0.5*df_list[fc].loc[df_list[fc].index==i,'mate_resistanceT1'].values + \
+                               np.random.normal(0, farms_sigEMB[farm], eggs_now)/np.sqrt(2)
+                    bv_lst.extend(underlying.tolist())  
                 new_offs = len(bv_lst)
                 num = 0
                 for f in range(inpt.nfarms):
@@ -434,18 +434,15 @@ while cur_date <= inpt.end_date:
                         offs['Cage'] = np.random.choice(range(1,inpt.ncages[farm]+1), arrivals)
                         offs['stage'] = np.repeat(1, arrivals)
                         offs['stage_age'] = np.repeat(0, arrivals)
-                        if len(bv_lst)>=arrivals:
-                            ran_bvs = np.random.choice(len(bv_lst),arrivals,replace=False)
-                            offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]
-                        else:
+                        if len(bv_lst)<arrivals:
                             randams = np.random.choice(dams,arrivals-len(bv_lst))
                             for i in randams:
                                 underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
                                    + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
                                    np.random.normal(0, farms_sigEMB[farm], 1)/np.sqrt(2)
                                 bv_lst.extend(underlying)  
-                            ran_bvs = np.random.choice(len(bv_lst),arrivals,replace=False)
-                            offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]  
+                        ran_bvs = np.random.choice(len(bv_lst),arrivals,replace=False)
+                        offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]  
                         for i in sorted(ran_bvs, reverse=True):
                             del bv_lst[i]     
                         Earrival = [hrs_travel[farm][i] for i in offs.Farm]
