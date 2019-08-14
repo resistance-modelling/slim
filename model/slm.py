@@ -120,8 +120,8 @@ prop_arrive = inpt.prob_arrive
 
 
 mort_rates = np.array([0.17, 0.22, 0.008, 0.05, 0.02, 0.06]) # L1,L2,L3,L4,L5f,L5m
-eggspday = 50#[50,50,40,40,50,60,80,80,80,80,70,50]
-d_hatching = 8#[9,10,11,9,8,6,4,4,4,4,5,7]            
+eggspday = inpt.eggspday #50#[50,50,40,40,50,60,80,80,80,80,70,50]
+d_hatching = inpt.d_hatching #8#[9,10,11,9,8,6,4,4,4,4,5,7]            
 
 tau = 1 ###############################################
 
@@ -186,8 +186,6 @@ while cur_date <= inpt.end_date:
     #------------------------------------------------------------------------------------------
     #Events during tau in cage-----------------------------------------------------------------
     #------------------------------------------------------------------------------------------
-    prev_femaleAL = [0]*inpt.nfarms
-    delta_treat = [0]*inpt.nfarms
     fc = -1
     for farm in range(1, inpt.nfarms+1):
         if cur_date.day==1:
@@ -216,7 +214,7 @@ while cur_date <= inpt.end_date:
                                 
                 if cur_date.day==1:
                     femaleAL = np.append(femaleAL, sum((df_list[fc].MF=='F') & (df_list[fc].stage==5))/len(all_fish['f'+str(farm)+'c'+str(cage)]))
-                                                                                  
+                                                              
                 if not df_list[fc].empty:
                     df_list[fc].date = cur_date
                     df_list[fc].stage_age = df_list[fc].stage_age + tau
@@ -264,7 +262,8 @@ while cur_date <= inpt.end_date:
                         
                 #Treatment mortality events------------------------------------------------------
                 EMBsus = [1 if df_list[fc].stage[i]>2 else 0 for i in range(len(df_list[fc].index))]
-                if eval(inpt.bool_treat):
+                start_treat = cur_date - dt.timedelta(days=14)
+                if start_treat in inpt.dates_list[farm-1]:
                     phenoEMB = df_list[fc].resistanceT1 + np.random.normal(0,env_sigEMB,len(df_list[fc].resistanceT1)) #add environmental deviation
                     phenoEMB = 1/(1 + np.exp(phenoEMB))  #1-resistance
                     phenoEMB =  phenoEMB*EMBsus #remove stages that aren't susceptible to EMB
@@ -427,8 +426,6 @@ while cur_date <= inpt.end_date:
                 
         if cur_date.day==1:
             print(cur_date, femaleAL.mean(), femaleAL.std(), file=file1, flush=True)
-            delta_treat[farm-1] = femaleAL.mean() - prev_femaleAL[farm-1]
-            prev_femaleAL[farm-1] = femaleAL.mean()
             femaleAL = np.array([],dtype=float)
                 
 file1.close()  
