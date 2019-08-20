@@ -1,6 +1,5 @@
 Data/
 Figures/
-outputs/
 reading/
 Stakeholder engagement/
 Thumbs.db
@@ -19,3 +18,4 @@ model/prop_arriveLinnhe.txt
 model/slm_es.sh
 model/slm2.py
 model/ws_mlicecounts.py
+communication/
