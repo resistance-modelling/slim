@@ -301,7 +301,8 @@ while cur_date <= inpt.end_date:
                 if farm>0:
                     EMBsus = [1 if df_list[fc].stage[i]>2 else 0 for i in range(len(df_list[fc].index))]
                     if eval(inpt.bool_treat):
-                        print(farm, cur_date, flush=True)
+                        if cage==1:
+                            print(farm, cur_date, flush=True)
                         phenoEMB = df_list[fc].resistanceT1 + np.random.normal(0,env_sigEMB,len(df_list[fc].resistanceT1)) #add environmental deviation
                         phenoEMB = 1/(1 + np.exp(phenoEMB))  #1-resistance
                         phenoEMB =  phenoEMB*EMBsus #remove stages that aren't susceptible to EMB
