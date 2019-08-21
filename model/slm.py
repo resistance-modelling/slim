@@ -301,8 +301,7 @@ while cur_date <= inpt.end_date:
                 if farm>0:
                     EMBsus = [1 if df_list[fc].stage[i]>2 else 0 for i in range(len(df_list[fc].index))]
                     if eval(inpt.bool_treat):
-                        if cage==1:
-                            print(farm, cur_date, flush=True)
+                        print(farm, cur_date, flush=True)
                         phenoEMB = df_list[fc].resistanceT1 + np.random.normal(0,env_sigEMB,len(df_list[fc].resistanceT1)) #add environmental deviation
                         phenoEMB = 1/(1 + np.exp(phenoEMB))  #1-resistance
                         phenoEMB =  phenoEMB*EMBsus #remove stages that aren't susceptible to EMB
@@ -444,7 +443,8 @@ while cur_date <= inpt.end_date:
                                 bv_lst.extend(underlying)  
                         ran_bvs = np.random.choice(len(bv_lst),arrivals,replace=False)
                         offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]  
-                        bv_lst = []     
+                        for i in sorted(ran_bvs, reverse=True):
+                            del bv_lst[i]     
                         Earrival = [hrs_travel[farm][i] for i in offs.Farm]
                         offs['arrival'] = np.random.poisson(Earrival)
                         offs['avail'] = 0
