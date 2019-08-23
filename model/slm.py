@@ -392,7 +392,7 @@ while cur_date <= inpt.end_date:
                 if nmating>0:
                     sires = np.random.choice(males, nmating, replace=False)
                     p_dams = 1 - (df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']/
-                                np.sum(df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']+1))
+                                np.sum(df_list[fc].loc[df_list[fc].index.isin(females),'stage_age'])+1)
                     dams = np.random.choice(females, nmating, p=np.array(p_dams/np.sum(p_dams)).tolist(), replace=False)
                 else:
                     sires = []
@@ -415,15 +415,15 @@ while cur_date <= inpt.end_date:
                         if r>inpt.prop_influx:
                             underlying = 0.5*df_list[fc].loc[df_list[fc].index==i,'resistanceT1'].values\
                                + 0.5*df_list[fc].loc[df_list[fc].index==i,'mate_resistanceT1'].values + \
-                               np.random.normal(0, farms_sigEMB[farm], eggs_now)/np.sqrt(2)
+                               np.random.normal(0, farms_sigEMB[farm], eggs_now+250)/np.sqrt(2)
                         else:
-                            underlying = np.random.normal(inpt.f_muEMB,inpt.f_sigEMB,eggs_now)
+                            underlying = np.random.normal(inpt.f_muEMB,inpt.f_sigEMB,eggs_now+250)
                     else:
                         underlying = 0.5*df_list[fc].loc[df_list[fc].index==i,'resistanceT1'].values\
                                + 0.5*df_list[fc].loc[df_list[fc].index==i,'mate_resistanceT1'].values + \
-                               np.random.normal(0, farms_sigEMB[farm], eggs_now)/np.sqrt(2)
+                               np.random.normal(0, farms_sigEMB[farm], eggs_now+250)/np.sqrt(2)
                     bv_lst.extend(underlying.tolist())  
-                new_offs = len(bv_lst)
+                new_offs = len(dams)*eggs_now
                 num = 0
                 for f in range(inpt.nfarms):
                     arrivals = np.random.poisson(prop_arrive[farm][f]*new_offs)
