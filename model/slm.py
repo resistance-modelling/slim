@@ -81,9 +81,9 @@ def fb_mort(jours):
 #prob of developping after D days in a stage as given by Aldrin et al 2017
 def devTimeAldrin(del_p, del_m10, del_s, temp_c, D):   
     unbounded = log(2)*del_s*D**(del_s-1)*(del_m10*10**del_p/temp_c**del_p)**(-del_s)
-    if unbounded==0:
-        unbounded = 10**(-30)
-    return min(unbounded,1)
+    unbounded[unbounded==0] = 10**(-30)
+    unbounded[unbounded>1] = 1
+    return unbounded.astype('float64')
 
 #average dev days using devTimeAldrin, not used in model but handy to have
 #5deg: 5.2,-,67.5,2
