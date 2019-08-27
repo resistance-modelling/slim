@@ -1,0 +1,10 @@
+diff a/model/slm.py b/model/slm.py	(rejected hunks)
+@@ -280,7 +280,7 @@
+                     femaleAL = np.append(femaleAL, sum(df_list[fc].stage==5)/len(all_fish['f'+str(farm)+'c'+str(cage)]))
+                 
+                 if farm==0:            
+-                    temp_now = inpt.temp_f(cur_date.month, (inpt.xy_array[0][1]+inpt.xy_array[8][1])/2)
++                    temp_now = inpt.temp_f(cur_date.month, (inpt.xy_array[0][1]+inpt.xy_array[1][1])/2)
+                 else:
+                     temp_now = inpt.temp_f(cur_date.month, inpt.xy_array[farm-1][1])
+                                                                                   

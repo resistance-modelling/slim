@@ -208,11 +208,10 @@ try:
         os.makedirs(directory)
 except OSError:
     print('Error creating directory')
-file = open(file_path + 'timings' + v_file + '.csv','a+')    
-#file1 = open(file_path + 'lice_counts' + v_file + '.txt','a+')
-#file2 = open(file_path + 'resistanceBVs' + v_file + '.csv','a+') 
-#print('cur_date', 'muEMB', 'sigEMB','prop_ext', file=file2, sep=',', flush=True)
-prev_time = time.time() 
+file1 = open(file_path + 'lice_counts' + v_file + '.txt','a+')
+file2 = open(file_path + 'resistanceBVs' + v_file + '.csv','a+') 
+print('cur_date', 'muEMB', 'sigEMB','prop_ext', file=file2, sep=',', flush=True)
+#prev_time = time.time() 
 while cur_date <= inpt.end_date: 
     
     cur_date = cur_date + dt.timedelta(days=tau)
@@ -264,22 +263,18 @@ while cur_date <= inpt.end_date:
                 resistanceT1.extend(df_list[i].resistanceT1)
             prev_muEMB[farm] = np.array(resistanceT1).mean()
             prev_sigEMB[farm] = np.array(resistanceT1).std()
-            #print(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext, file=file2, sep=',', flush=True)          
+            print(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext, file=file2, sep=',', flush=True)          
             
         for cage in range(1, inpt.ncages[farm]+1):
             fc = fc + 1
             NSbool = eval(inpt.NSbool_str)
             if NSbool==True: 
-                   
-                if ((t%7)==0) & (cage<2):
-                    print((time.time()-prev_time), ', l260, farm', farm,  ',t', t, file=file, flush=True)
-                    prev_time = time.time()
-                
+                                    
                 if (cur_date.day==1)&(farm>0):
                     femaleAL = np.append(femaleAL, sum(df_list[fc].stage==5)/len(all_fish['f'+str(farm)+'c'+str(cage)]))
                 
                 if farm==0:            
-                    temp_now = inpt.temp_f(cur_date.month, (inpt.xy_array[0][1]+inpt.xy_array[1][1])/2)
+                    temp_now = inpt.temp_f(cur_date.month, (inpt.xy_array[0][1]+inpt.xy_array[8][1])/2)
                 else:
                     temp_now = inpt.temp_f(cur_date.month, inpt.xy_array[farm-1][1])
                                                                                   
@@ -294,9 +289,6 @@ while cur_date <= inpt.end_date:
         
                              
                 dead_fish = set([])
-                if ((t%7)==0) & (cage<2):
-                    print((time.time()-prev_time), ', l283, farm', farm,  ',t', t, file=file, flush=True)
-                    prev_time = time.time()
                 
                 #Background mortality events-------------------------------------------------------
                 inds_stage = np.array([sum(df_list[fc]['stage']==i) for i in range(1,7)])
@@ -318,9 +310,6 @@ while cur_date <= inpt.end_date:
                             lifemates.extend(df.nmates[values])
                     del df
 
-                if ((t%7)==0) & (cage<2):
-                    print((time.time()-prev_time), ', l307, farm', farm,  ',t', t, file=file, flush=True)
-                    prev_time = time.time()
                 #Treatment mortality events------------------------------------------------------
                 if farm>0:
                     EMBsus = [1 if df_list[fc].stage[i]>2 else 0 for i in range(len(df_list[fc].index))]
@@ -404,9 +393,6 @@ while cur_date <= inpt.end_date:
                     inf_inds = []
                 
                 #Mating events---------------------------------------------------------------------
-                if ((t%7)==0) & (cage<2):
-                    print((time.time()-prev_time), ', l406, farm', farm,  ',t', t, file=file, flush=True)
-                    prev_time = time.time()
                 #who is mating               
                 females = df_list[fc].loc[(df_list[fc].stage==5) & (df_list[fc].avail==0)].index
                 males = df_list[fc].loc[(df_list[fc].stage==6) & (df_list[fc].avail==0)].index
@@ -428,25 +414,15 @@ while cur_date <= inpt.end_date:
                 df_list[fc].loc[df_list[fc].index.isin(dams),'mate_resistanceT1'] = \
                 df_list[fc].loc[df_list[fc].index.isin(sires),'resistanceT1'].values
                 
-                if ((t%7)==0) & (cage<2):
-                    print((time.time()-prev_time), ', l431, farm', farm,  ',t', t, file=file, flush=True)
-                    prev_time = time.time()
                 #create offspring
                 bv_lst = []
                 eggs_now = int(round(eggs*tau/d_hatching(temp_now)))
                 eggs_plus = eggs_now+250  
-#                for d in dams:
-#                    if (df_list[fc].loc[df_list[fc].index==d].resistanceT1.isnull())|(df_list[fc].loc[df_list[fc].index==d].mate_resistanceT1.isnull()):
-#                        print(df_list[fc].loc[df_list[fc].index==d])
                 underlying = list(map(lambda d: egg_gen(farm, farms_sigEMB[farm], eggs_plus, df_list[fc].loc[df_list[fc].index==d]), dams))
                 underlying = [i for sub in underlying for i in sub]
-                #print(underlying[0])
                 bv_lst.extend(underlying)
                 new_offs = len(dams)*eggs_now
 
-                if ((t%7)==0) & (cage<2):
-                    print((time.time()-prev_time), ', l453, farm', farm,  ',t', t, file=file, flush=True)
-                    prev_time = time.time()
                 num = 0
                 for f in range(inpt.nfarms):
                     arrivals = np.random.poisson(prop_arrive[farm][f]*new_offs)
@@ -458,43 +434,23 @@ while cur_date <= inpt.end_date:
                         offs['Cage'] = np.random.choice(range(1,inpt.ncages[farm]+1), arrivals)
                         offs['stage'] = np.repeat(1, arrivals)
                         offs['stage_age'] = np.repeat(0, arrivals)
-                        if ((t%7)==0) & (cage<2):
-                            print((time.time()-prev_time), ', l458, farm', farm,  ',f', f, file=file, flush=True)
-                            prev_time = time.time()
                         if len(bv_lst)<arrivals:
                             randams = np.random.choice(dams,arrivals-len(bv_lst))
                             for i in randams:
                                 underlying = list(map(lambda d: egg_gen(farm, farms_sigEMB[farm], 1, df_list[fc].loc[df_list[fc].index==d]), randams))                       
                                 bv_lst.extend(underlying)  
-                        if ((t%7)==0) & (cage<2):
-                            print((time.time()-prev_time), ', l468, farm', farm,  ',f', f, file=file, flush=True)
-                            prev_time = time.time()
                         ran_bvs = np.random.choice(len(bv_lst),arrivals,replace=False)
                         offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]  
-                        if ((t%7)==0) & (cage<2):
-                            print((time.time()-prev_time), ', l473, farm', farm,  ',f', f, file=file, flush=True)
-                            prev_time = time.time()
                         for i in sorted(ran_bvs, reverse=True):
                             del bv_lst[i]     
-                        if ((t%7)==0) & (cage<2):
-                            print((time.time()-prev_time), ', l478, farm', farm,  ',f', f, file=file, flush=True)
-                            prev_time = time.time()
                         Earrival = [hrs_travel[farm][i] for i in offs.Farm]
                         offs['arrival'] = np.random.poisson(Earrival)
                         offs['avail'] = 0
                         offs['date'] = cur_date
                         offs['nmates'] = 0
-                        if ((t%7)==0) & (cage<2):
-                            print((time.time()-prev_time), ', l486, farm', farm,  ',f', f, file=file, flush=True)
-                            prev_time = time.time()
                         offspring = offspring.append(offs, ignore_index=True)
                         del offs
-                        if ((t%7)==0) & (cage<2):
-                            print((time.time()-prev_time), ', l491, farm', farm,  ',f', f, file=file, flush=True)
-                            prev_time = time.time()
-                if ((t%7)==0) & (cage<2):
-                    print((time.time()-prev_time), ', l484, farm', farm,  ',t', t, file=file, flush=True)
-                    prev_time = time.time()
+                        
 
                 #Update cage info------------------------------------------------------------------
                 #----------------------------------------------------------------------------------
@@ -518,9 +474,7 @@ while cur_date <= inpt.end_date:
                 if farm>0:
                     df_list[fc] = df_list[fc].drop(df_list[fc].loc[df_list[fc].Fish.isin(dead_fish)].index)
                 
-                if ((t%7)==0) & (cage<2):
-                    print((time.time()-prev_time), ', l510, farm', farm,  ',t', t, file=file, flush=True)
-                    prev_time = time.time()               
+                              
                 #df_list[fc].to_csv(file_path + 'lice_df.csv', mode='a')
                 
         if (cur_date.day==1)&(farm>0):      
@@ -530,12 +484,11 @@ while cur_date <= inpt.end_date:
             else:
                 femaleALm = 0
                 femaleALs = 0
-            #print(cur_date, femaleALm, femaleALs, file=file1, flush=True)
+            print(cur_date, femaleALm, femaleALs, file=file1, flush=True)
             delta_treat[farm-1] = femaleALm - prev_femaleAL[farm-1]
             prev_femaleAL[farm-1] = femaleALm
             femaleAL = np.array([],dtype=float)
             
                 
-#file1.close()  
-#file2.close() 
-file.close()
+file1.close()  
+file2.close() 
