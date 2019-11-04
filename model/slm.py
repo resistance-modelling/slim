@@ -404,17 +404,6 @@ while cur_date <= inpt.end_date:
                 #create offspring
                 bv_lst = []
                 eggs_now = int(round(eggs*tau/d_hatching(temp_now)))
-                eggs_plus = eggs_now+250  
-                underlying = list(map(lambda d: egg_gen(farm, farms_sigEMB[farm], eggs_plus, df_list[fc].loc[df_list[fc].index==d]), dams))
-                underlying = [i for sub in underlying for i in sub]
-                bv_lst.extend(underlying)
-                new_offs = len(dams)*eggs_now
-
-=======
-
-                #create offspring
-                bv_lst = []
-                eggs_now = int(round(eggs*tau/d_hatching(temp_now)))
                 for i in dams:
                     if farm==0:
                         r = np.random.uniform(0,1,1)
@@ -430,7 +419,7 @@ while cur_date <= inpt.end_date:
                                np.random.normal(0, farms_sigEMB[farm], eggs_now+250)/np.sqrt(2)
                     bv_lst.extend(underlying.tolist())  
                 new_offs = len(dams)*eggs_now
->>>>>>> parent of 84e1cd7... more efficient BV generation
+ 
                 num = 0
                 for f in range(inpt.nfarms):
                     arrivals = np.random.poisson(prop_arrive[farm][f]*new_offs)
