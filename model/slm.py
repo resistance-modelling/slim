@@ -97,19 +97,6 @@ def aveDevDays(del_p, del_m10, del_s, temp_c):
 def eudist(pointA,pointB):
     return sqrt((pointA[0]-pointB[0])**2 + (pointA[1]-pointB[1])**2)
 
-def egg_gen(farm, sig, eggs_plus, data):
-#    print(data['resistanceT1'].values, data['mate_resistanceT1'].values)
-    if farm==0:
-        r = np.random.uniform(0,1,1)
-        if r>inpt.prop_influx:
-            bvs = 0.5*data['resistanceT1'].values + 0.5*data['mate_resistanceT1'].values + \
-                np.random.normal(0, sig, eggs_plus)/np.sqrt(2)
-        else:
-            bvs = np.random.normal(inpt.f_muEMB,inpt.f_sigEMB, eggs_plus)
-    else:
-        bvs = 0.5*data['resistanceT1'].values + 0.5*data['mate_resistanceT1'].values + \
-                np.random.normal(0, sig, eggs_plus)/np.sqrt(2)
-    return bvs
 
 #----------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------
@@ -253,7 +240,7 @@ while cur_date <= inpt.end_date:
     for farm in range(inpt.nfarms):
         if (cur_date.day==1)&(farm>0):
             femaleAL = np.array([],dtype=float)
-
+        
         #Estimate resistance distribution params 
         if cur_date.day==1:
             farms_muEMB[farm] = prev_muEMB[farm]
@@ -287,7 +274,7 @@ while cur_date <= inpt.end_date:
                     df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching(temp_now)), 'avail'] = 0
                     df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching(temp_now)), 'mate_resistanceT1'] = None
         
-                             
+                                               
                 dead_fish = set([])
                 
                 #Background mortality events-------------------------------------------------------
@@ -423,6 +410,27 @@ while cur_date <= inpt.end_date:
                 bv_lst.extend(underlying)
                 new_offs = len(dams)*eggs_now
 
+=======
+
+                #create offspring
+                bv_lst = []
+                eggs_now = int(round(eggs*tau/d_hatching(temp_now)))
+                for i in dams:
+                    if farm==0:
+                        r = np.random.uniform(0,1,1)
+                        if r>inpt.prop_influx:
+                            underlying = 0.5*df_list[fc].loc[df_list[fc].index==i,'resistanceT1'].values\
+                               + 0.5*df_list[fc].loc[df_list[fc].index==i,'mate_resistanceT1'].values + \
+                               np.random.normal(0, farms_sigEMB[farm], eggs_now+250)/np.sqrt(2)
+                        else:
+                            underlying = np.random.normal(inpt.f_muEMB,inpt.f_sigEMB,eggs_now+250)
+                    else:
+                        underlying = 0.5*df_list[fc].loc[df_list[fc].index==i,'resistanceT1'].values\
+                               + 0.5*df_list[fc].loc[df_list[fc].index==i,'mate_resistanceT1'].values + \
+                               np.random.normal(0, farms_sigEMB[farm], eggs_now+250)/np.sqrt(2)
+                    bv_lst.extend(underlying.tolist())  
+                new_offs = len(dams)*eggs_now
+>>>>>>> parent of 84e1cd7... more efficient BV generation
                 num = 0
                 for f in range(inpt.nfarms):
                     arrivals = np.random.poisson(prop_arrive[farm][f]*new_offs)
@@ -437,7 +445,9 @@ while cur_date <= inpt.end_date:
                         if len(bv_lst)<arrivals:
                             randams = np.random.choice(dams,arrivals-len(bv_lst))
                             for i in randams:
-                                underlying = list(map(lambda d: egg_gen(farm, farms_sigEMB[farm], 1, df_list[fc].loc[df_list[fc].index==d]), randams))                       
+                                underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
+                                   + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
+                                   np.random.normal(0, farms_sigEMB[farm], 1)/np.sqrt(2)
                                 bv_lst.extend(underlying)  
                         ran_bvs = np.random.choice(len(bv_lst),arrivals,replace=False)
                         offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]  
