@@ -199,6 +199,8 @@ file1 = open(file_path + 'lice_counts' + v_file + '.txt','a+')
 file2 = open(file_path + 'resistanceBVs' + v_file + '.csv','a+') 
 print('cur_date', 'muEMB', 'sigEMB','prop_ext', file=file2, sep=',', flush=True)
 #prev_time = time.time() 
+prev_femaleAL = [0]*(inpt.nfarms-1)
+delta_treat = [0]*(inpt.nfarms)
 while cur_date <= inpt.end_date: 
     
     cur_date = cur_date + dt.timedelta(days=tau)
@@ -234,8 +236,6 @@ while cur_date <= inpt.end_date:
     #------------------------------------------------------------------------------------------
     #Events during tau in cage-----------------------------------------------------------------
     #------------------------------------------------------------------------------------------
-    prev_femaleAL = [0]*(inpt.nfarms-1)
-    delta_treat = [0]*(inpt.nfarms)
     fc = -1
     for farm in range(inpt.nfarms):
         if (cur_date.day==1)&(farm>0):
