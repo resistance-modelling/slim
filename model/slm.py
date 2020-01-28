@@ -222,7 +222,7 @@ while cur_date <= inpt.end_date:
             if NSbool==True: 
                 
                 if cur_date.day==1:
-                    femaleAL = np.append(femaleAL, sum(((df_list[fc].stage==5))/len(all_fish['f'+str(farm)+'c'+str(cage)]))
+                    femaleAL = np.append(femaleAL, sum((df_list[fc].stage==5)/len(all_fish['f'+str(farm)+'c'+str(cage)])))
                 
                 temp_now = inpt.temp_f(cur_date.month, inpt.xy_array[farm-1][1])   
                                            
@@ -230,7 +230,8 @@ while cur_date <= inpt.end_date:
                     df_list[fc].date = cur_date
                     df_list[fc].stage_age = df_list[fc].stage_age + tau
                     df_list[fc].arrival = df_list[fc].arrival - tau
-                    df_list[fc].loc[df_list[fc].avail>0, 'avail'] = df_list[fc].loc[df_list[fc].avail>0, 'avail'] + tau                    df_list[fc].loc[df_list[fc].avail>0, 'avail'] = df_list[fc].avail + tau
+                    df_list[fc].loc[df_list[fc].avail>0, 'avail'] = df_list[fc].loc[df_list[fc].avail>0, 'avail'] + tau
+                    df_list[fc].loc[df_list[fc].avail>0, 'avail'] = df_list[fc].avail + tau
                     df_list[fc].loc[(df_list[fc].MF=='M') & (df_list[fc].avail>4), 'avail'] = 0
                     df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching(temp_now)), 'avail'] = 0
                     df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching(temp_now)), 'mate_resistanceT1'] = None
@@ -302,7 +303,7 @@ while cur_date <= inpt.end_date:
                     L1toL2_inds = []
                                         
                 if inds_stage[2]>0:
-                    L3toL4 = devTimeAldrin(1.305,18.934,7.945,temp_now,df_list[fc].loc[df_list[fc].stage==3.'stage_age'].values) 
+                    L3toL4 = devTimeAldrin(1.305,18.934,7.945,temp_now,df_list[fc].loc[df_list[fc].stage==3,'stage_age'].values) 
                     L3toL4_ents = np.random.poisson(sum(L3toL4))
                     L3toL4_ents = min(L3toL4_ents, inds_stage[2])
                     L3toL4_inds = np.random.choice(df_list[fc].loc[df_list[fc]['stage']==3].index, \
@@ -379,8 +380,8 @@ while cur_date <= inpt.end_date:
                 bv_lst = []
                 eggs_now = int(round(eggs*tau/d_hatching(temp_now)))                
                 for i in dams:
-                    underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
-                               + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
+                    underlying = 0.5*df_list[fc].resistanceT1[i]\
+                               + 0.5*df_list[fc].mate_resistanceT1[i]+ \
                                np.random.normal(0, farms_sigEMB[farm-1], eggs_now+250)/np.sqrt(2)
                     bv_lst.extend(underlying)  
                 new_offs = len(dams)*eggs_now
@@ -398,15 +399,15 @@ while cur_date <= inpt.end_date:
                         if len(bv_lst)<arrivals:
                             randams = np.random.choice(dams,arrivals-len(bv_lst))
                             for i in randams:
-                                underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
-                                   + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
+                                underlying = 0.5*df_list[fc].resistanceT1[i]\
+                                   + 0.5*df_list[fc].mate_resistanceT1[i]+ \
                                    np.random.normal(0, farms_sigEMB[farm-1], 1)/np.sqrt(2)
                                 bv_lst.extend(underlying)  
                         ran_bvs = np.random.choice(len(bv_lst),arrivals,replace=False)
                         offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]  
                         for i in sorted(ran_bvs, reverse=True):
                             del bv_lst[i]     
-                        Earrival = [hrs_travel[farm][i] for i in offs.Farm]                            
+                        Earrival = [hrs_travel[farm-1][i-1] for i in offs.Farm]                            
                         offs['arrival'] = np.random.poisson(Earrival)
                         offs['avail'] = 0
                         offs['date'] = cur_date
