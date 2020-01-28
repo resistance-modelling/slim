@@ -161,7 +161,7 @@ file1 = open(file_path + 'lice_counts' + v_file + '.txt','a+')
 file2 = open(file_path + 'resistanceBVs' + v_file + '.csv','a+') 
 print('cur_date', 'muEMB', 'sigEMB', 'prop_ext', file=file2, sep=',', flush=True)
 #prev_time = time.time() 
-prev_femaleAL = [0]*(inpt.nfarms-1)
+#prev_femaleAL = [0]*(inpt.nfarms-1)
 delta_treat = [0]*(inpt.nfarms)
 while cur_date <= inpt.end_date: 
     
@@ -231,7 +231,6 @@ while cur_date <= inpt.end_date:
                     df_list[fc].stage_age = df_list[fc].stage_age + tau
                     df_list[fc].arrival = df_list[fc].arrival - tau
                     df_list[fc].loc[df_list[fc].avail>0, 'avail'] = df_list[fc].loc[df_list[fc].avail>0, 'avail'] + tau
-                    df_list[fc].loc[df_list[fc].avail>0, 'avail'] = df_list[fc].avail + tau
                     df_list[fc].loc[(df_list[fc].MF=='M') & (df_list[fc].avail>4), 'avail'] = 0
                     df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching(temp_now)), 'avail'] = 0
                     df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching(temp_now)), 'mate_resistanceT1'] = None
@@ -362,7 +361,7 @@ while cur_date <= inpt.end_date:
                 if nmating>0:
                     sires = np.random.choice(males, nmating, replace=False)
                     p_dams = 1 - (df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']/
-                                np.sum(df_list[fc].loc[df_list[fc].index.isin(females),'stage_age'])+1)
+                                (np.sum(df_list[fc].loc[df_list[fc].index.isin(females),'stage_age'])+1))
                     dams = np.random.choice(females, nmating, p=np.array(p_dams/np.sum(p_dams)).tolist(), replace=False)
                 else:
                     sires = []
