@@ -201,7 +201,7 @@ while cur_date <= inpt.end_date:
             femaleAL = np.array([],dtype=float)
         
         #Estimate distribution params for external pressure that originated from farms
-        if (t%35)==0:
+        if ((t%35)==0) & (cur_date >= inpt.farm_start[farm-1] + dt.timedelta(days=35)):
             farms_muEMB[farm-1] = prev_muEMB[farm-1]
             farms_sigEMB[farm-1] = prev_sigEMB[farm-1]
             resistanceT1 = []
