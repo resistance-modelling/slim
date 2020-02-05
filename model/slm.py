@@ -189,7 +189,7 @@ while cur_date <= inpt.end_date:
         res_muEMB = pres_muEMB
         pres_muEMB = np.mean(plankt_resist)
         plankt_resist = []
-        prop_ext = (sum(inpt.ncages)*inpt.ext_pressure)/(sum(inpt.ncages)*inpt.ext_pressure + offs_len/35)
+        prop_ext = (sum(inpt.ncages)*eval(inpt.ext_pressure))/(sum(inpt.ncages)*eval(inpt.ext_pressure) + offs_len/35)
         offs_len = 0        
         if len(lifemates)>0:
             print(cur_date, len(lifemates), np.nanmean(lifemates),flush=True)
@@ -239,7 +239,7 @@ while cur_date <= inpt.end_date:
                     df_list[fc].loc[(df_list[fc].MF=='F') & (df_list[fc].avail>d_hatching(temp_now)), 'mate_resistanceT1'] = None
                     
                 #new planktonic stages arriving from wildlife reservoir
-                nplankt = inpt.ext_pressure*tau
+                nplankt = eval(inpt.ext_pressure)*tau
                 plankt_cage = pd.DataFrame(columns=df_list[fc].columns)
                 plankt_cage['MF'] = np.random.choice(['F','M'],nplankt)
                 plankt_cage['stage'] = 2 
