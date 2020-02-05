@@ -74,14 +74,11 @@ v_file = str(sys.argv[3])
 #Functions-------------------------------------------------------------------------------------
 
 #Update resistance distribution and sample from it 
-def resistEMB(prp_ext, frms_muEMB, frms_sigEMB, length=1): 
+def resistEMB(prp_ext, frms_muEMB, res_muEMB, length=1): 
     EMB_out = []
+    est_muEMB = inpt.prop_influx*inpt.f_muEMB + (1-inpt.prop_influx)*(prp_ext*res_muEMB + (1-prp_ext)*frms_muEMB)
     for i in range(length):
-        r = np.random.uniform(0,1,1)
-        if r<prp_ext:
-            EMB_out.extend([np.random.normal(inpt.f_muEMB, inpt.f_sigEMB)])        
-        else:
-            EMB_out.extend([np.random.normal(frms_muEMB, frms_sigEMB)])
+        EMB_out.extend([np.random.normal(est_muEMB, inpt.f_sigEMB)])
     return EMB_out
                                
 #Fish background mortality rate, decreasing as in Soares et al 2011                           
@@ -145,7 +142,10 @@ farms_muEMB = [inpt.f_muEMB]*inpt.nfarms
 farms_sigEMB = [inpt.f_sigEMB]*inpt.nfarms
 prev_muEMB = farms_muEMB.copy()
 prev_sigEMB = farms_sigEMB.copy()
+res_muEMB = inpt.f_muEMB
+pres_muEMB = inpt.f_muEMB
 prop_ext = 1
+plankt_resist = []
 #----------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------
 #--------------------------Simulation----------------------------------------------------------
@@ -186,10 +186,13 @@ while cur_date <= inpt.end_date:
         print('Warning not all offspring cleared!', flush=True)
 
     if (t%35)==0:
+        res_muEMB = pres_muEMB
+        pres_muEMB = np.mean(plankt_resist)
+        plankt_resist = []
         prop_ext = (sum(inpt.ncages)*inpt.ext_pressure)/(sum(inpt.ncages)*inpt.ext_pressure + offs_len/35)
         offs_len = 0        
         if len(lifemates)>0:
-            print(cur_date, len(lifemates), np.array(lifemates).mean(),flush=True)
+            print(cur_date, len(lifemates), np.nanmean(lifemates),flush=True)
             lifemates=[]
             
     #------------------------------------------------------------------------------------------
@@ -246,10 +249,13 @@ while cur_date <= inpt.end_date:
                 p = p/np.sum(p) #probs need to add up to one 
                 plankt_cage['stage_age'] = np.random.choice(range(15),nplankt,p=p)
                 plankt_cage['avail'] = 0
-                plankt_cage['resistanceT1'] = resistEMB(prop_ext, farms_muEMB[farm-1], farms_sigEMB[farm-1], nplankt)
+                plankt_cage['resistanceT1'] = resistEMB(prop_ext, farms_muEMB[farm-1], res_muEMB, nplankt)
                 plankt_cage['date'] = cur_date
                 plankt_cage['avail'] = 0
                 plankt_cage['arrival'] = 0
+                
+                if ((t+1)%35)==0:
+                    plankt_resist.extend(plankt_cage.resistanceT1)
                            
                 df_list[fc] = df_list[fc].append(plankt_cage, ignore_index=True)
                 dead_fish = set([])
