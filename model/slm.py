@@ -214,8 +214,8 @@ while cur_date <= inpt.end_date:
             else:
                 for i in range(sum(inpt.ncages[0:farm-1])-1,sum(inpt.ncages[0:farm])):
                     resistanceT1.extend(df_list[i].resistanceT1)
-            prev_muEMB[farm-1] = np.array(resistanceT1).mean()
-            prev_sigEMB[farm-1] = np.array(resistanceT1).std()
+            prev_muEMB[farm-1] = np.nanmean(resistanceT1)
+            prev_sigEMB[farm-1] = np.nanstd(resistanceT1)
             print(cur_date, prev_muEMB[farm-1], prev_sigEMB[farm-1], prop_ext, file=file2, sep=',', flush=True)
         
         for cage in range(1, inpt.ncages[farm-1]+1):
