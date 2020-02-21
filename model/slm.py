@@ -159,7 +159,7 @@ except OSError:
     print('Error creating directory')
 file1 = open(file_path + 'lice_counts' + v_file + '.txt','a+')
 file2 = open(file_path + 'resistanceBVs' + v_file + '.csv','a+') 
-print('cur_date', 'muEMB', 'sigEMB', 'prop_ext', file=file2, sep=',', flush=True)
+print('farm', 'cur_date', 'muEMB', 'sigEMB', 'prop_ext', file=file2, sep=',', flush=True)
 #prev_time = time.time() 
 #prev_femaleAL = [0]*(inpt.nfarms-1)
 delta_treat = [0]*(inpt.nfarms)
@@ -179,11 +179,13 @@ while cur_date <= inpt.end_date:
     for f in range(1,inpt.nfarms+1):
         for c in range(1,inpt.ncages[f-1]+1):
             k = k + 1
-            df_list[k] = df_list[k].append(offspring[(offspring.Farm==f) & (offspring.Cage==c)].copy(), ignore_index=True)
-            offspring = offspring[(offspring.Farm!=f) & (offspring.Cage!=c)]
+            if len(offspring.index)>0:
+                df_list[k] = df_list[k].append(offspring[(offspring['Farm']==f) & (offspring['Cage']==c)].copy(), ignore_index=True)
+                offspring = offspring.drop(offspring[(offspring['Farm']==f) & (offspring['Cage']==c)].index)
 
     if len(offspring.index)>0:
         print('Warning not all offspring cleared!', flush=True)
+        offspring = pd.DataFrame(columns=df_list[0].columns)
 
     if (t%35)==0:
         res_muEMB = pres_muEMB
@@ -212,11 +214,11 @@ while cur_date <= inpt.end_date:
                 for i in range(inpt.ncages[farm-1]):
                     resistanceT1.extend(df_list[i].resistanceT1)
             else:
-                for i in range(sum(inpt.ncages[0:farm-1])-1,sum(inpt.ncages[0:farm])):
+                for i in range(sum(inpt.ncages[0:farm-1]),sum(inpt.ncages[0:farm])):
                     resistanceT1.extend(df_list[i].resistanceT1)
             prev_muEMB[farm-1] = np.nanmean(resistanceT1)
             prev_sigEMB[farm-1] = np.nanstd(resistanceT1)
-            print(cur_date, prev_muEMB[farm-1], prev_sigEMB[farm-1], prop_ext, file=file2, sep=',', flush=True)
+            print(farm, cur_date, prev_muEMB[farm-1], prev_sigEMB[farm-1], prop_ext, file=file2, sep=',', flush=True)
         
         for cage in range(1, inpt.ncages[farm-1]+1):
             fc = fc + 1
@@ -399,7 +401,7 @@ while cur_date <= inpt.end_date:
                         offs = pd.DataFrame(columns=df_list[fc].columns)
                         offs['MF'] = np.random.choice(['F','M'], arrivals)
                         offs['Farm'] = f
-                        offs['Cage'] = np.random.choice(range(1,inpt.ncages[farm-1]+1), arrivals)
+                        offs['Cage'] = np.random.choice(range(1,inpt.ncages[f-1]+1), arrivals)
                         offs['stage'] = np.repeat(1, arrivals)
                         offs['stage_age'] = np.repeat(0, arrivals)
                         if len(bv_lst)<arrivals:
