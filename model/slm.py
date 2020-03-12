@@ -76,7 +76,7 @@ v_file = str(sys.argv[3])
 #Update resistance distribution and sample from it 
 def resistEMB(prp_ext, frms_muEMB, res_muEMB, length=1): 
     EMB_out = []
-    est_muEMB = inpt.prop_influx*inpt.f_muEMB + (1-inpt.prop_influx)*(prp_ext*res_muEMB + (1-prp_ext)*frms_muEMB)
+    est_muEMB = prp_ext*(inpt.prop_influx*inpt.f_muEMB + (1-inpt.prop_influx)*res_muEMB) + (1-prp_ext)*frms_muEMB
     for i in range(length):
         EMB_out.extend([np.random.normal(est_muEMB, inpt.f_sigEMB)])
     return EMB_out
@@ -181,11 +181,8 @@ while cur_date <= inpt.end_date:
             k = k + 1
             if len(offspring.index)>0:
                 df_list[k] = df_list[k].append(offspring[(offspring['Farm']==f) & (offspring['Cage']==c)].copy(), ignore_index=True)
-                offspring = offspring.drop(offspring[(offspring['Farm']==f) & (offspring['Cage']==c)].index)
-
-    if len(offspring.index)>0:
-        print('Warning not all offspring cleared!', flush=True)
-        offspring = pd.DataFrame(columns=df_list[0].columns)
+                #offspring = offspring.drop(offspring[(offspring['Farm']==f) & (offspring['Cage']==c)].index)
+    offspring = pd.DataFrame(columns=df_list[0].columns)
 
     if (t%35)==0:
         res_muEMB = pres_muEMB
@@ -260,6 +257,7 @@ while cur_date <= inpt.end_date:
                     plankt_resist.extend(plankt_cage.resistanceT1)
                            
                 df_list[fc] = df_list[fc].append(plankt_cage, ignore_index=True)
+                del plankt_cage
                 dead_fish = set([])
                 
                 #Background mortality events-------------------------------------------------------
@@ -394,8 +392,9 @@ while cur_date <= inpt.end_date:
                     bv_lst.extend(underlying)  
                 new_offs = len(dams)*eggs_now
                 num = 0
+                offs_lst = [offspring]
                 for f in range(1,inpt.nfarms+1):
-                    arrivals = np.random.poisson(prop_arrive[farm-1][f-1]*new_offs)
+                    arrivals = np.random.poisson(prop_arrive[f-1][farm-1]*new_offs)
                     if arrivals>0:
                         num = num + 1
                         offs = pd.DataFrame(columns=df_list[fc].columns)
@@ -415,14 +414,14 @@ while cur_date <= inpt.end_date:
                         offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]  
                         for i in sorted(ran_bvs, reverse=True):
                             del bv_lst[i]     
-                        Earrival = [hrs_travel[farm-1][i-1] for i in offs.Farm]                            
+                        Earrival = [hrs_travel[i-1][farm-1] for i in offs.Farm]                            
                         offs['arrival'] = np.random.poisson(Earrival)
                         offs['avail'] = 0
                         offs['date'] = cur_date
                         offs['nmates'] = 0
-                        offspring = offspring.append(offs, ignore_index=True)
-                        
+                        offs_lst.append(offs)                        
                         del offs
+                offspring = pd.concat(offs_lst)
             
                 
                 #Update cage info------------------------------------------------------------------
