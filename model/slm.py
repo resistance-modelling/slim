@@ -137,6 +137,7 @@ offspring = pd.DataFrame(columns=df_list[0].columns)
 
 lifemates = []
 offs_len = 0
+prevOffs_len = 0
 env_sigEMB = 1.0
 farms_muEMB = [inpt.f_muEMB]*inpt.nfarms
 farms_sigEMB = [inpt.f_sigEMB]*inpt.nfarms
@@ -189,6 +190,7 @@ while cur_date <= inpt.end_date:
         pres_muEMB = np.mean(plankt_resist)
         plankt_resist = []
         prop_ext = (sum(inpt.ncages)*eval(inpt.ext_pressure))/(sum(inpt.ncages)*eval(inpt.ext_pressure) + offs_len/35)
+        prevOffs_len = offs_len/35
         offs_len = 0        
         if len(lifemates)>0:
             print(cur_date, len(lifemates), np.nanmean(lifemates),flush=True)
