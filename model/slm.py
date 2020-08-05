@@ -366,12 +366,12 @@ while cur_date <= inpt.end_date:
                 males = df_list[fc].loc[(df_list[fc].stage==6) & (df_list[fc].avail==0)].index
                 nmating = min(sum(df_list[fc].index.isin(females)),\
                           sum(df_list[fc].index.isin(males)))
-                mred = min(2, round(nmating/10))
+                mred = min(2, round(nmating/5))
                 nmating = nmating - np.random.poisson(mred)
                 if nmating>0:
                     sires = np.random.choice(males, nmating, replace=False)
-                    p_dams = 1 - (df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']/
-                                (np.sum(df_list[fc].loc[df_list[fc].index.isin(females),'stage_age'])+1))
+                    p_dams = 1 - (df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']**2/
+                                (np.sum(df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']**2)+1))
                     dams = np.random.choice(females, nmating, p=np.array(p_dams/np.sum(p_dams)).tolist(), replace=False)
                 else:
                     sires = []
