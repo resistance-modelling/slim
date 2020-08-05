@@ -366,6 +366,8 @@ while cur_date <= inpt.end_date:
                 males = df_list[fc].loc[(df_list[fc].stage==6) & (df_list[fc].avail==0)].index
                 nmating = min(sum(df_list[fc].index.isin(females)),\
                           sum(df_list[fc].index.isin(males)))
+                mred = min(2, round(nmating/10))
+                nmating = nmating - np.random.poisson(mred)
                 if nmating>0:
                     sires = np.random.choice(males, nmating, replace=False)
                     p_dams = 1 - (df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']/
@@ -423,6 +425,7 @@ while cur_date <= inpt.end_date:
                         offs_lst.append(offs)                        
                         del offs
                 offspring = pd.concat(offs_lst)
+            
                 
                 #Update cage info------------------------------------------------------------------
                 #----------------------------------------------------------------------------------
