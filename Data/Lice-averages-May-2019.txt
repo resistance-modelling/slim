@@ -1,0 +1,237 @@
+May 2019
+
+Company,Farm,Adult female lice (Average per fish)
+Cooke Aquaculture (Scotland),Balta Isle,0.20
+Cooke Aquaculture (Scotland),Bastaness,0.83
+Cooke Aquaculture (Scotland),Bay of Cleat (North),0.00
+Cooke Aquaculture (Scotland),Bay of Ham,Fallow
+Cooke Aquaculture (Scotland),Bay of Vady,0.00
+Cooke Aquaculture (Scotland),Bow of Hascosay,2.01
+Cooke Aquaculture (Scotland),Burkwell,2.24
+Cooke Aquaculture (Scotland),Burrastow,1.85 (Farm fallowed in May)
+Cooke Aquaculture (Scotland),Carness Bay,0.00
+Cooke Aquaculture (Scotland),Chalmers Hope,0.00
+Cooke Aquaculture (Scotland),Cloudin,1.01
+Cooke Aquaculture (Scotland),Djubawick,1.04
+Cooke Aquaculture (Scotland),East Skelwick,0.00
+Cooke Aquaculture (Scotland),Fara West,Fallow
+Cooke Aquaculture (Scotland),Flaeshins,0.65
+Cooke Aquaculture (Scotland),Hogan,Fallow
+Cooke Aquaculture (Scotland),Kirk Noust,No count - farm recently stocked
+Cooke Aquaculture (Scotland),Kirkabister,Fallow
+Cooke Aquaculture (Scotland),Lyrawa Bay,Fallow
+Cooke Aquaculture (Scotland),Meil Bay,0.00
+Cooke Aquaculture (Scotland),MidTaing,Fallow
+Cooke Aquaculture (Scotland),Ness of Copister,0.04
+Cooke Aquaculture (Scotland),North Sandwick,0.43
+Cooke Aquaculture (Scotland),Ouseness,0.00
+Cooke Aquaculture (Scotland),Pegal Bay,0.00
+Cooke Aquaculture (Scotland),Quanterness,0.00
+Cooke Aquaculture (Scotland),South Cava,0.00
+Cooke Aquaculture (Scotland),Staid of Aithness,0.01
+Cooke Aquaculture (Scotland),Uyea Isle,2.75
+Cooke Aquaculture (Scotland),Vee Taing,Fallow
+Cooke Aquaculture (Scotland),Vestness,0.00
+Cooke Aquaculture (Scotland),Wick of Belmont,0.11
+Cooke Aquaculture (Scotland),Wick of Vatsetter,Fallow
+Cooke Aquaculture (Scotland),Winna Ness,Fallow
+Grieg Seafood Shetland Ltd,Bomlo,0.22
+Grieg Seafood Shetland Ltd,Coledeep,0.03
+Grieg Seafood Shetland Ltd,Corlarach,Fallow
+Grieg Seafood Shetland Ltd,East of Papa Little,0.05
+Grieg Seafood Shetland Ltd,Foraness,0.61
+Grieg Seafood Shetland Ltd,Gob na Hoe,Farm fallowed in May
+Grieg Seafood Shetland Ltd,Langa,3.60
+Grieg Seafood Shetland Ltd,Leinish,Farm fallowed in May
+Grieg Seafood Shetland Ltd,North Papa,1.63
+Grieg Seafood Shetland Ltd,North Voe,0.69
+Grieg Seafood Shetland Ltd,Poseidon,0.36
+Grieg Seafood Shetland Ltd,Railsbrough,0.11 (Farm fallowed in May)
+Grieg Seafood Shetland Ltd,Score Holms,4.84
+Grieg Seafood Shetland Ltd,Setter,Fallow
+Grieg Seafood Shetland Ltd,Snizort East,Fallow
+Grieg Seafood Shetland Ltd,South of Linga,0.16
+Grieg Seafood Shetland Ltd,Swining 3,0.08
+Grieg Seafood Shetland Ltd,Uig Bay,0.00 (Farm stocked in May)
+Grieg Seafood Shetland Ltd,West of Burwick,1.03
+Hendrix-Genetics,Ormsary,0.05
+Loch Duart Ltd,Badcall,0.00 (Farm stocked in May)
+Loch Duart Ltd,Calbha Bay,0.04
+Loch Duart Ltd,Drumbeg,Fallow
+Loch Duart Ltd,Loch a Chairn Bhain,0.00
+Loch Duart Ltd,Loch Carnan,2.19
+Loch Duart Ltd,Loch Laxford,0.04
+Loch Duart Ltd,Lochmaddy,0.00
+Loch Duart Ltd,Oldany,0.53
+Loch Duart Ltd,Outer Bay,Broodstock - visual checks
+Loch Duart Ltd,Sound of Harris,0.33
+Mowi Scotland Limited,Ardintoul,0.08
+Mowi Scotland Limited,Ardnish,0.13
+Mowi Scotland Limited,Bagh Dail Nan Cean,0.18
+Mowi Scotland Limited,Boisdale (An Camus),Fallow
+Mowi Scotland Limited,Cairidh,0.91
+Mowi Scotland Limited,Camas Glas,0.14
+Mowi Scotland Limited,Caolas a Deas East,0.04
+Mowi Scotland Limited,Caolas a Deas West,0.04
+Mowi Scotland Limited,Carradale,Fallow
+Mowi Scotland Limited,Carradale North,Fallow
+Mowi Scotland Limited,Colonsay,0.00
+Mowi Scotland Limited,Duich,0.02
+Mowi Scotland Limited,Glencripesdale,Fallow
+Mowi Scotland Limited,Gorsten,0.10
+Mowi Scotland Limited,Greshornish,0.00
+Mowi Scotland Limited,Grey Horse Channel,0.05
+Mowi Scotland Limited,Groatay,0.15
+Mowi Scotland Limited,Harport,0.04
+Mowi Scotland Limited,Hellisay,0.47 (Farm stocked in May)
+Mowi Scotland Limited,Invasion Bay,0.04
+Mowi Scotland Limited,Isle Ewe,0.00
+Mowi Scotland Limited,Kingairloch,0.63
+Mowi Scotland Limited,Leven,0.34
+Mowi Scotland Limited,Linnhe,0.37
+Mowi Scotland Limited,Loch Alsh,0.10
+Mowi Scotland Limited,Loch Hourn,0.48
+Mowi Scotland Limited,Macleans Nose,0.07
+Mowi Scotland Limited,Maol Ban,0.82
+Mowi Scotland Limited,Marulaig Bay,Fallow
+Mowi Scotland Limited,Muck,0.22
+Mowi Scotland Limited,North Shore,0.05
+Mowi Scotland Limited,North Shore East,0.02
+Mowi Scotland Limited,Noster,0.00
+Mowi Scotland Limited,Ornish,1.58
+Mowi Scotland Limited,Poll Na Gille,0.14
+Mowi Scotland Limited,Port Na Cro,0.23
+Mowi Scotland Limited,Raineach,Fallow
+Mowi Scotland Limited,Rum,0.41
+Mowi Scotland Limited,Sconser,0.42
+Mowi Scotland Limited,Sconser Quarry,0.57
+Mowi Scotland Limited,Scotasay,Fallow
+Mowi Scotland Limited,Seaforth,0.00
+Mowi Scotland Limited,Soay,0.07
+Mowi Scotland Limited,South West Shuna,0.20
+Mowi Scotland Limited,Stulaigh,Farm fallowed in May
+Mowi Scotland Limited,Tabhaigh,0.15
+Mowi Scotland Limited,Torridon,Farm fallowed in May
+Scottish Salmon Company Ltd,Aird,1.53
+Scottish Salmon Company Ltd,Ardcastle Bay,0.95
+Scottish Salmon Company Ltd,Ardgadden,1.93
+Scottish Salmon Company Ltd,Ardyne,0.00
+Scottish Salmon Company Ltd,Druimyeon Bay,0.08
+Scottish Salmon Company Ltd,East Tarbert Bay,0.09
+Scottish Salmon Company Ltd,Eport Outer,Farm fallowed in May
+Scottish Salmon Company Ltd,Eughlam,0.00
+Scottish Salmon Company Ltd,Furnace Quarry,Fallow
+Scottish Salmon Company Ltd,Geasgill,1.59
+Scottish Salmon Company Ltd,Glenan Bay,0.23
+Scottish Salmon Company Ltd,Gob a Bharra,0.22 (Farm fallowed in May)
+Scottish Salmon Company Ltd,Gometra,2.19
+Scottish Salmon Company Ltd,Gravir Outer,0.09
+Scottish Salmon Company Ltd,Greanamul,2.68
+Scottish Salmon Company Ltd,Grimsay,1.42
+Scottish Salmon Company Ltd,Inch Kenneth,1.81
+Scottish Salmon Company Ltd,Kenmore,0.33
+Scottish Salmon Company Ltd,Kyles Vuia,0.01
+Scottish Salmon Company Ltd,Lamlash,0.62
+Scottish Salmon Company Ltd,Loch Tuath,2.17
+Scottish Salmon Company Ltd,Maaey,2.79
+Scottish Salmon Company Ltd,Maragay Mor,1.66
+Scottish Salmon Company Ltd,Meall Mhor,Fallow
+Scottish Salmon Company Ltd,Petersport North,2.14
+Scottish Salmon Company Ltd,Petersport South,1.71
+Scottish Salmon Company Ltd,Plocrapool,1.81
+Scottish Salmon Company Ltd,Portree,0.00
+Scottish Salmon Company Ltd,Portree Outer,0.02
+Scottish Salmon Company Ltd,Quarry Point,Farm fallowed in May
+Scottish Salmon Company Ltd,Reibinish,2.24
+Scottish Salmon Company Ltd,Rubha Stillaig,0.22
+Scottish Salmon Company Ltd,Scadabay,Fallow
+Scottish Salmon Company Ltd,Sgeir Dughall,2.16
+Scottish Salmon Company Ltd,Sgian Dubh,0.00
+Scottish Salmon Company Ltd,Strome,0.75 (Farm stocked in May)
+Scottish Salmon Company Ltd,Strondoir Bay,Fallow
+Scottish Salmon Company Ltd,Strone,0.00
+Scottish Salmon Company Ltd,Taranaish,0.00
+Scottish Salmon Company Ltd,Tarbert South,1.30
+Scottish Salmon Company Ltd,Treanay,Fallow
+Scottish Salmon Company Ltd,Trilleachan Mor,Fallow
+Scottish Salmon Company Ltd,Uiskevagh,4.55 (Farm fallowed in May)
+Scottish Salmon Company Ltd,Vacasay,Fallow
+Scottish Salmon Company Ltd,Vuia Mor,0.00
+Scottish Sea Farms Ltd,Bight of Bellister,2.16
+Scottish Sea Farms Ltd,Bloody Bay,0.47
+Scottish Sea Farms Ltd,Bring head,0.00
+Scottish Sea Farms Ltd,Dunstaffnage,0.76
+Scottish Sea Farms Ltd,Eday,Fallow
+Scottish Sea Farms Ltd,Fada,Fallow
+Scottish Sea Farms Ltd,Fishnish (A),0.12
+Scottish Sea Farms Ltd,Fishnish (B),Fallow
+Scottish Sea Farms Ltd,Fiunary,0.04
+Scottish Sea Farms Ltd,Grunna Voe,5.75
+Scottish Sea Farms Ltd,Holms Geo,2.65
+Scottish Sea Farms Ltd,Kempie Bay,0.25
+Scottish Sea Farms Ltd,Kerrera B (Charlotte Bay),0.48
+Scottish Sea Farms Ltd,Kishorn A (South),1.56
+Scottish Sea Farms Ltd,Kishorn B (North),1.61
+Scottish Sea Farms Ltd,Kishorn C (West),1.45
+Scottish Sea Farms Ltd,Lismore East (Walters),0.96
+Scottish Sea Farms Ltd,Lismore North,0.65
+Scottish Sea Farms Ltd,Lismore West (B),Fallow
+Scottish Sea Farms Ltd,Loch Creran (B),1.32
+Scottish Sea Farms Ltd,Loch Spelve (B),0.09
+Scottish Sea Farms Ltd,Loura Voe,6.15
+Scottish Sea Farms Ltd,Mangaster,0.13
+Scottish Sea Farms Ltd,Nevis A,0.32
+Scottish Sea Farms Ltd,Nevis C,0.85
+Scottish Sea Farms Ltd,Puldrite,Fallow
+Scottish Sea Farms Ltd,Scallastle,0.30
+Scottish Sea Farms Ltd,Shapinsay,0.00
+Scottish Sea Farms Ltd,Shuna,0.68
+Scottish Sea Farms Ltd,Sian Bay,0.59
+Scottish Sea Farms Ltd,Slocka Ronas Voe,0.00
+Scottish Sea Farms Ltd,Tanera,0.04
+Scottish Sea Farms Ltd,Teisti Geo,1.84
+Scottish Sea Farms Ltd,Toyness,0.01
+Scottish Sea Farms Ltd,Vidlin,0.41
+Scottish Sea Farms Ltd,Westerbister,0.03
+Scottish Sea Farms Ltd,Wyre,Farm fallowed in May
+Wester Ross Fisheries Ltd,Ardessie A,0.00 (Farm stocked in May)
+Wester Ross Fisheries Ltd,Ardessie B,0.00 (Farm stocked in May)
+Wester Ross Fisheries Ltd,Ardmair,0.03
+Wester Ross Fisheries Ltd,Corry Farm,0.00
+Notes to support the table
+
+Sea lice are adult females, presented as monthly averages (per fish).
+
+Farms count sea lice every week. Figures are reported by calendar month. Therefore
+some months include five full weeks and some include four full weeks to cover the 52
+weeks of the year.
+
+
+
+"Fallow" = the farm was fallow or empty throughout the entire reporting month.
+
+“Farm stocked in May” = the farm was fallow or empty at the start of the month but was
+restocked during the month.
+
+"Farm fallowed in May" = the farm was stocked at the start of the month but became
+fallow or empty during that month.
+
+“No count – harvesting” = fish were being harvested throughout the month. Under such
+circumstances it is not always possible to record the lice count.
+
+"Broodstock fish - visual checks" - the fish on the farm are broodstock and they were
+checked visually without removing them from the water.
+
+"No count - farm recently stocked" - the farm was recently stocked and it may not have
+been possible or appropriate to record a lice count.
+
+
+
+Statistics for May 2019
+
+There are 197 active salmon farms in Scotland.
+
+Of these, 165 (or 84%) were stocked at some point during May 2019.
+
+This means 32 (or 16%) of the active farms were fallow or empty throughout May 2019.
+

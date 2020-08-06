@@ -1,0 +1,11 @@
+	Farm	Cage	Fish	MF	stage	stage_age	avail	mate_resistanceT1	resistanceT1	date
+	Farm	Cage	Fish	MF	stage	stage_age	avail	mate_resistanceT1	resistanceT1	date
+	Farm	Cage	Fish	MF	stage	stage_age	avail	mate_resistanceT1	resistanceT1	date
+	Farm	Cage	Fish	MF	stage	stage_age	avail	mate_resistanceT1	resistanceT1	date
+	Farm	Cage	Fish	MF	stage	stage_age	avail	mate_resistanceT1	resistanceT1	date
+	Farm	Cage	Fish	MF	stage	stage_age	avail	mate_resistanceT1	resistanceT1	date
+2	1	1	2	M	3	1	0		0.0656246233104898	2016-03-07
+	Farm	Cage	Fish	MF	stage	stage_age	avail	mate_resistanceT1	resistanceT1	date
+2	1	1	2	M	3	2	0		0.0656246233104898	2016-03-08
+	Farm	Cage	Fish	MF	stage	stage_age	avail	mate_resistanceT1	resistanceT1	date
+2	1	1	2	M	3	3	0		0.0656246233104898	2016-03-09
