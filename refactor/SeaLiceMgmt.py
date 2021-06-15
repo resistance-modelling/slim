@@ -1,14 +1,17 @@
 """
 TODO: Describe this simulation.
 """
-import sys
+import copy
+import datetime as dt
 import getopt
 import logging
-from pathlib import Path
 import math
-import datetime as dt
-from scipy.spatial import distance
+import sys
+from pathlib import Path
+
 import numpy as np
+from scipy.spatial import distance
+
 import config as cfg
 import Farm as frm
 

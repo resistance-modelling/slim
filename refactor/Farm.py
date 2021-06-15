@@ -145,7 +145,7 @@ class Reservoir:
         :param nplankt: TODO ???
         """
         self.date = cfg.start_date
-        self.nFish = 4000
+        self.num_fish = 4000
 
         # this is by no means optimal: I want to distribute nplankt lice across
         # each stage at random. (the method I use here is to create a random list
@@ -259,7 +259,7 @@ class Cage:# pylint: disable=R0902
     Fish cages contain the fish.
     """
 
-    def __init__(self, farm, label, nplankt):
+    def __init__(self, farm, label, start_date, nplankt):
         """
         Create a cage on a farm
         :param farm: the farm this cage is attached to
@@ -544,7 +544,7 @@ class Cage:# pylint: disable=R0902
 
             # inf_ents now go on to infect fish so get removed from the general lice population.
             return  min(inf_ents, num_avail_lice)
-        else
+        else:
             return 0
 
     def do_mating_events(self):
@@ -639,23 +639,23 @@ class Cage:# pylint: disable=R0902
         pass
 
 
-    def update_deltas(dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish):
+    def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish):
         """
         Update the number of fish and the lice in each life stage given the number that move between stages in this time period.
         """
 
-        for stage in lice_population:
+        for stage in self.lice_population:
             # update background mortality
             self.lice_population[stage] -= dead_lice_dist[stage]
 
             # update population due to treatment
-            num_dead = treatment_mortality[stage]
+            num_dead = treatment_mortality.get(stage, 0)
             if num_dead > 0:
                 self.lice_population[stage] -= num_dead
 
         self.lice_population['L5m'] += new_males
         self.lice_population['L5f'] += new_females
-        self.lice_population['L4'] = self.lice_population['L4'] - (new_names + new_females) + new_L4
+        self.lice_population['L4'] = self.lice_population['L4'] - (new_males + new_females) + new_L4
         self.lice_population['L3'] = self.lice_population['L3'] - new_L4 + num_infected_fish
         self.lice_population['L2'] = self.lice_population['L2'] + new_L2 - num_infected_fish
         self.lice_population['L1'] -= new_L2
