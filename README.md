@@ -92,7 +92,12 @@ Also:
 ### EMB Treatment Model
 TODO: source of data (f_meanEMB, f_sigEMB, EMBmort, env_meanEMB, env_sigEMB)
 
+## Usage
+To run the WIP refactored model, enter the ```refactor``` directory and run:
 
+```python SeaLiceMgmt.py folder_name exp_name```
+### Requirements
+Details on required packages and versions can be found in ```environment.yml``` which can be used to create a [conda](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) environment for the project. 
 
 
 
