@@ -1,0 +1,99 @@
+# Sea Lice Modelling
+**Sea lice** (*singular sea louse*) are a type of parasitic organisms that occur on salmonid species (salmon, trout, char). We differentiate between farm **salmon** (in the **sea cages**) and **wild fish** (wild salmonid species in the **reservoir**, that is external environment). Salmon in sea cages can be infected when the sea lice crosses into the sea cage from the reservoir where it occurs on the wild fish. 
+
+Chemical or biological **treatment** can be applied to the sea cages against the sea lice. Currently the treatment in the model is modelled after a chemical treatment (Emamectin Benzoate, *EMB*). In past few years, biological treatment has also been deployed (small fish that eats the sea lice is put into the sea cages). Another solution deployed is a time break between the farming cycles (growing a salmon to be ready for harvest) so that the sea lice population dies down before populating the cages with salmon again.
+
+
+## Salmon
+Salmon fish live in a sea cage in a farm. Over time it grows and has a chance of dying.
+
+### Growth rate
+- ```10000 / (1 + exp(-0.01 * (t - 475)))``` based  on a fitted logistic curve to data from [FAO](http://www.fao.org/fishery/affris/species-profiles/atlantic-salmon/growth/en/)
+
+### Death rate
+- constant background daily rate ```0.00057``` (based on [Scottish fish farm production survey 2016](www.gov.scot/Resource/0052/00524803.pdf)) multiplied by lice coefficient 
+- TODO: *see surv.py (compare to threshold of 0.75 lice/g fish)*
+
+## Sea lice
+The life cycle of sea lice is modelled as 5 stages:
+
+**L1: Nauplius**
+
+The sea lice nauplii hatch from the eggs and drift in the water with some very limited ability to move. This stage is also called planctonic.
+
+**L2: Copepodid**
+
+Nauplii develop further into copepodids. They also drift in water and have limited movement but can perform initial attachment to the fish (infection). Note that a sea lice needs to be attached to a fish to develop further into the chalimus.
+
+**L3 & L4: Chalimus & Pre-adult**
+
+Chalimus performs further attachement to the fish. They develop into pre-adult sea lice and are now mobile and can move on the host and swim in water column. They cannot yet reproduce.
+
+**L5: Adult**
+
+Adult sea lice can reproduce. They are further split into adult male (L5m) and adult female (L5f).
+
+See [here](https://www.marine.ie/Home/site-area/areas-activity/aquaculture/sea-lice/life-cycle-salmon-louse) for more details and [here](https://oar.marine.ie/bitstream/handle/10793/1590/Irish%20Fisheries%20Bulletin%20No.%2050.pdf?sequence=1&isAllowed=y) for a summary graph (page 6, Figure I).
+
+Additionally:
+* Adult male and adult female attached to the same fish can reproduce.
+* The sea lice development depends on the water temperature (warmer -> faster)
+* The sea lice can develop resistance to a chemical treatment and pass it on to their offspring
+* Sea lice have a chance of dying depending on their development stage and gender (background death) and the treatment (treatment death)
+
+### Sea Lice Events
+#### Development
+Progression in the life cycle of the sea lice. Based on [Aldrin et al 2017](https://doi.org/10.1016/j.ecolmodel.2017.05.019).
+
+#### Infection
+Attachement to the host fish. Based on [Aldrin et al 2017](https://doi.org/10.1016/j.ecolmodel.2017.05.019).
+
+#### Mating
+Reproduction. For sea lice on a given fish: ```adult_males * adult_females * (1/4) * (2.5 / avg_adult_female_lifetime) ``` TODO: source
+
+6-11 broods of 500 ova on average extrude a pair every 3 days (alternatively a constant production of 70 nauplii/day for 20 days post-mating), based on [Costello 2006](https://doi.org/10.1016/j.pt.2006.08.006).
+
+Assumptions
+- lice is unavailable for 3 days after mating 
+- a female will mate as soon as a male is available
+- only adult (5F and 5M) sea lice can reproduce
+- the offspring's inheritted resistence is calculated as linear function of the parents' resistances
+
+#### Background death
+Constant rates based on [Stien et al 2005](http://dx.doi.org/10.3354/meps290263).
+
+#### Treatment death
+Treatment death in a stage: ```(1 - individual resistance for individuals in appropriate stage) * treatment effect * (dose presence / decay)```.
+
+## Farms, Sea cages & Reservoir
+Farm consists of multiple sea cages. Reservoir is the external environment that is also modelled as a sea cage.
+
+### Model outline
+Given sea cages populated with fish (based on farm data) and reservior with random distribution of sea lice at each development stage, at each considered timestep perform the following updates:
+- get dead sea lice from background death
+- get dead sea lice from treatment death
+- progress the development of the sea lice
+- progress fish growth
+- get dead fish (natural death or from sea lice)
+    * remove lice associated with dead fish
+- perform infection
+- get new offspring from sea lice mating
+- update the population deltas (changes in population of fish and sea lice)
+
+Also:
+- indicate farm that will be reached by the sea lice in reservoir using probability matrix from Salama et al 2013 and sample cage within the farm randomly
+    - TODO: confirm the right citation
+    - https://doi.org/10.1016/j.prevetmed.2012.11.005 
+    - or https://doi.org/10.3354/aei00077 
+    - or https://doi.org/10.1111/jfd.12065
+- apply the treatment (if treatment should be applied on a given timestep)
+
+## Treatment
+### EMB Treatment Model
+TODO: source of data (f_meanEMB, f_sigEMB, EMBmort, env_meanEMB, env_sigEMB)
+
+
+
+
+
+
