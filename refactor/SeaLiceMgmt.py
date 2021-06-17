@@ -1,14 +1,17 @@
 """
 TODO: Describe this simulation.
 """
-import sys
+import copy
+import datetime as dt
 import getopt
 import logging
-from pathlib import Path
 import math
-import datetime as dt
-from scipy.spatial import distance
+import sys
+from pathlib import Path
+
 import numpy as np
+from scipy.spatial import distance
+
 import config as cfg
 import Farm as frm
 
@@ -160,11 +163,10 @@ def run_model(path, farms, reservoir):
     data_file.close()
 
 if __name__ == "__main__":
-    # We need at least python 3.8, check it here and abort if necessary
-    # NOTE: I can't remember why I needed 3.8 (I think it was to do with path handling) but I've worked around it
-    # and only need 3.7
-    if sys.version_info < (3, 7, 0):
-        sys.stderr.write("You need python 3.7 or later to run this script\n")
+    # NOTE: missing_ok argument of unlink is only supported from Python 3.8
+    # TODO: decide if that's ok or whether to revamp the file handling
+    if sys.version_info < (3, 8, 0):
+        sys.stderr.write("You need python 3.8 or later to run this script\n")
         sys.exit(1)
 
     # Set up the logger, logging to file and screen.
