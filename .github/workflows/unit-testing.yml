@@ -1,7 +1,10 @@
 # Inspired from https://github.com/marketplace/actions/conda-action
 # botched together to include unit testing with unittest
+name: unit-testing
+on: [push]
 jobs:
   unit-test:
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v1
     - name: Setup Conda environment
