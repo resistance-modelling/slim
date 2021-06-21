@@ -12,8 +12,9 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import distance
 
-import config as cfg
-import Farm as frm
+import src.config as cfg
+from src.Farm import Farm
+from src.Reservoir import Reservoir
 
 
 def setup(data_folder, sim_id):
@@ -66,12 +67,12 @@ def initialise(data_folder, sim_id):
 
 
     # Create the reservoir, farms and cages.
-    wildlife_reservoir = frm.Reservoir(cfg.start_pop)
+    wildlife_reservoir = Reservoir(cfg.start_pop)
     #farms[0].cages[0].stage = np.random.choice(range(2, 7), cfg.ext_pressure)
 
     farms = []
     for i in range(cfg.nfarms):
-        farms.append(frm.Farm(i, cfg.farm_locations[i], cfg.farm_start[i], cfg.treatment_dates[i], \
+        farms.append(Farm(i, cfg.farm_locations[i], cfg.farm_start[i], cfg.treatment_dates[i], \
                 cfg.ncages[i], cfg.cages_start[i], cfg.ext_pressure))
 
     #print(cfg.prop_arrive)

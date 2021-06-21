@@ -1,260 +1,15 @@
-"""
-Defines a Farm class that encapsulates a salmon farm containing several cages.
-"""
-import json
 import datetime as dt
 import math
+
 import numpy as np
 from scipy import stats
-from scipy.spatial import distance
-import config as cfg
 
-#def d_hatching(c_temp):
-#    """
-#    TODO: ???
-#    """
-#    return 3*(3.3 - 0.93*np.log(c_temp/3) -0.16*np.log(c_temp/3)**2) #for 3 broods
-#
-#def ave_dev_days(del_p, del_m10, del_s, temp_c):
-#    """
-#    Average dev days using dev_time method, not used in model but handy to have
-#        # 5deg: 5.2,-,67.5,2
-#        # 10deg: 3.9,-,24,5.3
-#        # 15deg: 3.3,-,13.1,9.4
-#    :param del_p:
-#    :param del_m10:
-#    :param del_s:
-#    :param temp_c:
-#    :return:
-#    """
-#    return 100 * dev_time(del_p, del_m10, del_s, temp_c, 100) \
-#                   - 0.001 * sum([dev_time(del_p, del_m10, del_s, temp_c, i)
-#                          for i in np.arange(0, 100.001, 0.001)])
-#
-#def eudist(point_a, point_b):
-#    """
-#    Obtain the [Euclidean] distance between two points.
-#    :param point_a: the first point (location of farm 1)
-#    :param point_b: the second point (location of farm 2)
-#    :return: the Euclidean distance between point_a and point_b
-#    """
-#    return distance.euclidean(point_a, point_b)
-#
-#def egg_gen(farm, sig, eggs_plus, data):
-#    """
-#    TODO ???
-#    :param farm:
-#    :param sig:
-#    :param eggs_plus:
-#    :param data:
-#    :return:
-#    """
-#    if farm == 0:
-#        if np.random.uniform(0, 1, 1) > cfg.prop_influx:
-#            bvs = 0.5 * data['resistanceT1'].values + 0.5 * data['mate_resistanceT1'].values + \
-#                          np.random.normal(0, sig, eggs_plus) / np.sqrt(2)
-#        else:
-#            bvs = np.random.normal(cfg.f_muEMB, cfg.f_sigEMB, eggs_plus)
-#    else:
-#        bvs = 0.5 * data['resistanceT1'].values + 0.5 * data['mate_resistanceT1'].values + \
-#              np.random.normal(0, sig, eggs_plus) / np.sqrt(2)
-#    return bvs
-#
-#
-
-def update_background_lice_mortality(lice_population, days):
-    """
-    Background death in a stage (remove entry) -> rate = number of individuals in
-    stage*stage rate (nauplii 0.17/d, copepods 0.22/d, pre-adult female 0.05,
-    pre-adult male ... Stien et al 2005)
-    """
-    lice_mortality_rates = {'L1': 0.17, 'L2': 0.22, 'L3': 0.008, 'L4': 0.05, 'L5f': 0.02,
-                            'L5m': 0.06}
-
-    dead_lice_dist = {}
-    for stage in lice_population:
-        mortality_rate = lice_population[stage] * lice_mortality_rates[stage] * days
-        mortality = min(np.random.poisson(mortality_rate), lice_population[stage])
-        dead_lice_dist[stage] = mortality
-
-    cfg.logger.debug('    background mortality distribn of dead lice = {}'.format(dead_lice_dist))
-    return dead_lice_dist
-
-def fish_growth_rate(days):
-    return 10000/(1 + math.exp(-0.01*(days-475)))
-
-class CustomFarmEncoder(json.JSONEncoder):
-    """
-    Bespoke encoder to encode Farm objects to json. Specifically, numpy arrays and datetime objects
-    are not automatically converted to json.
-    """
-    def default(self, o): # pylint: disable=E0202
-        """
-        Provide a json string of an object.
-        :param o: The object to be encoded as a json string.
-        :return: the json representation of o.
-        """
-        return_str = ''
-        if isinstance(o, np.ndarray):
-            return_str = str(o)
-        elif isinstance(o, np.int64):
-            return_str = str(o)
-        elif isinstance(o, dt.datetime):
-            return_str = o.strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            return_str = {'__{}__'.format(o.__class__.__name__): o.__dict__}
-
-        return return_str
-
-class CustomCageEncoder(json.JSONEncoder):
-    """
-    Bespoke encoder to encode Cage objects to json. Specifically, numpy arrays and datetime objects
-    are not automatically converted to json.
-    """
-    def default(self, o): # pylint: disable=E0202
-        """
-        Provide a json string of an object.
-        :param o: The object to be encoded as a json string.
-        :return: the json representation of o.
-        """
-        return_str = ''
-        if isinstance(o, np.ndarray):
-            return_str = str(o)
-        elif isinstance(o, Farm):
-            return_str = ""
-        elif isinstance(o, np.int64):
-            return_str = str(o)
-        elif isinstance(o, dt.datetime):
-            return_str = o.strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            return_str = {'__{}__'.format(o.__class__.__name__): o.__dict__}
-
-        return return_str
+import src.config as cfg
+from src.CageTemplate import CageTemplate
+from src.JSONEncoders import CustomCageEncoder
 
 
-    
-class Reservoir:
-    """
-    The reservoir for sea lice, essentially modelled as a sea cage.
-    """
-    def __init__(self, nplankt):
-        """
-        Create a cage on a farm
-        :param farm: the farm this cage is attached to
-        :param label: the label (id) of the cage within the farm
-        :param nplankt: TODO ???
-        """
-        self.date = cfg.start_date
-        self.num_fish = 4000
-
-        # this is by no means optimal: I want to distribute nplankt lice across
-        # each stage at random. (the method I use here is to create a random list
-        # of stages and add up the number for each.
-        lice_stage = np.random.choice(range(2, 7), nplankt)
-        num_lice_in_stage = np.array([sum(lice_stage == i) for i in range(1, 7)])
-        self.lice_population = {'L1': num_lice_in_stage[0], 'L2': num_lice_in_stage[1],
-                                'L3': num_lice_in_stage[2], 'L4': num_lice_in_stage[3],
-                                'L5f': num_lice_in_stage[4],
-                                'L5m': num_lice_in_stage[5]}
-
-    def to_csv(self):
-        """
-        Save the contents of this cage as a CSV string for writing to a file later.
-        """
-        return f"reservoir, {self.num_fish}, {self.lice_population['L1']}, \
-                {self.lice_population['L2']}, {self.lice_population['L3']}, \
-                {self.lice_population['L4']}, {self.lice_population['L5f']}, \
-                {self.lice_population['L5m']}, {sum(self.lice_population.values())}"
-
-
-    def update(self, step_size, farms):
-        """
-        Update the reservoir at the current time step.
-        :return:
-        """
-        cfg.logger.debug("Updating reservoir")
-        cfg.logger.debug("  initial lice population = {}".format(self.lice_population))
-
-        self.lice_population = update_background_lice_mortality(self.lice_population, step_size)
-
-        # TODO - infection events in the reservoir
-        #eta_aldrin = -2.576 + log(inpt.Enfish_res[cur_date.month-1]) + 0.082*(log(inpt.Ewt_res)-0.55)
-        #Einf = (exp(eta_aldrin)/(1+exp(eta_aldrin)))*tau*cop_cage
-        #inf_ents = np.random.poisson(Einf)
-        #inf_ents = min(inf_ents,cop_cage)
-        #inf_inds = np.random.choice(df_list[fc].loc[(df_list[fc].stage==2) & (df_list[fc].arrival<=df_list[fc].stage_age)].index, inf_ents, replace=False)
-
-        cfg.logger.debug("  final lice population = {}".format(self.lice_population))
-
-
-class Farm:
-    """
-    Define a salmon farm containing salmon cages. Over time the salmon in the cages grow and are
-    subjected to external infestation pressure from sea lice.
-    """
-
-    def __init__(self, name, loc, start_date, treatment_dates, n_cages, cages_start_date, nplankt):
-        """
-        Create a farm.
-        :param name: the id of the farm.
-        :param loc: the [x,y] location of the farm.
-        :param start_date: the date the farm commences.
-        :param treatment_dates: the dates the farm is allowed to treat their cages.
-        :param n_cages: the number of cages on the farm.
-        :param cages_start_date: a list of the start dates for each cage.
-        :param nplankt: initial number of planktonic lice.
-        """
-        self.name = name
-        self.loc_x = loc[0]
-        self.loc_y = loc[1]
-        self.start_date = start_date
-        self.treatment_dates = treatment_dates
-        self.cages = [Cage(self, i, cages_start_date[i], nplankt) for i in range(n_cages)]
-
-    def __str__(self):
-        """
-        Get a human readable string representation of the farm.
-        :return: a description of the cage
-        """
-        cages = ', '.join(str(a) for a in self.cages)
-        return f'id: {self.name}, Cages: {cages}'
-
-    def __repr__(self):
-        return json.dumps(self, cls=CustomEncoder, indent=4)
-
-    def __eq__(self, other): 
-        if not isinstance(other, Farm):
-            # don't attempt to compare against unrelated types
-            return NotImplemented
-
-        return self.name == other.name
-
-    def update(self, cur_date, step_size, other_farms, reservoir):
-        """
-        Update the status of the farm given the growth of fish and change in population of
-        parasites.
-        :return: none
-        """
-        cfg.logger.debug("Updating farm {}".format(self.name))
-
-        # TODO: add new offspring to cages
-
-        # update cages
-        for cage in self.cages:
-            cage.update(cur_date, step_size, other_farms, reservoir)
-
-    def to_csv(self):
-        """
-        Save the contents of this cage as a CSV string for writing to a file later.
-        """
-        farm_data = "farm, " + str(self.name) + ", " + str(self.loc_x) + ", " + str(self.loc_y)
-        cages_data = ""
-        for i in range(len(self.cages)):
-            # I want to keep a consistent order, hence the loop in this way
-            cages_data = cages_data + ", " + self.cages[i].to_csv()
-        return farm_data + cages_data
-
-class Cage:# pylint: disable=R0902
+class Cage(CageTemplate):
     """
     Fish cages contain the fish.
     """
@@ -276,7 +31,7 @@ class Cage:# pylint: disable=R0902
         self.num_infected_fish = 0
 
         self.lice_population = {'L1': nplankt, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 0}
- 
+
         # The original code was a IBM, here we act on populations so the age in each stage must
         # be a distribution.
 
@@ -312,8 +67,6 @@ class Cage:# pylint: disable=R0902
                 {self.lice_population['L4']}, {self.lice_population['L5f']}, \
                 {self.lice_population['L5m']}, {sum(self.lice_population.values())}"
 
-
-
     def update(self, cur_date, step_size, other_farms, reservoir):
         """
         Update the cage at the current time step.
@@ -326,7 +79,7 @@ class Cage:# pylint: disable=R0902
         days_since_start = (cur_date - self.date).days
 
         # Background lice mortality events
-        dead_lice_dist = update_background_lice_mortality(self.lice_population, step_size)
+        dead_lice_dist = self.update_background_lice_mortality(self.lice_population, step_size)
 
         # Treatment mortality events
         treatment_mortality = self.update_lice_treatment_mortality(cur_date)
@@ -468,7 +221,7 @@ class Cage:# pylint: disable=R0902
 
         lice_dist['L4'] = num_to_move
 
-        # L2 -> L3 
+        # L2 -> L3
         # This is done in do_infection_events()
 
         # L1 -> L2
@@ -484,8 +237,6 @@ class Cage:# pylint: disable=R0902
                          .format(self.farm.name, self.label, lice_dist))
 
         return new_L2, new_L4, new_females, new_males
-
-
 
     def update_fish_growth(self, days, step_size):
         """
@@ -511,7 +262,7 @@ class Cage:# pylint: disable=R0902
         # for now, assume there is only one TODO fix this when I understand the infestation
         # (next stage)
         num_fish_with_lice = 3
-        adlicepg = np.array([1] * num_fish_with_lice)/fish_growth_rate(days)
+        adlicepg = np.array([1] * num_fish_with_lice)/self.fish_growth_rate(days)
         prob_lice_death = 1/(1+np.exp(-19*(adlicepg-0.63)))
 
         ebf_death = fb_mort(days)*step_size*(self.num_fish)
@@ -535,7 +286,7 @@ class Cage:# pylint: disable=R0902
         # but at what point does the distribution mean decrease).
         num_avail_lice = self.lice_population['L2']
         if num_avail_lice > 0:
-            num_fish_in_farm = sum([c.num_fish for c in self.farm.cages]) 
+            num_fish_in_farm = sum([c.num_fish for c in self.farm.cages])
 
             eta_aldrin = -2.576 + math.log(num_fish_in_farm) + 0.082*(math.log(fish_growth_rate(days))-0.55)
             Einf = (math.exp(eta_aldrin)/(1 + math.exp(eta_aldrin)))*tau*num_avail_lice
@@ -555,7 +306,7 @@ class Cage:# pylint: disable=R0902
         """
         TODO - convert this (it is an IBM so we will also need to think about the numbers of events rather than who is mating).
                         #Mating events---------------------------------------------------------------------
-                #who is mating               
+                #who is mating
                 females = df_list[fc].loc[(df_list[fc].stage==5) & (df_list[fc].avail==0)].index
                 males = df_list[fc].loc[(df_list[fc].stage==6) & (df_list[fc].avail==0)].index
                 nmating = min(sum(df_list[fc].index.isin(females)),\
@@ -601,7 +352,7 @@ class Cage:# pylint: disable=R0902
                         underlying = 0.5*df_list[fc].loc[df_list[fc].index==i,'resistanceT1'].values\
                                + 0.5*df_list[fc].loc[df_list[fc].index==i,'mate_resistanceT1'].values + \
                                np.random.normal(0, farms_sigEMB[farm], eggs_now+250)/np.sqrt(2)
-                    bv_lst.extend(underlying.tolist())  
+                    bv_lst.extend(underlying.tolist())
                 new_offs = len(dams)*eggs_now
 
                 #print("       farms =  {}".format(inpt.nfarms))
@@ -623,11 +374,11 @@ class Cage:# pylint: disable=R0902
                                 underlying = 0.5*df_list[fc].resistanceT1[df_list[fc].index==i]\
                                    + 0.5*df_list[fc].mate_resistanceT1[df_list[fc].index==i]+ \
                                    np.random.normal(0, farms_sigEMB[farm], 1)/np.sqrt(2)
-                                bv_lst.extend(underlying)  
+                                bv_lst.extend(underlying)
                         ran_bvs = np.random.choice(len(bv_lst),arrivals,replace=False)
-                        offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]  
+                        offs['resistanceT1'] = [bv_lst[i] for i in ran_bvs]
                         for i in sorted(ran_bvs, reverse=True):
-                            del bv_lst[i]     
+                            del bv_lst[i]
                         Earrival = [hrs_travel[farm][i] for i in offs.Farm]
                         offs['arrival'] = np.random.poisson(Earrival)
                         offs['avail'] = 0
