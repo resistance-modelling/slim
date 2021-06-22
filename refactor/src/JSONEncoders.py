@@ -3,10 +3,9 @@ import json
 
 import numpy as np
 
-# from Farm import Farm
+import src.Farm as frm
 
-# currently not used due to the circular dependency
-# TODO: fix it
+
 class CustomFarmEncoder(json.JSONEncoder):
     """
     Bespoke encoder to encode Farm objects to json. Specifically, numpy arrays
@@ -45,7 +44,7 @@ class CustomCageEncoder(json.JSONEncoder):
         return_str = ''
         if isinstance(o, np.ndarray):
             return_str = str(o)
-        elif isinstance(o, Farm):
+        elif isinstance(o, frm.Farm):
             return_str = ""
         elif isinstance(o, np.int64):
             return_str = str(o)

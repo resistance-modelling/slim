@@ -2,7 +2,7 @@
 Defines a Farm class that encapsulates a salmon farm containing several cages.
 """
 from src.Cage import Cage
-import src.config as cfg
+from src.JSONEncoders import CustomFarmEncoder
 
 
 class Farm:
@@ -11,7 +11,7 @@ class Farm:
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name, loc, start_date, treatment_dates, n_cages, cages_start_date, nplankt):
+    def __init__(self, name, cfg):
         """
         Create a farm.
         :param name: the id of the farm.
@@ -22,12 +22,16 @@ class Farm:
         :param cages_start_date: a list of the start dates for each cage.
         :param nplankt: initial number of planktonic lice.
         """
+
+        self.logger = cfg.logger
+
+        farm_cfg = cfg.farms[name]
         self.name = name
-        self.loc_x = loc[0]
-        self.loc_y = loc[1]
-        self.start_date = start_date
-        self.treatment_dates = treatment_dates
-        self.cages = [Cage(self, i, cages_start_date[i], nplankt) for i in range(n_cages)]
+        self.loc_x = farm_cfg.farm_location[0]
+        self.loc_y = farm_cfg.farm_location[1]
+        self.start_date = farm_cfg.farm_start
+        self.treatment_dates = farm_cfg.treatment_dates
+        self.cages = [Cage(name, i, cfg) for i in range(farm_cfg.n_cages)]
 
     def __str__(self):
         """
@@ -38,7 +42,7 @@ class Farm:
         return f'id: {self.name}, Cages: {cages}'
 
     def __repr__(self):
-        return json.dumps(self, cls=CustomEncoder, indent=4)
+        return json.dumps(self, cls=CustomFarmEncoder, indent=4)
 
     def __eq__(self, other): 
         if not isinstance(other, Farm):
@@ -53,7 +57,7 @@ class Farm:
         parasites.
         :return: none
         """
-        cfg.logger.debug("Updating farm {}".format(self.name))
+        self.logger.debug("Updating farm {}".format(self.name))
 
         # TODO: add new offspring to cages
 

@@ -1,10 +1,14 @@
 import math
+
 import numpy as np
-import src.config as cfg
 
 
 class CageTemplate:
     """Class for methods shared between the sea cages and reservoir."""
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.logger = cfg.logger
 
     def update_background_lice_mortality(self, lice_population, days):
         """
@@ -25,7 +29,7 @@ class CageTemplate:
             mortality = min(np.random.poisson(mortality_rate), lice_population[stage])
             dead_lice_dist[stage] = mortality
 
-        cfg.logger.debug('    background mortality distribn of dead lice = {}'.format(dead_lice_dist))
+        self.logger.debug('    background mortality distribn of dead lice = {}'.format(dead_lice_dist))
         return dead_lice_dist
 
     def fish_growth_rate(self, days):

@@ -1,0 +1,99 @@
+{
+    "start_date": {
+        "description": "Simulation start date",
+        "value": [2017, 10, 1]
+    },
+    "end_date": {
+        "description": "Simulation end date",
+        "value": [2017, 10, 2]
+    },
+    "tau": {
+        "description": "Tau value for tau-leaping",
+        "value": 1
+    },
+    "lice_pop_modifier": {
+        "description": "Starting lice population modifier (total = modifier * number of all cages)",
+        "value": 150
+    },
+    "ext_pressure": {
+        "description": "Sealice per day per cage/farm arriving from wildlife",
+        "value": 150
+    },
+    "reservoir": {
+        "description": "Test reservoir",
+        "value": {
+            "num_fish": {
+                "description": "Starting number of fish",
+                "value": 4000
+            }
+        }
+    },
+    "farms": [
+        {
+            "description": "Test farm",
+            "value": {
+                "ncages": {
+                    "description": "Number of cages on the farm",
+                    "value": 6
+                },
+                "location": {
+                    "description": "Location of the farm",
+                    "value": [190300, 665300]
+                },
+                "num_fish": {
+                    "description": "Starting number of fish",
+                    "value": 4000
+                },
+                "start_date": {
+                    "description": "Start date of simulation of the farm",
+                    "value": [2017, 10, 1]
+                },
+                "cages_start_dates": {
+                    "description": "Start dates for individual farms",
+                    "value": [
+                        [2017, 10, 1], 
+                        [2017, 10, 8], 
+                        [2017, 10, 15], 
+                        [2017, 10, 22], 
+                        [2017, 10, 29], 
+                        [2017, 11, 5]
+                    ]
+                },
+                "treatment_dates": {
+                    "description": "Treatment dates for each farm",
+                    "value": [
+                        {"from": [2017, 9, 15], "to": [2017, 9, 22]},
+                        {"from": [2017, 12, 1], "to": [2018, 1, 1]},
+                        {"from": [2018, 2, 1], "to": [2018, 3, 1]},
+                        {"from": [2018, 5, 1], "to": [2018, 6, 1]}
+                    ]
+                }
+            }
+        }
+    ],
+    "treatment": {
+        "description": "Chemical treatment with Emamectin Benzoate",
+        "value": {
+            "f_meanEMB": {
+                "description": "Mean of Emamectin Benzoate",
+                "value": 3.5
+            },
+            "f_sigEMB": {
+                "description": "Standard deviation of Emamectin Benzoate",
+                "value": 0.7 
+            },
+            "env_meanEMB": {
+                "description": "Mean Emamectin Benzoate in the environment",
+                "value": 0.0
+            },
+            "env_sigEMB": {
+                "description": "Standard deviation of Emamectin Benzoate in the environment",
+                "value": 1.0
+            },
+            "EMBmort": {
+                "description": "Probability of mortality due to Emamectin Benzoate",
+                "value": 0.9
+            }
+        }
+    }
+}

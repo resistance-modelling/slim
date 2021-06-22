@@ -1,10 +1,10 @@
 import datetime as dt
 import math
+import json
 
 import numpy as np
 from scipy import stats
 
-import src.config as cfg
 from src.CageTemplate import CageTemplate
 from src.JSONEncoders import CustomCageEncoder
 
@@ -14,23 +14,26 @@ class Cage(CageTemplate):
     Fish cages contain the fish.
     """
 
-    def __init__(self, farm, label, start_date, nplankt):
+    def __init__(self, farm_id, cage_id, cfg):
         """
         Create a cage on a farm
         :param farm: the farm this cage is attached to
         :param label: the label (id) of the cage within the farm
         :param nplankt: TODO ???
         """
-        self.label = label
-        # TODO: having the farm here causes a circular refence when saving/printing the farms.
-        # I need to figure out a way of either ignoring this or saving it as an id.
-        self.farm = farm
-        self.start_date = start_date
+
+        # sets access to cfg and logger
+        super().__init__(cfg)
+
+        self.id = cage_id
+        self.farm_id = farm_id
+        self.start_date = cfg.farms[farm_id].cages_start[cage_id]
         self.date = cfg.start_date
-        self.num_fish = 4000
+        self.num_fish = cfg.farms[farm_id].num_fish
         self.num_infected_fish = 0
 
-        self.lice_population = {'L1': nplankt, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 0}
+        # TODO: update with calculations
+        self.lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 0}
 
         # The original code was a IBM, here we act on populations so the age in each stage must
         # be a distribution.
@@ -62,7 +65,7 @@ class Cage(CageTemplate):
         """
         Save the contents of this cage as a CSV string for writing to a file later.
         """
-        return f"{self.label}, {self.num_fish}, {self.lice_population['L1']}, \
+        return f"{self.id}, {self.num_fish}, {self.lice_population['L1']}, \
                 {self.lice_population['L2']}, {self.lice_population['L3']}, \
                 {self.lice_population['L4']}, {self.lice_population['L5f']}, \
                 {self.lice_population['L5m']}, {sum(self.lice_population.values())}"
@@ -72,9 +75,9 @@ class Cage(CageTemplate):
         Update the cage at the current time step.
         :return:
         """
-        cfg.logger.debug(f"  Updating farm {self.farm.name} / cage {self.label}")
-        cfg.logger.debug(f"    initial lice population = {self.lice_population}")
-        cfg.logger.debug(f"    initial fish population = {self.num_fish}")
+        self.logger.debug(f"  Updating farm {self.farm_id} / cage {self.id}")
+        self.logger.debug(f"    initial lice population = {self.lice_population}")
+        self.logger.debug(f"    initial fish population = {self.num_fish}")
 
         days_since_start = (cur_date - self.date).days
 
@@ -103,16 +106,16 @@ class Cage(CageTemplate):
         self.update_deltas(dead_lice_dist, treatment_mortality, fish_deaths_natural,
                 fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish)
 
-        cfg.logger.debug("    final lice population = {}".format(self.lice_population))
-        cfg.logger.debug("    final fish population = {}".format(self.num_fish))
+        self.logger.debug("    final lice population = {}".format(self.lice_population))
+        self.logger.debug("    final fish population = {}".format(self.num_fish))
 
     def update_lice_treatment_mortality(self, cur_date):
         """
         Calculate the number of lice in each stage killed by treatment.
         """
-        if cur_date - dt.timedelta(days=14) in self.farm.treatment_dates:
-            cfg.logger.debug('    treating farm {}/cage {} on date {}'.format(self.farm.name,
-                                                                              self.label, cur_date))
+        if cur_date - dt.timedelta(days=14) in self.cfg.farms[self.farm_id].treatment_dates:
+            self.logger.debug('    treating farm {}/cage {} on date {}'.format(self.farm_id,
+                                                                              self.id, cur_date))
 
             # number of lice in those stages that are susceptible to Emamectin Benzoate (i.e.
             # those L3 or above)
@@ -122,10 +125,10 @@ class Cage(CageTemplate):
             # model the resistence of each lice in the susceptible stages (phenoEMB) and estimate
             # the mortality rate due to treatment (ETmort). We will pick the number of lice that
             # die due to treatment from a Poisson distribution
-            pheno_emb = np.random.normal(cfg.f_meanEMB, cfg.f_sigEMB, num_susc) \
-                    + np.random.normal(cfg.env_meanEMB, cfg.env_sigEMB, num_susc)
+            pheno_emb = np.random.normal(self.cfg.f_meanEMB, self.cfg.f_sigEMB, num_susc) \
+                    + np.random.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
             pheno_emb = 1/(1 + np.exp(pheno_emb))
-            mortality_rate = sum(pheno_emb)*cfg.EMBmort
+            mortality_rate = sum(pheno_emb)*self.cfg.EMBmort
 
             if mortality_rate > 0:
                 num_dead_lice = np.random.poisson(mortality_rate)
@@ -151,15 +154,15 @@ class Cage(CageTemplate):
                         total_so_far += self.lice_population[stage]
                         dead_lice_dist[stage] = num_dead
 
-                cfg.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'
-                                 .format(self.farm.name, self.label, dead_lice_dist))
+                self.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'
+                                 .format(self.farm_id, self.id, dead_lice_dist))
         return dead_lice_dist
 
     def update_lice_lifestage(self, cur_month):
         """
         Move lice between lifecycle stages.
         """
-        cfg.logger.debug('    updating lice lifecycle stages')
+        self.logger.debug('    updating lice lifecycle stages')
 
         def get_stage_ages(size):
             """
@@ -200,10 +203,11 @@ class Cage(CageTemplate):
             return round(tarbert_avetemp[c_month-1] - Ndiff*degs, 1)
 
         lice_dist = {}
+        farm_loc_x = self.cfg.farms[self.farm_id].farm_location[0]
 
         # L4 -> L5
         num_lice = self.lice_population['L4']
-        l4_to_l5 = dev_time(0.866, 10.742, 1.643, ave_temperature_at(cur_month, self.farm.loc_x),
+        l4_to_l5 = dev_time(0.866, 10.742, 1.643, ave_temperature_at(cur_month, farm_loc_x),
                             get_stage_ages(num_lice))
         num_to_move = min(np.random.poisson(sum(l4_to_l5)), num_lice)
         new_females = np.random.choice([math.floor(num_to_move/2.0), math.ceil(num_to_move/2.0)])
@@ -214,7 +218,7 @@ class Cage(CageTemplate):
 
         # L3 -> L4
         num_lice = self.lice_population['L3']
-        l3_to_l4 = dev_time(1.305, 18.934, 7.945, ave_temperature_at(cur_month, self.farm.loc_x),
+        l3_to_l4 = dev_time(1.305, 18.934, 7.945, ave_temperature_at(cur_month, farm_loc_x),
                             get_stage_ages(num_lice))
         num_to_move = min(np.random.poisson(sum(l3_to_l4)), num_lice)
         new_L4 = num_to_move
@@ -226,15 +230,15 @@ class Cage(CageTemplate):
 
         # L1 -> L2
         num_lice = self.lice_population['L2']
-        l1_to_l2 = dev_time(0.401, 8.814, 18.869, ave_temperature_at(cur_month, self.farm.loc_x),
+        l1_to_l2 = dev_time(0.401, 8.814, 18.869, ave_temperature_at(cur_month, farm_loc_x),
                             get_stage_ages(num_lice))
         num_to_move = min(np.random.poisson(sum(l1_to_l2)), num_lice)
         new_L2 = num_to_move
 
         lice_dist['L2'] = num_to_move
 
-        cfg.logger.debug('      distribution of new lice lifecycle stages on farm {}/cage {} = {}'
-                         .format(self.farm.name, self.label, lice_dist))
+        self.logger.debug('      distribution of new lice lifecycle stages on farm {}/cage {} = {}'
+                         .format(self.farm_id, self.id, lice_dist))
 
         return new_L2, new_L4, new_females, new_males
 
@@ -248,7 +252,7 @@ class Cage(CageTemplate):
         multiplied by lice coefficient see surv.py (compare to threshold of 0.75 lice/g fish)
         """
 
-        cfg.logger.debug('    updating fish population')
+        self.logger.debug('    updating fish population')
 
         def fb_mort(days):
             """
@@ -270,7 +274,7 @@ class Cage(CageTemplate):
         fish_deaths_natural = np.random.poisson(ebf_death)
         fish_deaths_from_lice = np.random.poisson(elf_death)
 
-        cfg.logger.debug('      number of background fish death {}, from lice {}'
+        self.logger.debug('      number of background fish death {}, from lice {}'
                          .format(fish_deaths_natural, fish_deaths_from_lice))
 
         #self.num_fish -= fish_deaths_natural
@@ -288,13 +292,13 @@ class Cage(CageTemplate):
         if num_avail_lice > 0:
             num_fish_in_farm = sum([c.num_fish for c in self.farm.cages])
 
-            eta_aldrin = -2.576 + math.log(num_fish_in_farm) + 0.082*(math.log(fish_growth_rate(days))-0.55)
+            eta_aldrin = -2.576 + math.log(num_fish_in_farm) + 0.082*(math.log(self.fish_growth_rate(days))-0.55)
             Einf = (math.exp(eta_aldrin)/(1 + math.exp(eta_aldrin)))*tau*num_avail_lice
             num_infected_fish = np.random.poisson(Einf)
             inf_ents = np.random.poisson(Einf)
 
             # inf_ents now go on to infect fish so get removed from the general lice population.
-            return  min(inf_ents, num_avail_lice)
+            return min(inf_ents, num_avail_lice)
         else:
             return 0
 
