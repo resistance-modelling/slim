@@ -32,3 +32,8 @@ model/slm_es.sh
 model/slm2.py
 model/ws_mlicecounts.py
 communication/
+
+# Ignore IDE-specific folders
+.vscode-workspace/
+.idea/
+venv/

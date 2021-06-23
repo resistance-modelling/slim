@@ -1,0 +1,29 @@
+name: unit-testing
+on: [push]
+jobs:
+  unit-test:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v1
+    - name: Setup Conda environment
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        miniconda-version: "latest"
+        auto-update-conda: true
+        python-version: "3.8"
+        environment-file: environment.yml
+        activate-environment: slp
+
+    - uses: actions/checkout@v1
+    - name: Conda info sanity check
+      shell: bash -l {0}
+      run: |
+        conda info
+        conda list
+
+    - name: Perform Unit testing
+      # TODO: as soon as refactoring is done the refactor/ source folder will
+      # move to src/. Not sure whether tests should be under refactor or in
+      # a different folder...
+      shell: bash -l {0}
+      run: pytest refactor/
