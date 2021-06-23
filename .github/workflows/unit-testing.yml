@@ -11,7 +11,10 @@ jobs:
       uses: matthewrmshin/conda-action@v1
       with:
         args: conda env update
-    - name: Perform Unit testing"
+    - name: Perform Unit testing
       uses: matthewrmshin/conda-action@v1
+      # TODO: as soon as refactoring is done the refactor/ source folder will
+      # move to src/. Not sure whether tests should be under refactor or in
+      # a different folder...
       with:
-        args: python3 -m unittest tests.dummy
+        args: pytest refactor/
