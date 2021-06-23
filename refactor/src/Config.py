@@ -3,6 +3,18 @@ import datetime as dt
 import pandas as pd
 
 
+def to_dt(string_date):
+    """Convert from string date to datetime date
+
+    :param string_date: Date as string timestamp
+    :type string_date: str
+    :return: Date as Datetime
+    :rtype: [type]
+    """
+    dt_format = '%Y-%m-%d %H:%M:%S'
+    return dt.datetime.strptime(string_date, dt_format)
+
+
 class Config:
 
     def __init__(self, config_file, logger):
@@ -22,8 +34,8 @@ class Config:
             data = json.load(f)
 
         # time and dates
-        self.start_date = dt.datetime(*data["start_date"]["value"])
-        self.end_date = dt.datetime(*data["end_date"]["value"])
+        self.start_date = to_dt(data["start_date"]["value"])
+        self.end_date = to_dt(data["end_date"]["value"])
         self.tau = data["tau"]["value"]
 
         # general parameters
@@ -70,14 +82,14 @@ class FarmConfig:
         self.num_fish = data["num_fish"]["value"]
         self.n_cages = data["ncages"]["value"]
         self.farm_location = data["location"]["value"]
-        self.farm_start = dt.datetime(*data["start_date"]["value"])
-        self.cages_start = [dt.datetime(*date)
+        self.farm_start = to_dt(data["start_date"]["value"])
+        self.cages_start = [to_dt(date)
                             for date in data["cages_start_dates"]["value"]]
 
         # generate treatment dates from ranges
         self.treatment_dates = []
         for range_data in data["treatment_dates"]["value"]:
-            from_date = dt.datetime(*range_data["from"])
-            to_date = dt.datetime(*range_data["to"])
+            from_date = to_dt(range_data["from"])
+            to_date = to_dt(range_data["to"])
             self.treatment_dates.extend(
                 pd.date_range(from_date, to_date).to_pydatetime().tolist())
