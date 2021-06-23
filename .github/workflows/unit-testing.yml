@@ -1,5 +1,3 @@
-# Inspired from https://github.com/marketplace/actions/conda-action
-# botched together to include unit testing with unittest
 name: unit-testing
 on: [push]
 jobs:
@@ -8,13 +6,24 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: Setup Conda environment
-      uses: matthewrmshin/conda-action@v1
+      uses: conda-incubator/setup-miniconda@v2
       with:
-        args: conda env update
+        miniconda-version: "latest"
+        auto-update-conda: true
+        python-version: "3.8"
+        environment-file: environment.yml
+        activate-environment: slp
+
+    - uses: actions/checkout@v1
+    - name: Conda info sanity check
+      shell: bash -l {0}
+      run: |
+        conda info
+        conda list
+
     - name: Perform Unit testing
-      uses: matthewrmshin/conda-action@v1
       # TODO: as soon as refactoring is done the refactor/ source folder will
       # move to src/. Not sure whether tests should be under refactor or in
       # a different folder...
-      with:
-        args: pytest refactor/
+      shell: bash -l {0}
+      run: pytest refactor/
