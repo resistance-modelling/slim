@@ -1,19 +1,16 @@
 """
 TODO: Describe this simulation.
 """
+import argparse
 import copy
 import datetime as dt
-import getopt
 import logging
-import math
 import sys
 from pathlib import Path
 
-import numpy as np
-from scipy.spatial import distance
-
-import config as cfg
-import Farm as frm
+from src.Config import Config
+from src.Farm import Farm
+from src.Reservoir import Reservoir
 
 
 def setup(data_folder, sim_id):
@@ -51,7 +48,7 @@ def create_logger():
     return logger
 
 
-def initialise(data_folder, sim_id):
+def initialise(data_folder, sim_id, cfg):
     """
     Create the farms, cages, reservoirs and data files that we will need.
     :return:
@@ -64,47 +61,18 @@ def initialise(data_folder, sim_id):
     resistance_bv.unlink(missing_ok=True)
     resistance_bv.write_text('cur_date, muEMB, sigEMB, prop_ext')
 
-
     # Create the reservoir, farms and cages.
-    wildlife_reservoir = frm.Reservoir(cfg.start_pop)
+    wildlife_reservoir = Reservoir(cfg)
     #farms[0].cages[0].stage = np.random.choice(range(2, 7), cfg.ext_pressure)
 
-    farms = []
-    for i in range(cfg.nfarms):
-        farms.append(frm.Farm(i, cfg.farm_locations[i], cfg.farm_start[i], cfg.treatment_dates[i], \
-                cfg.ncages[i], cfg.cages_start[i], cfg.ext_pressure))
-
+    farms = [Farm(i, cfg) for i in range(cfg.nfarms)]
+    
     #print(cfg.prop_arrive)
     #print(cfg.hrs_travel)
     return farms, wildlife_reservoir
 
-def read_command_line_args(args):
-    """
-    Read the command line arguments (the output data folder and the simulation id)
-    :param args: the command line arguments
-    :return: the output data folder and the simulation id
-    """
-    usage = "usage: SeaLiceMgmt -p <path>"
-    data_folder = Path.cwd() / "outputs"
-    sim_id = 0
 
-    try:
-        opts, args = getopt.getopt(args, "hi:p:", ["id=", "path="])
-        for opt, arg in opts:
-            if opt == '-h':
-                print(usage)
-                sys.exit()
-            elif opt in ("-i", "--id"):
-                sim_id = int(arg)
-            elif opt in ("-p", "--path"):
-                # create the path and create the data files.
-                data_folder = data_folder / arg
-    except getopt.GetoptError:
-        print(usage)
-        sys.exit("")
-    return data_folder, sim_id
-
-def run_model(path, farms, reservoir):
+def run_model(path, sim_id, cfg, farms, reservoir):
     """
     TODO
     :param path: TODO
@@ -114,7 +82,7 @@ def run_model(path, farms, reservoir):
     cur_date = cfg.start_date
 
     # create a file to store the population data from our simulation
-    data_file = path / "simulation_data_{}.txt".format(SIM_ID)
+    data_file = path / "simulation_data_{}.txt".format(sim_id)
     data_file.unlink(missing_ok=True)
     data_file = (data_file).open(mode='a')
 
@@ -125,7 +93,7 @@ def run_model(path, farms, reservoir):
         days = (cur_date - cfg.start_date).days
 
         # Since we are using a tau-leap like algorithm, we want to update the cages using
-        # the current time step. To make things consistent, we copy the current state of 
+        # the current time step. To make things consistent, we copy the current state of
         # farms and this copy as the current state.
         farms_at_date = copy.deepcopy(farms)
 
@@ -143,12 +111,12 @@ def run_model(path, farms, reservoir):
             # I need to create another copy!).
             other_farms = copy.deepcopy(farms_at_date)
             other_farms.remove(farm)
-            
+
             #if days == 1:
             #    resistance_bv.write_text(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext)
 
             farm.update(cur_date, cfg.tau, other_farms, reservoir)
-        
+
         # Now update the reservoir. The farms have already been updated so we don't need
         # to use the copy of the farms
         reservoir.update(cfg.tau, farms)
@@ -162,6 +130,7 @@ def run_model(path, farms, reservoir):
         data_file.write(data_str + "\n")
     data_file.close()
 
+
 if __name__ == "__main__":
     # NOTE: missing_ok argument of unlink is only supported from Python 3.8
     # TODO: decide if that's ok or whether to revamp the file handling
@@ -169,13 +138,21 @@ if __name__ == "__main__":
         sys.stderr.write("You need python 3.8 or later to run this script\n")
         sys.exit(1)
 
-    # Set up the logger, logging to file and screen.
-    cfg.logger = create_logger()
+    # set up and read the command line arguments
+    parser = argparse.ArgumentParser(description="Sea lice simulation")
+    parser.add_argument("path", type=str, help="Output directory path")
+    parser.add_argument("id", type=str, help="Experiment name")
+    parser.add_argument("cfg_path", type=str, help="Path to config JSON file")
+    args = parser.parse_args()
 
-    # set up the data folders and read the command line arguments.
-    DATA_FOLDER, SIM_ID = read_command_line_args(sys.argv[1:])
-    DATA_FOLDER.mkdir(parents=True, exist_ok=True)
+    # set up the data folders
+    output_folder = Path.cwd() / "outputs" / args.path
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    # set up config class and logger (logging to file and screen.)
+    logger = create_logger()
+    cfg = Config(args.cfg_path, logger)
 
     # run the simulation
-    FARMS, RESERVOIR = initialise(DATA_FOLDER, SIM_ID)
-    run_model(DATA_FOLDER, FARMS, RESERVOIR)
+    FARMS, RESERVOIR = initialise(output_folder, args.id, cfg)
+    run_model(output_folder, args.id, cfg, FARMS, RESERVOIR)

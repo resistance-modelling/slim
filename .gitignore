@@ -8,6 +8,9 @@ __pycache__/
 resistanceBVs_*.txt
 simulation_data_*.txt
 
+# Testing
+.pytest_cache/
+
 # Original .gitignore
 Figures/
 reading/
