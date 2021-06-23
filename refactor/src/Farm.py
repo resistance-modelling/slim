@@ -3,7 +3,9 @@ Defines a Farm class that encapsulates a salmon farm containing several cages.
 """
 from src.Cage import Cage
 from src.JSONEncoders import CustomFarmEncoder
+from src.Config import Config
 
+import json
 
 class Farm:
     """
@@ -11,16 +13,11 @@ class Farm:
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name, cfg):
+    def __init__(self, name, cfg: Config):
         """
         Create a farm.
         :param name: the id of the farm.
-        :param loc: the [x,y] location of the farm.
-        :param start_date: the date the farm commences.
-        :param treatment_dates: the dates the farm is allowed to treat their cages.
-        :param n_cages: the number of cages on the farm.
-        :param cages_start_date: a list of the start dates for each cage.
-        :param nplankt: initial number of planktonic lice.
+        :param cfg: the farm configuration
         """
 
         self.logger = cfg.logger
