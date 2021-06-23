@@ -95,7 +95,7 @@ TODO: source of data (f_meanEMB, f_sigEMB, EMBmort, env_meanEMB, env_sigEMB)
 ## Usage
 To run the WIP refactored model, enter the ```refactor``` directory and run:
 
-```python -m src.SeaLiceMgmt folder_name exp_name```
+```python -m src.SeaLiceMgmt output_folder simulation_name config_json_path```
 
 To test, also from ```refactor``` directory, run:
 
