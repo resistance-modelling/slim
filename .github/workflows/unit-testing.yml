@@ -26,4 +26,5 @@ jobs:
       # move to src/. Not sure whether tests should be under refactor or in
       # a different folder...
       shell: bash -l {0}
-      run: pytest refactor/
+      run: pytest
+      working-directory: ./refactor
