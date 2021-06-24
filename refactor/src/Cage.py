@@ -152,9 +152,9 @@ class Cage(CageTemplate):
                 for stage in susceptible_stages:
                     num_dead = len([x for x in dead_lice if total_so_far <= x <
                                     (total_so_far + self.lice_population[stage])])
+                    total_so_far += self.lice_population[stage]
                     if num_dead > 0:
                         self.lice_population[stage] -= num_dead
-                        total_so_far += self.lice_population[stage]
                         dead_lice_dist[stage] = num_dead
 
                 self.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'

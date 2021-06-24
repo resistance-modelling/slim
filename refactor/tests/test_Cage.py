@@ -37,9 +37,8 @@ class TestCage:
         assert(treatment_dates == sorted(treatment_dates))
 
         # before a 14-day activation period there should be no effect
-        # TODO:
-        for i in range(-14, 14):
-            cur_day = treatment_dates[0] - dt.timedelta(days=i)
+        for i in range(-14, first_cage.cfg.delay_EMB):
+            cur_day = treatment_dates[0] + dt.timedelta(days=i)
             mortality_updates = first_cage.update_lice_treatment_mortality(cur_day)
             assert all(rate == 0 for rate in mortality_updates.values())
 
@@ -51,12 +50,11 @@ class TestCage:
         cur_day = treatment_dates[0] + dt.timedelta(days=5)
         mortality_updates = first_cage.update_lice_treatment_mortality(cur_day)
 
-        # FIXME: This test is broken for now. No lice die for some reason.
-        #assert mortality_updates.values() == {
-        #    "L1": 0,
-        #    "L2": 0,
-        #    "L3": 2,
-        #    "L4": 4,
-        #    "L5m": 0,
-        #    "L5f": 1
-        #}
+        assert mortality_updates == {
+            "L1": 0,
+            "L2": 0,
+            "L3": 0,
+            "L4": 3,
+            "L5m": 0,
+            "L5f": 0
+        }
