@@ -10,3 +10,7 @@ def farm():
     np.random.seed(0)
     cfg = Config("config_data/test.json", logging.getLogger('dummy'))
     return Farm(0, cfg)
+
+@pytest.fixture
+def first_cage(farm):
+    return farm.cages[0]

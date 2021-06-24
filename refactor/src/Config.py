@@ -62,6 +62,8 @@ class Config:
         self.env_meanEMB = treatment_data["env_meanEMB"]["value"]
         self.env_sigEMB = treatment_data["env_sigEMB"]["value"]
         self.EMBmort = treatment_data["EMBmort"]["value"]
+        self.delay_EMB = treatment_data["delay_EMB"]["value"]
+        self.delta_EMB = treatment_data["delta_EMB"]["value"]
 
 
 class FarmConfig:

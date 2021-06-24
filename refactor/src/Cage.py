@@ -113,7 +113,11 @@ class Cage(CageTemplate):
         """
         Calculate the number of lice in each stage killed by treatment.
         """
-        if cur_date - dt.timedelta(days=14) in self.cfg.farms[self.farm_id].treatment_dates:
+
+        dead_lice_dist = {"L1": 0, "L2": 0, "L3": 0, "L4": 0, "L5m": 0, "L5f": 0}
+
+        # TODO: take temperatures into account? See #22
+        if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
             self.logger.debug('    treating farm {}/cage {} on date {}'.format(self.farm_id,
                                                                               self.id, cur_date))
 
@@ -145,7 +149,6 @@ class Cage(CageTemplate):
                 dead_lice = np.random.choice(range(num_susc), num_dead_lice, p=p,
                                              replace=False).tolist()
                 total_so_far = 0
-                dead_lice_dist = {}
                 for stage in susceptible_stages:
                     num_dead = len([x for x in dead_lice if total_so_far <= x <
                                     (total_so_far + self.lice_population[stage])])

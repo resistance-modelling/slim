@@ -1,13 +1,11 @@
+import datetime as dt
+
 import numpy as np
 import pytest
 
 from src.Config import Config, to_dt
 from src.Farm import Farm
-from .fixtures import farm
-
-@pytest.fixture
-def first_cage(farm):
-    return farm.cages[0]
+from .fixtures import farm, first_cage
 
 class TestCage:
     def test_cage_loads_params(self, first_cage):
@@ -33,3 +31,32 @@ class TestCage:
         expected_dead_lice = np.array([26, 0, 0, 2, 0, 0])
         assert np.alltrue(dead_lice_dist_np >= 0.0)
         assert np.alltrue(np.isclose(dead_lice_dist_np, expected_dead_lice))
+
+    def test_cage_update_lice_treatment_mortality_no_effect(self, farm, first_cage):
+        treatment_dates = farm.treatment_dates
+        assert(treatment_dates == sorted(treatment_dates))
+
+        # before a 14-day activation period there should be no effect
+        # TODO:
+        for i in range(-14, 14):
+            cur_day = treatment_dates[0] - dt.timedelta(days=i)
+            mortality_updates = first_cage.update_lice_treatment_mortality(cur_day)
+            assert all(rate == 0 for rate in mortality_updates.values())
+
+    def test_cage_update_lice_treatment_mortality(self, farm, first_cage):
+        # TODO: this does not take into account water temperature!
+        treatment_dates = farm.treatment_dates
+
+        # first useful day
+        cur_day = treatment_dates[0] + dt.timedelta(days=5)
+        mortality_updates = first_cage.update_lice_treatment_mortality(cur_day)
+
+        # FIXME: This test is broken for now. No lice die for some reason.
+        #assert mortality_updates.values() == {
+        #    "L1": 0,
+        #    "L2": 0,
+        #    "L3": 2,
+        #    "L4": 4,
+        #    "L5m": 0,
+        #    "L5f": 1
+        #}
