@@ -25,6 +25,14 @@
             "num_fish": {
                 "description": "Starting number of fish",
                 "value": 4000
+            },
+            "enfish_res": {
+                "description": "Number of fish in millions in given month",
+                "value": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+            },
+            "ewt_res": {
+                "description": "Average fish weight in kg",
+                "value": 2500
             }
         }
     },

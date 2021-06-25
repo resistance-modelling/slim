@@ -119,7 +119,7 @@ def run_model(path, sim_id, cfg, farms, reservoir):
 
         # Now update the reservoir. The farms have already been updated so we don't need
         # to use the copy of the farms
-        reservoir.update(cfg.tau, farms)
+        reservoir.update(cur_date, farms)
 
         # Save the data
         data_str = str(cur_date) + ", " + str(days) + ", " + reservoir.to_csv()
@@ -143,6 +143,9 @@ if __name__ == "__main__":
     parser.add_argument("path", type=str, help="Output directory path")
     parser.add_argument("id", type=str, help="Experiment name")
     parser.add_argument("cfg_path", type=str, help="Path to config JSON file")
+    parser.add_argument("--quiet", help="Don't log to console or file.",
+                        default=False,
+                        action='store_true')
     args = parser.parse_args()
 
     # set up the data folders
@@ -151,6 +154,10 @@ if __name__ == "__main__":
 
     # set up config class and logger (logging to file and screen.)
     logger = create_logger()
+
+    if args.quiet:
+        logger.addFilter(lambda record: False)
+
     cfg = Config(args.cfg_path, logger)
 
     # run the simulation

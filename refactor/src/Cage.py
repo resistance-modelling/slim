@@ -82,7 +82,7 @@ class Cage(CageTemplate):
         days_since_start = (cur_date - self.date).days
 
         # Background lice mortality events
-        dead_lice_dist = self.update_background_lice_mortality(self.lice_population, step_size)
+        dead_lice_dist = self.update_background_lice_mortality(self.lice_population)
 
         # Treatment mortality events
         treatment_mortality = self.update_lice_treatment_mortality(cur_date)

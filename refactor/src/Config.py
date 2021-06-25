@@ -16,9 +16,10 @@ def to_dt(string_date):
 
 
 class Config:
+    """Simulation configuration and parameters"""
 
     def __init__(self, config_file, logger):
-        """Simulation configuration and parameters
+        """Read the configuration from a file
 
         :param config_file: Path to the JSON file
         :type config_file: string
@@ -48,12 +49,15 @@ class Config:
         self.nfarms = len(self.farms)
 
         # reservoir
+        reservoir_data = data["reservoir"]["value"]
         # starting sealice population in reservoir = number of cages * modifier
         # TODO: confirm this is intended behaviour
         # TODO: is external pressure and modifier the same?
         total_cages = sum([farm.n_cages for farm in self.farms])
         self.reservoir_num_lice = self.lice_pop_modifier * total_cages
-        self.reservoir_num_fish = data["reservoir"]["value"]["num_fish"]["value"]
+        self.reservoir_num_fish = reservoir_data["num_fish"]["value"]
+        self.reservoir_enfish_res = reservoir_data["enfish_res"]["value"]
+        self.reservoir_ewt_res = reservoir_data["ewt_res"]["value"]
 
         # treatment
         treatment_data = data["treatment"]["value"]
@@ -65,9 +69,10 @@ class Config:
 
 
 class FarmConfig:
+    """Config for individual farm"""
 
     def __init__(self, data, logger):
-        """Config for individual farm
+        """Create farm configuration
 
         :param data: Dictionary with farm data
         :type data: dict
