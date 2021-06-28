@@ -106,5 +106,9 @@ class TestCage:
                 )
 
     def test_update_lice_lifestage(self, first_cage):
-        first_cage.update_lice_lifestage(1)
-        pass
+        new_l2, new_l4, new_females, new_males = first_cage.update_lice_lifestage(1)
+
+        assert new_l2 == 0
+        assert new_l4 == 30 and first_cage.lice_population["L3"] > 0
+        assert new_males == 2 and first_cage.lice_population["L4"] > 0
+        assert new_females == 2

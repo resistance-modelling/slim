@@ -231,7 +231,6 @@ class Cage(CageTemplate):
         ave_temp = self.ave_temperature_at(cur_month, farm_loc_x)
 
         # L4 -> L5
-        # TODO: work out which medians we need here...
         # TODO move these magic numbers somewhere else...
         # TODO these blocks look like the same?
         num_lice = self.lice_population['L4']
