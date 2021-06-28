@@ -112,3 +112,19 @@ class TestCage:
         assert new_l4 == 30 and first_cage.lice_population["L3"] > 0
         assert new_males == 2 and first_cage.lice_population["L4"] > 0
         assert new_females == 2
+
+    def test_update_fish_growth(self, first_cage):
+        # TODO: infestation has not been implemented, this does not take into account the actual lice population!
+        natural_death, lice_death = first_cage.update_fish_growth(1, 1)
+
+        assert natural_death > 0
+        assert lice_death >= 0
+
+    def test_update_fish_growth_no_lice(self, first_cage):
+        # See above
+        first_cage.num_infected_fish = 0
+        for k in first_cage.lice_population:
+            first_cage.lice_population = 0
+
+        _, lice_death = first_cage.update_fish_growth(1, 1)
+        # assert lice_death == 0

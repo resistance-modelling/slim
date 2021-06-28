@@ -272,12 +272,10 @@ class Cage(CageTemplate):
 
     def update_fish_growth(self, days, step_size):
         """
+        Get the new number of fish after a step size.
         Fish growth rate -> 10000/(1+exp(-0.01*(t-475))) fitted logistic curve to data from
         http://www.fao.org/fishery/affris/species-profiles/atlantic-salmon/growth/en/
 
-        Fish death rate: constant background daily rate 0.00057 based on
-        www.gov.scot/Resource/0052/00524803.pdf
-        multiplied by lice coefficient see surv.py (compare to threshold of 0.75 lice/g fish)
         """
 
         self.logger.debug('    updating fish population')
@@ -285,16 +283,22 @@ class Cage(CageTemplate):
         def fb_mort(days):
             """
             Fish background mortality rate, decreasing as in Soares et al 2011
-            :param days: TODO ???
-            :return: TODO ???
+
+            Fish death rate: constant background daily rate 0.00057 based on
+            www.gov.scot/Resource/0052/00524803.pdf
+            multiplied by lice coefficient see surv.py (compare to threshold of 0.75 lice/g fish)
+
+            TODO: what should we do with the formulae?
+
+            :param days: number of days elapsed
+            :return: fish background mortality rate
             """
             return 0.00057 #(1000 + (days - 700)**2)/490000000
 
         # detemine the number of fish with lice and the number of attached lice on each.
         # for now, assume there is only one TODO fix this when I understand the infestation
         # (next stage)
-        num_fish_with_lice = 3
-        adlicepg = np.array([1] * num_fish_with_lice)/self.fish_growth_rate(days)
+        adlicepg = np.array([1] * self.num_infected_fish)/self.fish_growth_rate(days)
         prob_lice_death = 1/(1+np.exp(-19*(adlicepg-0.63)))
 
         ebf_death = fb_mort(days)*step_size*(self.num_fish)
