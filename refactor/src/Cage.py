@@ -332,6 +332,89 @@ class Cage(CageTemplate):
                 df_list[fc].loc[df_list[fc].index.isin(sires),'resistanceT1'].values
         """
         pass
+        
+    # if we're in the discrete 2-gene setting, assume for now that genotypes are tuples - so in a A/a genetic system, genotypes
+    # could be ('A'), ('a'), or ('A', 'a')     
+    #  right now number of offspring with each genotype are deterministic, and might be missing one (we should update to add jitter in future,
+    # but this is a reasonable approx)
+    # note another todo: doesn't do anything sensible re: integer/real numbers of offspring     
+    def generate_eggs(sire, dam, breeding_method, number_eggs):
+      if breeding_method == 'discrete':
+        eggs_generated = {}
+        if len(sire) == 1 and len(dam) == 1:
+          eggs_generated[tuple(set((sire[0], dam[0])))] = number_eggs
+        elif len(sire) == 2 and len(dam) == 1:
+          eggs_generated[tuple(set((sire[0], dam[0])))] = number_eggs/2
+          eggs_generated[tuple(set((sire[1], dam[0])))] = number_eggs/2
+        else: #
+          # drawing both from the sire in the first case ensures heterozygotes
+          # but is a bit hacky.
+          eggs_generated[tuple(set((sire[0], sire[1])))] = number_eggs/2
+          # and the below gets us our two types of homozygotes
+          eggs_generated[tuple(set((sire[0], dam[0])))] = number_eggs/4
+          eggs_generated[tuple(set((sire[1], dam[1])))] = number_eggs/4
+        return eggs_generated
+      else:
+        # additive not yet implemented
+        return None
+    
+    
+    # I've assumed that both distrib and delta are dictionaries
+    # and are *not* normalised (that is, they are effectively counts)
+    # I've also assumed that we never want a count below zero
+    # Code is naive - interpret as algorithm spec
+    # combine these two functions with a negation of a dict?
+    def update_distrib_discrete_add(distrib_delta, distrib):
+      # print('adding distribs')
+      for geno in distrib_delta:
+        if geno not in distrib:
+          distrib[geno] = 0
+        distrib[geno] += distrib_delta[geno]
+        if distrib[geno] < 0:
+          distrib[geno] = 0
+    
+    def update_distrib_discrete_subtract(distrib_delta, distrib):
+      for geno in distrib:
+        distrib[geno] -= distrib_delta[geno]
+        if distrib[geno] < 0:
+          distrib[geno] = 0
+    
+    # Assuming that these distribs are counts, and that they 
+    # contain only individuals available for mating
+    # will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs 
+    # assume males don't become unavailable? in this case we don't need a delta for sires
+    # right now only does one mating - need to deal with dams becoming unavailable if mating events is similar to number of dams
+    def generate_matings_discrete(distrib_sire_available, distrib_dam_available, distrib_eggs_per_mating):
+      delta_eggs = {}
+      # delta_sires = {}
+      delta_dams = {}
+      # this is where I need to add back in multiple matings, but for this either assume that far fewer matings than dams,
+      # or make dams unavailable as we select them (i.e. draw without replacement)       
+      # for _ in range(num_matings):
+      for _ in [1]:
+        sire_geno = choose_from_distrib(distrib_sire_available)
+        dam_geno = choose_from_distrib(distrib_dam_available)
+        num_eggs = choose_from_distrib(distrib_eggs_per_mating)
+    
+        if dam_geno not in delta_dams:
+          delta_dams [dam_geno] = 0
+        delta_dams[dam_geno] += 1
+    
+        new_eggs = generate_eggs(sire_geno, dam_geno, 'discrete', num_eggs)
+        
+        update_distrib_discrete_add(new_eggs, delta_eggs)
+    
+      return delta_dams, delta_eggs
+    
+    def choose_from_distrib(distrib):
+      max_val = sum(distrib.values())
+      this_draw = random.randrange(max_val)
+      sum_so_far = 0
+      for val in distrib:
+        sum_so_far += distrib[val]
+        if this_draw <= sum_so_far:
+          return val
+        
 
     def create_offspring(self):
         """
