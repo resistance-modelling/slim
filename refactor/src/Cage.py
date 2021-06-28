@@ -55,8 +55,6 @@ class Cage(CageTemplate):
     def __str__(self):
         """
         Get a human readable string representation of the cage in json form.
-        Note: having a reference to the farm here causeѕ a circular reference, we need to
-        ignore the farm attribute of this class in this method.
         :return: a description of the cage
         """
         return json.dumps(self, cls=CustomCageEncoder, indent=4)
@@ -82,7 +80,7 @@ class Cage(CageTemplate):
         days_since_start = (cur_date - self.date).days
 
         # Background lice mortality events
-        dead_lice_dist = self.update_background_lice_mortality(self.lice_population)
+        dead_lice_dist = self.get_background_lice_mortality(self.lice_population)
 
         # Treatment mortality events
         treatment_mortality = self.update_lice_treatment_mortality(cur_date)

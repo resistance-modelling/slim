@@ -58,17 +58,22 @@ class Reservoir(CageTemplate):
                 {sum(self.lice_population.values())}"
 
     def update(self, cur_date, farms):
+        """Update the reservoir at the current time step.
+        * update lice population
+        * perform infection
+        * TODO: mating?
+
+        :param cur_date: Current date of the simulation
+        :type cur_date: datetime.datetime
+        :param farms: List of Farm objects
+        :type farms: list
         """
-        Update the reservoir at the current time step.
-            * update lice population
-            * perform infection
-            * TODO: mating?
-        :return:
-        """
+
         self.logger.debug("Updating reservoir")
         self.logger.debug("  initial lice population = {}".format(self.lice_population))
 
-        dead_lice_dist = self.update_background_lice_mortality(self.lice_population)
+        # get new lice population after background deaths
+        dead_lice_dist = self.get_background_lice_mortality(self.lice_population)
         self.lice_population = {stage: max(0, self.lice_population[stage] - dead) for stage, dead in dead_lice_dist.items()}
 
         # "controls the magnitude of the infection rate conditioned on
@@ -78,7 +83,7 @@ class Reservoir(CageTemplate):
         # term involving month-based number of fish in millions
         # in the reservoir
         num_fish_term = math.log(self.cfg.reservoir_enfish_res[cur_date.month - 1])
-        
+
         # TODO: why 0.082? What is delta(CO)(l) in the paper?
         weight_delta = 0.082
 
@@ -100,7 +105,8 @@ class Reservoir(CageTemplate):
         # get the number of infections
         infections = np.random.poisson(infection_rate)
 
-        # TODO: why min here?
+        # get lower out of infections and lice - can't infect
+        # more fish then there are lice
         infections = min(infections, num_avail_lice)
 
 

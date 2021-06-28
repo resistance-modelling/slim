@@ -10,7 +10,7 @@ class CageTemplate:
         self.cfg = cfg
         self.logger = cfg.logger
 
-    def update_background_lice_mortality(self, lice_population):
+    def get_background_lice_mortality(self, lice_population):
         """
         Background death in a stage (remove entry) -> rate = number of
         individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,
