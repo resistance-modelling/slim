@@ -58,16 +58,8 @@ class Config:
         self.reservoir_num_lice = self.lice_pop_modifier * total_cages
         self.reservoir_num_fish = data["reservoir"]["value"]["num_fish"]["value"]
 
-        # treatment
-        #treatment_data = data["treatment"]["value"]
-        #self.f_meanEMB = treatment_data["f_meanEMB"]["value"]
-        #self.f_sigEMB = treatment_data["f_sigEMB"]["value"]
-        #self.env_meanEMB = treatment_data["env_meanEMB"]["value"]
-        #self.env_sigEMB = treatment_data["env_sigEMB"]["value"]
-        #self.EMBmort = treatment_data["EMBmort"]["value"]
-
     def __getattr__(self, name):
-        # obscure marshalling trick
+        # obscure marshalling trick.
         params = self.__getattribute__("params")
         if name in dir(params):
             return params.__getattribute__(name)
@@ -85,6 +77,9 @@ class RuntimeConfig:
         self.env_meanEMB = data["env_meanEMB"]["value"]
         self.env_sigEMB = data["env_sigEMB"]["value"]
         self.EMBmort = data["EMBmort"]["value"]
+        self.delay_EMB = data["delay_EMB"]["value"]
+        self.delta_EMB = data["delta_EMB"]["value"]
+
 
 class FarmConfig:
 

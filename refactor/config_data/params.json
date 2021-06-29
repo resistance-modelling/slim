@@ -22,5 +22,13 @@
   "EMBmort": {
     "description": "Probability of mortality due to Emamectin Benzoate",
     "value": 0.9
+  },
+  "delay_EMB": {
+      "description": "Delay between application and observation of noticeable effects of the Emamectin Benzoate (in days)",
+      "value": 5
+  },
+  "delta_EMB": {
+      "description": "Ratio between durability and current sea temperature (unit: days / °C)",
+      "value": 210
   }
 }
