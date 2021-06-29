@@ -17,11 +17,12 @@ def to_dt(string_date):
 
 class Config:
 
-    def __init__(self, config_file, logger):
+    def __init__(self, environment_file, param_file, logger):
         """Simulation configuration and parameters
 
-        :param config_file: Path to the JSON file
-        :type config_file: string
+        :param environment_file: Path to the environment JSON file
+        :type environment_file: string
+        :param param_file: path to the simulator parameters JSON file
         :param logger: Logger to be used
         :type logger: logging.Logger
         """
@@ -30,8 +31,10 @@ class Config:
         self.logger = logger
 
         # read and set the params
-        with open(config_file) as f:
+        with open(environment_file) as f:
             data = json.load(f)
+
+        self.params = RuntimeConfig(param_file)
 
         # time and dates
         self.start_date = to_dt(data["start_date"]["value"])
@@ -56,13 +59,32 @@ class Config:
         self.reservoir_num_fish = data["reservoir"]["value"]["num_fish"]["value"]
 
         # treatment
-        treatment_data = data["treatment"]["value"]
-        self.f_meanEMB = treatment_data["f_meanEMB"]["value"]
-        self.f_sigEMB = treatment_data["f_sigEMB"]["value"]
-        self.env_meanEMB = treatment_data["env_meanEMB"]["value"]
-        self.env_sigEMB = treatment_data["env_sigEMB"]["value"]
-        self.EMBmort = treatment_data["EMBmort"]["value"]
+        #treatment_data = data["treatment"]["value"]
+        #self.f_meanEMB = treatment_data["f_meanEMB"]["value"]
+        #self.f_sigEMB = treatment_data["f_sigEMB"]["value"]
+        #self.env_meanEMB = treatment_data["env_meanEMB"]["value"]
+        #self.env_sigEMB = treatment_data["env_sigEMB"]["value"]
+        #self.EMBmort = treatment_data["EMBmort"]["value"]
 
+    def __getattr__(self, name):
+        # obscure marshalling trick
+        params = self.__getattribute__("params")
+        if name in dir(params):
+            return params.__getattribute__(name)
+        return self.__getattribute__(name)
+
+class RuntimeConfig:
+    """Simulation parameters and constants"""
+
+    def __init__(self, hyperparam_file):
+        with open(hyperparam_file) as f:
+            data = json.load(f)
+
+        self.f_meanEMB = data["f_meanEMB"]["value"]
+        self.f_sigEMB = data["f_sigEMB"]["value"]
+        self.env_meanEMB = data["env_meanEMB"]["value"]
+        self.env_sigEMB = data["env_sigEMB"]["value"]
+        self.EMBmort = data["EMBmort"]["value"]
 
 class FarmConfig:
 
