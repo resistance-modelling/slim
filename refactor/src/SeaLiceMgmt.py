@@ -142,10 +142,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sea lice simulation")
     parser.add_argument("path", type=str, help="Output directory path")
     parser.add_argument("id", type=str, help="Experiment name")
+    parser.add_argument("sim_path", type=str, help="Path to simulation params JSON file")
     parser.add_argument("cfg_path", type=str, help="Path to config JSON file")
     parser.add_argument("--quiet", help="Don't log to console or file.",
                         default=False,
                         action='store_true')
+    parser.add_argument("--seed", type=int, help="Provide a seed. Overrides the param", required=False)
     args = parser.parse_args()
 
     # set up the data folders
@@ -155,10 +157,16 @@ if __name__ == "__main__":
     # set up config class and logger (logging to file and screen.)
     logger = create_logger()
 
+    # silence if needed
     if args.quiet:
         logger.addFilter(lambda record: False)
 
-    cfg = Config(args.cfg_path, logger)
+    # create the config object
+    cfg = Config(args.cfg_path, args.sim_path, logger)
+
+    # set the seed
+    if "seed" in args:
+        cfg.params.seed = args.seed
 
     # run the simulation
     FARMS, RESERVOIR = initialise(output_folder, args.id, cfg)

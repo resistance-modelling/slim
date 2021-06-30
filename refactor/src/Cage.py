@@ -111,7 +111,11 @@ class Cage(CageTemplate):
         """
         Calculate the number of lice in each stage killed by treatment.
         """
-        if cur_date - dt.timedelta(days=14) in self.cfg.farms[self.farm_id].treatment_dates:
+
+        dead_lice_dist = {"L1": 0, "L2": 0, "L3": 0, "L4": 0, "L5m": 0, "L5f": 0}
+
+        # TODO: take temperatures into account? See #22
+        if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
             self.logger.debug('    treating farm {}/cage {} on date {}'.format(self.farm_id,
                                                                               self.id, cur_date))
 
@@ -143,18 +147,57 @@ class Cage(CageTemplate):
                 dead_lice = np.random.choice(range(num_susc), num_dead_lice, p=p,
                                              replace=False).tolist()
                 total_so_far = 0
-                dead_lice_dist = {}
                 for stage in susceptible_stages:
                     num_dead = len([x for x in dead_lice if total_so_far <= x <
                                     (total_so_far + self.lice_population[stage])])
+                    total_so_far += self.lice_population[stage]
                     if num_dead > 0:
                         self.lice_population[stage] -= num_dead
-                        total_so_far += self.lice_population[stage]
                         dead_lice_dist[stage] = num_dead
 
                 self.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'
                                  .format(self.farm_id, self.id, dead_lice_dist))
+
+                assert num_dead_lice == sum(list(dead_lice_dist.values()))
         return dead_lice_dist
+
+    @staticmethod
+    def get_stage_ages(size: int, min: int, mean: int, development_days=25):
+        """
+        Create an age distribution (in days) for the sea lice within a lifecycle stage.
+        :param size the number of lice to consider
+        :param mean the mean of the distribution. mean must be bigger than min.
+        :param development_days the maximum age to consider
+        :return a size-long array of ages (in days)
+        """
+
+        # Create a shifted poisson distribution,
+        k = mean - min
+        max_quantile = development_days - min
+
+        assert min > 0, "min must be positive"
+        assert k > 0, "mean must be greater than min."
+
+        p = stats.poisson.pmf(range(max_quantile), k)
+        p = p / np.sum(p)  # probs need to add up to one
+        return np.random.choice(range(max_quantile), size, p=p) + min
+
+
+    @staticmethod
+    def ave_temperature_at(c_month, farm_northing):
+        """
+        Calculate the mean sea temperature at the northing coordinate of the farm at
+        month c_month interpolating data taken from
+        TODO if the farm never moves there is no point in interpolating every time but only during initialization
+        www.seatemperature.org
+        """
+        ardrishaig_avetemp = np.array([8.2, 7.55, 7.45, 8.25, 9.65, 11.35, 13.15, 13.75, 13.65,
+                                       12.85, 11.75, 9.85])
+        tarbert_avetemp = np.array([8.4, 7.8, 7.7, 8.6, 9.8, 11.65, 13.4, 13.9, 13.9, 13.2,
+                                    12.15, 10.2])
+        degs = (tarbert_avetemp[c_month - 1] - ardrishaig_avetemp[c_month - 1]) / (685715 - 665300)
+        Ndiff = farm_northing - 665300  # farm Northing - tarbert Northing
+        return np.round(tarbert_avetemp[c_month - 1] - Ndiff * degs, 1)
 
     def update_lice_lifestage(self, cur_month):
         """
@@ -162,52 +205,37 @@ class Cage(CageTemplate):
         """
         self.logger.debug('    updating lice lifecycle stages')
 
-        def get_stage_ages(size):
-            """
-            Create an age distribution (in days) for the sea lice within a lifecycle stage.
-            """
-            p = stats.poisson.pmf(range(15), 3)
-            p = p / np.sum(p) # probs need to add up to one
-            return np.random.choice(range(15), size, p=p)
-
         def dev_time(del_p, del_m10, del_s, temp_c, n_days):
             """
             Probability of developing after n_days days in a stage as given by Aldrin et al 2017
-            :param n_days:
-            :param del_p:
-            :param del_m10:
-            :param del_s:
-            :param temp_c:
-            :return:
+            See section 2.2.4 of Aldrin et al. (2017)
+            :param n_days: stage-age
+            :param del_p: power transformation constant on temp_c
+            :param del_m10: 10 °C median reference value
+            :param del_s: fitted Weibull shape parameter
+            :param temp_c: average temperature in °C
+            :return: expected development rate
             """
-            unbounded = math.log(2)*del_s*n_days**(del_s-1)* \
-                    (del_m10*10**del_p/temp_c**del_p)**(-del_s)
-            unbounded[unbounded == 0] = 10**(-30)
-            unbounded[unbounded > 1] = 1
-            return unbounded.astype('float64')
+            epsilon = 1e-30
+            del_m = del_m10*(10/temp_c)**del_p
 
-        def ave_temperature_at(c_month, farm_northing):
-            """
-            TODO: Calculate the mean sea temperature at the northing coordinate of the farm at
-            month c_month interpolating data taken from
-            www.seatemperature.org
-            """
-            ardrishaig_avetemp = np.array([8.2, 7.55, 7.45, 8.25, 9.65, 11.35, 13.15, 13.75, 13.65,
-                                           12.85, 11.75, 9.85])
-            tarbert_avetemp = np.array([8.4, 7.8, 7.7, 8.6, 9.8, 11.65, 13.4, 13.9, 13.9, 13.2,
-                                        12.15, 10.2])
-            degs = (tarbert_avetemp[c_month-1]-ardrishaig_avetemp[c_month-1])/(685715-665300)
-            Ndiff = farm_northing - 665300              #farm Northing - tarbert Northing
-            return round(tarbert_avetemp[c_month-1] - Ndiff*degs, 1)
+            unbounded = math.log(2)*del_s*n_days**(del_s-1)*del_m**(-del_s)
+            unbounded = np.clip(unbounded, epsilon, 1)
+            return unbounded.astype('float64')
 
         lice_dist = {}
         farm_loc_x = self.cfg.farms[self.farm_id].farm_location[0]
 
+        ave_temp = self.ave_temperature_at(cur_month, farm_loc_x)
+
         # L4 -> L5
+        # TODO move these magic numbers somewhere else...
+        # TODO these blocks look like the same?
         num_lice = self.lice_population['L4']
-        l4_to_l5 = dev_time(0.866, 10.742, 1.643, ave_temperature_at(cur_month, farm_loc_x),
-                            get_stage_ages(num_lice))
-        num_to_move = min(np.random.poisson(sum(l4_to_l5)), num_lice)
+        stage_ages = self.get_stage_ages(num_lice, min=10, mean=15)
+
+        l4_to_l5 = dev_time(0.866, 10.742, 1.643, ave_temp, stage_ages)
+        num_to_move = min(np.random.poisson(np.sum(l4_to_l5)), num_lice)
         new_females = np.random.choice([math.floor(num_to_move/2.0), math.ceil(num_to_move/2.0)])
         new_males = (num_to_move - new_females)
 
@@ -216,9 +244,9 @@ class Cage(CageTemplate):
 
         # L3 -> L4
         num_lice = self.lice_population['L3']
-        l3_to_l4 = dev_time(1.305, 18.934, 7.945, ave_temperature_at(cur_month, farm_loc_x),
-                            get_stage_ages(num_lice))
-        num_to_move = min(np.random.poisson(sum(l3_to_l4)), num_lice)
+        stage_ages = self.get_stage_ages(num_lice, min=15, mean=18)
+        l3_to_l4 = dev_time(1.305, 18.934, 7.945, ave_temp, stage_ages)
+        num_to_move = min(np.random.poisson(np.sum(l3_to_l4)), num_lice)
         new_L4 = num_to_move
 
         lice_dist['L4'] = num_to_move
@@ -228,9 +256,9 @@ class Cage(CageTemplate):
 
         # L1 -> L2
         num_lice = self.lice_population['L2']
-        l1_to_l2 = dev_time(0.401, 8.814, 18.869, ave_temperature_at(cur_month, farm_loc_x),
-                            get_stage_ages(num_lice))
-        num_to_move = min(np.random.poisson(sum(l1_to_l2)), num_lice)
+        stage_ages = self.get_stage_ages(num_lice, min=3, mean=4)
+        l1_to_l2 = dev_time(0.401, 8.814, 18.869, ave_temp, stage_ages)
+        num_to_move = min(np.random.poisson(np.sum(l1_to_l2)), num_lice)
         new_L2 = num_to_move
 
         lice_dist['L2'] = num_to_move
@@ -242,12 +270,10 @@ class Cage(CageTemplate):
 
     def update_fish_growth(self, days, step_size):
         """
+        Get the new number of fish after a step size.
         Fish growth rate -> 10000/(1+exp(-0.01*(t-475))) fitted logistic curve to data from
         http://www.fao.org/fishery/affris/species-profiles/atlantic-salmon/growth/en/
 
-        Fish death rate: constant background daily rate 0.00057 based on
-        www.gov.scot/Resource/0052/00524803.pdf
-        multiplied by lice coefficient see surv.py (compare to threshold of 0.75 lice/g fish)
         """
 
         self.logger.debug('    updating fish population')
@@ -255,16 +281,22 @@ class Cage(CageTemplate):
         def fb_mort(days):
             """
             Fish background mortality rate, decreasing as in Soares et al 2011
-            :param days: TODO ???
-            :return: TODO ???
+
+            Fish death rate: constant background daily rate 0.00057 based on
+            www.gov.scot/Resource/0052/00524803.pdf
+            multiplied by lice coefficient see surv.py (compare to threshold of 0.75 lice/g fish)
+
+            TODO: what should we do with the formulae?
+
+            :param days: number of days elapsed
+            :return: fish background mortality rate
             """
             return 0.00057 #(1000 + (days - 700)**2)/490000000
 
         # detemine the number of fish with lice and the number of attached lice on each.
         # for now, assume there is only one TODO fix this when I understand the infestation
         # (next stage)
-        num_fish_with_lice = 3
-        adlicepg = np.array([1] * num_fish_with_lice)/self.fish_growth_rate(days)
+        adlicepg = np.array([1] * self.num_infected_fish)/self.fish_growth_rate(days)
         prob_lice_death = 1/(1+np.exp(-19*(adlicepg-0.63)))
 
         ebf_death = fb_mort(days)*step_size*(self.num_fish)
