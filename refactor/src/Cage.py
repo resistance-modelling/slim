@@ -355,8 +355,16 @@ class Cage(CageTemplate):
           eggs_generated[tuple(set((sire[1], dam[1])))] = number_eggs/4
         return eggs_generated
       else:
-        # additive not yet implemented
-        return None
+        # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
+        # because we're only dealing with the heritable part here don't need to do any of the comparison
+        # to population mean or impact of heritability, etc - that would appear in thecode dealing with treatment
+        # so we could use just the mid-parent value for this genetic recording for children
+        # as with the discrete genetic model, this will be deterministic for now
+        eggs_generated = {}
+        mid_parent = np.round((sire + dam)/2, 1)
+        eggs_generated[mid_parent] = number_eggs
+        
+        return eggs_generated
     
     
     # I've assumed that both distrib and delta are dictionaries
