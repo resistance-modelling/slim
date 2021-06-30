@@ -48,14 +48,11 @@ class Reservoir(CageTemplate):
         for writing to a file later.
         """
 
-        return f"reservoir, {self.num_fish}, \
-                {self.lice_population['L1']}, \
-                {self.lice_population['L2']}, \
-                {self.lice_population['L3']}, \
-                {self.lice_population['L4']}, \
-                {self.lice_population['L5f']}, \
-                {self.lice_population['L5m']}, \
-                {sum(self.lice_population.values())}"
+        data = ["reservoir", str(self.num_fish)]
+        data.extend([str(val) for val in self.lice_population.values()])
+        data.append(str(sum(self.lice_population.values())))
+        
+        return ", ".join(data)
 
     def update(self, cur_date, farms):
         """Update the reservoir at the current time step.
