@@ -27,7 +27,8 @@ class TestCage:
     def test_cage_lice_background_mortality_one_day(self, first_cage):
         # NOTE: this currently relies on Stien's approach.
         # Changing this approach will break things
-        dead_lice_dist = first_cage.update_background_lice_mortality(first_cage.lice_population, 1)
+        first_cage.cfg.tau = 1
+        dead_lice_dist = first_cage.get_background_lice_mortality(first_cage.lice_population)
         dead_lice_dist_np = np.array(list(dead_lice_dist.values()))
         expected_dead_lice = np.array([26, 0, 0, 2, 0, 0])
         assert np.alltrue(dead_lice_dist_np >= 0.0)
