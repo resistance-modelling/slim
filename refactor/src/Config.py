@@ -31,6 +31,9 @@ class Config:
         # set logger
         self.logger = logger
 
+        # don't use seed unless set in SeaLiceMgmt
+        self.seed = None
+
         # read and set the params
         with open(environment_file) as f:
             data = json.load(f)
@@ -84,6 +87,8 @@ class RuntimeConfig:
         self.EMBmort = data["EMBmort"]["value"]
         self.delay_EMB = data["delay_EMB"]["value"]
         self.delta_EMB = data["delta_EMB"]["value"]
+        self.infection_main_delta = data["infection_main_delta"]["value"]
+        self.infection_weight_delta = data["infection_weight_delta"]["value"]
 
 
 class FarmConfig:

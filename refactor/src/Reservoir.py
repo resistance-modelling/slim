@@ -31,7 +31,7 @@ class Reservoir(CageTemplate):
         life_stages_prob = np.full(n, 1/n)
 
         # construct rng generator
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed=self.cfg.seed)
 
         # generate distribution based on life stage probs that sums
         # up to total number of initial lice in reservoir
@@ -73,16 +73,13 @@ class Reservoir(CageTemplate):
         dead_lice_dist = self.get_background_lice_mortality(self.lice_population)
         self.lice_population = {stage: max(0, self.lice_population[stage] - dead) for stage, dead in dead_lice_dist.items()}
 
-        # "controls the magnitude of the infection rate conditioned on
-        # the number and weight of fish within a given cage" (Aldrin, 2017)
-        main_delta = -2.576
+        # retrieve deltas
+        main_delta = self.cfg.infection_main_delta
+        weight_delta = self.cfg.infection_weight_delta
 
         # term involving month-based number of fish in millions
         # in the reservoir
         num_fish_term = math.log(self.cfg.reservoir_enfish_res[cur_date.month - 1])
-
-        # TODO: why 0.082? What is delta(CO)(l) in the paper?
-        weight_delta = 0.082
 
         # term involving average fish weight
         # 0.55 is constant from (Aldrin, 2017)
@@ -105,7 +102,6 @@ class Reservoir(CageTemplate):
         # get lower out of infections and lice - can't infect
         # more fish then there are lice
         infections = min(infections, num_avail_lice)
-
 
         self.logger.debug("  final lice population = {}".format(self.lice_population))
         self.logger.debug("  number of infections = {}".format(infections))

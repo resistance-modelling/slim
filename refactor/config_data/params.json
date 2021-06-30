@@ -30,5 +30,13 @@
   "delta_EMB": {
       "description": "Ratio between durability and current sea temperature (unit: days / °C)",
       "value": 210
+  },
+  "infection_main_delta": {
+      "description": "Controls the magnitude of the infection rate conditioned on the number and weight of fish within a given cage (Aldrin, 2017)",
+      "value": -2.576
+  },
+  "infection_weight_delta": {
+      "description": "Regression coefficient (Aldrin, 2017)",
+      "value": 0.082
   }
 }

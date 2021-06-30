@@ -152,7 +152,6 @@ class Cage(CageTemplate):
                                     (total_so_far + self.lice_population[stage])])
                     total_so_far += self.lice_population[stage]
                     if num_dead > 0:
-                        self.lice_population[stage] -= num_dead
                         dead_lice_dist[stage] = num_dead
 
                 self.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'
@@ -431,19 +430,20 @@ class Cage(CageTemplate):
 
         for stage in self.lice_population:
             # update background mortality
-            self.lice_population[stage] -= dead_lice_dist[stage]
+            bg_delta = self.lice_population[stage] - dead_lice_dist[stage]
+            self.lice_population[stage] = max(0, bg_delta)
 
             # update population due to treatment
             num_dead = treatment_mortality.get(stage, 0)
-            if num_dead > 0:
-                self.lice_population[stage] -= num_dead
+            treatment_delta = self.lice_population[stage] - num_dead
+            self.lice_population[stage] = max(0, treatment_delta)
 
         self.lice_population['L5m'] += new_males
         self.lice_population['L5f'] += new_females
-        self.lice_population['L4'] = self.lice_population['L4'] - (new_males + new_females) + new_L4
-        self.lice_population['L3'] = self.lice_population['L3'] - new_L4 + num_infected_fish
-        self.lice_population['L2'] = self.lice_population['L2'] + new_L2 - num_infected_fish
-        self.lice_population['L1'] -= new_L2
+        self.lice_population['L4'] = max(0, self.lice_population['L4'] - (new_males + new_females) + new_L4)
+        self.lice_population['L3'] = max(0, self.lice_population['L3'] - new_L4 + num_infected_fish)
+        self.lice_population['L2'] = max(0, self.lice_population['L2'] + new_L2 - num_infected_fish)
+        self.lice_population['L1'] = max(0, self.lice_population['L1'] - new_L2)
 
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice
