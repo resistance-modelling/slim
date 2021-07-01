@@ -23,9 +23,8 @@ class Cage(CageTemplate):
         """
 
         # sets access to cfg and logger
-        super().__init__(cfg)
+        super().__init__(cfg, cage_id)
 
-        self.id = cage_id
         self.farm_id = farm_id
         self.start_date = cfg.farms[farm_id].cages_start[cage_id]
         self.date = cfg.start_date
@@ -58,15 +57,6 @@ class Cage(CageTemplate):
         :return: a description of the cage
         """
         return json.dumps(self, cls=CustomCageEncoder, indent=4)
-
-    def to_csv(self):
-        """
-        Save the contents of this cage as a CSV string for writing to a file later.
-        """
-        return f"{self.id}, {self.num_fish}, {self.lice_population['L1']}, \
-                {self.lice_population['L2']}, {self.lice_population['L3']}, \
-                {self.lice_population['L4']}, {self.lice_population['L5f']}, \
-                {self.lice_population['L5m']}, {sum(self.lice_population.values())}"
 
     def update(self, cur_date, step_size, other_farms, reservoir):
         """

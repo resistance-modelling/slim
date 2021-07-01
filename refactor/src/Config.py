@@ -31,9 +31,6 @@ class Config:
         # set logger
         self.logger = logger
 
-        # don't use seed unless set in SeaLiceMgmt
-        self.seed = None
-
         # read and set the params
         with open(environment_file) as f:
             data = json.load(f)
@@ -89,6 +86,11 @@ class RuntimeConfig:
         self.delta_EMB = data["delta_EMB"]["value"]
         self.infection_main_delta = data["infection_main_delta"]["value"]
         self.infection_weight_delta = data["infection_weight_delta"]["value"]
+
+        # load in the seed if provided
+        # otherwise don't use a seed
+        seed_dict = data.get("seed", 0)
+        self.seed = seed_dict["value"] if seed_dict else None
 
 
 class FarmConfig:

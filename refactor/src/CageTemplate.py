@@ -6,9 +6,10 @@ import numpy as np
 class CageTemplate:
     """Class for methods shared between the sea cages and reservoir."""
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, name):
         self.cfg = cfg
         self.logger = cfg.logger
+        self.id = name
 
     def get_background_lice_mortality(self, lice_population):
         """
@@ -34,3 +35,15 @@ class CageTemplate:
 
     def fish_growth_rate(self, days):
         return 10000/(1 + math.exp(-0.01*(days-475)))
+
+    def to_csv(self):
+        """
+        Save the contents of this cage as a CSV string
+        for writing to a file later.
+        """
+
+        data = [str(self.id), str(self.num_fish)]
+        data.extend([str(val) for val in self.lice_population.values()])
+        data.append(str(sum(self.lice_population.values())))
+        
+        return ", ".join(data)
