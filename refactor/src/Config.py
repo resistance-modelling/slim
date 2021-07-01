@@ -16,9 +16,10 @@ def to_dt(string_date):
 
 
 class Config:
+    """Simulation configuration and parameters"""
 
     def __init__(self, environment_file, param_file, logger):
-        """Simulation configuration and parameters
+        """Read the configuration from files
 
         :param environment_file: Path to the environment JSON file
         :type environment_file: string
@@ -29,6 +30,9 @@ class Config:
 
         # set logger
         self.logger = logger
+
+        # don't use seed unless set in SeaLiceMgmt
+        self.seed = None
 
         # read and set the params
         with open(environment_file) as f:
@@ -51,12 +55,15 @@ class Config:
         self.nfarms = len(self.farms)
 
         # reservoir
+        reservoir_data = data["reservoir"]["value"]
         # starting sealice population in reservoir = number of cages * modifier
         # TODO: confirm this is intended behaviour
         # TODO: is external pressure and modifier the same?
         total_cages = sum([farm.n_cages for farm in self.farms])
         self.reservoir_num_lice = self.lice_pop_modifier * total_cages
-        self.reservoir_num_fish = data["reservoir"]["value"]["num_fish"]["value"]
+        self.reservoir_num_fish = reservoir_data["num_fish"]["value"]
+        self.reservoir_enfish_res = reservoir_data["enfish_res"]["value"]
+        self.reservoir_ewt_res = reservoir_data["ewt_res"]["value"]
 
     def __getattr__(self, name):
         # obscure marshalling trick.
@@ -64,6 +71,7 @@ class Config:
         if name in dir(params):
             return params.__getattribute__(name)
         return self.__getattribute__(name)
+
 
 class RuntimeConfig:
     """Simulation parameters and constants"""
@@ -79,12 +87,15 @@ class RuntimeConfig:
         self.EMBmort = data["EMBmort"]["value"]
         self.delay_EMB = data["delay_EMB"]["value"]
         self.delta_EMB = data["delta_EMB"]["value"]
+        self.infection_main_delta = data["infection_main_delta"]["value"]
+        self.infection_weight_delta = data["infection_weight_delta"]["value"]
 
 
 class FarmConfig:
+    """Config for individual farm"""
 
     def __init__(self, data, logger):
-        """Config for individual farm
+        """Create farm configuration
 
         :param data: Dictionary with farm data
         :type data: dict

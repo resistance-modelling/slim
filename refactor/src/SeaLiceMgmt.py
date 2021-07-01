@@ -119,7 +119,7 @@ def run_model(path, sim_id, cfg, farms, reservoir):
 
         # Now update the reservoir. The farms have already been updated so we don't need
         # to use the copy of the farms
-        reservoir.update(cfg.tau, farms)
+        reservoir.update(cur_date, farms)
 
         # Save the data
         data_str = str(cur_date) + ", " + str(days) + ", " + reservoir.to_csv()
@@ -144,6 +144,9 @@ if __name__ == "__main__":
     parser.add_argument("id", type=str, help="Experiment name")
     parser.add_argument("sim_path", type=str, help="Path to simulation params JSON file")
     parser.add_argument("cfg_path", type=str, help="Path to config JSON file")
+    parser.add_argument("--quiet", help="Don't log to console or file.",
+                        default=False,
+                        action='store_true')
     parser.add_argument("--seed", type=int, help="Provide a seed. Overrides the param", required=False)
     args = parser.parse_args()
 
@@ -153,7 +156,15 @@ if __name__ == "__main__":
 
     # set up config class and logger (logging to file and screen.)
     logger = create_logger()
+
+    # silence if needed
+    if args.quiet:
+        logger.addFilter(lambda record: False)
+
+    # create the config object
     cfg = Config(args.cfg_path, args.sim_path, logger)
+
+    # set the seed
     if "seed" in args:
         cfg.params.seed = args.seed
 

@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 from src.CageTemplate import CageTemplate
@@ -7,12 +9,12 @@ class Reservoir(CageTemplate):
     """
     The reservoir for sea lice, essentially modelled as a sea cage.
     """
+
     def __init__(self, cfg):
-        """
-        Create a cage on a farm
-        :param farm: the farm this cage is attached to
-        :param label: the label (id) of the cage within the farm
-        :param nplankt: TODO ???
+        """Create a reservoir
+
+        :param cfg: Simulation configuration and parameters
+        :type cfg: src.Config.Config
         """
 
         super().__init__(cfg)
@@ -20,42 +22,86 @@ class Reservoir(CageTemplate):
         self.date = cfg.start_date
         self.num_fish = cfg.reservoir_num_fish
 
-        # this is by no means optimal: I want to distribute nplankt lice across
-        # each stage at random. (the method I use here is to create a random list
-        # of stages and add up the number for each.
-        lice_stage = np.random.choice(range(2, 7), cfg.reservoir_num_lice)
-        num_lice_in_stage = np.array([sum(lice_stage == i) for i in range(1, 7)])
-        self.lice_population = {'L1': num_lice_in_stage[0],
-                                'L2': num_lice_in_stage[1],
-                                'L3': num_lice_in_stage[2],
-                                'L4': num_lice_in_stage[3],
-                                'L5f': num_lice_in_stage[4],
-                                'L5m': num_lice_in_stage[5]}
+        # define life stage labels
+        life_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
+        n = len(life_stages)
+
+        # set probability of each life stage - in this case,
+        # the same of all lifestages
+        life_stages_prob = np.full(n, 1/n)
+
+        # construct rng generator
+        rng = np.random.default_rng(seed=self.cfg.seed)
+
+        # generate distribution based on life stage probs that sums
+        # up to total number of initial lice in reservoir
+        dist = rng.multinomial(cfg.reservoir_num_lice,
+                               life_stages_prob,
+                               size=1)[0]
+
+        # construct the population dict by assigning the numbers to labels
+        self.lice_population = {life_stages[ix]: dist[ix] for ix in range(n)}
 
     def to_csv(self):
         """
-        Save the contents of this cage as a CSV string for writing to a file later.
+        Save the contents of this cage as a CSV string
+        for writing to a file later.
         """
-        return f"reservoir, {self.num_fish}, {self.lice_population['L1']}, \
-                {self.lice_population['L2']}, {self.lice_population['L3']}, \
-                {self.lice_population['L4']}, {self.lice_population['L5f']}, \
-                {self.lice_population['L5m']}, {sum(self.lice_population.values())}"
 
-    def update(self, step_size, farms):
+        data = ["reservoir", str(self.num_fish)]
+        data.extend([str(val) for val in self.lice_population.values()])
+        data.append(str(sum(self.lice_population.values())))
+        
+        return ", ".join(data)
+
+    def update(self, cur_date, farms):
+        """Update the reservoir at the current time step.
+        * update lice population
+        * perform infection
+        * TODO: mating?
+
+        :param cur_date: Current date of the simulation
+        :type cur_date: datetime.datetime
+        :param farms: List of Farm objects
+        :type farms: list
         """
-        Update the reservoir at the current time step.
-        :return:
-        """
+
         self.logger.debug("Updating reservoir")
         self.logger.debug("  initial lice population = {}".format(self.lice_population))
 
-        self.lice_population = self.update_background_lice_mortality(self.lice_population, step_size)
+        # get new lice population after background deaths
+        dead_lice_dist = self.get_background_lice_mortality(self.lice_population)
+        self.lice_population = {stage: max(0, self.lice_population[stage] - dead) for stage, dead in dead_lice_dist.items()}
 
-        # TODO - infection events in the reservoir
-        #eta_aldrin = -2.576 + log(inpt.Enfish_res[cur_date.month-1]) + 0.082*(log(inpt.Ewt_res)-0.55)
-        #Einf = (exp(eta_aldrin)/(1+exp(eta_aldrin)))*tau*cop_cage
-        #inf_ents = np.random.poisson(Einf)
-        #inf_ents = min(inf_ents,cop_cage)
-        #inf_inds = np.random.choice(df_list[fc].loc[(df_list[fc].stage==2) & (df_list[fc].arrival<=df_list[fc].stage_age)].index, inf_ents, replace=False)
+        # retrieve deltas
+        main_delta = self.cfg.infection_main_delta
+        weight_delta = self.cfg.infection_weight_delta
+
+        # term involving month-based number of fish in millions
+        # in the reservoir
+        num_fish_term = math.log(self.cfg.reservoir_enfish_res[cur_date.month - 1])
+
+        # term involving average fish weight
+        # 0.55 is constant from (Aldrin, 2017)
+        weight_term = math.log(self.cfg.reservoir_ewt_res) - 0.55
+
+        # calculate the eta
+        eta_aldrin = main_delta + num_fish_term + weight_delta * weight_term
+
+        # TODO: this variable depends on arrival and stage age - update once
+        # age dependency handling is agreed upon
+        # `cop_cage = sum((df_list[fc].stage==2) & (df_list[fc].arrival<=df_list[fc].stage_age))``
+        num_avail_lice = self.lice_population["L3"]
+
+        # calculate infection rate
+        infection_rate = (math.exp(eta_aldrin) / (1 + math.exp(eta_aldrin))) * self.cfg.tau * num_avail_lice
+
+        # get the number of infections
+        infections = np.random.poisson(infection_rate)
+
+        # get lower out of infections and lice - can't infect
+        # more fish then there are lice
+        infections = min(infections, num_avail_lice)
 
         self.logger.debug("  final lice population = {}".format(self.lice_population))
+        self.logger.debug("  number of infections = {}".format(infections))

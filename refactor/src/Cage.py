@@ -55,8 +55,6 @@ class Cage(CageTemplate):
     def __str__(self):
         """
         Get a human readable string representation of the cage in json form.
-        Note: having a reference to the farm here causeѕ a circular reference, we need to
-        ignore the farm attribute of this class in this method.
         :return: a description of the cage
         """
         return json.dumps(self, cls=CustomCageEncoder, indent=4)
@@ -82,7 +80,7 @@ class Cage(CageTemplate):
         days_since_start = (cur_date - self.date).days
 
         # Background lice mortality events
-        dead_lice_dist = self.update_background_lice_mortality(self.lice_population, step_size)
+        dead_lice_dist = self.get_background_lice_mortality(self.lice_population)
 
         # Treatment mortality events
         treatment_mortality = self.update_lice_treatment_mortality(cur_date)
@@ -154,7 +152,6 @@ class Cage(CageTemplate):
                                     (total_so_far + self.lice_population[stage])])
                     total_so_far += self.lice_population[stage]
                     if num_dead > 0:
-                        self.lice_population[stage] -= num_dead
                         dead_lice_dist[stage] = num_dead
 
                 self.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'
@@ -433,19 +430,20 @@ class Cage(CageTemplate):
 
         for stage in self.lice_population:
             # update background mortality
-            self.lice_population[stage] -= dead_lice_dist[stage]
+            bg_delta = self.lice_population[stage] - dead_lice_dist[stage]
+            self.lice_population[stage] = max(0, bg_delta)
 
             # update population due to treatment
             num_dead = treatment_mortality.get(stage, 0)
-            if num_dead > 0:
-                self.lice_population[stage] -= num_dead
+            treatment_delta = self.lice_population[stage] - num_dead
+            self.lice_population[stage] = max(0, treatment_delta)
 
         self.lice_population['L5m'] += new_males
         self.lice_population['L5f'] += new_females
-        self.lice_population['L4'] = self.lice_population['L4'] - (new_males + new_females) + new_L4
-        self.lice_population['L3'] = self.lice_population['L3'] - new_L4 + num_infected_fish
-        self.lice_population['L2'] = self.lice_population['L2'] + new_L2 - num_infected_fish
-        self.lice_population['L1'] -= new_L2
+        self.lice_population['L4'] = max(0, self.lice_population['L4'] - (new_males + new_females) + new_L4)
+        self.lice_population['L3'] = max(0, self.lice_population['L3'] - new_L4 + num_infected_fish)
+        self.lice_population['L2'] = max(0, self.lice_population['L2'] + new_L2 - num_infected_fish)
+        self.lice_population['L1'] = max(0, self.lice_population['L1'] - new_L2)
 
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice
