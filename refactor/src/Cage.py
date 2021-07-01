@@ -14,12 +14,13 @@ class Cage(CageTemplate):
     Fish cages contain the fish.
     """
 
-    def __init__(self, farm_id, cage_id, cfg):
+    def __init__(self, farm_id, cage_id, cfg, farm):
         """
         Create a cage on a farm
-        :param farm: the farm this cage is attached to
-        :param label: the label (id) of the cage within the farm
-        :param nplankt: TODO ???
+        :param farm_id: the farm this cage is attached to
+        :param cage_id: the label (id) of the cage within the farm
+        :param cfg the farm configuration
+        :param farm a Farm object
         """
 
         # sets access to cfg and logger
@@ -31,6 +32,7 @@ class Cage(CageTemplate):
         self.date = cfg.start_date
         self.num_fish = cfg.farms[farm_id].num_fish
         self.num_infected_fish = 0
+        self.farm = farm
 
         # TODO: update with calculations
         self.lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 0}
@@ -240,9 +242,8 @@ class Cage(CageTemplate):
             return unbounded.astype('float64')
 
         lice_dist = {}
-        farm_loc_x = self.cfg.farms[self.farm_id].farm_location[0]
+        ave_temp = self.farm.year_temperatures[cur_month-1]
 
-        ave_temp = self.ave_temperature_at(cur_month, farm_loc_x)
 
         # L4 -> L5
         # TODO move these magic numbers somewhere else...

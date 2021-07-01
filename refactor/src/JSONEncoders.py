@@ -4,6 +4,7 @@ import json
 import numpy as np
 
 import src.Farm as frm
+from src.Config import Config, FarmConfig
 
 
 class CustomFarmEncoder(json.JSONEncoder):
@@ -50,7 +51,11 @@ class CustomCageEncoder(json.JSONEncoder):
             return_str = str(o)
         elif isinstance(o, dt.datetime):
             return_str = o.strftime("%Y-%m-%d %H:%M:%S")
+        elif isinstance(o, frm.Farm) or isinstance(o, Config) or isinstance(o, FarmConfig):
+            return_str = ""
         else:
-            return_str = {'__{}__'.format(o.__class__.__name__): o.__dict__}
+            #return_str = json.dumps(o)
+            #return_str = {'__{}__'.format(o.__class__.__name__): o.__dict__}
+            return_str = ""
 
         return return_str

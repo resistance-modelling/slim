@@ -24,6 +24,10 @@ class TestCage:
             'L5m': 0
         }
 
+    def test_cage_json_does_not_raise(self, first_cage):
+        return_str = str(first_cage)
+        assert return_str != "" and return_str != '""'
+
     def test_cage_lice_background_mortality_one_day(self, first_cage):
         # NOTE: this currently relies on Stien's approach.
         # Changing this approach will break things
