@@ -33,4 +33,13 @@ class CageTemplate:
         return dead_lice_dist
 
     def fish_growth_rate(self, days):
+        """
+        Fish growth rate -> 10000/(1+exp(-0.01*(t-475))) fitted logistic curve to data from
+        http://www.fao.org/fishery/affris/species-profiles/atlantic-salmon/growth/en/
+        """
         return 10000/(1 + math.exp(-0.01*(days-475)))
+
+    @classmethod
+    def logit_normalize(self, x):
+        expd = math.exp(x)
+        return expd / (1 + expd)

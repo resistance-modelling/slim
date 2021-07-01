@@ -109,6 +109,34 @@ class Cage(CageTemplate):
         self.logger.debug("    final lice population = {}".format(self.lice_population))
         self.logger.debug("    final fish population = {}".format(self.num_fish))
 
+    def get_lice_treatment_mortality_rate(self, cur_date):
+        """
+        Compute the mortality rate due to chemotherapeutic treatment (See Aldrin et al, 2017, §2.2.3)
+        """
+        susceptible_stages = list(self.lice_population)[2:]
+        num_susc = sum(self.lice_population[x] for x in susceptible_stages)
+
+        # TODO: take temperatures into account? See #22
+        if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
+            self.logger.debug('    treating farm {}/cage {} on date {}'.format(self.farm_id,
+                                                                               self.id, cur_date))
+
+            # number of lice in those stages that are susceptible to Emamectin Benzoate (i.e.
+            # those L3 or above)
+            # we assume the mortality rate is the same across all stages and ages, but this may change in the future
+            # (or with different chemicals)
+
+            # model the resistence of each lice in the susceptible stages (phenoEMB) and estimate
+            # the mortality rate due to treatment (ETmort).
+            pheno_emb = np.random.normal(self.cfg.f_meanEMB, self.cfg.f_sigEMB, num_susc) \
+                        + np.random.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
+            pheno_emb = 1 / (1 + np.exp(pheno_emb))
+            mortality_rate = sum(pheno_emb) * self.cfg.EMBmort
+            return mortality_rate, pheno_emb, num_susc
+
+        else:
+            return 0, 0, num_susc
+
     def update_lice_treatment_mortality(self, cur_date):
         """
         Calculate the number of lice in each stage killed by treatment.
@@ -116,51 +144,36 @@ class Cage(CageTemplate):
 
         dead_lice_dist = {"L1": 0, "L2": 0, "L3": 0, "L4": 0, "L5m": 0, "L5f": 0}
 
-        # TODO: take temperatures into account? See #22
-        if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
-            self.logger.debug('    treating farm {}/cage {} on date {}'.format(self.farm_id,
-                                                                              self.id, cur_date))
+        mortality_rate, pheno_emb, num_susc = self.get_lice_treatment_mortality_rate(cur_date)
+        susceptible_stages = list(self.lice_population)[2:]
 
-            # number of lice in those stages that are susceptible to Emamectin Benzoate (i.e.
-            # those L3 or above)
-            susceptible_stages = list(self.lice_population)[2:]
-            num_susc = sum(self.lice_population[x] for x in susceptible_stages)
+        if mortality_rate > 0:
+            num_dead_lice = np.random.poisson(mortality_rate)
+            num_dead_lice = min(num_dead_lice, num_susc)
 
-            # model the resistence of each lice in the susceptible stages (phenoEMB) and estimate
-            # the mortality rate due to treatment (ETmort). We will pick the number of lice that
-            # die due to treatment from a Poisson distribution
-            pheno_emb = np.random.normal(self.cfg.f_meanEMB, self.cfg.f_sigEMB, num_susc) \
-                    + np.random.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
-            pheno_emb = 1/(1 + np.exp(pheno_emb))
-            mortality_rate = sum(pheno_emb)*self.cfg.EMBmort
+            # Now we need to decide how many lice from each stage die,
+            #   the algorithm is to label each louse  1...num_susc
+            #   assign each of these a probability of dying as (phenoEMB)/np.sum(phenoEMB)
+            #   randomly pick lice according to this probability distribution
+            #        now we need to find out which stages these lice are in by calculating the
+            #        cumulative sum of the lice in each stage and finding out how many of our
+            #        dead lice falls into this bin.
+            p = (pheno_emb)/np.sum(pheno_emb)
+            dead_lice = np.random.choice(range(num_susc), num_dead_lice, p=p,
+                                         replace=False).tolist()
+            total_so_far = 0
+            for stage in susceptible_stages:
+                num_dead = len([x for x in dead_lice if total_so_far <= x <
+                                (total_so_far + self.lice_population[stage])])
+                total_so_far += self.lice_population[stage]
+                if num_dead > 0:
+                    self.lice_population[stage] -= num_dead
+                    dead_lice_dist[stage] = num_dead
 
-            if mortality_rate > 0:
-                num_dead_lice = np.random.poisson(mortality_rate)
-                num_dead_lice = min(num_dead_lice, num_susc)
+            self.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'
+                             .format(self.farm_id, self.id, dead_lice_dist))
 
-                # Now we need to decide how many lice from each stage die,
-                #   the algorithm is to label each louse  1...num_susc
-                #   assign each of these a probability of dying as (phenoEMB)/np.sum(phenoEMB)
-                #   randomly pick lice according to this probability distribution
-                #        now we need to find out which stages these lice are in by calculating the
-                #        cumulative sum of the lice in each stage and finding out how many of our
-                #        dead lice falls into this bin.
-                p = (pheno_emb)/np.sum(pheno_emb)
-                dead_lice = np.random.choice(range(num_susc), num_dead_lice, p=p,
-                                             replace=False).tolist()
-                total_so_far = 0
-                for stage in susceptible_stages:
-                    num_dead = len([x for x in dead_lice if total_so_far <= x <
-                                    (total_so_far + self.lice_population[stage])])
-                    total_so_far += self.lice_population[stage]
-                    if num_dead > 0:
-                        self.lice_population[stage] -= num_dead
-                        dead_lice_dist[stage] = num_dead
-
-                self.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'
-                                 .format(self.farm_id, self.id, dead_lice_dist))
-
-                assert num_dead_lice == sum(list(dead_lice_dist.values()))
+            assert num_dead_lice == sum(list(dead_lice_dist.values()))
         return dead_lice_dist
 
     @staticmethod
@@ -204,14 +217,15 @@ class Cage(CageTemplate):
     def update_lice_lifestage(self, cur_month):
         """
         Move lice between lifecycle stages.
+        See Section 2.1 of Aldrin et al. (2017)
         """
         self.logger.debug('    updating lice lifecycle stages')
 
-        def dev_time(del_p, del_m10, del_s, temp_c, n_days):
+        def dev_times(del_p, del_m10, del_s, temp_c, ages):
             """
             Probability of developing after n_days days in a stage as given by Aldrin et al 2017
             See section 2.2.4 of Aldrin et al. (2017)
-            :param n_days: stage-age
+            :param ages: stage-age
             :param del_p: power transformation constant on temp_c
             :param del_m10: 10 °C median reference value
             :param del_s: fitted Weibull shape parameter
@@ -221,7 +235,7 @@ class Cage(CageTemplate):
             epsilon = 1e-30
             del_m = del_m10*(10/temp_c)**del_p
 
-            unbounded = math.log(2)*del_s*n_days**(del_s-1)*del_m**(-del_s)
+            unbounded = math.log(2) * del_s * ages ** (del_s - 1) * del_m ** (-del_s)
             unbounded = np.clip(unbounded, epsilon, 1)
             return unbounded.astype('float64')
 
@@ -233,10 +247,12 @@ class Cage(CageTemplate):
         # L4 -> L5
         # TODO move these magic numbers somewhere else...
         # TODO these blocks look like the same?
+
         num_lice = self.lice_population['L4']
         stage_ages = self.get_stage_ages(num_lice, min=10, mean=15)
 
-        l4_to_l5 = dev_time(0.866, 10.742, 1.643, ave_temp, stage_ages)
+        l4_to_l5 = dev_times(self.cfg.delta_p["L4"], self.cfg.delta_m10["L4"], self.cfg.delta_s["L4"],
+                             ave_temp, stage_ages)
         num_to_move = min(np.random.poisson(np.sum(l4_to_l5)), num_lice)
         new_females = np.random.choice([math.floor(num_to_move/2.0), math.ceil(num_to_move/2.0)])
         new_males = (num_to_move - new_females)
@@ -247,7 +263,8 @@ class Cage(CageTemplate):
         # L3 -> L4
         num_lice = self.lice_population['L3']
         stage_ages = self.get_stage_ages(num_lice, min=15, mean=18)
-        l3_to_l4 = dev_time(1.305, 18.934, 7.945, ave_temp, stage_ages)
+        l3_to_l4 = dev_times(self.cfg.delta_p["L3"], self.cfg.delta_m10["L3"], self.cfg.delta_s["L3"],
+                             ave_temp, stage_ages)
         num_to_move = min(np.random.poisson(np.sum(l3_to_l4)), num_lice)
         new_L4 = num_to_move
 
@@ -259,7 +276,8 @@ class Cage(CageTemplate):
         # L1 -> L2
         num_lice = self.lice_population['L2']
         stage_ages = self.get_stage_ages(num_lice, min=3, mean=4)
-        l1_to_l2 = dev_time(0.401, 8.814, 18.869, ave_temp, stage_ages)
+        l1_to_l2 = dev_times(self.cfg.delta_p["L1"], self.cfg.delta_m10["L1"], self.cfg.delta_s["L1"],
+                             ave_temp, stage_ages)
         num_to_move = min(np.random.poisson(np.sum(l1_to_l2)), num_lice)
         new_L2 = num_to_move
 
@@ -273,9 +291,6 @@ class Cage(CageTemplate):
     def update_fish_growth(self, days, step_size):
         """
         Get the new number of fish after a step size.
-        Fish growth rate -> 10000/(1+exp(-0.01*(t-475))) fitted logistic curve to data from
-        http://www.fao.org/fishery/affris/species-profiles/atlantic-salmon/growth/en/
-
         """
 
         self.logger.debug('    updating fish population')
@@ -313,10 +328,11 @@ class Cage(CageTemplate):
         #self.num_fish -= fish_deaths_from_lice
         return fish_deaths_natural, fish_deaths_from_lice
 
-    def do_infection_events(self, days):
-        """
-        Infect fish in this cage if the sea lice are in stage L2 and TODO - the 'arrival time' <= 'stage_age' ?????
-        """
+    def compute_eta_aldrin(self, num_fish_in_farm):
+        return self.cfg.delta_CO_0 + math.log(num_fish_in_farm) + self.cfg.delta_CO_1 * \
+                         (math.log(self.fish_growth_rate(days))-self.cfg.delta_expectation_weight_log)
+
+    def get_infection_rates(self, days):
         # TODO - need to fix this - we have a dictionary of lice lifestage but no age within this stage.
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease).
@@ -324,15 +340,30 @@ class Cage(CageTemplate):
         if num_avail_lice > 0:
             num_fish_in_farm = sum([c.num_fish for c in self.farm.cages])
 
-            eta_aldrin = -2.576 + math.log(num_fish_in_farm) + 0.082*(math.log(self.fish_growth_rate(days))-0.55)
-            Einf = (math.exp(eta_aldrin)/(1 + math.exp(eta_aldrin)))*tau*num_avail_lice
-            num_infected_fish = np.random.poisson(Einf)
-            inf_ents = np.random.poisson(Einf)
+            # FIXME: this has O(c^2) complexity
+            etas = np.array([c.compute_eta_aldrin(num_fish_in_farm) for c in self.farm.cages])
+            Einf = math.exp(etas[self.id])/(1 + np.sum(np.exp(etas)))
 
-            # inf_ents now go on to infect fish so get removed from the general lice population.
-            return min(inf_ents, num_avail_lice)
-        else:
+            return Einf, num_avail_lice
+
+        return 0, num_avail_lice
+
+    def do_infection_events(self, days):
+        """
+        Infect fish in this cage if the sea lice are in stage L2 and TODO - the 'arrival time' <= 'stage_age' ?????
+        """
+        # TODO - need to fix this - we have a dictionary of lice lifestage but no age within this stage.
+        # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
+        # but at what point does the distribution mean decrease).
+
+        Einf, num_avail_lice = self.get_infection_rates(days)
+
+        if Einf == 0:
             return 0
+
+        inf_ents = max(np.random.poisson(Einf), 0)
+
+        return min(inf_ents, num_avail_lice)
 
     def do_mating_events(self):
         """

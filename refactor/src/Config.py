@@ -18,7 +18,7 @@ def to_dt(string_date):
 class Config:
 
     def __init__(self, environment_file, param_file, logger):
-        """Simulation configuration and parameters
+        """@DynamicAttrs Simulation configuration and parameters
 
         :param environment_file: Path to the environment JSON file
         :type environment_file: string
@@ -66,12 +66,18 @@ class Config:
         return self.__getattribute__(name)
 
 class RuntimeConfig:
-    """Simulation parameters and constants"""
+    """@DynamicAttrs Simulation parameters and constants"""
 
     def __init__(self, hyperparam_file):
         with open(hyperparam_file) as f:
             data = json.load(f)
 
+        # FIXME: make pycharm/mypy perform detection of these vars
+        for k, v in data.items():
+            setattr(self, k, v["value"])
+
+        """
+        self.delta_CO_0 = data["delta_CO_0"]
         self.f_meanEMB = data["f_meanEMB"]["value"]
         self.f_sigEMB = data["f_sigEMB"]["value"]
         self.env_meanEMB = data["env_meanEMB"]["value"]
@@ -79,6 +85,7 @@ class RuntimeConfig:
         self.EMBmort = data["EMBmort"]["value"]
         self.delay_EMB = data["delay_EMB"]["value"]
         self.delta_EMB = data["delta_EMB"]["value"]
+        """
 
 
 class FarmConfig:

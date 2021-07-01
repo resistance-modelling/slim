@@ -3,6 +3,42 @@
     "description": "Global seed to use in the simulations",
     "value": 0
   },
+  "delta_p": {
+    "description": "Weibull power transformation constant for each development stage",
+    "value": {
+      "L1": 0.401,
+      "L3": 1.305,
+      "L4": 0.866
+    }
+  },
+  "delta_s": {
+    "description": "Weibull shape transformation constant for each development stage",
+    "value": {
+      "L1": 18.869,
+      "L3": 7.945,
+      "L4": 1.643
+    }
+  },
+  "delta_m10": {
+    "description": "10 °C median development time",
+    "value": {
+      "L1": 8.814,
+      "L3": 18.934,
+      "L4": 10.742
+    }
+  },
+  "delta_CO_0": {
+    "description": "Infection expectation",
+    "value": -2.576
+  },
+  "delta_CO_1": {
+    "description": "Infection regression coefficient",
+    "value": 0.082
+  },
+  "delta_expectation_weight_log": {
+    "description": "Log-expectation of fish weight",
+    "value": -0.55
+  },
   "f_meanEMB": {
     "description": "Mean of Emamectin Benzoate",
     "value": 3.5
@@ -30,5 +66,13 @@
   "delta_EMB": {
       "description": "Ratio between durability and current sea temperature (unit: days / °C)",
       "value": 210
+  },
+  "infection_main_delta": {
+      "description": "Controls the magnitude of the infection rate conditioned on the number and weight of fish within a given cage (Aldrin, 2017)",
+      "value": -2.576
+  },
+  "infection_weight_delta": {
+    "description": "Regression coefficient (Aldrin, 2017)",
+    "value": 0.082
   }
 }
