@@ -4,6 +4,8 @@ import itertools
 import numpy as np
 import pytest
 
+import json
+
 from src.Config import Config, to_dt
 from src.Farm import Farm
 from .conftest import farm, first_cage
@@ -24,9 +26,10 @@ class TestCage:
             'L5m': 0
         }
 
-    def test_cage_json_does_not_raise(self, first_cage):
+    def test_cage_json(self, first_cage):
         return_str = str(first_cage)
-        assert return_str != "" and return_str != '""'
+        imported_cage = json.loads(return_str)
+        assert isinstance(imported_cage, dict)
 
     def test_cage_lice_background_mortality_one_day(self, first_cage):
         # NOTE: this currently relies on Stien's approach.
@@ -71,7 +74,7 @@ class TestCage:
         mean_development_stage = 8
 
         for i in range(100):
-            stage_ages = first_cage.get_stage_ages(
+            stage_ages = first_cage.get_evolution_ages(
                 test_num_lice,
                 min=min_development_stage,
                 mean=mean_development_stage,
@@ -95,14 +98,14 @@ class TestCage:
         for min, mean in itertools.product(min_development_stages, mean_development_stages):
             if mean <= min or min == 0:
                 with pytest.raises(AssertionError):
-                    first_cage.get_stage_ages(
+                    first_cage.get_evolution_ages(
                     test_num_lice,
                     min=min,
                     mean=mean,
                     development_days=development_days
                 )
             else:
-                first_cage.get_stage_ages(
+                first_cage.get_evolution_ages(
                     test_num_lice,
                     min=min,
                     mean=mean,
@@ -118,17 +121,20 @@ class TestCage:
         assert new_females == 2
 
     def test_update_fish_growth(self, first_cage):
-        # TODO: infestation has not been implemented, this does not take into account the actual lice population!
         natural_death, lice_death = first_cage.update_fish_growth(1, 1)
 
         assert natural_death > 0
         assert lice_death >= 0
 
     def test_update_fish_growth_no_lice(self, first_cage):
-        # See above
         first_cage.num_infected_fish = 0
         for k in first_cage.lice_population:
             first_cage.lice_population = 0
 
         _, lice_death = first_cage.update_fish_growth(1, 1)
         # assert lice_death == 0
+
+    def test_do_infection_events(self, first_cage):
+        first_cage.lice_population["L2"] = 100
+        rate, avail_lice = first_cage.get_infection_rates(1)
+        pass

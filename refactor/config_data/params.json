@@ -3,6 +3,15 @@
     "description": "Global seed to use in the simulations",
     "value": 0
   },
+  "stage_age_evolutions": {
+    "description": "Stage-age average evolution times (in days), taken from the maximums in Heuch et al. (2000)",
+    "value": {
+      "L1": 4.3,
+      "L2": 10,
+      "L3": 25,
+      "L4": 11
+    }
+  },
   "delta_p": {
     "description": "Weibull power transformation constant for each development stage",
     "value": {

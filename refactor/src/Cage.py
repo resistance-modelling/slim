@@ -188,10 +188,21 @@ class Cage(CageTemplate):
             assert num_dead_lice == sum(list(dead_lice_dist.values()))
         return dead_lice_dist
 
+    def get_stage_ages_distrib(self, stage: str, size=15):
+        """
+        Create an age distribution (in days) for the sea lice within a lyfecycle stage.
+        For now we simply assume it's a 3-centered poisson distribution
+        """
+        stage_age_max_days = self.cfg.stage_age_evolutions[stage]
+        p = stats.poisson.pmf(range(size), round(stage_age_max_days/2))
+        return p / np.sum(p)
+
+
     @staticmethod
-    def get_stage_ages(size: int, min: int, mean: int, development_days=25):
+    def get_evolution_ages(size: int, min: int, mean: int, development_days=25):
         """
         Create an age distribution (in days) for the sea lice within a lifecycle stage.
+        TODO: This actually computes the evolution ages.
         :param size the number of lice to consider
         :param mean the mean of the distribution. mean must be bigger than min.
         :param development_days the maximum age to consider
@@ -260,7 +271,7 @@ class Cage(CageTemplate):
         # TODO these blocks look like the same?
 
         num_lice = self.lice_population['L4']
-        stage_ages = self.get_stage_ages(num_lice, min=10, mean=15)
+        stage_ages = self.get_evolution_ages(num_lice, min=10, mean=15)
 
         l4_to_l5 = dev_times(self.cfg.delta_p["L4"], self.cfg.delta_m10["L4"], self.cfg.delta_s["L4"],
                              ave_temp, stage_ages)
@@ -273,7 +284,7 @@ class Cage(CageTemplate):
 
         # L3 -> L4
         num_lice = self.lice_population['L3']
-        stage_ages = self.get_stage_ages(num_lice, min=15, mean=18)
+        stage_ages = self.get_evolution_ages(num_lice, min=15, mean=18)
         l3_to_l4 = dev_times(self.cfg.delta_p["L3"], self.cfg.delta_m10["L3"], self.cfg.delta_s["L3"],
                              ave_temp, stage_ages)
         num_to_move = min(np.random.poisson(np.sum(l3_to_l4)), num_lice)
@@ -286,7 +297,7 @@ class Cage(CageTemplate):
 
         # L1 -> L2
         num_lice = self.lice_population['L2']
-        stage_ages = self.get_stage_ages(num_lice, min=3, mean=4)
+        stage_ages = self.get_evolution_ages(num_lice, min=3, mean=4)
         l1_to_l2 = dev_times(self.cfg.delta_p["L1"], self.cfg.delta_m10["L1"], self.cfg.delta_s["L1"],
                              ave_temp, stage_ages)
         num_to_move = min(np.random.poisson(np.sum(l1_to_l2)), num_lice)
@@ -324,7 +335,8 @@ class Cage(CageTemplate):
         # detemine the number of fish with lice and the number of attached lice on each.
         # for now, assume there is only one TODO fix this when I understand the infestation
         # (next stage)
-        adlicepg = np.array([1] * self.num_infected_fish)/self.fish_growth_rate(days)
+        adlicepg = np.repeat([1/self.fish_growth_rate(days)], (self.num_infected_fish,))
+        #adlicepg = np.array([1] * self.num_infected_fish)/self.fish_growth_rate(days)
         prob_lice_death = 1/(1+np.exp(-19*(adlicepg-0.63)))
 
         ebf_death = fb_mort(days)*step_size*(self.num_fish)
@@ -339,7 +351,7 @@ class Cage(CageTemplate):
         #self.num_fish -= fish_deaths_from_lice
         return fish_deaths_natural, fish_deaths_from_lice
 
-    def compute_eta_aldrin(self, num_fish_in_farm):
+    def compute_eta_aldrin(self, num_fish_in_farm, days):
         return self.cfg.delta_CO_0 + math.log(num_fish_in_farm) + self.cfg.delta_CO_1 * \
                          (math.log(self.fish_growth_rate(days))-self.cfg.delta_expectation_weight_log)
 
@@ -347,12 +359,13 @@ class Cage(CageTemplate):
         # TODO - need to fix this - we have a dictionary of lice lifestage but no age within this stage.
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease).
-        num_avail_lice = self.lice_population['L2']
+        age_distrib = self.get_stage_ages_distrib('L2')
+        num_avail_lice = self.lice_population['L2']*np.sum(age_distrib[6:])
         if num_avail_lice > 0:
             num_fish_in_farm = sum([c.num_fish for c in self.farm.cages])
 
             # FIXME: this has O(c^2) complexity
-            etas = np.array([c.compute_eta_aldrin(num_fish_in_farm) for c in self.farm.cages])
+            etas = np.array([c.compute_eta_aldrin(num_fish_in_farm, days) for c in self.farm.cages])
             Einf = math.exp(etas[self.id])/(1 + np.sum(np.exp(etas)))
 
             return Einf, num_avail_lice
