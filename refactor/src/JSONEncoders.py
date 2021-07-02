@@ -35,6 +35,7 @@ class CustomCageEncoder(json.JSONEncoder):
     """
     Bespoke encoder to encode Cage objects to json. Specifically, numpy arrays
     and datetime objects are not automatically converted to json.
+    TODO: this is unused as filtering out keys is impossible via a JSONEncoder, see https://stackoverflow.com/a/56138540
     """
     def default(self, o):
         """

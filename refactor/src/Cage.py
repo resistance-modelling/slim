@@ -61,7 +61,17 @@ class Cage(CageTemplate):
         ignore the farm attribute of this class in this method.
         :return: a description of the cage
         """
-        return json.dumps(self, cls=CustomCageEncoder, indent=4)
+
+        filtered_vars = vars(self).copy()
+        del filtered_vars["farm"]
+        del filtered_vars["logger"]
+        del filtered_vars["cfg"]
+        for k in filtered_vars:
+            if isinstance(filtered_vars[k], dt.datetime):
+                filtered_vars[k] = filtered_vars[k].strftime("%Y-%m-%d %H:%M:%S")
+
+        return json.dumps(filtered_vars, indent=4)
+        #return json.dumps(self, cls=CustomCageEncoder, indent=4)
 
     def to_csv(self):
         """
