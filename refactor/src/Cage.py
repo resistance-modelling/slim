@@ -1,6 +1,8 @@
 import datetime as dt
 import math
 import json
+import random
+import copy
 
 import numpy as np
 from scipy import stats
@@ -346,6 +348,9 @@ class Cage(CageTemplate):
         elif len(sire) == 2 and len(dam) == 1:
           eggs_generated[tuple(set((sire[0], dam[0])))] = number_eggs/2
           eggs_generated[tuple(set((sire[1], dam[0])))] = number_eggs/2
+        elif len(sire) == 1 and len(dam) == 2:
+          eggs_generated[tuple(set((sire[0], dam[0])))] = number_eggs/2
+          eggs_generated[tuple(set((sire[0], dam[1])))] = number_eggs/2
         else: #
           # drawing both from the sire in the first case ensures heterozygotes
           # but is a bit hacky.
@@ -387,30 +392,47 @@ class Cage(CageTemplate):
         if distrib[geno] < 0:
           distrib[geno] = 0
     
+    
+    # Assumes the usual dictionary representation of number
+    # of dams - genotype:number_available
+    # function separated from other breeding processses to make it easier to come back and optimise
+    # related TODO: there must be a faster way to do this. 
+    # returns a dictionary in the same format giving genotpye:numer_selected
+    # if the num_dams exceeds number available, gives back all the dams
+    def select_dams(distrib_dams_available, num_dams):
+        delta_dams_selected = {}
+        copy_dams_avail = copy.deepcopy(distrib_dams_available)
+        if sum(distrib_dams_available.values()) <= num_dams:
+            return copy_dams_avail
+        
+        for _ in range(num_dams):
+            this_dam = choose_from_distrib(copy_dams_avail)
+            copy_dams_avail[this_dam] -= 1
+            if this_dam not in delta_dams_selected:
+                delta_dams_selected[this_dam] = 0
+            delta_dams_selected[this_dam] += 1
+            
+        return delta_dams_selected
+            
+        
+        
+    
     # Assuming that these distribs are counts, and that they 
     # contain only individuals available for mating
     # will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs 
     # assume males don't become unavailable? in this case we don't need a delta for sires
     # right now only does one mating - need to deal with dams becoming unavailable if mating events is similar to number of dams
-    def generate_matings_discrete(distrib_sire_available, distrib_dam_available, distrib_eggs_per_mating):
+    def generate_matings_discrete(distrib_sire_available, distrib_dam_available, distrib_eggs_per_mating, num_matings):
       delta_eggs = {}
-      # delta_sires = {}
-      delta_dams = {}
-      # this is where I need to add back in multiple matings, but for this either assume that far fewer matings than dams,
-      # or make dams unavailable as we select them (i.e. draw without replacement)       
-      # for _ in range(num_matings):
-      for _ in [1]:
-        sire_geno = choose_from_distrib(distrib_sire_available)
-        dam_geno = choose_from_distrib(distrib_dam_available)
-        num_eggs = choose_from_distrib(distrib_eggs_per_mating)
-    
-        if dam_geno not in delta_dams:
-          delta_dams [dam_geno] = 0
-        delta_dams[dam_geno] += 1
-    
-        new_eggs = generate_eggs(sire_geno, dam_geno, 'discrete', num_eggs)
-        
-        update_distrib_discrete_add(new_eggs, delta_eggs)
+      delta_dams = select_dams(distrib_dam_available, num_matings)
+      for dam_geno in delta_dams:
+        for _ in range(delta_dams[dam_geno]):
+          sire_geno = choose_from_distrib(distrib_sire_available)
+          num_eggs = choose_from_distrib(distrib_eggs_per_mating)
+      
+          new_eggs = generate_eggs(sire_geno, dam_geno, 'discrete', num_eggs)
+          
+          update_distrib_discrete_add(new_eggs, delta_eggs)
     
       return delta_dams, delta_eggs
     
