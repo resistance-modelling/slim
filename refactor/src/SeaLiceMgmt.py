@@ -1,5 +1,7 @@
 """
-TODO: Describe this simulation.
+Simulate effects of sea lice population on salmon population in
+a given body of water.
+See README.md for details.
 """
 import argparse
 import copy
@@ -66,17 +68,25 @@ def initialise(data_folder, sim_id, cfg):
     #farms[0].cages[0].stage = np.random.choice(range(2, 7), cfg.ext_pressure)
 
     farms = [Farm(i, cfg) for i in range(cfg.nfarms)]
-    
+
     #print(cfg.prop_arrive)
     #print(cfg.hrs_travel)
     return farms, wildlife_reservoir
 
 
 def run_model(path, sim_id, cfg, farms, reservoir):
-    """
-    TODO
-    :param path: TODO
-    :return:
+    """Perform the simulation by running the model.
+
+    :param path: Path to store the results in
+    :type path: pathlib.PosixPath
+    :param sim_id: Simulation name
+    :type sim_id: str
+    :param cfg: Configuration object holding parameter information.
+    :type cfg: src.Config
+    :param farms: List of Farm objects.
+    :type farms: list
+    :param reservoir: Reservoir object representing the waters outside the farms.
+    :type reservoir: src.Reservoir
     """
     cfg.logger.info('running simulation, saving to %s', path)
     cur_date = cfg.start_date
@@ -96,14 +106,6 @@ def run_model(path, sim_id, cfg, farms, reservoir):
         # the current time step. To make things consistent, we copy the current state of
         # farms and this copy as the current state.
         farms_at_date = copy.deepcopy(farms)
-
-        # TODO: can this be done in paralled?
-        #from multiprocessing import Pool
-        #pool = Pool()
-        #result1 = pool.apply_async(solve1, [A])    # evaluate "solve1(A)" asynchronously
-        #result2 = pool.apply_async(solve2, [B])    # evaluate "solve2(B)" asynchronously
-        #answer1 = result1.get(timeout=10)
-        #answer2 = result2.get(timeout=10)
 
         for farm in farms:
             # update each farm who will need to know about their neighbours. To get the list of neighbbours
@@ -140,14 +142,25 @@ if __name__ == "__main__":
 
     # set up and read the command line arguments
     parser = argparse.ArgumentParser(description="Sea lice simulation")
-    parser.add_argument("path", type=str, help="Output directory path")
-    parser.add_argument("id", type=str, help="Experiment name")
-    parser.add_argument("sim_path", type=str, help="Path to simulation params JSON file")
-    parser.add_argument("cfg_path", type=str, help="Path to config JSON file")
-    parser.add_argument("--quiet", help="Don't log to console or file.",
+    parser.add_argument("path",
+                        type=str, help="Output directory path")
+    parser.add_argument("id",
+                        type=str,
+                        help="Experiment name")
+    parser.add_argument("sim_path",
+                        type=str,
+                        help="Path to simulation params JSON file")
+    parser.add_argument("cfg_path",
+                        type=str,
+                        help="Path to config JSON file")
+    parser.add_argument("--quiet",
+                        help="Don't log to console or file.",
                         default=False,
                         action='store_true')
-    parser.add_argument("--seed", type=int, help="Provide a seed. Overrides the param", required=False)
+    parser.add_argument("--seed",
+                        type=int,
+                        help="Provide a seed for random generation.",
+                        required=False)
     args = parser.parse_args()
 
     # set up the data folders

@@ -31,9 +31,6 @@ class Config:
         # set logger
         self.logger = logger
 
-        # don't use seed unless set in SeaLiceMgmt
-        self.seed = None
-
         # read and set the params
         with open(environment_file) as f:
             data = json.load(f)
@@ -47,7 +44,6 @@ class Config:
 
         # general parameters
         self.ext_pressure = data["ext_pressure"]["value"]
-        self.lice_pop_modifier = data["lice_pop_modifier"]["value"]
 
         # farms
         self.farms = [FarmConfig(farm_data["value"], self.logger)
@@ -56,11 +52,14 @@ class Config:
 
         # reservoir
         reservoir_data = data["reservoir"]["value"]
-        # starting sealice population in reservoir = number of cages * modifier
-        # TODO: confirm this is intended behaviour
-        # TODO: is external pressure and modifier the same?
+
+        # NOTE: Both external pressure and the function behind number
+        # of starting sealice population in reservoir (total number of
+        # cages * external pressure) has been determined experimentally
+        # to match actual outputs for Loch Fyne in the original code.
+        # Adjustments might be needed.
         total_cages = sum([farm.n_cages for farm in self.farms])
-        self.reservoir_num_lice = self.lice_pop_modifier * total_cages
+        self.reservoir_num_lice = self.ext_pressure * total_cages
         self.reservoir_num_fish = reservoir_data["num_fish"]["value"]
         self.reservoir_enfish_res = reservoir_data["enfish_res"]["value"]
         self.reservoir_ewt_res = reservoir_data["ewt_res"]["value"]
@@ -89,6 +88,11 @@ class RuntimeConfig:
         self.delta_EMB = data["delta_EMB"]["value"]
         self.infection_main_delta = data["infection_main_delta"]["value"]
         self.infection_weight_delta = data["infection_weight_delta"]["value"]
+
+        # load in the seed if provided
+        # otherwise don't use a seed
+        seed_dict = data.get("seed", 0)
+        self.seed = seed_dict["value"] if seed_dict else None
 
 
 class FarmConfig:

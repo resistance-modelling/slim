@@ -17,7 +17,7 @@ class Reservoir(CageTemplate):
         :type cfg: src.Config.Config
         """
 
-        super().__init__(cfg)
+        super().__init__(cfg, "reservoir")
 
         self.date = cfg.start_date
         self.num_fish = cfg.reservoir_num_fish
@@ -41,18 +41,6 @@ class Reservoir(CageTemplate):
 
         # construct the population dict by assigning the numbers to labels
         self.lice_population = {life_stages[ix]: dist[ix] for ix in range(n)}
-
-    def to_csv(self):
-        """
-        Save the contents of this cage as a CSV string
-        for writing to a file later.
-        """
-
-        data = ["reservoir", str(self.num_fish)]
-        data.extend([str(val) for val in self.lice_population.values()])
-        data.append(str(sum(self.lice_population.values())))
-        
-        return ", ".join(data)
 
     def update(self, cur_date, farms):
         """Update the reservoir at the current time step.

@@ -11,12 +11,8 @@
         "description": "Tau value for tau-leaping",
         "value": 1
     },
-    "lice_pop_modifier": {
-        "description": "Starting lice population modifier (total = modifier * number of all cages)",
-        "value": 150
-    },
     "ext_pressure": {
-        "description": "Sealice per day per cage/farm arriving from wildlife",
+        "description": "Sealice per day per cage/farm arriving from wildlife. Note that this value has been determined experimentally in the original code.",
         "value": 150
     },
     "reservoir": {
