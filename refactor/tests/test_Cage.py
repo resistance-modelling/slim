@@ -121,10 +121,18 @@ class TestCage:
         assert new_females == 2
 
     def test_update_fish_growth(self, first_cage):
+        first_cage.num_fish *= 300
+        first_cage.num_infected_fish = first_cage.num_fish // 3
+        #first_cage.lice_population["L2"] = 100
         natural_death, lice_death = first_cage.update_fish_growth(1, 1)
 
+        # basic invariants
         assert natural_death > 0
-        assert lice_death >= 0
+        assert lice_death > 0
+
+        # exact figures
+        assert natural_death == 688
+        assert lice_death == 4
 
     def test_update_fish_growth_no_lice(self, first_cage):
         first_cage.num_infected_fish = 0
@@ -132,9 +140,19 @@ class TestCage:
             first_cage.lice_population = 0
 
         _, lice_death = first_cage.update_fish_growth(1, 1)
-        # assert lice_death == 0
+
+    def test_get_infection_rates(self, first_cage):
+        first_cage.lice_population["L2"] = 100
+        rate, avail_lice = first_cage.get_infection_rates(1)
+        assert rate > 0
+        assert avail_lice > 0
+
+        assert np.isclose(rate, 0.16665658047288034)
+        assert avail_lice == 80
 
     def test_do_infection_events(self, first_cage):
         first_cage.lice_population["L2"] = 100
-        rate, avail_lice = first_cage.get_infection_rates(1)
-        pass
+        inf_events = first_cage.do_infection_events(1)
+
+        assert inf_events > 0
+        assert inf_events == 14

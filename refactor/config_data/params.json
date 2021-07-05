@@ -84,6 +84,14 @@
     "description": "Regression coefficient (Aldrin, 2017)",
     "value": 0.082
   },
+  "fish_mortality_center": {
+    "description": "Fish mortality sigmoid center",
+    "value": 0.63
+  },
+  "fish_mortality_k": {
+    "description": "Fish mortality sigmoid steepness",
+    "value": 19
+  },
   "farm_data": {
     "description": "Average temperatures at known farm locations. Farm temperatures will be interpolated from them. Data taken from www.seatemperature.org",
     "value": {

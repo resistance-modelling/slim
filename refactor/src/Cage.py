@@ -191,11 +191,18 @@ class Cage(CageTemplate):
     def get_stage_ages_distrib(self, stage: str, size=15):
         """
         Create an age distribution (in days) for the sea lice within a lyfecycle stage.
-        For now we simply assume it's a 3-centered poisson distribution
+        In absence of further data or constraints, we simply assume it's a uniform distribution
         """
-        stage_age_max_days = self.cfg.stage_age_evolutions[stage]
+
+        """
         p = stats.poisson.pmf(range(size), round(stage_age_max_days/2))
         return p / np.sum(p)
+        """
+        stage_age_max_days = self.cfg.stage_age_evolutions[stage]
+        p = np.ones((size,))
+        p[size-stage_age_max_days:] = 0
+        return p / np.sum(p)
+
 
 
     @staticmethod
@@ -335,12 +342,15 @@ class Cage(CageTemplate):
         # detemine the number of fish with lice and the number of attached lice on each.
         # for now, assume there is only one TODO fix this when I understand the infestation
         # (next stage)
-        adlicepg = np.repeat([1/self.fish_growth_rate(days)], (self.num_infected_fish,))
+        #adlicepg = np.repeat([1/self.fish_growth_rate(days)], (self.num_infected_fish,))
         #adlicepg = np.array([1] * self.num_infected_fish)/self.fish_growth_rate(days)
-        prob_lice_death = 1/(1+np.exp(-19*(adlicepg-0.63)))
+        adlicepg = 1/self.fish_growth_rate(days)
+        prob_lice_death = 1/(1+math.exp(-self.cfg.fish_mortality_k*(adlicepg-self.cfg.fish_mortality_center)))
 
         ebf_death = fb_mort(days)*step_size*(self.num_fish)
-        elf_death = np.sum(prob_lice_death)*step_size
+        #elf_death = np.sum(prob_lice_death)*step_size
+        # Why are we doing this? wouldn't it be simply be
+        elf_death = self.num_infected_fish*step_size*prob_lice_death
         fish_deaths_natural = np.random.poisson(ebf_death)
         fish_deaths_from_lice = np.random.poisson(elf_death)
 
@@ -355,12 +365,17 @@ class Cage(CageTemplate):
         return self.cfg.delta_CO_0 + math.log(num_fish_in_farm) + self.cfg.delta_CO_1 * \
                          (math.log(self.fish_growth_rate(days))-self.cfg.delta_expectation_weight_log)
 
-    def get_infection_rates(self, days):
-        # TODO - need to fix this - we have a dictionary of lice lifestage but no age within this stage.
+    def get_infection_rates(self, days) -> (float, int):
+        """
+        Compute the number of lice that can infect and what their infection rate (number per fish) is
+
+        :param days the amount of time it takes
+        :returns a pair (Einf, num_avail_lice)
+        """
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease).
         age_distrib = self.get_stage_ages_distrib('L2')
-        num_avail_lice = self.lice_population['L2']*np.sum(age_distrib[6:])
+        num_avail_lice = round(self.lice_population['L2']*np.sum(age_distrib[1:]))
         if num_avail_lice > 0:
             num_fish_in_farm = sum([c.num_fish for c in self.farm.cages])
 
@@ -374,9 +389,8 @@ class Cage(CageTemplate):
 
     def do_infection_events(self, days):
         """
-        Infect fish in this cage if the sea lice are in stage L2 and TODO - the 'arrival time' <= 'stage_age' ?????
+        Infect fish in this cage if the sea lice are in stage L2 and at least 1 day old
         """
-        # TODO - need to fix this - we have a dictionary of lice lifestage but no age within this stage.
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease).
 
@@ -385,7 +399,7 @@ class Cage(CageTemplate):
         if Einf == 0:
             return 0
 
-        inf_ents = max(np.random.poisson(Einf), 0)
+        inf_ents = np.random.poisson(Einf*num_avail_lice)
 
         return min(inf_ents, num_avail_lice)
 
