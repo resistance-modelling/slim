@@ -1,5 +1,7 @@
 """
-TODO: Describe this simulation.
+Simulate effects of sea lice population on salmon population in
+a given body of water.
+See README.md for details.
 """
 import argparse
 import copy
@@ -66,17 +68,25 @@ def initialise(data_folder, sim_id, cfg):
     #farms[0].cages[0].stage = np.random.choice(range(2, 7), cfg.ext_pressure)
 
     farms = [Farm(i, cfg) for i in range(cfg.nfarms)]
-    
+
     #print(cfg.prop_arrive)
     #print(cfg.hrs_travel)
     return farms, wildlife_reservoir
 
 
 def run_model(path, sim_id, cfg, farms, reservoir):
-    """
-    TODO
-    :param path: TODO
-    :return:
+    """Perform the simulation by running the model.
+
+    :param path: Path to store the results in
+    :type path: pathlib.PosixPath
+    :param sim_id: Simulation name
+    :type sim_id: str
+    :param cfg: Configuration object holding parameter information.
+    :type cfg: src.Config
+    :param farms: List of Farm objects.
+    :type farms: list
+    :param reservoir: Reservoir object representing the waters outside the farms.
+    :type reservoir: src.Reservoir
     """
     cfg.logger.info('running simulation, saving to %s', path)
     cur_date = cfg.start_date
@@ -97,14 +107,6 @@ def run_model(path, sim_id, cfg, farms, reservoir):
         # farms and this copy as the current state.
         farms_at_date = copy.deepcopy(farms)
 
-        # TODO: can this be done in paralled?
-        #from multiprocessing import Pool
-        #pool = Pool()
-        #result1 = pool.apply_async(solve1, [A])    # evaluate "solve1(A)" asynchronously
-        #result2 = pool.apply_async(solve2, [B])    # evaluate "solve2(B)" asynchronously
-        #answer1 = result1.get(timeout=10)
-        #answer2 = result2.get(timeout=10)
-
         for farm in farms:
             # update each farm who will need to know about their neighbours. To get the list of neighbbours
             # just remove this farm from the list of farms (the remove method actually removes the element so
@@ -119,7 +121,7 @@ def run_model(path, sim_id, cfg, farms, reservoir):
 
         # Now update the reservoir. The farms have already been updated so we don't need
         # to use the copy of the farms
-        reservoir.update(cfg.tau, farms)
+        reservoir.update(cur_date, farms)
 
         # Save the data
         data_str = str(cur_date) + ", " + str(days) + ", " + reservoir.to_csv()
@@ -140,11 +142,25 @@ if __name__ == "__main__":
 
     # set up and read the command line arguments
     parser = argparse.ArgumentParser(description="Sea lice simulation")
-    parser.add_argument("path", type=str, help="Output directory path")
-    parser.add_argument("id", type=str, help="Experiment name")
-    parser.add_argument("sim_path", type=str, help="Path to simulation params JSON file")
-    parser.add_argument("cfg_path", type=str, help="Path to config JSON file")
-    parser.add_argument("--seed", type=int, help="Provide a seed. Overrides the param", required=False)
+    parser.add_argument("path",
+                        type=str, help="Output directory path")
+    parser.add_argument("id",
+                        type=str,
+                        help="Experiment name")
+    parser.add_argument("sim_path",
+                        type=str,
+                        help="Path to simulation params JSON file")
+    parser.add_argument("cfg_path",
+                        type=str,
+                        help="Path to config JSON file")
+    parser.add_argument("--quiet",
+                        help="Don't log to console or file.",
+                        default=False,
+                        action='store_true')
+    parser.add_argument("--seed",
+                        type=int,
+                        help="Provide a seed for random generation.",
+                        required=False)
     args = parser.parse_args()
 
     # set up the data folders
@@ -153,7 +169,15 @@ if __name__ == "__main__":
 
     # set up config class and logger (logging to file and screen.)
     logger = create_logger()
+
+    # silence if needed
+    if args.quiet:
+        logger.addFilter(lambda record: False)
+
+    # create the config object
     cfg = Config(args.cfg_path, args.sim_path, logger)
+
+    # set the seed
     if "seed" in args:
         cfg.params.seed = args.seed
 

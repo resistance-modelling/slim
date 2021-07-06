@@ -16,9 +16,10 @@ def to_dt(string_date):
 
 
 class Config:
+    """Simulation configuration and parameters"""
 
     def __init__(self, environment_file, param_file, logger):
-        """@DynamicAttrs Simulation configuration and parameters
+        """@DynamicAttrs Read the configuration from files
 
         :param environment_file: Path to the environment JSON file
         :type environment_file: string
@@ -43,7 +44,6 @@ class Config:
 
         # general parameters
         self.ext_pressure = data["ext_pressure"]["value"]
-        self.lice_pop_modifier = data["lice_pop_modifier"]["value"]
 
         # farms
         self.farms = [FarmConfig(farm_data["value"], self.logger)
@@ -51,12 +51,18 @@ class Config:
         self.nfarms = len(self.farms)
 
         # reservoir
-        # starting sealice population in reservoir = number of cages * modifier
-        # TODO: confirm this is intended behaviour
-        # TODO: is external pressure and modifier the same?
+        reservoir_data = data["reservoir"]["value"]
+
+        # NOTE: Both external pressure and the function behind number
+        # of starting sealice population in reservoir (total number of
+        # cages * external pressure) has been determined experimentally
+        # to match actual outputs for Loch Fyne in the original code.
+        # Adjustments might be needed.
         total_cages = sum([farm.n_cages for farm in self.farms])
-        self.reservoir_num_lice = self.lice_pop_modifier * total_cages
-        self.reservoir_num_fish = data["reservoir"]["value"]["num_fish"]["value"]
+        self.reservoir_num_lice = self.ext_pressure * total_cages
+        self.reservoir_num_fish = reservoir_data["num_fish"]["value"]
+        self.reservoir_enfish_res = reservoir_data["enfish_res"]["value"]
+        self.reservoir_ewt_res = reservoir_data["ewt_res"]["value"]
 
     def __getattr__(self, name):
         # obscure marshalling trick.
@@ -64,6 +70,7 @@ class Config:
         if name in dir(params):
             return params.__getattribute__(name)
         return self.__getattribute__(name)
+
 
 class RuntimeConfig:
     """@DynamicAttrs Simulation parameters and constants"""
@@ -73,6 +80,7 @@ class RuntimeConfig:
             data = json.load(f)
 
         # FIXME: make pycharm/mypy perform detection of these vars
+        # Or alternatively manually set the vars
         for k, v in data.items():
             setattr(self, k, v["value"])
 
@@ -85,13 +93,21 @@ class RuntimeConfig:
         self.EMBmort = data["EMBmort"]["value"]
         self.delay_EMB = data["delay_EMB"]["value"]
         self.delta_EMB = data["delta_EMB"]["value"]
+        self.infection_main_delta = data["infection_main_delta"]["value"]
+        self.infection_weight_delta = data["infection_weight_delta"]["value"]
+
         """
+        # load in the seed if provided
+        # otherwise don't use a seed
+        seed_dict = data.get("seed", 0)
+        self.seed = seed_dict["value"] if seed_dict else None
 
 
 class FarmConfig:
+    """Config for individual farm"""
 
     def __init__(self, data, logger):
-        """Config for individual farm
+        """Create farm configuration
 
         :param data: Dictionary with farm data
         :type data: dict

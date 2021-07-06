@@ -36,12 +36,12 @@
       "L4": 10.742
     }
   },
-  "delta_CO_0": {
-    "description": "Infection expectation",
+  "infection_main_delta": {
+    "description": "Infection expectation (Aldrin et al., 2017)",
     "value": -2.576
   },
-  "delta_CO_1": {
-    "description": "Infection regression coefficient",
+  "infection_weight_delta": {
+    "description": "Infection regression coefficient (Aldrin et al., 2017)",
     "value": 0.082
   },
   "delta_expectation_weight_log": {

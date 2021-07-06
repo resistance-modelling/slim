@@ -23,9 +23,8 @@ class Cage(CageTemplate):
         """
 
         # sets access to cfg and logger
-        super().__init__(cfg)
+        super().__init__(cfg, cage_id)
 
-        self.id = cage_id
         self.farm_id = farm_id
         self.start_date = cfg.farms[farm_id].cages_start[cage_id]
         self.date = cfg.start_date
@@ -56,8 +55,6 @@ class Cage(CageTemplate):
     def __str__(self):
         """
         Get a human readable string representation of the cage in json form.
-        Note: having a reference to the farm here causeѕ a circular reference, we need to
-        ignore the farm attribute of this class in this method.
         :return: a description of the cage
         """
 
@@ -72,15 +69,6 @@ class Cage(CageTemplate):
         return json.dumps(filtered_vars, indent=4)
         # return json.dumps(self, cls=CustomCageEncoder, indent=4)
 
-    def to_csv(self):
-        """
-        Save the contents of this cage as a CSV string for writing to a file later.
-        """
-        return f"{self.id}, {self.num_fish}, {self.lice_population['L1']}, \
-                {self.lice_population['L2']}, {self.lice_population['L3']}, \
-                {self.lice_population['L4']}, {self.lice_population['L5f']}, \
-                {self.lice_population['L5m']}, {sum(self.lice_population.values())}"
-
     def update(self, cur_date, step_size, other_farms, reservoir):
         """
         Update the cage at the current time step.
@@ -93,7 +81,7 @@ class Cage(CageTemplate):
         days_since_start = (cur_date - self.date).days
 
         # Background lice mortality events
-        dead_lice_dist = self.update_background_lice_mortality(self.lice_population, step_size)
+        dead_lice_dist = self.get_background_lice_mortality(self.lice_population)
 
         # Treatment mortality events
         treatment_mortality = self.update_lice_treatment_mortality(cur_date)
@@ -341,7 +329,7 @@ class Cage(CageTemplate):
         return fish_deaths_natural, fish_deaths_from_lice
 
     def compute_eta_aldrin(self, num_fish_in_farm, days):
-        return self.cfg.delta_CO_0 + math.log(num_fish_in_farm) + self.cfg.delta_CO_1 * \
+        return self.cfg.infection_main_delta + math.log(num_fish_in_farm) + self.cfg.infection_weight_delta * \
                (math.log(self.fish_growth_rate(days)) - self.cfg.delta_expectation_weight_log)
 
     def get_infection_rates(self, days) -> (float, int):
@@ -489,21 +477,21 @@ class Cage(CageTemplate):
 
         for stage in self.lice_population:
             # update background mortality
-            self.lice_population[stage] -= dead_lice_dist[stage]
+            bg_delta = self.lice_population[stage] - dead_lice_dist[stage]
+            self.lice_population[stage] = max(0, bg_delta)
 
             # update population due to treatment
             num_dead = treatment_mortality.get(stage, 0)
-            if num_dead > 0:
-                self.lice_population[stage] -= num_dead
-
-            assert self.lice_population[stage] >= 0
+            treatment_delta = self.lice_population[stage] - num_dead
+            self.lice_population[stage] = max(0, treatment_delta)
 
         self.lice_population['L5m'] += new_males
         self.lice_population['L5f'] += new_females
-        self.lice_population['L4'] = self.lice_population['L4'] - (new_males + new_females) + new_L4
-        self.lice_population['L3'] = self.lice_population['L3'] - new_L4 + new_infections
-        self.lice_population['L2'] = self.lice_population['L2'] + new_L2 - new_infections
-        self.lice_population['L1'] -= new_L2
+
+        self.lice_population['L4'] = max(0, self.lice_population['L4'] - (new_males + new_females) + new_L4)
+        self.lice_population['L3'] = max(0, self.lice_population['L3'] - new_L4 + new_infections)
+        self.lice_population['L2'] = max(0, self.lice_population['L2'] + new_L2 - new_infections)
+        self.lice_population['L1'] = max(0, self.lice_population['L1'] - new_L2)
 
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice

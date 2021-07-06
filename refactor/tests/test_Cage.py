@@ -35,7 +35,8 @@ class TestCage:
     def test_cage_lice_background_mortality_one_day(self, first_cage):
         # NOTE: this currently relies on Stien's approach.
         # Changing this approach will break things
-        dead_lice_dist = first_cage.update_background_lice_mortality(first_cage.lice_population, 1)
+        first_cage.cfg.tau = 1
+        dead_lice_dist = first_cage.get_background_lice_mortality(first_cage.lice_population)
         dead_lice_dist_np = np.array(list(dead_lice_dist.values()))
         expected_dead_lice = np.array([26, 0, 0, 2, 0, 0])
         assert np.alltrue(dead_lice_dist_np >= 0.0)
@@ -177,7 +178,7 @@ class TestCage:
         first_cage.lice_population["L5m"] = 0
         first_cage.lice_population["L5f"] = 0
 
-        background_mortality = first_cage.update_background_lice_mortality(first_cage.lice_population, 1)
+        background_mortality = first_cage.get_background_lice_mortality(first_cage.lice_population)
         treatment_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 20, "L5f": 30}
         fish_deaths_natural = 0
         fish_deaths_from_lice = 0
@@ -187,9 +188,11 @@ class TestCage:
         new_males = 0
         new_infections = 0
 
-        with pytest.raises(AssertionError):
-            first_cage.update_deltas(background_mortality, treatment_mortality, fish_deaths_natural,
-                                     fish_deaths_from_lice, new_l2, new_l4, new_females, new_males, new_infections)
+        first_cage.update_deltas(background_mortality, treatment_mortality, fish_deaths_natural,
+                                 fish_deaths_from_lice, new_l2, new_l4, new_females, new_males, new_infections)
+
+        for population in first_cage.lice_population.values():
+            assert population >= 0
 
     def test_update_step(self, first_cage):
         cur_day = first_cage.date + datetime.timedelta(days=1)

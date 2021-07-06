@@ -6,11 +6,12 @@ import numpy as np
 class CageTemplate:
     """Class for methods shared between the sea cages and reservoir."""
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, name):
         self.cfg = cfg
         self.logger = cfg.logger
+        self.id = name
 
-    def update_background_lice_mortality(self, lice_population, days):
+    def get_background_lice_mortality(self, lice_population):
         """
         Background death in a stage (remove entry) -> rate = number of
         individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,
@@ -20,7 +21,7 @@ class CageTemplate:
 
         dead_lice_dist = {}
         for stage in lice_population:
-            mortality_rate = lice_population[stage] * lice_mortality_rates[stage] * days
+            mortality_rate = lice_population[stage] * lice_mortality_rates[stage] * self.cfg.tau
             mortality = min(np.random.poisson(mortality_rate), lice_population[stage])
             dead_lice_dist[stage] = mortality
 
@@ -34,7 +35,14 @@ class CageTemplate:
         """
         return 10000/(1 + math.exp(-0.01*(days-475)))
 
-    @classmethod
-    def logit_normalize(self, x):
-        expd = math.exp(x)
-        return expd / (1 + expd)
+    def to_csv(self):
+        """
+        Save the contents of this cage as a CSV string
+        for writing to a file later.
+        """
+
+        data = [str(self.id), str(self.num_fish)]
+        data.extend([str(val) for val in self.lice_population.values()])
+        data.append(str(sum(self.lice_population.values())))
+        
+        return ", ".join(data)
