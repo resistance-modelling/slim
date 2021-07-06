@@ -36,6 +36,22 @@ class Cage(CageTemplate):
 
         # TODO: update with calculations
         self.lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 0}
+ 
+        self.eggs = {}
+        # TODO/Question: what's the best way to deal with having multiple possible genetic schemes?
+        # TODO/Question: I suppose some of this initial genotype information ought to come from the config file
+        # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
+        # for now I've hard-coded in one mechanism in this setup, and a particular genotype starting point. Should probably be from a config file?
+        self.genetic_mechanism = 'discrete'
+        
+        generic_discrete_props = {('A'):0.25, ('a'): 0.25, ('A', 'a'): 0.5}
+        
+        self.geno_by_lifestage = {}
+        for stage in self.lice_population:
+            self.geno_by_lifestage[stage] = {}
+            for geno in generic_discrete_props:
+                self.geno_by_lifestage[stage][geno] = np.round(generic_discrete_props[geno]*self.lice_population[stage], 0)
+
 
         # The original code was a IBM, here we act on populations so the age in each stage must
         # be a distribution.
