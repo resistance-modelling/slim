@@ -5,11 +5,10 @@ import json
 import numpy as np
 from scipy import stats
 
-from src.CageTemplate import CageTemplate
 from src.JSONEncoders import CustomCageEncoder
 
 
-class Cage(CageTemplate):
+class Cage:
     """
     Fish cages contain the fish.
     """
@@ -22,8 +21,9 @@ class Cage(CageTemplate):
         :param nplankt: TODO ???
         """
 
-        # sets access to cfg and logger
-        super().__init__(cfg, cage_id)
+        self.cfg = cfg
+        self.logger = cfg.logger
+        self.id = cage_id
 
         self.farm_id = farm_id
         self.start_date = cfg.farms[farm_id].cages_start[cage_id]
@@ -58,7 +58,7 @@ class Cage(CageTemplate):
         """
         return json.dumps(self, cls=CustomCageEncoder, indent=4)
 
-    def update(self, cur_date, step_size, other_farms, reservoir):
+    def update(self, cur_date, step_size, other_farms):
         """
         Update the cage at the current time step.
         :return:
@@ -439,3 +439,40 @@ class Cage(CageTemplate):
         self.num_fish -= fish_deaths_from_lice
 
         return self.lice_population
+
+    def get_background_lice_mortality(self, lice_population):
+        """
+        Background death in a stage (remove entry) -> rate = number of
+        individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,
+        pre-adult female 0.05, pre-adult male ... Stien et al 2005)
+        """
+        lice_mortality_rates = {'L1': 0.17,
+                                'L2': 0.22,
+                                'L3': 0.008,
+                                'L4': 0.05,
+                                'L5f': 0.02,
+                                'L5m': 0.06}
+
+        dead_lice_dist = {}
+        for stage in lice_population:
+            mortality_rate = lice_population[stage] * lice_mortality_rates[stage] * self.cfg.tau
+            mortality = min(np.random.poisson(mortality_rate), lice_population[stage])
+            dead_lice_dist[stage] = mortality
+
+        self.logger.debug('    background mortality distribn of dead lice = {}'.format(dead_lice_dist))
+        return dead_lice_dist
+
+    def fish_growth_rate(self, days):
+        return 10000/(1 + math.exp(-0.01*(days-475)))
+
+    def to_csv(self):
+        """
+        Save the contents of this cage as a CSV string
+        for writing to a file later.
+        """
+
+        data = [str(self.id), str(self.num_fish)]
+        data.extend([str(val) for val in self.lice_population.values()])
+        data.append(str(sum(self.lice_population.values())))
+        
+        return ", ".join(data)

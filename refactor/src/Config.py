@@ -50,20 +50,6 @@ class Config:
                       for farm_data in data["farms"]]
         self.nfarms = len(self.farms)
 
-        # reservoir
-        reservoir_data = data["reservoir"]["value"]
-
-        # NOTE: Both external pressure and the function behind number
-        # of starting sealice population in reservoir (total number of
-        # cages * external pressure) has been determined experimentally
-        # to match actual outputs for Loch Fyne in the original code.
-        # Adjustments might be needed.
-        total_cages = sum([farm.n_cages for farm in self.farms])
-        self.reservoir_num_lice = self.ext_pressure * total_cages
-        self.reservoir_num_fish = reservoir_data["num_fish"]["value"]
-        self.reservoir_enfish_res = reservoir_data["enfish_res"]["value"]
-        self.reservoir_ewt_res = reservoir_data["ewt_res"]["value"]
-
     def __getattr__(self, name):
         # obscure marshalling trick.
         params = self.__getattribute__("params")

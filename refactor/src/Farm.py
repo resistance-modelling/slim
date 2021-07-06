@@ -48,7 +48,7 @@ class Farm:
 
         return self.name == other.name
 
-    def update(self, cur_date, step_size, other_farms, reservoir):
+    def update(self, cur_date, step_size, other_farms):
         """
         Update the status of the farm given the growth of fish and change in population of
         parasites.
@@ -60,7 +60,7 @@ class Farm:
 
         # update cages
         for cage in self.cages:
-            cage.update(cur_date, step_size, other_farms, reservoir)
+            cage.update(cur_date, step_size, other_farms)
 
     def to_csv(self):
         """

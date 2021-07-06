@@ -12,7 +12,6 @@ from pathlib import Path
 
 from src.Config import Config
 from src.Farm import Farm
-from src.Reservoir import Reservoir
 
 
 def setup(data_folder, sim_id):
@@ -52,7 +51,7 @@ def create_logger():
 
 def initialise(data_folder, sim_id, cfg):
     """
-    Create the farms, cages, reservoirs and data files that we will need.
+    Create the farms, cages and data files that we will need.
     :return:
     """
 
@@ -63,18 +62,14 @@ def initialise(data_folder, sim_id, cfg):
     resistance_bv.unlink(missing_ok=True)
     resistance_bv.write_text('cur_date, muEMB, sigEMB, prop_ext')
 
-    # Create the reservoir, farms and cages.
-    wildlife_reservoir = Reservoir(cfg)
-    #farms[0].cages[0].stage = np.random.choice(range(2, 7), cfg.ext_pressure)
-
     farms = [Farm(i, cfg) for i in range(cfg.nfarms)]
 
     #print(cfg.prop_arrive)
     #print(cfg.hrs_travel)
-    return farms, wildlife_reservoir
+    return farms
 
 
-def run_model(path, sim_id, cfg, farms, reservoir):
+def run_model(path, sim_id, cfg, farms):
     """Perform the simulation by running the model.
 
     :param path: Path to store the results in
@@ -85,8 +80,6 @@ def run_model(path, sim_id, cfg, farms, reservoir):
     :type cfg: src.Config
     :param farms: List of Farm objects.
     :type farms: list
-    :param reservoir: Reservoir object representing the waters outside the farms.
-    :type reservoir: src.Reservoir
     """
     cfg.logger.info('running simulation, saving to %s', path)
     cur_date = cfg.start_date
@@ -117,14 +110,10 @@ def run_model(path, sim_id, cfg, farms, reservoir):
             #if days == 1:
             #    resistance_bv.write_text(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext)
 
-            farm.update(cur_date, cfg.tau, other_farms, reservoir)
-
-        # Now update the reservoir. The farms have already been updated so we don't need
-        # to use the copy of the farms
-        reservoir.update(cur_date, farms)
+            farm.update(cur_date, cfg.tau, other_farms)
 
         # Save the data
-        data_str = str(cur_date) + ", " + str(days) + ", " + reservoir.to_csv()
+        data_str = str(cur_date) + ", " + str(days)
         for farm in farms:
             data_str = data_str + ", "
             data_str = data_str + farm.to_csv()
@@ -182,5 +171,5 @@ if __name__ == "__main__":
         cfg.params.seed = args.seed
 
     # run the simulation
-    FARMS, RESERVOIR = initialise(output_folder, args.id, cfg)
-    run_model(output_folder, args.id, cfg, FARMS, RESERVOIR)
+    FARMS = initialise(output_folder, args.id, cfg)
+    run_model(output_folder, args.id, cfg, FARMS)
