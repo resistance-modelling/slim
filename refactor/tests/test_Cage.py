@@ -1,3 +1,4 @@
+import datetime
 import datetime as dt
 import itertools
 
@@ -152,7 +153,27 @@ class TestCage:
 
     def test_do_infection_events(self, first_cage):
         first_cage.lice_population["L2"] = 100
-        inf_events = first_cage.do_infection_events(1)
+        num_infected_fish = first_cage.do_infection_events(1)
 
-        assert inf_events > 0
-        assert inf_events == 14
+        assert num_infected_fish > 0
+        assert num_infected_fish == 14
+
+    def test_get_infected_fish_noinfection(self, first_cage):
+        first_cage.lice_population["L3"] = 0
+        first_cage.lice_population["L4"] = 0
+        first_cage.lice_population["L5m"] = 0
+        first_cage.lice_population["L5f"] = 0
+
+        assert first_cage.get_infected_fish() == 0
+
+    def test_get_infected_fish(self, first_cage):
+        assert first_cage.get_infected_fish() == int(4000 * (1 - (3999/4000)**70))
+
+
+    def test_update_deltas(self, first_cage):
+        pass
+
+    def test_update_step(self, first_cage):
+        cur_day = first_cage.date + datetime.timedelta(days=1)
+        # TODO: reservoir still not taken into account, this test may break in the future
+        first_cage.update(cur_day, 1, None, None)

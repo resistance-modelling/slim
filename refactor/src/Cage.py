@@ -40,19 +40,19 @@ class Cage(CageTemplate):
         # The original code was a IBM, here we act on populations so the age in each stage must
         # be a distribution.
 
-        #lice_gender = {} #np.random.choice(['F','M'],nplankt)
-        #lice_age = {} # np.random.choice(range(15),nplankt,p=p)
-        #self.nplankt = nplankt
-        #self.m_f = np.random.choice(['F', 'M'], nplankt)
-        #self.stage = 1
-        #prob = stats.poisson.pmf(range(15), 3)
-        #prob = prob/np.sum(prob) #probs need to add up to one
-        #self.stage_age = np.random.choice(range(15), nplankt, p=prob)
-        #self.avail = 0
-        #self.resistance_t1 = np.random.normal(cfg.f_muEMB, cfg.f_sigEMB, nplankt)
-        #self.avail = 0
-        #self.arrival = 0
-        #self.nmates = 0
+        # lice_gender = {} #np.random.choice(['F','M'],nplankt)
+        # lice_age = {} # np.random.choice(range(15),nplankt,p=p)
+        # self.nplankt = nplankt
+        # self.m_f = np.random.choice(['F', 'M'], nplankt)
+        # self.stage = 1
+        # prob = stats.poisson.pmf(range(15), 3)
+        # prob = prob/np.sum(prob) #probs need to add up to one
+        # self.stage_age = np.random.choice(range(15), nplankt, p=prob)
+        # self.avail = 0
+        # self.resistance_t1 = np.random.normal(cfg.f_muEMB, cfg.f_sigEMB, nplankt)
+        # self.avail = 0
+        # self.arrival = 0
+        # self.nmates = 0
 
     def __str__(self):
         """
@@ -71,7 +71,7 @@ class Cage(CageTemplate):
                 filtered_vars[k] = filtered_vars[k].strftime("%Y-%m-%d %H:%M:%S")
 
         return json.dumps(filtered_vars, indent=4)
-        #return json.dumps(self, cls=CustomCageEncoder, indent=4)
+        # return json.dumps(self, cls=CustomCageEncoder, indent=4)
 
     def to_csv(self):
         """
@@ -106,7 +106,7 @@ class Cage(CageTemplate):
         fish_deaths_natural, fish_deaths_from_lice = self.update_fish_growth(days_since_start, step_size)
 
         # Infection events
-        num_infected_fish = self.do_infection_events(days_since_start)
+        num_infection_events = self.do_infection_events(days_since_start)
 
         # TODO: Mating events
         self.do_mating_events()
@@ -116,7 +116,7 @@ class Cage(CageTemplate):
 
         # TODO
         self.update_deltas(dead_lice_dist, treatment_mortality, fish_deaths_natural,
-                fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish)
+                           fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infection_events)
 
         self.logger.debug("    final lice population = {}".format(self.lice_population))
         self.logger.debug("    final fish population = {}".format(self.num_fish))
@@ -170,7 +170,7 @@ class Cage(CageTemplate):
             #        now we need to find out which stages these lice are in by calculating the
             #        cumulative sum of the lice in each stage and finding out how many of our
             #        dead lice falls into this bin.
-            p = (pheno_emb)/np.sum(pheno_emb)
+            p = (pheno_emb) / np.sum(pheno_emb)
             dead_lice = np.random.choice(range(num_susc), num_dead_lice, p=p,
                                          replace=False).tolist()
             total_so_far = 0
@@ -183,7 +183,7 @@ class Cage(CageTemplate):
                     dead_lice_dist[stage] = num_dead
 
             self.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'
-                             .format(self.farm_id, self.id, dead_lice_dist))
+                              .format(self.farm_id, self.id, dead_lice_dist))
 
             assert num_dead_lice == sum(list(dead_lice_dist.values()))
         return dead_lice_dist
@@ -200,10 +200,8 @@ class Cage(CageTemplate):
         """
         stage_age_max_days = self.cfg.stage_age_evolutions[stage]
         p = np.ones((size,))
-        p[size-stage_age_max_days:] = 0
+        p[size - stage_age_max_days:] = 0
         return p / np.sum(p)
-
-
 
     @staticmethod
     def get_evolution_ages(size: int, min: int, mean: int, development_days=25):
@@ -227,23 +225,6 @@ class Cage(CageTemplate):
         p = p / np.sum(p)  # probs need to add up to one
         return np.random.choice(range(max_quantile), size, p=p) + min
 
-
-    @staticmethod
-    def ave_temperature_at(c_month, farm_northing):
-        """
-        Calculate the mean sea temperature at the northing coordinate of the farm at
-        month c_month interpolating data taken from
-        TODO if the farm never moves there is no point in interpolating every time but only during initialization
-        www.seatemperature.org
-        """
-        ardrishaig_avetemp = np.array([8.2, 7.55, 7.45, 8.25, 9.65, 11.35, 13.15, 13.75, 13.65,
-                                       12.85, 11.75, 9.85])
-        tarbert_avetemp = np.array([8.4, 7.8, 7.7, 8.6, 9.8, 11.65, 13.4, 13.9, 13.9, 13.2,
-                                    12.15, 10.2])
-        degs = (tarbert_avetemp[c_month - 1] - ardrishaig_avetemp[c_month - 1]) / (685715 - 665300)
-        Ndiff = farm_northing - 665300  # farm Northing - tarbert Northing
-        return np.round(tarbert_avetemp[c_month - 1] - Ndiff * degs, 1)
-
     def update_lice_lifestage(self, cur_month):
         """
         Move lice between lifecycle stages.
@@ -263,15 +244,14 @@ class Cage(CageTemplate):
             :return: expected development rate
             """
             epsilon = 1e-30
-            del_m = del_m10*(10/temp_c)**del_p
+            del_m = del_m10 * (10 / temp_c) ** del_p
 
             unbounded = math.log(2) * del_s * ages ** (del_s - 1) * del_m ** (-del_s)
             unbounded = np.clip(unbounded, epsilon, 1)
             return unbounded.astype('float64')
 
         lice_dist = {}
-        ave_temp = self.farm.year_temperatures[cur_month-1]
-
+        ave_temp = self.farm.year_temperatures[cur_month - 1]
 
         # L4 -> L5
         # TODO move these magic numbers somewhere else...
@@ -283,7 +263,7 @@ class Cage(CageTemplate):
         l4_to_l5 = dev_times(self.cfg.delta_p["L4"], self.cfg.delta_m10["L4"], self.cfg.delta_s["L4"],
                              ave_temp, stage_ages)
         num_to_move = min(np.random.poisson(np.sum(l4_to_l5)), num_lice)
-        new_females = np.random.choice([math.floor(num_to_move/2.0), math.ceil(num_to_move/2.0)])
+        new_females = np.random.choice([math.floor(num_to_move / 2.0), math.ceil(num_to_move / 2.0)])
         new_males = (num_to_move - new_females)
 
         lice_dist['L5f'] = new_females
@@ -313,7 +293,7 @@ class Cage(CageTemplate):
         lice_dist['L2'] = num_to_move
 
         self.logger.debug('      distribution of new lice lifecycle stages on farm {}/cage {} = {}'
-                         .format(self.farm_id, self.id, lice_dist))
+                          .format(self.farm_id, self.id, lice_dist))
 
         return new_L2, new_L4, new_females, new_males
 
@@ -337,33 +317,33 @@ class Cage(CageTemplate):
             :param days: number of days elapsed
             :return: fish background mortality rate
             """
-            return 0.00057 #(1000 + (days - 700)**2)/490000000
+            return 0.00057  # (1000 + (days - 700)**2)/490000000
 
         # detemine the number of fish with lice and the number of attached lice on each.
         # for now, assume there is only one TODO fix this when I understand the infestation
         # (next stage)
-        #adlicepg = np.repeat([1/self.fish_growth_rate(days)], (self.num_infected_fish,))
-        #adlicepg = np.array([1] * self.num_infected_fish)/self.fish_growth_rate(days)
-        adlicepg = 1/self.fish_growth_rate(days)
-        prob_lice_death = 1/(1+math.exp(-self.cfg.fish_mortality_k*(adlicepg-self.cfg.fish_mortality_center)))
+        # adlicepg = np.repeat([1/self.fish_growth_rate(days)], (self.num_infected_fish,))
+        # adlicepg = np.array([1] * self.num_infected_fish)/self.fish_growth_rate(days)
+        adlicepg = 1 / self.fish_growth_rate(days)
+        prob_lice_death = 1 / (1 + math.exp(-self.cfg.fish_mortality_k * (adlicepg - self.cfg.fish_mortality_center)))
 
-        ebf_death = fb_mort(days)*step_size*(self.num_fish)
-        #elf_death = np.sum(prob_lice_death)*step_size
+        ebf_death = fb_mort(days) * step_size * self.num_fish
+        # elf_death = np.sum(prob_lice_death)*step_size
         # Why are we doing this? wouldn't it be simply be
-        elf_death = self.num_infected_fish*step_size*prob_lice_death
+        elf_death = self.num_infected_fish * step_size * prob_lice_death
         fish_deaths_natural = np.random.poisson(ebf_death)
         fish_deaths_from_lice = np.random.poisson(elf_death)
 
         self.logger.debug('      number of background fish death {}, from lice {}'
-                         .format(fish_deaths_natural, fish_deaths_from_lice))
+                          .format(fish_deaths_natural, fish_deaths_from_lice))
 
-        #self.num_fish -= fish_deaths_natural
-        #self.num_fish -= fish_deaths_from_lice
+        # self.num_fish -= fish_deaths_natural
+        # self.num_fish -= fish_deaths_from_lice
         return fish_deaths_natural, fish_deaths_from_lice
 
     def compute_eta_aldrin(self, num_fish_in_farm, days):
         return self.cfg.delta_CO_0 + math.log(num_fish_in_farm) + self.cfg.delta_CO_1 * \
-                         (math.log(self.fish_growth_rate(days))-self.cfg.delta_expectation_weight_log)
+               (math.log(self.fish_growth_rate(days)) - self.cfg.delta_expectation_weight_log)
 
     def get_infection_rates(self, days) -> (float, int):
         """
@@ -375,33 +355,41 @@ class Cage(CageTemplate):
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease).
         age_distrib = self.get_stage_ages_distrib('L2')
-        num_avail_lice = round(self.lice_population['L2']*np.sum(age_distrib[1:]))
+        num_avail_lice = round(self.lice_population['L2'] * np.sum(age_distrib[1:]))
         if num_avail_lice > 0:
             num_fish_in_farm = sum([c.num_fish for c in self.farm.cages])
 
             # FIXME: this has O(c^2) complexity
             etas = np.array([c.compute_eta_aldrin(num_fish_in_farm, days) for c in self.farm.cages])
-            Einf = math.exp(etas[self.id])/(1 + np.sum(np.exp(etas)))
+            Einf = math.exp(etas[self.id]) / (1 + np.sum(np.exp(etas)))
 
             return Einf, num_avail_lice
 
         return 0, num_avail_lice
 
-    def do_infection_events(self, days):
+    def do_infection_events(self, days) -> int:
         """
         Infect fish in this cage if the sea lice are in stage L2 and at least 1 day old
-        """
-        # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
-        # but at what point does the distribution mean decrease).
 
+        :param days the number of days elapsed
+        :returns number of evolving lice, or equivalently the new number of infections
+        """
         Einf, num_avail_lice = self.get_infection_rates(days)
 
         if Einf == 0:
             return 0
 
-        inf_ents = np.random.poisson(Einf*num_avail_lice)
+        inf_events = np.random.poisson(Einf * num_avail_lice)
+        return min(inf_events, num_avail_lice)
 
-        return min(inf_ents, num_avail_lice)
+    def get_infected_fish(self):
+        # the number of infections is equal to the population size from stage 3 onward
+        infective_stages = ["L3", "L4", "L5m", "L5f"]
+        attached_lice = sum(self.lice_population[stage] for stage in infective_stages)
+
+        # see: https://stats.stackexchange.com/a/296053
+        num_infected_fish = int(self.num_fish * (1 - ((self.num_fish - 1) / self.num_fish) ** attached_lice))
+        return num_infected_fish
 
     def do_mating_events(self):
         """
@@ -494,8 +482,8 @@ class Cage(CageTemplate):
         """
         pass
 
-
-    def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish):
+    def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2,
+                      new_L4, new_females, new_males, num_infections):
         """
         Update the number of fish and the lice in each life stage given the number that move between stages in this time period.
         """
@@ -512,11 +500,14 @@ class Cage(CageTemplate):
         self.lice_population['L5m'] += new_males
         self.lice_population['L5f'] += new_females
         self.lice_population['L4'] = self.lice_population['L4'] - (new_males + new_females) + new_L4
-        self.lice_population['L3'] = self.lice_population['L3'] - new_L4 + num_infected_fish
-        self.lice_population['L2'] = self.lice_population['L2'] + new_L2 - num_infected_fish
+        self.lice_population['L3'] = self.lice_population['L3'] - new_L4 + num_infections
+        self.lice_population['L2'] = self.lice_population['L2'] + new_L2 - num_infections
         self.lice_population['L1'] -= new_L2
 
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice
+
+        # treatment may kill some lice attached to the fish, thus update at the very end
+        self.num_infected_fish = self.get_infected_fish()
 
         return self.lice_population
