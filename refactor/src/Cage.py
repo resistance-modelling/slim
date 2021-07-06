@@ -6,7 +6,6 @@ import numpy as np
 from scipy import stats
 
 from src.CageTemplate import CageTemplate
-from src.JSONEncoders import CustomCageEncoder
 
 
 class Cage(CageTemplate):
@@ -483,7 +482,7 @@ class Cage(CageTemplate):
         pass
 
     def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2,
-                      new_L4, new_females, new_males, num_infections):
+                      new_L4, new_females, new_males, new_infections):
         """
         Update the number of fish and the lice in each life stage given the number that move between stages in this time period.
         """
@@ -497,11 +496,13 @@ class Cage(CageTemplate):
             if num_dead > 0:
                 self.lice_population[stage] -= num_dead
 
+            assert self.lice_population[stage] >= 0
+
         self.lice_population['L5m'] += new_males
         self.lice_population['L5f'] += new_females
         self.lice_population['L4'] = self.lice_population['L4'] - (new_males + new_females) + new_L4
-        self.lice_population['L3'] = self.lice_population['L3'] - new_L4 + num_infections
-        self.lice_population['L2'] = self.lice_population['L2'] + new_L2 - num_infections
+        self.lice_population['L3'] = self.lice_population['L3'] - new_L4 + new_infections
+        self.lice_population['L2'] = self.lice_population['L2'] + new_L2 - new_infections
         self.lice_population['L1'] -= new_L2
 
         self.num_fish -= fish_deaths_natural

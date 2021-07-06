@@ -159,6 +159,7 @@ class TestCage:
         assert num_infected_fish == 14
 
     def test_get_infected_fish_noinfection(self, first_cage):
+        # TODO: maybe make a fixture of this?
         first_cage.lice_population["L3"] = 0
         first_cage.lice_population["L4"] = 0
         first_cage.lice_population["L5m"] = 0
@@ -170,8 +171,25 @@ class TestCage:
         assert first_cage.get_infected_fish() == int(4000 * (1 - (3999/4000)**70))
 
 
-    def test_update_deltas(self, first_cage):
-        pass
+    def test_update_deltas_no_negative_raise(self, first_cage):
+        first_cage.lice_population["L3"] = 0
+        first_cage.lice_population["L4"] = 0
+        first_cage.lice_population["L5m"] = 0
+        first_cage.lice_population["L5f"] = 0
+
+        background_mortality = first_cage.update_background_lice_mortality(first_cage.lice_population, 1)
+        treatment_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 20, "L5f": 30}
+        fish_deaths_natural = 0
+        fish_deaths_from_lice = 0
+        new_l2 = 0
+        new_l4 = 0
+        new_females = 0
+        new_males = 0
+        new_infections = 0
+
+        with pytest.raises(AssertionError):
+            first_cage.update_deltas(background_mortality, treatment_mortality, fish_deaths_natural,
+                                     fish_deaths_from_lice, new_l2, new_l4, new_females, new_males, new_infections)
 
     def test_update_step(self, first_cage):
         cur_day = first_cage.date + datetime.timedelta(days=1)

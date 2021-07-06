@@ -92,6 +92,17 @@
     "description": "Fish mortality sigmoid steepness",
     "value": 19
   },
+  "background_fish_mortality_rates": {
+    "description": "Background fish mortality rates",
+    "value": {
+      "L1": 0.17,
+      "L2": 0.22,
+      "L3": 0.008,
+      "L4": 0.05,
+      "L5f": 0.02,
+      "L5m": 0.06
+    }
+  },
   "farm_data": {
     "description": "Average temperatures at known farm locations. Farm temperatures will be interpolated from them. Data taken from www.seatemperature.org",
     "value": {
