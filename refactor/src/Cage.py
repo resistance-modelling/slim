@@ -536,7 +536,8 @@ class Cage(CageTemplate):
 
     def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish, delta_avail_dams, delta_eggs):
         """
-        Update the number of fish and the lice in each life stage given the number that move between stages in this time period.
+        Update the number of fish, the lice in each life stage and with each genotype  given the number that move between stages in this time period,
+        the genotypes of unavailable females, and the genotypes of eggs after mating.
         """
 
         for stage in self.lice_population:
