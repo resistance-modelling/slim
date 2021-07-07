@@ -37,7 +37,9 @@ class Cage(CageTemplate):
         # TODO: update with calculations
         self.lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 0}
  
-        self.eggs = {}
+        self.egg_genotypes = {}
+        self.available_dams = {}
+        
         # TODO/Question: what's the best way to deal with having multiple possible genetic schemes?
         # TODO/Question: I suppose some of this initial genotype information ought to come from the config file
         # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
@@ -52,6 +54,7 @@ class Cage(CageTemplate):
             for geno in generic_discrete_props:
                 self.geno_by_lifestage[stage][geno] = np.round(generic_discrete_props[geno]*self.lice_population[stage], 0)
 
+        self.available_dams = copy.deepcopy(self.geno_by_lifestage['L5f'])
 
         # The original code was a IBM, here we act on populations so the age in each stage must
         # be a distribution.
@@ -114,7 +117,7 @@ class Cage(CageTemplate):
         # Infection events
         num_infected_fish = self.do_infection_events(days_since_start)
 
-        # TODO: Mating events
+        # Mating events that create eggs
         delta_avail_dams, delta_eggs = self.do_mating_events()
 
         # TODO: create offspring
@@ -340,28 +343,7 @@ class Cage(CageTemplate):
         """
 
         """
-        TODO - convert this (it is an IBM so we will also need to think about the numbers of events rather than who is mating).
-                        #Mating events---------------------------------------------------------------------
-                #who is mating
-                females = df_list[fc].loc[(df_list[fc].stage==5) & (df_list[fc].avail==0)].index
-                males = df_list[fc].loc[(df_list[fc].stage==6) & (df_list[fc].avail==0)].index
-                nmating = min(sum(df_list[fc].index.isin(females)),\
-                          sum(df_list[fc].index.isin(males)))
-                if nmating>0:
-                    sires = np.random.choice(males, nmating, replace=False)
-                    p_dams = 1 - (df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']/
-                                np.sum(df_list[fc].loc[df_list[fc].index.isin(females),'stage_age'])+1)
-                    dams = np.random.choice(females, nmating, p=np.array(p_dams/np.sum(p_dams)).tolist(), replace=False)
-                else:
-                    sires = []
-                    dams = []
-                df_list[fc].loc[df_list[fc].index.isin(dams),'avail'] = 1
-                df_list[fc].loc[df_list[fc].index.isin(sires),'avail'] = 1
-                df_list[fc].loc[df_list[fc].index.isin(dams),'nmates'] = df_list[fc].loc[df_list[fc].index.isin(dams),'nmates'].values + 1
-                df_list[fc].loc[df_list[fc].index.isin(sires),'nmates'] = df_list[fc].loc[df_list[fc].index.isin(sires),'nmates'].values + 1
-                #Add genotype of sire to dam info
-                df_list[fc].loc[df_list[fc].index.isin(dams),'mate_resistanceT1'] = \
-                df_list[fc].loc[df_list[fc].index.isin(sires),'resistanceT1'].values
+
         """
         num_mating_events = self.get_num_mating_events()
         
@@ -421,12 +403,12 @@ class Cage(CageTemplate):
         if geno not in distrib:
           distrib[geno] = 0
         distrib[geno] += distrib_delta[geno]
-        if distrib[geno] < 0:
-          distrib[geno] = 0
+
     
     def update_distrib_discrete_subtract(self, distrib_delta, distrib):
       for geno in distrib:
-        distrib[geno] -= distrib_delta[geno]
+        if geno in distrib_delta:
+            distrib[geno] -= distrib_delta[geno]
         if distrib[geno] < 0:
           distrib[geno] = 0
     
@@ -572,12 +554,13 @@ class Cage(CageTemplate):
         self.lice_population['L3'] = self.lice_population['L3'] - new_L4 + num_infected_fish
         self.lice_population['L2'] = self.lice_population['L2'] + new_L2 - num_infected_fish
         self.lice_population['L1'] -= new_L2
+
+        self.update_distrib_discrete_subtract(delta_avail_dams, self.available_dams)
+        self.update_distrib_discrete_add(delta_eggs, self.egg_genotypes)
         
-        #  TODO: update genotypes as well
+         #  TODO: update life-stage progression genotypes as well
+         #  TODO: remove females that leave L5f by dying from available_dams
         
-        
-        #  TODO: update available dams and eggs
-        self.geno_by_lifestage
 
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice
