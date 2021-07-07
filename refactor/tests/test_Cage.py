@@ -49,7 +49,7 @@ class TestCage:
         # before a 14-day activation period there should be no effect
         for i in range(-14, first_cage.cfg.delay_EMB):
             cur_day = treatment_dates[0] + dt.timedelta(days=i)
-            mortality_updates = first_cage.update_lice_treatment_mortality(cur_day)
+            mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
             assert all(rate == 0 for rate in mortality_updates.values())
 
     def test_cage_update_lice_treatment_mortality(self, farm, first_cage):
@@ -58,7 +58,7 @@ class TestCage:
 
         # first useful day
         cur_day = treatment_dates[0] + dt.timedelta(days=5)
-        mortality_updates = first_cage.update_lice_treatment_mortality(cur_day)
+        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
 
         assert mortality_updates == {
             "L1": 0,
@@ -97,24 +97,24 @@ class TestCage:
         min_development_stages = list(range(10))
         mean_development_stages = list(range(10))
 
-        for min, mean in itertools.product(min_development_stages, mean_development_stages):
-            if mean <= min or min == 0:
+        for minimum, mean in itertools.product(min_development_stages, mean_development_stages):
+            if mean <= minimum or minimum == 0:
                 with pytest.raises(AssertionError):
                     first_cage.get_evolution_ages(
                     test_num_lice,
-                    minimum_age=min,
+                    minimum_age=minimum,
                     mean=mean,
                     development_days=development_days
                 )
             else:
                 first_cage.get_evolution_ages(
                     test_num_lice,
-                    minimum_age=min,
+                    minimum_age=minimum,
                     mean=mean,
                     development_days=development_days
                 )
 
-    def test_update_lice_lifestage(self, first_cage):
+    def test_get_lice_lifestage(self, first_cage):
         new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(1)
 
         assert new_l2 == 0
@@ -122,7 +122,7 @@ class TestCage:
         assert new_males == 2 and first_cage.lice_population["L4"] > 0
         assert new_females == 2
 
-    def test_update_fish_growth(self, first_cage):
+    def test_get_fish_growth(self, first_cage):
         first_cage.num_fish *= 300
         first_cage.num_infected_fish = first_cage.num_fish // 3
         #first_cage.lice_population["L2"] = 100
@@ -136,10 +136,10 @@ class TestCage:
         assert natural_death == 688
         assert lice_death == 4
 
-    def test_update_fish_growth_no_lice(self, first_cage):
+    def test_get_fish_growth_no_lice(self, first_cage):
         first_cage.num_infected_fish = 0
         for k in first_cage.lice_population:
-            first_cage.lice_population = 0
+            first_cage.lice_population[k] = 0
 
         _, lice_death = first_cage.get_fish_growth(1, 1)
 
