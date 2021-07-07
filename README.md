@@ -66,7 +66,7 @@ Constant rates based on [Stien et al 2005](http://dx.doi.org/10.3354/meps290263)
 Treatment death in a stage: ```(1 - individual resistance for individuals in appropriate stage) * treatment effect * (dose presence / decay)```.
 
 ## Farms, Sea cages & Reservoir
-Farm consists of multiple sea cages. Reservoir is the external environment that is also modelled as an constant inflow of sea lice into farms.
+Farm consists of multiple sea cages. Reservoir is the external environment that is also modelled as a constant inflow of sea lice into farms.
 
 ### Model outline
 Given sea cages populated with fish (based on farm data) at each development stage, at each considered timestep perform the following updates:
