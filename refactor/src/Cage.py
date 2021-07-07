@@ -14,7 +14,7 @@ class Cage(CageTemplate):
     """
 
     lice_stages = ['L1', 'L2', 'L3', 'L4', 'L5f', 'L5m']
-    susceptible_stages = list(lice_stages)[2:]
+    susceptible_stages = lice_stages[2:]
 
     def __init__(self, cage_id, cfg, farm):
         """
@@ -87,7 +87,7 @@ class Cage(CageTemplate):
         dead_lice_dist = self.get_background_lice_mortality(self.lice_population)
 
         # Treatment mortality events
-        treatment_mortality = self.update_lice_treatment_mortality(cur_date)
+        treatment_mortality = self.get_lice_treatment_mortality(cur_date)
 
         # Development events
         new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date.month)
@@ -138,7 +138,7 @@ class Cage(CageTemplate):
         else:
             return 0, 0, num_susc
 
-    def update_lice_treatment_mortality(self, cur_date):
+    def get_lice_treatment_mortality(self, cur_date):
         """
         Calculate the number of lice in each stage killed by treatment.
         """
@@ -302,11 +302,14 @@ class Cage(CageTemplate):
             """
             return 0.00057  # (1000 + (days - 700)**2)/490000000
 
-        # determine the number of fish with lice and the number of attached lice on each.
-        # for now, assume there is only one TODO fix this when I understand the infestation
-        # (next stage)
-        adlicepg = 1 / self.fish_growth_rate(days)
-        prob_lice_death = 1 / (1 + math.exp(-self.cfg.fish_mortality_k * (adlicepg - self.cfg.fish_mortality_center)))
+        # Apply a sigmoid based on the number of lice per fish
+        pathogenic_lice = sum([self.lice_population[stage] for stage in self.susceptible_stages])
+        if self.num_infected_fish > 0:
+            lice_per_host_mass = pathogenic_lice / (self.num_infected_fish * self.fish_growth_rate(days))
+        else:
+            lice_per_host_mass = 0.0
+        prob_lice_death = 1 / (1 + math.exp(-self.cfg.fish_mortality_k *
+                                            (lice_per_host_mass - self.cfg.fish_mortality_center)))
 
         ebf_death = fb_mort(days) * step_size * self.num_fish
         elf_death = self.num_infected_fish * step_size * prob_lice_death
