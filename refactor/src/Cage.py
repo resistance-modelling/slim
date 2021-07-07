@@ -303,9 +303,6 @@ class Cage(CageTemplate):
             return 0.00057  # (1000 + (days - 700)**2)/490000000
 
         # Apply a sigmoid based on the number of lice per fish
-        # determine the number of fish with lice and the number of attached lice on each.
-        # for now, assume there is only one TODO fix this when I understand the infestation
-        # (next stage)
         pathogenic_lice = sum([self.lice_population[stage] for stage in self.susceptible_stages])
         if self.num_infected_fish > 0:
             lice_per_host_mass = pathogenic_lice / (self.num_infected_fish * self.fish_growth_rate(days))
