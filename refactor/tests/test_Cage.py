@@ -78,7 +78,7 @@ class TestCage:
         for i in range(100):
             stage_ages = first_cage.get_evolution_ages(
                 test_num_lice,
-                min=min_development_stage,
+                minimum_age=min_development_stage,
                 mean=mean_development_stage,
                 development_days=development_days
             )
@@ -102,20 +102,20 @@ class TestCage:
                 with pytest.raises(AssertionError):
                     first_cage.get_evolution_ages(
                     test_num_lice,
-                    min=min,
+                    minimum_age=min,
                     mean=mean,
                     development_days=development_days
                 )
             else:
                 first_cage.get_evolution_ages(
                     test_num_lice,
-                    min=min,
+                    minimum_age=min,
                     mean=mean,
                     development_days=development_days
                 )
 
     def test_update_lice_lifestage(self, first_cage):
-        new_l2, new_l4, new_females, new_males = first_cage.update_lice_lifestage(1)
+        new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(1)
 
         assert new_l2 == 0
         assert new_l4 == 30 and first_cage.lice_population["L3"] > 0
@@ -126,7 +126,7 @@ class TestCage:
         first_cage.num_fish *= 300
         first_cage.num_infected_fish = first_cage.num_fish // 3
         #first_cage.lice_population["L2"] = 100
-        natural_death, lice_death = first_cage.update_fish_growth(1, 1)
+        natural_death, lice_death = first_cage.get_fish_growth(1, 1)
 
         # basic invariants
         assert natural_death > 0
@@ -141,7 +141,7 @@ class TestCage:
         for k in first_cage.lice_population:
             first_cage.lice_population = 0
 
-        _, lice_death = first_cage.update_fish_growth(1, 1)
+        _, lice_death = first_cage.get_fish_growth(1, 1)
 
     def test_get_infection_rates(self, first_cage):
         first_cage.lice_population["L2"] = 100

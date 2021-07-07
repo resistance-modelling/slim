@@ -17,7 +17,7 @@ class CageTemplate:
         individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,
         pre-adult female 0.05, pre-adult male ... Stien et al 2005)
         """
-        lice_mortality_rates = self.cfg.background_fish_mortality_rates
+        lice_mortality_rates = self.cfg.background_lice_mortality_rates
 
         dead_lice_dist = {}
         for stage in lice_population:

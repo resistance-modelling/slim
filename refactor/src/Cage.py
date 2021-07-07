@@ -13,7 +13,10 @@ class Cage(CageTemplate):
     Fish cages contain the fish.
     """
 
-    def __init__(self, farm_id, cage_id, cfg, farm):
+    lice_stages = ['L1', 'L2', 'L3', 'L4', 'L5f', 'L5m']
+    susceptible_stages = list(lice_stages)[2:]
+
+    def __init__(self, cage_id, cfg, farm):
         """
         Create a cage on a farm
         :param farm_id: the farm this cage is attached to
@@ -25,10 +28,10 @@ class Cage(CageTemplate):
         # sets access to cfg and logger
         super().__init__(cfg, cage_id)
 
-        self.farm_id = farm_id
-        self.start_date = cfg.farms[farm_id].cages_start[cage_id]
+        self.farm_id = farm.name
+        self.start_date = cfg.farms[self.farm_id].cages_start[cage_id]
         self.date = cfg.start_date
-        self.num_fish = cfg.farms[farm_id].num_fish
+        self.num_fish = cfg.farms[self.farm_id].num_fish
         self.num_infected_fish = 0
         self.farm = farm
 
@@ -87,10 +90,10 @@ class Cage(CageTemplate):
         treatment_mortality = self.update_lice_treatment_mortality(cur_date)
 
         # Development events
-        new_L2, new_L4, new_females, new_males = self.update_lice_lifestage(cur_date.month)
+        new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date.month)
 
         # Fish growth and death
-        fish_deaths_natural, fish_deaths_from_lice = self.update_fish_growth(days_since_start, step_size)
+        fish_deaths_natural, fish_deaths_from_lice = self.get_fish_growth(days_since_start, step_size)
 
         # Infection events
         num_infection_events = self.do_infection_events(days_since_start)
@@ -112,8 +115,7 @@ class Cage(CageTemplate):
         """
         Compute the mortality rate due to chemotherapeutic treatment (See Aldrin et al, 2017, §2.2.3)
         """
-        susceptible_stages = list(self.lice_population)[2:]
-        num_susc = sum(self.lice_population[x] for x in susceptible_stages)
+        num_susc = sum(self.lice_population[x] for x in self.susceptible_stages)
 
         # TODO: take temperatures into account? See #22
         if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
@@ -144,7 +146,6 @@ class Cage(CageTemplate):
         dead_lice_dist = {"L1": 0, "L2": 0, "L3": 0, "L4": 0, "L5m": 0, "L5f": 0}
 
         mortality_rate, pheno_emb, num_susc = self.get_lice_treatment_mortality_rate(cur_date)
-        susceptible_stages = list(self.lice_population)[2:]
 
         if mortality_rate > 0:
             num_dead_lice = np.random.poisson(mortality_rate)
@@ -161,12 +162,11 @@ class Cage(CageTemplate):
             dead_lice = np.random.choice(range(num_susc), num_dead_lice, p=p,
                                          replace=False).tolist()
             total_so_far = 0
-            for stage in susceptible_stages:
+            for stage in self.susceptible_stages:
                 num_dead = len([x for x in dead_lice if total_so_far <= x <
                                 (total_so_far + self.lice_population[stage])])
                 total_so_far += self.lice_population[stage]
                 if num_dead > 0:
-                    self.lice_population[stage] -= num_dead
                     dead_lice_dist[stage] = num_dead
 
             self.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'
@@ -181,17 +181,13 @@ class Cage(CageTemplate):
         In absence of further data or constraints, we simply assume it's a uniform distribution
         """
 
-        """
-        p = stats.poisson.pmf(range(size), round(stage_age_max_days/2))
-        return p / np.sum(p)
-        """
         stage_age_max_days = self.cfg.stage_age_evolutions[stage]
         p = np.ones((size,))
         p[size - stage_age_max_days:] = 0
         return p / np.sum(p)
 
     @staticmethod
-    def get_evolution_ages(size: int, min: int, mean: int, development_days=25):
+    def get_evolution_ages(size: int, minimum_age: int, mean: int, development_days=25):
         """
         Create an age distribution (in days) for the sea lice within a lifecycle stage.
         TODO: This actually computes the evolution ages.
@@ -202,17 +198,17 @@ class Cage(CageTemplate):
         """
 
         # Create a shifted poisson distribution,
-        k = mean - min
-        max_quantile = development_days - min
+        k = mean - minimum_age
+        max_quantile = development_days - minimum_age
 
-        assert min > 0, "min must be positive"
+        assert minimum_age > 0, "min must be positive"
         assert k > 0, "mean must be greater than min."
 
         p = stats.poisson.pmf(range(max_quantile), k)
         p = p / np.sum(p)  # probs need to add up to one
-        return np.random.choice(range(max_quantile), size, p=p) + min
+        return np.random.choice(range(max_quantile), size, p=p) + minimum_age
 
-    def update_lice_lifestage(self, cur_month):
+    def get_lice_lifestage(self, cur_month):
         """
         Move lice between lifecycle stages.
         See Section 2.1 of Aldrin et al. (2017)
@@ -241,11 +237,10 @@ class Cage(CageTemplate):
         ave_temp = self.farm.year_temperatures[cur_month - 1]
 
         # L4 -> L5
-        # TODO move these magic numbers somewhere else...
         # TODO these blocks look like the same?
 
         num_lice = self.lice_population['L4']
-        stage_ages = self.get_evolution_ages(num_lice, min=10, mean=15)
+        stage_ages = self.get_evolution_ages(num_lice, minimum_age=10, mean=15)
 
         l4_to_l5 = dev_times(self.cfg.delta_p["L4"], self.cfg.delta_m10["L4"], self.cfg.delta_s["L4"],
                              ave_temp, stage_ages)
@@ -258,7 +253,7 @@ class Cage(CageTemplate):
 
         # L3 -> L4
         num_lice = self.lice_population['L3']
-        stage_ages = self.get_evolution_ages(num_lice, min=15, mean=18)
+        stage_ages = self.get_evolution_ages(num_lice, minimum_age=15, mean=18)
         l3_to_l4 = dev_times(self.cfg.delta_p["L3"], self.cfg.delta_m10["L3"], self.cfg.delta_s["L3"],
                              ave_temp, stage_ages)
         num_to_move = min(np.random.poisson(np.sum(l3_to_l4)), num_lice)
@@ -271,7 +266,7 @@ class Cage(CageTemplate):
 
         # L1 -> L2
         num_lice = self.lice_population['L2']
-        stage_ages = self.get_evolution_ages(num_lice, min=3, mean=4)
+        stage_ages = self.get_evolution_ages(num_lice, minimum_age=3, mean=4)
         l1_to_l2 = dev_times(self.cfg.delta_p["L1"], self.cfg.delta_m10["L1"], self.cfg.delta_s["L1"],
                              ave_temp, stage_ages)
         num_to_move = min(np.random.poisson(np.sum(l1_to_l2)), num_lice)
@@ -284,7 +279,7 @@ class Cage(CageTemplate):
 
         return new_L2, new_L4, new_females, new_males
 
-    def update_fish_growth(self, days, step_size):
+    def get_fish_growth(self, days, step_size):
         """
         Get the new number of fish after a step size.
         """
@@ -346,7 +341,7 @@ class Cage(CageTemplate):
         if num_avail_lice > 0:
             num_fish_in_farm = sum([c.num_fish for c in self.farm.cages])
 
-            # FIXME: this has O(c^2) complexity
+            # TODO: this has O(c^2) complexity
             etas = np.array([c.compute_eta_aldrin(num_fish_in_farm, days) for c in self.farm.cages])
             Einf = math.exp(etas[self.id]) / (1 + np.sum(np.exp(etas)))
 

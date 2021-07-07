@@ -14,7 +14,7 @@ class Farm:
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name, cfg: Config):
+    def __init__(self, name: int, cfg: Config):
         """
         Create a farm.
         :param name: the id of the farm.
@@ -24,12 +24,13 @@ class Farm:
         self.logger = cfg.logger
 
         farm_cfg = cfg.farms[name]
+        self.farm_cfg = farm_cfg
         self.name = name
         self.loc_x = farm_cfg.farm_location[0]
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.treatment_dates = farm_cfg.treatment_dates
-        self.cages = [Cage(name, i, cfg, self) for i in range(farm_cfg.n_cages)]
+        self.cages = [Cage(i, cfg, self) for i in range(farm_cfg.n_cages)]
 
         self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
 

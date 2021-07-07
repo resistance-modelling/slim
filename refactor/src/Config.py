@@ -79,13 +79,19 @@ class RuntimeConfig:
         with open(hyperparam_file) as f:
             data = json.load(f)
 
-        # FIXME: make pycharm/mypy perform detection of these vars
+        # TODO: make pycharm/mypy perform detection of these vars
         # Or alternatively manually set the vars
-        for k, v in data.items():
-            setattr(self, k, v["value"])
+        # for k, v in data.items():
+        #    setattr(self, k, v["value"])
 
-        """
-        self.delta_CO_0 = data["delta_CO_0"]
+        self.stage_age_evolutions = data["stage_age_evolutions"]["value"]
+        self.delta_p = data["delta_p"]["value"]
+        self.delta_s = data["delta_s"]["value"]
+        self.delta_m10 = data["delta_m10"]["value"]
+        self.infection_main_delta = data["infection_main_delta"]["value"]
+        self.infection_weight_delta = data["infection_weight_delta"]["value"]
+        self.delta_expectation_weight_log = data["delta_expectation_weight_log"]["value"]
+
         self.f_meanEMB = data["f_meanEMB"]["value"]
         self.f_sigEMB = data["f_sigEMB"]["value"]
         self.env_meanEMB = data["env_meanEMB"]["value"]
@@ -93,10 +99,12 @@ class RuntimeConfig:
         self.EMBmort = data["EMBmort"]["value"]
         self.delay_EMB = data["delay_EMB"]["value"]
         self.delta_EMB = data["delta_EMB"]["value"]
-        self.infection_main_delta = data["infection_main_delta"]["value"]
-        self.infection_weight_delta = data["infection_weight_delta"]["value"]
+        self.fish_mortality_center = data["fish_mortality_center"]["value"]
+        self.fish_mortality_k = data["fish_mortality_k"]["value"]
+        self.background_lice_mortality_rates = data["background_lice_mortality_rates"]["value"]
+        self.farm_data = data["farm_data"]["value"]
 
-        """
+
         # load in the seed if provided
         # otherwise don't use a seed
         seed_dict = data.get("seed", 0)
