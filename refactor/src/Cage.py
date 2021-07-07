@@ -115,14 +115,14 @@ class Cage(CageTemplate):
         num_infected_fish = self.do_infection_events(days_since_start)
 
         # TODO: Mating events
-        self.do_mating_events()
+        delta_avail_dams, delta_eggs = self.do_mating_events()
 
         # TODO: create offspring
         self.create_offspring()
 
         # TODO
         self.update_deltas(dead_lice_dist, treatment_mortality, fish_deaths_natural,
-                fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish)
+                fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish, delta_avail_dams, delta_eggs)
 
         self.logger.debug("    final lice population = {}".format(self.lice_population))
         self.logger.debug("    final fish population = {}".format(self.num_fish))
@@ -370,9 +370,8 @@ class Cage(CageTemplate):
         distrib_eggs_per_mating = self.get_num_eggs_distrib()
         
         delta_avail_dams, delta_eggs = self.generate_matings_discrete(distrib_sire_available, distrib_dam_available, distrib_eggs_per_mating, num_mating_events)
-        
-        
-        pass
+        return delta_avail_dams, delta_eggs
+
         
     # if we're in the discrete 2-gene setting, assume for now that genotypes are tuples - so in a A/a genetic system, genotypes
     # could be ('A'), ('a'), or ('A', 'a')     
@@ -401,7 +400,7 @@ class Cage(CageTemplate):
       else:
         # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
         # because we're only dealing with the heritable part here don't need to do any of the comparison
-        # to population mean or impact of heritability, etc - that would appear in thecode dealing with treatment
+        # to population mean or impact of heritability, etc - that would appear in the code dealing with treatment
         # so we could use just the mid-parent value for this genetic recording for children
         # as with the discrete genetic model, this will be deterministic for now
         eggs_generated = {}
@@ -480,6 +479,8 @@ class Cage(CageTemplate):
     
       return delta_dams, delta_eggs
     
+    
+    
     def choose_from_distrib(self, distrib):
       max_val = sum(distrib.values())
       this_draw = random.randrange(max_val)
@@ -551,7 +552,7 @@ class Cage(CageTemplate):
         pass
 
 
-    def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish):
+    def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish, delta_avail_dams, delta_eggs):
         """
         Update the number of fish and the lice in each life stage given the number that move between stages in this time period.
         """
@@ -571,6 +572,12 @@ class Cage(CageTemplate):
         self.lice_population['L3'] = self.lice_population['L3'] - new_L4 + num_infected_fish
         self.lice_population['L2'] = self.lice_population['L2'] + new_L2 - num_infected_fish
         self.lice_population['L1'] -= new_L2
+        
+        #  TODO: update genotypes as well
+        
+        
+        #  TODO: update available dams and eggs
+        self.geno_by_lifestage
 
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice
