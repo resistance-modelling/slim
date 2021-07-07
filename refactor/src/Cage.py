@@ -5,8 +5,6 @@ import json
 import numpy as np
 from scipy import stats
 
-from src.JSONEncoders import CustomCageEncoder
-
 class Cage:
     """
     Fish cages contain the fish.
@@ -556,7 +554,7 @@ class Cage:
         :rtype: dict
         """
 
-        num_L1 = self.cfg.rng.integers(low=0, high=pressure, size=1)
+        num_L1 = self.cfg.rng.integers(low=0, high=pressure, size=1)[0]
         new_lice_dist = {"L1": num_L1, "L2": pressure - num_L1}
         self.logger.debug('    distribn of new lice from reservoir = {}'.format(new_lice_dist))
         return new_lice_dist

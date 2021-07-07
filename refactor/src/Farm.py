@@ -7,10 +7,7 @@ from src.Config import Config
 
 import json
 import numpy as np
-<<<<<<< HEAD
 
-=======
->>>>>>> master
 
 class Farm:
     """
