@@ -319,7 +319,21 @@ class Cage(CageTemplate):
             return min(inf_ents, num_avail_lice)
         else:
             return 0
-
+    
+    def get_num_mating_events(self):
+        """
+        TODO
+        """
+        return 10
+    
+    def get_num_eggs_distrib(self):
+        """
+        TODO
+        
+        probably depends on water temperature, maybe other things?
+        """
+        return {400:5, 500 : 10, 600:5}
+    
     def do_mating_events(self):
         """
         TODO
@@ -349,6 +363,15 @@ class Cage(CageTemplate):
                 df_list[fc].loc[df_list[fc].index.isin(dams),'mate_resistanceT1'] = \
                 df_list[fc].loc[df_list[fc].index.isin(sires),'resistanceT1'].values
         """
+        num_mating_events = self.get_num_mating_events()
+        
+        distrib_sire_available = self.geno_by_lifestage['L5m']
+        distrib_dam_available = self.geno_by_lifestage['L5f']
+        distrib_eggs_per_mating = self.get_num_eggs_distrib()
+        
+        delta_avail_dams, delta_eggs = self.generate_matings_discrete(distrib_sire_available, distrib_dam_available, distrib_eggs_per_mating, num_mating_events)
+        
+        
         pass
         
     # if we're in the discrete 2-gene setting, assume for now that genotypes are tuples - so in a A/a genetic system, genotypes
@@ -356,7 +379,7 @@ class Cage(CageTemplate):
     #  right now number of offspring with each genotype are deterministic, and might be missing one (we should update to add jitter in future,
     # but this is a reasonable approx)
     # note another todo: doesn't do anything sensible re: integer/real numbers of offspring     
-    def generate_eggs(sire, dam, breeding_method, number_eggs):
+    def generate_eggs(self, sire, dam, breeding_method, number_eggs):
       if breeding_method == 'discrete':
         eggs_generated = {}
         if len(sire) == 1 and len(dam) == 1:
@@ -393,7 +416,7 @@ class Cage(CageTemplate):
     # I've also assumed that we never want a count below zero
     # Code is naive - interpret as algorithm spec
     # combine these two functions with a negation of a dict?
-    def update_distrib_discrete_add(distrib_delta, distrib):
+    def update_distrib_discrete_add(self, distrib_delta, distrib):
       # print('adding distribs')
       for geno in distrib_delta:
         if geno not in distrib:
@@ -402,7 +425,7 @@ class Cage(CageTemplate):
         if distrib[geno] < 0:
           distrib[geno] = 0
     
-    def update_distrib_discrete_subtract(distrib_delta, distrib):
+    def update_distrib_discrete_subtract(self, distrib_delta, distrib):
       for geno in distrib:
         distrib[geno] -= distrib_delta[geno]
         if distrib[geno] < 0:
@@ -415,7 +438,7 @@ class Cage(CageTemplate):
     # related TODO: there must be a faster way to do this. 
     # returns a dictionary in the same format giving genotpye:numer_selected
     # if the num_dams exceeds number available, gives back all the dams
-    def select_dams(distrib_dams_available, num_dams):
+    def select_dams(self, distrib_dams_available, num_dams):
         delta_dams_selected = {}
         copy_dams_avail = copy.deepcopy(distrib_dams_available)
         if sum(distrib_dams_available.values()) <= num_dams:
@@ -438,21 +461,26 @@ class Cage(CageTemplate):
     # will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs 
     # assume males don't become unavailable? in this case we don't need a delta for sires
     # right now only does one mating - need to deal with dams becoming unavailable if mating events is similar to number of dams
-    def generate_matings_discrete(distrib_sire_available, distrib_dam_available, distrib_eggs_per_mating, num_matings):
+    def generate_matings_discrete(self, distrib_sire_available, distrib_dam_available, distrib_eggs_per_mating, num_matings):
       delta_eggs = {}
-      delta_dams = select_dams(distrib_dam_available, num_matings)
-      for dam_geno in delta_dams:
-        for _ in range(delta_dams[dam_geno]):
-          sire_geno = choose_from_distrib(distrib_sire_available)
-          num_eggs = choose_from_distrib(distrib_eggs_per_mating)
+      delta_dams = self.select_dams(distrib_dam_available, num_matings)
+      if sum(distrib_sire_available.values()) == 0 or sum(distrib_dam_available.values()) == 0:
+        return {}, {}
+    
+#       TODO - need to add dealing with fewer males/females than the number of matings
       
-          new_eggs = generate_eggs(sire_geno, dam_geno, 'discrete', num_eggs)
+      for dam_geno in delta_dams:
+        for _ in range(int(delta_dams[dam_geno])):
+          sire_geno = self.choose_from_distrib(distrib_sire_available)
+          num_eggs = self.choose_from_distrib(distrib_eggs_per_mating)
+      
+          new_eggs = self.generate_eggs(sire_geno, dam_geno, 'discrete', num_eggs)
           
-          update_distrib_discrete_add(new_eggs, delta_eggs)
+          self.update_distrib_discrete_add(new_eggs, delta_eggs)
     
       return delta_dams, delta_eggs
     
-    def choose_from_distrib(distrib):
+    def choose_from_distrib(self, distrib):
       max_val = sum(distrib.values())
       this_draw = random.randrange(max_val)
       sum_so_far = 0
