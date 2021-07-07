@@ -159,7 +159,7 @@ class Cage:
         Calculate the number of lice in each stage killed by treatment.
         """
 
-        dead_lice_dist = {"L1": 0, "L2": 0, "L3": 0, "L4": 0, "L5m": 0, "L5f": 0}
+        dead_lice_dist = {stage: 0 for stage in self.lice_stages}
 
         mortality_rate, pheno_emb, num_susc = self.get_lice_treatment_mortality_rate(cur_date)
 
@@ -526,12 +526,7 @@ class Cage:
         individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,
         pre-adult female 0.05, pre-adult male ... Stien et al 2005)
         """
-        lice_mortality_rates = {'L1': 0.17,
-                                'L2': 0.22,
-                                'L3': 0.008,
-                                'L4': 0.05,
-                                'L5f': 0.02,
-                                'L5m': 0.06}
+        lice_mortality_rates = self.cfg.background_lice_mortality_rates
 
         dead_lice_dist = {}
         for stage in lice_population:
