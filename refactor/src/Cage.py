@@ -5,6 +5,7 @@ import json
 import numpy as np
 from scipy import stats
 
+
 class Cage:
     """
     Fish cages contain the fish.
@@ -70,11 +71,17 @@ class Cage:
         return json.dumps(filtered_vars, indent=4)
         # return json.dumps(self, cls=CustomCageEncoder, indent=4)
 
-    def update(self, cur_date, step_size, other_farms, pressure):
+    def update(self, cur_date, step_size, pressure):
+        """Update the cage at the current time step.
+
+        :param cur_date: Current date of simualtion
+        :type cur_date: datetime.datetime
+        :param step_size: Step size
+        :type step_size: int
+        :param pressure: External pressure, planctonic lice coming from the reservoir.
+        :type pressure: int
         """
-        Update the cage at the current time step.
-        :return:
-        """
+
         self.logger.debug(f"  Updating farm {self.farm_id} / cage {self.id}")
         self.logger.debug(f"    initial lice population = {self.lice_population}")
         self.logger.debug(f"    initial fish population = {self.num_fish}")
@@ -468,11 +475,13 @@ class Cage:
         """
         pass
 
-    def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2,
-                      new_L4, new_females, new_males, new_infections, lice_from_reservoir):
+    def update_deltas(self, dead_lice_dist, treatment_mortality,
+                      fish_deaths_natural, fish_deaths_from_lice,
+                      new_L2, new_L4, new_females, new_males,
+                      new_infections, lice_from_reservoir):
         """
-        Update the number of fish and the lice in each life stage given the number that move between stages in this time
-        period.
+        Update the number of fish and the lice in each life stage given
+        the number that move between stages in this time period.
         """
 
         for stage in self.lice_population:
@@ -553,7 +562,10 @@ class Cage:
         :return: Distribution of lice in L1 and L2
         :rtype: dict
         """
-
+        
+        if pressure == 0:
+            return {"L1": 0, "L2": 0}
+        
         num_L1 = self.cfg.rng.integers(low=0, high=pressure, size=1)[0]
         new_lice_dist = {"L1": num_L1, "L2": pressure - num_L1}
         self.logger.debug('    distribn of new lice from reservoir = {}'.format(new_lice_dist))

@@ -95,22 +95,12 @@ def run_model(path, sim_id, cfg, farms):
         cur_date += dt.timedelta(days=cfg.tau)
         days = (cur_date - cfg.start_date).days
 
-        # Since we are using a tau-leap like algorithm, we want to update the cages using
-        # the current time step. To make things consistent, we copy the current state of
-        # farms and this copy as the current state.
-        farms_at_date = copy.deepcopy(farms)
-
         for farm in farms:
-            # update each farm who will need to know about their neighbours. To get the list of neighbbours
-            # just remove this farm from the list of farms (the remove method actually removes the element so
-            # I need to create another copy!).
-            other_farms = copy.deepcopy(farms_at_date)
-            other_farms.remove(farm)
 
             #if days == 1:
             #    resistance_bv.write_text(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext)
 
-            farm.update(cur_date, cfg.tau, other_farms)
+            farm.update(cur_date, cfg.tau)
 
         # Save the data
         data_str = str(cur_date) + ", " + str(days)

@@ -140,7 +140,7 @@ class TestCage:
         first_cage.num_infected_fish = 0
         for k in first_cage.lice_population:
             first_cage.lice_population = 0
-            
+
         _, lice_death = first_cage.get_fish_growth(1, 1)
 
     def test_get_infection_rates(self, first_cage):
@@ -186,17 +186,19 @@ class TestCage:
         new_females = 0
         new_males = 0
         new_infections = 0
+        reservoir_lice = {"L1": 0, "L2": 0}
 
-        first_cage.update_deltas(background_mortality, treatment_mortality, fish_deaths_natural,
-                                 fish_deaths_from_lice, new_l2, new_l4, new_females, new_males, new_infections)
+        first_cage.update_deltas(background_mortality, treatment_mortality,
+                                 fish_deaths_natural, fish_deaths_from_lice,
+                                 new_l2, new_l4, new_females, new_males,
+                                 new_infections, reservoir_lice)
 
         for population in first_cage.lice_population.values():
             assert population >= 0
 
     def test_update_step(self, first_cage):
         cur_day = first_cage.date + datetime.timedelta(days=1)
-        # TODO: reservoir still not taken into account, this test may break in the future
-        first_cage.update(cur_day, 1, None, None)
+        first_cage.update(cur_day, 1, 0)
 
     def test_to_csv(self, first_cage):
         first_cage.lice_population = {"L1": 1,

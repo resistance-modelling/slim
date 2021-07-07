@@ -72,7 +72,7 @@ class Farm:
         return np.round(tarbert_temps - Ndiff * degs, 1)
 
 
-    def update(self, cur_date, step_size, other_farms):
+    def update(self, cur_date, step_size):
         """
         Update the status of the farm given the growth of fish and change in population of
         parasites.
@@ -93,7 +93,7 @@ class Farm:
 
         # update cages
         for cage in self.cages:
-            cage.update(cur_date, step_size, other_farms, pressures_per_cage[cage.id])
+            cage.update(cur_date, step_size, pressures_per_cage[cage.id])
 
     def to_csv(self):
         """
