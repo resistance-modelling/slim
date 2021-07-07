@@ -192,6 +192,7 @@ class Cage(CageTemplate):
         Create an age distribution (in days) for the sea lice within a lifecycle stage.
         TODO: This actually computes the evolution ages.
         :param size the number of lice to consider
+        :param minimum_age the minimum age before an evolution is allowed
         :param mean the mean of the distribution. mean must be bigger than min.
         :param development_days the maximum age to consider
         :return a size-long array of ages (in days)
@@ -301,17 +302,13 @@ class Cage(CageTemplate):
             """
             return 0.00057  # (1000 + (days - 700)**2)/490000000
 
-        # detemine the number of fish with lice and the number of attached lice on each.
+        # determine the number of fish with lice and the number of attached lice on each.
         # for now, assume there is only one TODO fix this when I understand the infestation
         # (next stage)
-        # adlicepg = np.repeat([1/self.fish_growth_rate(days)], (self.num_infected_fish,))
-        # adlicepg = np.array([1] * self.num_infected_fish)/self.fish_growth_rate(days)
         adlicepg = 1 / self.fish_growth_rate(days)
         prob_lice_death = 1 / (1 + math.exp(-self.cfg.fish_mortality_k * (adlicepg - self.cfg.fish_mortality_center)))
 
         ebf_death = fb_mort(days) * step_size * self.num_fish
-        # elf_death = np.sum(prob_lice_death)*step_size
-        # Why are we doing this? wouldn't it be simply be
         elf_death = self.num_infected_fish * step_size * prob_lice_death
         fish_deaths_natural = np.random.poisson(ebf_death)
         fish_deaths_from_lice = np.random.poisson(elf_death)
@@ -319,8 +316,6 @@ class Cage(CageTemplate):
         self.logger.debug('      number of background fish death {}, from lice {}'
                           .format(fish_deaths_natural, fish_deaths_from_lice))
 
-        # self.num_fish -= fish_deaths_natural
-        # self.num_fish -= fish_deaths_from_lice
         return fish_deaths_natural, fish_deaths_from_lice
 
     def compute_eta_aldrin(self, num_fish_in_farm, days):
@@ -467,7 +462,8 @@ class Cage(CageTemplate):
     def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2,
                       new_L4, new_females, new_males, new_infections):
         """
-        Update the number of fish and the lice in each life stage given the number that move between stages in this time period.
+        Update the number of fish and the lice in each life stage given the number that move between stages in this time
+        period.
         """
 
         for stage in self.lice_population:
