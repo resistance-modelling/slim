@@ -3,6 +3,10 @@ Defines a Farm class that encapsulates a salmon farm containing several cages.
 """
 from src.Cage import Cage
 from src.JSONEncoders import CustomFarmEncoder
+from src.Config import Config
+
+import json
+import numpy as np
 
 
 class Farm:
@@ -11,27 +15,26 @@ class Farm:
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name, cfg):
+    def __init__(self, name: int, cfg: Config):
         """
         Create a farm.
         :param name: the id of the farm.
-        :param loc: the [x,y] location of the farm.
-        :param start_date: the date the farm commences.
-        :param treatment_dates: the dates the farm is allowed to treat their cages.
-        :param n_cages: the number of cages on the farm.
-        :param cages_start_date: a list of the start dates for each cage.
-        :param nplankt: initial number of planktonic lice.
+        :param cfg: the farm configuration
         """
 
         self.logger = cfg.logger
+        self.cfg = cfg
 
         farm_cfg = cfg.farms[name]
+        self.farm_cfg = farm_cfg
         self.name = name
         self.loc_x = farm_cfg.farm_location[0]
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.treatment_dates = farm_cfg.treatment_dates
-        self.cages = [Cage(name, i, cfg) for i in range(farm_cfg.n_cages)]
+        self.cages = [Cage(i, cfg, self) for i in range(farm_cfg.n_cages)]
+
+        self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
 
     def __str__(self):
         """
@@ -51,7 +54,25 @@ class Farm:
 
         return self.name == other.name
 
-    def update(self, cur_date, step_size, other_farms, reservoir):
+    def initialize_temperatures(self, temperatures):
+        """
+        Calculate the mean sea temperature at the northing coordinate of the farm at
+        month c_month interpolating data taken from
+        www.seatemperature.org
+        """
+
+        ardrishaig_data = temperatures["ardrishaig"]
+        ardrishaig_temps, ardrishaig_northing = np.array(ardrishaig_data["temperatures"]), ardrishaig_data["northing"]
+        tarbert_data = temperatures["tarbert"]
+        tarbert_temps, tarbert_northing = np.array(tarbert_data["temperatures"]), tarbert_data["northing"]
+
+        degs = (tarbert_temps - ardrishaig_temps) / abs(tarbert_northing - ardrishaig_northing)
+
+        Ndiff = self.loc_x - tarbert_northing
+        return np.round(tarbert_temps - Ndiff * degs, 1)
+
+
+    def update(self, cur_date, step_size):
         """
         Update the status of the farm given the growth of fish and change in population of
         parasites.
@@ -61,9 +82,18 @@ class Farm:
 
         # TODO: add new offspring to cages
 
+        # set probabilities for lice from reservoir to end up in each cage
+        # (equal chances each)
+        probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
+
+        # get number of lice from reservoir to be put in each cage
+        pressures_per_cage = self.cfg.rng.multinomial(self.cfg.ext_pressure,
+                                                      probs_per_cage,
+                                                      size=1)[0]
+
         # update cages
         for cage in self.cages:
-            cage.update(cur_date, step_size, other_farms, reservoir)
+            cage.update(cur_date, step_size, pressures_per_cage[cage.id])
 
     def to_csv(self):
         """

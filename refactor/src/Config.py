@@ -1,6 +1,7 @@
 import json
 import datetime as dt
 import pandas as pd
+import numpy as np
 
 
 def to_dt(string_date):
@@ -16,12 +17,14 @@ def to_dt(string_date):
 
 
 class Config:
+    """Simulation configuration and parameters"""
 
-    def __init__(self, config_file, logger):
-        """Simulation configuration and parameters
+    def __init__(self, environment_file, param_file, logger):
+        """@DynamicAttrs Read the configuration from files
 
-        :param config_file: Path to the JSON file
-        :type config_file: string
+        :param environment_file: Path to the environment JSON file
+        :type environment_file: string
+        :param param_file: path to the simulator parameters JSON file
         :param logger: Logger to be used
         :type logger: logging.Logger
         """
@@ -30,8 +33,10 @@ class Config:
         self.logger = logger
 
         # read and set the params
-        with open(config_file) as f:
+        with open(environment_file) as f:
             data = json.load(f)
+
+        self.params = RuntimeConfig(param_file)
 
         # time and dates
         self.start_date = to_dt(data["start_date"]["value"])
@@ -40,34 +45,66 @@ class Config:
 
         # general parameters
         self.ext_pressure = data["ext_pressure"]["value"]
-        self.lice_pop_modifier = data["lice_pop_modifier"]["value"]
 
         # farms
         self.farms = [FarmConfig(farm_data["value"], self.logger)
                       for farm_data in data["farms"]]
         self.nfarms = len(self.farms)
 
-        # reservoir
-        # starting sealice population in reservoir = number of cages * modifier
-        # TODO: confirm this is intended behaviour
-        # TODO: is external pressure and modifier the same?
-        total_cages = sum([farm.n_cages for farm in self.farms])
-        self.reservoir_num_lice = self.lice_pop_modifier * total_cages
-        self.reservoir_num_fish = data["reservoir"]["value"]["num_fish"]["value"]
+    def __getattr__(self, name):
+        # obscure marshalling trick.
+        params = self.__getattribute__("params")
+        if name in dir(params):
+            return params.__getattribute__(name)
+        return self.__getattribute__(name)
 
-        # treatment
-        treatment_data = data["treatment"]["value"]
-        self.f_meanEMB = treatment_data["f_meanEMB"]["value"]
-        self.f_sigEMB = treatment_data["f_sigEMB"]["value"]
-        self.env_meanEMB = treatment_data["env_meanEMB"]["value"]
-        self.env_sigEMB = treatment_data["env_sigEMB"]["value"]
-        self.EMBmort = treatment_data["EMBmort"]["value"]
+
+class RuntimeConfig:
+    """@DynamicAttrs Simulation parameters and constants"""
+
+    def __init__(self, hyperparam_file):
+        with open(hyperparam_file) as f:
+            data = json.load(f)
+
+        # TODO: make pycharm/mypy perform detection of these vars
+        # Or alternatively manually set the vars
+        # for k, v in data.items():
+        #    setattr(self, k, v["value"])
+
+        self.stage_age_evolutions = data["stage_age_evolutions"]["value"]
+        self.delta_p = data["delta_p"]["value"]
+        self.delta_s = data["delta_s"]["value"]
+        self.delta_m10 = data["delta_m10"]["value"]
+        self.infection_main_delta = data["infection_main_delta"]["value"]
+        self.infection_weight_delta = data["infection_weight_delta"]["value"]
+        self.delta_expectation_weight_log = data["delta_expectation_weight_log"]["value"]
+
+        self.f_meanEMB = data["f_meanEMB"]["value"]
+        self.f_sigEMB = data["f_sigEMB"]["value"]
+        self.env_meanEMB = data["env_meanEMB"]["value"]
+        self.env_sigEMB = data["env_sigEMB"]["value"]
+        self.EMBmort = data["EMBmort"]["value"]
+        self.delay_EMB = data["delay_EMB"]["value"]
+        self.delta_EMB = data["delta_EMB"]["value"]
+        self.fish_mortality_center = data["fish_mortality_center"]["value"]
+        self.fish_mortality_k = data["fish_mortality_k"]["value"]
+        self.background_lice_mortality_rates = data["background_lice_mortality_rates"]["value"]
+        self.farm_data = data["farm_data"]["value"]
+
+
+        # load in the seed if provided
+        # otherwise don't use a seed
+        seed_dict = data.get("seed", 0)
+        self.seed = seed_dict["value"] if seed_dict else None
+
+        self.rng = np.random.default_rng(seed=self.seed)
 
 
 class FarmConfig:
+    """Config for individual farm"""
 
     def __init__(self, data, logger):
-        """Config for individual farm
+        """Create farm configuration
 
         :param data: Dictionary with farm data
         :type data: dict

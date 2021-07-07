@@ -11,22 +11,9 @@
         "description": "Tau value for tau-leaping",
         "value": 1
     },
-    "lice_pop_modifier": {
-        "description": "Starting lice population modifier (total = modifier * number of all cages)",
-        "value": 150
-    },
     "ext_pressure": {
-        "description": "Sealice per day per cage/farm arriving from wildlife",
+        "description": "Sealice per day per cage/farm arriving from wildlife. Note that this value has been determined experimentally in the original code.",
         "value": 150
-    },
-    "reservoir": {
-        "description": "Test reservoir",
-        "value": {
-            "num_fish": {
-                "description": "Starting number of fish",
-                "value": 4000
-            }
-        }
     },
     "farms": [
         {
@@ -70,30 +57,5 @@
                 }
             }
         }
-    ],
-    "treatment": {
-        "description": "Chemical treatment with Emamectin Benzoate",
-        "value": {
-            "f_meanEMB": {
-                "description": "Mean of Emamectin Benzoate",
-                "value": 3.5
-            },
-            "f_sigEMB": {
-                "description": "Standard deviation of Emamectin Benzoate",
-                "value": 0.7 
-            },
-            "env_meanEMB": {
-                "description": "Mean Emamectin Benzoate in the environment",
-                "value": 0.0
-            },
-            "env_sigEMB": {
-                "description": "Standard deviation of Emamectin Benzoate in the environment",
-                "value": 1.0
-            },
-            "EMBmort": {
-                "description": "Probability of mortality due to Emamectin Benzoate",
-                "value": 0.9
-            }
-        }
-    }
+    ]
 }
