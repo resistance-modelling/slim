@@ -7,7 +7,10 @@ from src.Config import Config
 
 import json
 import numpy as np
+<<<<<<< HEAD
 
+=======
+>>>>>>> master
 
 class Farm:
     """
@@ -15,7 +18,7 @@ class Farm:
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name, cfg: Config):
+    def __init__(self, name: int, cfg: Config):
         """
         Create a farm.
         :param name: the id of the farm.
@@ -26,12 +29,15 @@ class Farm:
         self.cfg = cfg
 
         farm_cfg = cfg.farms[name]
+        self.farm_cfg = farm_cfg
         self.name = name
         self.loc_x = farm_cfg.farm_location[0]
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.treatment_dates = farm_cfg.treatment_dates
-        self.cages = [Cage(name, i, cfg) for i in range(farm_cfg.n_cages)]
+        self.cages = [Cage(i, cfg, self) for i in range(farm_cfg.n_cages)]
+
+        self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
 
     def __str__(self):
         """
@@ -50,6 +56,24 @@ class Farm:
             return NotImplemented
 
         return self.name == other.name
+
+    def initialize_temperatures(self, temperatures):
+        """
+        Calculate the mean sea temperature at the northing coordinate of the farm at
+        month c_month interpolating data taken from
+        www.seatemperature.org
+        """
+
+        ardrishaig_data = temperatures["ardrishaig"]
+        ardrishaig_temps, ardrishaig_northing = np.array(ardrishaig_data["temperatures"]), ardrishaig_data["northing"]
+        tarbert_data = temperatures["tarbert"]
+        tarbert_temps, tarbert_northing = np.array(tarbert_data["temperatures"]), tarbert_data["northing"]
+
+        degs = (tarbert_temps - ardrishaig_temps) / abs(tarbert_northing - ardrishaig_northing)
+
+        Ndiff = self.loc_x - tarbert_northing
+        return np.round(tarbert_temps - Ndiff * degs, 1)
+
 
     def update(self, cur_date, step_size, other_farms):
         """
