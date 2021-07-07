@@ -58,7 +58,7 @@ class Cage:
         """
         return json.dumps(self, cls=CustomCageEncoder, indent=4)
 
-    def update(self, cur_date, step_size, other_farms):
+    def update(self, cur_date, step_size, other_farms, pressure):
         """
         Update the cage at the current time step.
         :return:
@@ -90,9 +90,12 @@ class Cage:
         # TODO: create offspring
         self.create_offspring()
 
+        # lice coming from reservoir
+        lice_from_reservoir = self.get_reservoir_lice(pressure)
+
         # TODO
         self.update_deltas(dead_lice_dist, treatment_mortality, fish_deaths_natural,
-                fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish)
+                fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish, lice_from_reservoir)
 
         self.logger.debug("    final lice population = {}".format(self.lice_population))
         self.logger.debug("    final fish population = {}".format(self.num_fish))
@@ -413,7 +416,7 @@ class Cage:
         pass
 
 
-    def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish):
+    def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infected_fish, lice_from_reservoir):
         """
         Update the number of fish and the lice in each life stage given the number that move between stages in this time period.
         """
@@ -432,8 +435,8 @@ class Cage:
         self.lice_population['L5f'] += new_females
         self.lice_population['L4'] = max(0, self.lice_population['L4'] - (new_males + new_females) + new_L4)
         self.lice_population['L3'] = max(0, self.lice_population['L3'] - new_L4 + num_infected_fish)
-        self.lice_population['L2'] = max(0, self.lice_population['L2'] + new_L2 - num_infected_fish)
-        self.lice_population['L1'] = max(0, self.lice_population['L1'] - new_L2)
+        self.lice_population['L2'] = max(0, self.lice_population['L2'] + new_L2 - num_infected_fish + lice_from_reservoir["L2"])
+        self.lice_population['L1'] = max(0, self.lice_population['L1'] - new_L2 + lice_from_reservoir["L1"])
 
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice
@@ -476,3 +479,17 @@ class Cage:
         data.append(str(sum(self.lice_population.values())))
         
         return ", ".join(data)
+
+    def get_reservoir_lice(self, pressure):
+        """Get distribution of lice coming from the reservoir
+
+        :param pressure: External pressure
+        :type pressure: int
+        :return: Distribution of lice in L1 and L2
+        :rtype: dict
+        """
+
+        num_L1 = self.cfg.rng.integers(low=0, high=pressure, size=1)
+        new_lice_dist = {"L1": num_L1, "L2": pressure - num_L1}
+        self.logger.debug('    distribn of new lice from reservoir = {}'.format(new_lice_dist))
+        return new_lice_dist

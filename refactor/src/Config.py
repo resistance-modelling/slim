@@ -1,6 +1,7 @@
 import json
 import datetime as dt
 import pandas as pd
+import numpy as np
 
 
 def to_dt(string_date):
@@ -79,6 +80,8 @@ class RuntimeConfig:
         # otherwise don't use a seed
         seed_dict = data.get("seed", 0)
         self.seed = seed_dict["value"] if seed_dict else None
+
+        self.rng = np.random.default_rng(seed=self.seed)
 
 
 class FarmConfig:

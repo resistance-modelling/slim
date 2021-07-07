@@ -6,6 +6,8 @@ from src.JSONEncoders import CustomFarmEncoder
 from src.Config import Config
 
 import json
+import numpy as np
+
 
 class Farm:
     """
@@ -21,6 +23,7 @@ class Farm:
         """
 
         self.logger = cfg.logger
+        self.cfg = cfg
 
         farm_cfg = cfg.farms[name]
         self.name = name
@@ -58,9 +61,18 @@ class Farm:
 
         # TODO: add new offspring to cages
 
+        # set probabilities for lice from reservoir to end up in each cage
+        # (equal chances each)
+        probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
+
+        # get number of lice from reservoir to be put in each cage
+        pressures_per_cage = self.cfg.rng.multinomial(self.cfg.ext_pressure,
+                                                      probs_per_cage,
+                                                      size=1)[0]
+
         # update cages
         for cage in self.cages:
-            cage.update(cur_date, step_size, other_farms)
+            cage.update(cur_date, step_size, other_farms, pressures_per_cage[cage.id])
 
     def to_csv(self):
         """
