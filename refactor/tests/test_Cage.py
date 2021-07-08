@@ -187,11 +187,19 @@ class TestCage:
         new_males = 0
         new_infections = 0
         reservoir_lice = {"L1": 0, "L2": 0}
+        delta_avail_dams = {"L1": {('A'):0, ('a'):0, ('A', 'a'):0},
+                            "L2": {('A'):0, ('a'):0, ('A', 'a'):0},
+                            "L3": {('A'):0, ('a'):0, ('A', 'a'):0},
+                            "L4": {('A'):0, ('a'):0, ('A', 'a'):0},
+                            "L5m": {('A'):0, ('a'):0, ('A', 'a'):0},
+                            "L5f": {('A'):0, ('a'):0, ('A', 'a'):0}}
+        delta_eggs = {('A'):0, ('a'):0, ('A', 'a'):0}
 
         first_cage.update_deltas(background_mortality, treatment_mortality,
                                  fish_deaths_natural, fish_deaths_from_lice,
                                  new_l2, new_l4, new_females, new_males,
-                                 new_infections, reservoir_lice)
+                                 new_infections, reservoir_lice,
+                                 delta_avail_dams, delta_eggs)
 
         for population in first_cage.lice_population.values():
             assert population >= 0
