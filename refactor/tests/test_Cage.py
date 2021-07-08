@@ -150,14 +150,14 @@ class TestCage:
         assert avail_lice > 0
 
         assert np.isclose(rate, 0.16665658047288034)
-        assert avail_lice == 80
+        assert avail_lice == 90
 
     def test_do_infection_events(self, first_cage):
         first_cage.lice_population["L2"] = 100
         num_infected_fish = first_cage.do_infection_events(1)
 
         assert num_infected_fish > 0
-        assert num_infected_fish == 14
+        assert num_infected_fish == 15
 
     def test_get_infected_fish_noinfection(self, first_cage):
         # TODO: maybe make a fixture of this?
@@ -170,7 +170,6 @@ class TestCage:
 
     def test_get_infected_fish(self, first_cage):
         assert first_cage.get_infected_fish() == int(4000 * (1 - (3999/4000)**70))
-
 
     def test_update_deltas_no_negative_raise(self, first_cage):
         first_cage.lice_population["L3"] = 0
@@ -187,14 +186,47 @@ class TestCage:
         new_females = 0
         new_males = 0
         new_infections = 0
+        reservoir_lice = {"L1": 0, "L2": 0}
 
-        first_cage.update_deltas(background_mortality, treatment_mortality, fish_deaths_natural,
-                                 fish_deaths_from_lice, new_l2, new_l4, new_females, new_males, new_infections)
+        first_cage.update_deltas(background_mortality, treatment_mortality,
+                                 fish_deaths_natural, fish_deaths_from_lice,
+                                 new_l2, new_l4, new_females, new_males,
+                                 new_infections, reservoir_lice)
 
         for population in first_cage.lice_population.values():
             assert population >= 0
 
     def test_update_step(self, first_cage):
         cur_day = first_cage.date + datetime.timedelta(days=1)
-        # TODO: reservoir still not taken into account, this test may break in the future
-        first_cage.update(cur_day, 1, None, None)
+        first_cage.update(cur_day, 1, 0)
+
+    def test_to_csv(self, first_cage):
+        first_cage.lice_population = {"L1": 1,
+                                      "L2": 2,
+                                      "L3": 3,
+                                      "L4": 4,
+                                      "L5f": 5,
+                                      "L5m": 6}
+        first_cage.num_fish = 7
+        first_cage.id = 0
+
+        csv_str = first_cage.to_csv()
+        csv_list = csv_str.split(", ")
+        print(csv_list)
+
+        assert csv_list[0] == "0"
+        assert csv_list[1] == "7"
+        for i in range(2, 7):
+            assert csv_list[i] == str(i - 1)
+        assert csv_list[8] == "21"
+
+    def test_get_stage_ages_distrib(self, first_cage):
+        size = 5
+        max_days = 4
+        age_distrib = first_cage.get_stage_ages_distrib("L_dummy", size, max_days)
+        assert age_distrib[-1] == 0.0
+        assert all(age_distrib[:-1] > 0)
+
+    def test_get_stage_ages_distrib_edge_cases(self, first_cage):
+        age_distrib = first_cage.get_stage_ages_distrib("L_dummy", 5, 5)
+        assert all(age_distrib > 0)

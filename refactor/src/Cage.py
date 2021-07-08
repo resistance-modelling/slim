@@ -5,10 +5,8 @@ import json
 import numpy as np
 from scipy import stats
 
-from src.CageTemplate import CageTemplate
 
-
-class Cage(CageTemplate):
+class Cage:
     """
     Fish cages contain the fish.
     """
@@ -25,8 +23,9 @@ class Cage(CageTemplate):
         :param farm a Farm object
         """
 
-        # sets access to cfg and logger
-        super().__init__(cfg, cage_id)
+        self.cfg = cfg
+        self.logger = cfg.logger
+        self.id = cage_id
 
         self.farm_id = farm.name
         self.start_date = cfg.farms[self.farm_id].cages_start[cage_id]
@@ -72,11 +71,17 @@ class Cage(CageTemplate):
         return json.dumps(filtered_vars, indent=4)
         # return json.dumps(self, cls=CustomCageEncoder, indent=4)
 
-    def update(self, cur_date, step_size, other_farms, reservoir):
+    def update(self, cur_date, step_size, pressure):
+        """Update the cage at the current time step.
+
+        :param cur_date: Current date of simualtion
+        :type cur_date: datetime.datetime
+        :param step_size: Step size
+        :type step_size: int
+        :param pressure: External pressure, planctonic lice coming from the reservoir.
+        :type pressure: int
         """
-        Update the cage at the current time step.
-        :return:
-        """
+
         self.logger.debug(f"  Updating farm {self.farm_id} / cage {self.id}")
         self.logger.debug(f"    initial lice population = {self.lice_population}")
         self.logger.debug(f"    initial fish population = {self.num_fish}")
@@ -108,9 +113,20 @@ class Cage(CageTemplate):
         # TODO: create offspring.
         self.create_offspring()
 
+        # lice coming from reservoir
+        lice_from_reservoir = self.get_reservoir_lice(pressure)
+
         # TODO
-        self.update_deltas(dead_lice_dist, treatment_mortality, fish_deaths_natural,
-                           fish_deaths_from_lice, new_L2, new_L4, new_females, new_males, num_infection_events)
+        self.update_deltas(dead_lice_dist,
+                           treatment_mortality,
+                           fish_deaths_natural,
+                           fish_deaths_from_lice,
+                           new_L2,
+                           new_L4,
+                           new_females,
+                           new_males,
+                           num_infection_events,
+                           lice_from_reservoir)
 
         self.logger.debug("    final lice population = {}".format(self.lice_population))
         self.logger.debug("    final fish population = {}".format(self.num_fish))
@@ -147,7 +163,7 @@ class Cage(CageTemplate):
         Calculate the number of lice in each stage killed by treatment.
         """
 
-        dead_lice_dist = {"L1": 0, "L2": 0, "L3": 0, "L4": 0, "L5m": 0, "L5f": 0}
+        dead_lice_dist = {stage: 0 for stage in self.lice_stages}
 
         mortality_rate, pheno_emb, num_susc = self.get_lice_treatment_mortality_rate(cur_date)
 
@@ -179,15 +195,17 @@ class Cage(CageTemplate):
             assert num_dead_lice == sum(list(dead_lice_dist.values()))
         return dead_lice_dist
 
-    def get_stage_ages_distrib(self, stage: str, size=15):
+    def get_stage_ages_distrib(self, stage: str, size=15, stage_age_max_days = None):
         """
-        Create an age distribution (in days) for the sea lice within a lyfecycle stage.
+        Create an age distribution (in days) for the sea lice within a lifecycle stage.
         In absence of further data or constraints, we simply assume it's a uniform distribution
         """
 
-        stage_age_max_days = self.cfg.stage_age_evolutions[stage]
-        p = np.ones((size,))
-        p[size - stage_age_max_days:] = 0
+        # NOTE: no data is available for L5 stages. We assume for simplicity they die after 30-ish days
+        if stage_age_max_days is None:
+            stage_age_max_days = min(self.cfg.stage_age_evolutions[stage], size + 1)
+        p = np.zeros((size,))
+        p[:stage_age_max_days] = 1
         return p / np.sum(p)
 
     @staticmethod
@@ -490,11 +508,13 @@ class Cage(CageTemplate):
         """
         pass
 
-    def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2,
-                      new_L4, new_females, new_males, new_infections):
+    def update_deltas(self, dead_lice_dist, treatment_mortality,
+                      fish_deaths_natural, fish_deaths_from_lice,
+                      new_L2, new_L4, new_females, new_males,
+                      new_infections, lice_from_reservoir):
         """
-        Update the number of fish and the lice in each life stage given the number that move between stages in this time
-        period.
+        Update the number of fish and the lice in each life stage given
+        the number that move between stages in this time period.
         """
 
         for stage in self.lice_population:
@@ -510,10 +530,17 @@ class Cage(CageTemplate):
         self.lice_population['L5m'] += new_males
         self.lice_population['L5f'] += new_females
 
-        self.lice_population['L4'] = max(0, self.lice_population['L4'] - (new_males + new_females) + new_L4)
-        self.lice_population['L3'] = max(0, self.lice_population['L3'] - new_L4 + new_infections)
-        self.lice_population['L2'] = max(0, self.lice_population['L2'] + new_L2 - new_infections)
-        self.lice_population['L1'] = max(0, self.lice_population['L1'] - new_L2)
+        update_L4 = self.lice_population['L4'] - (new_males + new_females) + new_L4
+        self.lice_population['L4'] = max(0, update_L4)
+
+        update_L3 = self.lice_population['L3'] - new_L4 + new_infections
+        self.lice_population['L3'] = max(0, update_L3)
+
+        update_L2 = self.lice_population['L2'] + new_L2 - new_infections + lice_from_reservoir["L2"]
+        self.lice_population['L2'] = max(0, update_L2)
+
+        update_L1 = self.lice_population['L1'] - new_L2 + lice_from_reservoir["L1"]
+        self.lice_population['L1'] = max(0, update_L1)
 
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice
@@ -522,3 +549,52 @@ class Cage(CageTemplate):
         self.num_infected_fish = self.get_infected_fish()
 
         return self.lice_population
+
+    def get_background_lice_mortality(self, lice_population):
+        """
+        Background death in a stage (remove entry) -> rate = number of
+        individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,
+        pre-adult female 0.05, pre-adult male ... Stien et al 2005)
+        """
+        lice_mortality_rates = self.cfg.background_lice_mortality_rates
+
+        dead_lice_dist = {}
+        for stage in lice_population:
+            mortality_rate = lice_population[stage] * lice_mortality_rates[stage] * self.cfg.tau
+            mortality = min(np.random.poisson(mortality_rate), lice_population[stage])
+            dead_lice_dist[stage] = mortality
+
+        self.logger.debug('    background mortality distribn of dead lice = {}'.format(dead_lice_dist))
+        return dead_lice_dist
+
+    def fish_growth_rate(self, days):
+        return 10000/(1 + math.exp(-0.01*(days-475)))
+
+    def to_csv(self):
+        """
+        Save the contents of this cage as a CSV string
+        for writing to a file later.
+        """
+
+        data = [str(self.id), str(self.num_fish)]
+        data.extend([str(val) for val in self.lice_population.values()])
+        data.append(str(sum(self.lice_population.values())))
+
+        return ", ".join(data)
+
+    def get_reservoir_lice(self, pressure):
+        """Get distribution of lice coming from the reservoir
+
+        :param pressure: External pressure
+        :type pressure: int
+        :return: Distribution of lice in L1 and L2
+        :rtype: dict
+        """
+        
+        if pressure == 0:
+            return {"L1": 0, "L2": 0}
+        
+        num_L1 = self.cfg.rng.integers(low=0, high=pressure, size=1)[0]
+        new_lice_dist = {"L1": num_L1, "L2": pressure - num_L1}
+        self.logger.debug('    distribn of new lice from reservoir = {}'.format(new_lice_dist))
+        return new_lice_dist
