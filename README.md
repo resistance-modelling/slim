@@ -49,15 +49,37 @@ Progression in the life cycle of the sea lice. Based on [Aldrin et al 2017](http
 Attachement to the host fish. Based on [Aldrin et al 2017](https://doi.org/10.1016/j.ecolmodel.2017.05.019).
 
 #### Mating
-Reproduction. For sea lice on a given fish: ```adult_males * adult_females * (1/4) * (2.5 / avg_adult_female_lifetime) ``` TODO: source
+Originally devised: sea lice grows on a given fish obtained by this formula: ```adult_males * adult_females * (1/4) * (2.5 / avg_adult_female_lifetime) ```
+
+TODO: source.
+
+New approach: use a sigmoid function on the current adult female population. Even this is based on Aldrin et al. 2017.
+
+Advantages:
+
+- Simple and straightforward
+
+Disadvantages/Opinionated?
+
+- Simplistic: does not take into account the _available_ lice. In particular, it does not consider that lice
+  are usually unavailable for 3 days after mating (see assumptions below). TODO: Does this matter?
+- Assumes a bias-free sex distribution. Some papers discuss that sex biases may be plausible as lice appear to have
+  promiscuous behaviour and propose better models. See [Cox et al., 2017](https://doi.org/10.1002/ecs2.2040).
+
+#### Egg production
+
+Based on Aldrin, but may change according to the assumptions below.
+
+##### Old notes
 
 6-11 broods of 500 ova on average extrude a pair every 3 days (alternatively a constant production of 70 nauplii/day for 20 days post-mating), based on [Costello 2006](https://doi.org/10.1016/j.pt.2006.08.006).
 
-Assumptions
+##### Assumptions
+
 - lice is unavailable for 3 days after mating 
 - a female will mate as soon as a male is available
 - only adult (5F and 5M) sea lice can reproduce
-- the offspring's inheritted resistence is calculated as linear function of the parents' resistances
+- the offspring's inherited resistence is calculated as linear function of the parents' resistances
 
 #### Background death
 Constant rates based on [Stien et al 2005](http://dx.doi.org/10.3354/meps290263).

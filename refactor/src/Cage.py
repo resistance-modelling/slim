@@ -104,9 +104,9 @@ class Cage:
         num_infection_events = self.do_infection_events(days_since_start)
 
         # TODO: Mating events
-        matings = self.do_mating_events()
+        #matings = self.do_mating_events()
 
-        eggs = self.get_num_eggs(matings, cur_date.month)
+        eggs = self.get_num_eggs(cur_date.month)
 
         # TODO: should we keep eggs in a queue until they hatch? Or should we keep a typical age distribution for them?
 
@@ -395,11 +395,15 @@ class Cage:
 
     def do_mating_events(self) -> int:
         """
-        TODO
+        TODO: do we still need this?
         """
 
         """
         TODO - convert this (it is an IBM so we will also need to think about the numbers of events rather than who is mating).
+        This code assumes ALL available females and males are mating (at least, the minimum between the two).
+        When breaking ties, the youngest ones are usually preferred.
+        Mating is performed mainly to re-calculate their resistance factors, but otherwise I believe we can get away
+        with a simple sigmoid. For a more advanced approach see: https://doi.org/10.1002/ecs2.2040
                         #Mating events---------------------------------------------------------------------
                 #who is mating
                 females = df_list[fc].loc[(df_list[fc].stage==5) & (df_list[fc].avail==0)].index
@@ -426,23 +430,22 @@ class Cage:
         # for now only consider a sensible number of lice that can mate
         return min([10, self.lice_population["L5f"], self.lice_population["L5m"]])
 
-    def get_num_eggs(self, mated_females, cur_month):
+    def get_num_eggs(self, cur_month):
         """
         Get the number of new eggs
-        :param mated_females the number of mated and fecundated females
         :param cur_month the current month (to compute the temperature)
         :returns the number of eggs produced
         """
 
         # See Aldrin et al. 2017, §2.2.6
-        # TODO: in Aldrin matings are not taken into account.
+        # TODO: in Aldrin matings are not taken into account. This may change
+        female_population = self.lice_population['L5f']
         age_distrib = self.get_stage_ages_distrib("L5f")
-        # density_rate = self.lice_population['L5f'] * age_distrib / self.num_fish
-        density_rate = mated_females / self.num_fish
+        density_rate = female_population * age_distrib / self.num_fish
+        # density_rate = mated_females / self.num_fish
         age_range = np.arange(1, len(age_distrib) + 1)
 
-        # density_factor = np.ones_like(density_rate) - np.exp(-self.cfg.reproduction_density_dependence * density_rate)
-        density_factor = density_rate
+        density_factor = np.ones_like(density_rate) - np.exp(-self.cfg.reproduction_density_dependence * density_rate)
         ave_temp = self.farm.year_temperatures[cur_month - 1]
         temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
 
@@ -450,7 +453,7 @@ class Cage:
                              age_range ** self.cfg.reproduction_age_dependence * \
                              density_factor / (temperature_factor + 1)
 
-        return np.sum(reproduction_rates) * mated_females
+        return np.sum(reproduction_rates) * female_population
 
     def create_offspring(self):
         """

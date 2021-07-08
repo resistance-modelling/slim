@@ -230,3 +230,6 @@ class TestCage:
     def test_get_stage_ages_distrib_edge_cases(self, first_cage):
         age_distrib = first_cage.get_stage_ages_distrib("L_dummy", 5, 5)
         assert all(age_distrib > 0)
+
+    #def test_get_num_eggs_no_females(self, first_cage):
+
