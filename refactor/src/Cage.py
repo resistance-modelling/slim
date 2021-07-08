@@ -430,7 +430,7 @@ class Cage:
         # for now only consider a sensible number of lice that can mate
         return min([10, self.lice_population["L5f"], self.lice_population["L5m"]])
 
-    def get_num_eggs(self, cur_month):
+    def get_num_eggs(self, cur_month) -> int:
         """
         Get the number of new eggs
         :param cur_month the current month (to compute the temperature)
@@ -453,7 +453,7 @@ class Cage:
                              age_range ** self.cfg.reproduction_age_dependence * \
                              density_factor / (temperature_factor + 1)
 
-        return np.sum(reproduction_rates) * female_population
+        return int(np.round(np.sum(reproduction_rates) * female_population))
 
     def create_offspring(self):
         """
