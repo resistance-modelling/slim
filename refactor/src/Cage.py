@@ -99,9 +99,13 @@ class Cage(CageTemplate):
         num_infection_events = self.do_infection_events(days_since_start)
 
         # TODO: Mating events
-        self.do_mating_events()
+        matings = self.do_mating_events()
 
-        # TODO: create offspring
+        eggs = self.get_num_eggs(matings, cur_date.month)
+
+        # TODO: should we keep eggs in a queue until they hatch? Or should we keep a typical age distribution for them?
+
+        # TODO: create offspring.
         self.create_offspring()
 
         # TODO
@@ -362,7 +366,7 @@ class Cage(CageTemplate):
         inf_events = np.random.poisson(Einf * num_avail_lice)
         return min(inf_events, num_avail_lice)
 
-    def get_infected_fish(self):
+    def get_infected_fish(self) -> int:
         # the number of infections is equal to the population size from stage 3 onward
         infective_stages = ["L3", "L4", "L5m", "L5f"]
         attached_lice = sum(self.lice_population[stage] for stage in infective_stages)
@@ -371,7 +375,7 @@ class Cage(CageTemplate):
         num_infected_fish = int(self.num_fish * (1 - ((self.num_fish - 1) / self.num_fish) ** attached_lice))
         return num_infected_fish
 
-    def do_mating_events(self):
+    def do_mating_events(self) -> int:
         """
         TODO
         """
@@ -400,13 +404,37 @@ class Cage(CageTemplate):
                 df_list[fc].loc[df_list[fc].index.isin(dams),'mate_resistanceT1'] = \
                 df_list[fc].loc[df_list[fc].index.isin(sires),'resistanceT1'].values
         """
-        pass
+
+        # for now only consider a sensible number of lice that can mate
+        return min([10, self.lice_population["L5f"], self.lice_population["L5m"]])
+
+    def get_num_eggs(self, mated_females, cur_month):
+        """
+        Get the number of new eggs
+        :param mated_females the number of mated and fecundated females
+        :param cur_month the current month (to compute the temperature)
+        :returns the number of eggs produced
+        """
+
+        # See Aldrin et al. 2017, §2.2.6
+        # TODO: in Aldrin matings are not taken into account.
+        age_distrib = self.get_stage_ages_distrib("L5f")
+        # density_rate = self.lice_population['L5f'] * age_distrib / self.num_fish
+        density_rate = mated_females / self.num_fish
+        age_range = np.arange(1, len(age_distrib) + 1)
+
+        # density_factor = np.ones_like(density_rate) - np.exp(-self.cfg.reproduction_density_dependence * density_rate)
+        density_factor = density_rate
+        ave_temp = self.farm.year_temperatures[cur_month - 1]
+        temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
+
+        reproduction_rates = self.cfg.reproduction_eggs_first_extruded * \
+                             age_range ** self.cfg.reproduction_age_dependence * \
+                             density_factor / (temperature_factor + 1)
+
+        return np.sum(reproduction_rates) * mated_females
 
     def create_offspring(self):
-        """
-        TODO
-        """
-
         """
         TODO - convert this ().
                 #create offspring

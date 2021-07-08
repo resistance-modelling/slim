@@ -84,14 +84,18 @@ class RuntimeConfig:
         # for k, v in data.items():
         #    setattr(self, k, v["value"])
 
+        # Evolution constants
         self.stage_age_evolutions = data["stage_age_evolutions"]["value"]
         self.delta_p = data["delta_p"]["value"]
         self.delta_s = data["delta_s"]["value"]
         self.delta_m10 = data["delta_m10"]["value"]
+
+        # Infection constants
         self.infection_main_delta = data["infection_main_delta"]["value"]
         self.infection_weight_delta = data["infection_weight_delta"]["value"]
         self.delta_expectation_weight_log = data["delta_expectation_weight_log"]["value"]
 
+        # Treatment constants
         self.f_meanEMB = data["f_meanEMB"]["value"]
         self.f_sigEMB = data["f_sigEMB"]["value"]
         self.env_meanEMB = data["env_meanEMB"]["value"]
@@ -99,11 +103,21 @@ class RuntimeConfig:
         self.EMBmort = data["EMBmort"]["value"]
         self.delay_EMB = data["delay_EMB"]["value"]
         self.delta_EMB = data["delta_EMB"]["value"]
+
+        # Fish mortality constants
         self.fish_mortality_center = data["fish_mortality_center"]["value"]
         self.fish_mortality_k = data["fish_mortality_k"]["value"]
-        self.background_lice_mortality_rates = data["background_lice_mortality_rates"]["value"]
-        self.farm_data = data["farm_data"]["value"]
 
+        # Background lice mortality constants
+        self.background_lice_mortality_rates = data["background_lice_mortality_rates"]["value"]
+
+        # Reproduction and recruitment constants
+        self.reproduction_eggs_first_extruded = data["reproduction_eggs_first_extruded"]["value"]
+        self.reproduction_age_dependence = data["reproduction_age_dependence"]["value"]
+        self.reproduction_density_dependence = data["reproduction_density_dependence"]["value"]
+
+        # Farm data
+        self.farm_data = data["farm_data"]["value"]
 
         # load in the seed if provided
         # otherwise don't use a seed
