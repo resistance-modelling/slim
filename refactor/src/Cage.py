@@ -191,15 +191,17 @@ class Cage:
             assert num_dead_lice == sum(list(dead_lice_dist.values()))
         return dead_lice_dist
 
-    def get_stage_ages_distrib(self, stage: str, size=15):
+    def get_stage_ages_distrib(self, stage: str, size=15, stage_age_max_days = None):
         """
-        Create an age distribution (in days) for the sea lice within a lyfecycle stage.
+        Create an age distribution (in days) for the sea lice within a lifecycle stage.
         In absence of further data or constraints, we simply assume it's a uniform distribution
         """
 
-        stage_age_max_days = self.cfg.stage_age_evolutions[stage]
-        p = np.ones((size,))
-        p[size - stage_age_max_days:] = 0
+        # NOTE: no data is available for L5 stages. We assume for simplicity they die after 30-ish days
+        if stage_age_max_days is None:
+            stage_age_max_days = min(self.cfg.stage_age_evolutions[stage], size + 1)
+        p = np.zeros((size,))
+        p[:stage_age_max_days] = 1
         return p / np.sum(p)
 
     @staticmethod

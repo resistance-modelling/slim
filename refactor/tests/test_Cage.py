@@ -150,14 +150,14 @@ class TestCage:
         assert avail_lice > 0
 
         assert np.isclose(rate, 0.16665658047288034)
-        assert avail_lice == 80
+        assert avail_lice == 90
 
     def test_do_infection_events(self, first_cage):
         first_cage.lice_population["L2"] = 100
         num_infected_fish = first_cage.do_infection_events(1)
 
         assert num_infected_fish > 0
-        assert num_infected_fish == 14
+        assert num_infected_fish == 15
 
     def test_get_infected_fish_noinfection(self, first_cage):
         # TODO: maybe make a fixture of this?
@@ -219,3 +219,14 @@ class TestCage:
         for i in range(2, 7):
             assert csv_list[i] == str(i - 1)
         assert csv_list[8] == "21"
+
+    def test_get_stage_ages_distrib(self, first_cage):
+        size = 5
+        max_days = 4
+        age_distrib = first_cage.get_stage_ages_distrib("L_dummy", size, max_days)
+        assert age_distrib[-1] == 0.0
+        assert all(age_distrib[:-1] > 0)
+
+    def test_get_stage_ages_distrib_edge_cases(self, first_cage):
+        age_distrib = first_cage.get_stage_ages_distrib("L_dummy", 5, 5)
+        assert all(age_distrib > 0)
