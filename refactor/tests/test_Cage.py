@@ -252,9 +252,6 @@ class TestCage:
         for geno in egg_result_het:
             assert egg_result_het[geno] == het_target[geno]
         
-    
-    def test_generate_matings_discrete(self):
-        pass
 
     def test_update_step(self, first_cage):
         cur_day = first_cage.date + datetime.timedelta(days=1)
