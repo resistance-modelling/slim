@@ -89,6 +89,7 @@ class Cage:
             if isinstance(filtered_vars[k], dt.datetime):
                 filtered_vars[k] = filtered_vars[k].strftime("%Y-%m-%d %H:%M:%S")
         
+        # May want to improve these or change them if we change the representation for genotype distribs         
         filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
         filtered_vars["available_dams"] = {str(key): val for key, val in filtered_vars["available_dams"].items()}
         filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in filtered_vars["geno_by_lifestage"].items()}
