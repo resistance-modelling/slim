@@ -12,7 +12,7 @@ def to_dt(string_date):
     :return: Date as Datetime
     :rtype: [type]
     """
-    dt_format = '%Y-%m-%d %H:%M:%S'
+    dt_format = "%Y-%m-%d %H:%M:%S"
     return dt.datetime.strptime(string_date, dt_format)
 
 

@@ -19,12 +19,12 @@ class TestCage:
         assert first_cage.num_infected_fish == 0
         # this will likely break
         assert first_cage.lice_population == {
-            'L1': 150,
-            'L2': 0,
-            'L3': 30,
-            'L4': 30,
-            'L5f': 10,
-            'L5m': 0
+            "L1": 150,
+            "L2": 0,
+            "L3": 30,
+            "L4": 30,
+            "L5f": 10,
+            "L5m": 0
         }
 
     def test_cage_json(self, first_cage):

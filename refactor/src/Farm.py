@@ -41,8 +41,8 @@ class Farm:
         Get a human readable string representation of the farm.
         :return: a description of the cage
         """
-        cages = ', '.join(str(a) for a in self.cages)
-        return f'id: {self.name}, Cages: {cages}'
+        cages = ", ".join(str(a) for a in self.cages)
+        return f"id: {self.name}, Cages: {cages}"
 
     def __repr__(self):
         return json.dumps(self, cls=CustomFarmEncoder, indent=4)

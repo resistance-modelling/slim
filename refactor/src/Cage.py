@@ -11,7 +11,7 @@ class Cage:
     Fish cages contain the fish.
     """
 
-    lice_stages = ['L1', 'L2', 'L3', 'L4', 'L5f', 'L5m']
+    lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
     susceptible_stages = lice_stages[2:]
 
     def __init__(self, cage_id, cfg, farm):
@@ -35,7 +35,7 @@ class Cage:
         self.farm = farm
 
         # TODO: update with calculations
-        self.lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 0}
+        self.lice_population = {"L1": cfg.ext_pressure, "L2": 0, "L3": 30, "L4": 30, "L5f": 10, "L5m": 0}
 
         # The original code was a IBM, here we act on populations so the age in each stage must
         # be a distribution.
@@ -135,7 +135,7 @@ class Cage:
 
         # TODO: take temperatures into account? See #22
         if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
-            self.logger.debug('    treating farm {}/cage {} on date {}'.format(self.farm_id,
+            self.logger.debug("    treating farm {}/cage {} on date {}".format(self.farm_id,
                                                                                self.id, cur_date))
 
             # number of lice in those stages that are susceptible to Emamectin Benzoate (i.e.
@@ -185,7 +185,7 @@ class Cage:
                 if num_dead > 0:
                     dead_lice_dist[stage] = num_dead
 
-            self.logger.debug('      distribution of dead lice on farm {}/cage {} = {}'
+            self.logger.debug("      distribution of dead lice on farm {}/cage {} = {}"
                               .format(self.farm_id, self.id, dead_lice_dist))
 
             assert num_dead_lice == sum(list(dead_lice_dist.values()))
@@ -232,7 +232,7 @@ class Cage:
         Move lice between lifecycle stages.
         See Section 2.1 of Aldrin et al. (2017)
         """
-        self.logger.debug('    updating lice lifecycle stages')
+        self.logger.debug("    updating lice lifecycle stages")
 
         def dev_times(del_p, del_m10, del_s, temp_c, ages):
             """
@@ -250,7 +250,7 @@ class Cage:
 
             unbounded = math.log(2) * del_s * ages ** (del_s - 1) * del_m ** (-del_s)
             unbounded = np.clip(unbounded, epsilon, 1)
-            return unbounded.astype('float64')
+            return unbounded.astype("float64")
 
         lice_dist = {}
         ave_temp = self.farm.year_temperatures[cur_month - 1]
@@ -258,7 +258,7 @@ class Cage:
         # L4 -> L5
         # TODO these blocks look like the same?
 
-        num_lice = self.lice_population['L4']
+        num_lice = self.lice_population["L4"]
         stage_ages = self.get_evolution_ages(num_lice, minimum_age=10, mean=15)
 
         l4_to_l5 = dev_times(self.cfg.delta_p["L4"], self.cfg.delta_m10["L4"], self.cfg.delta_s["L4"],
@@ -267,33 +267,33 @@ class Cage:
         new_females = np.random.choice([math.floor(num_to_move / 2.0), math.ceil(num_to_move / 2.0)])
         new_males = (num_to_move - new_females)
 
-        lice_dist['L5f'] = new_females
-        lice_dist['L5m'] = (num_to_move - new_females)
+        lice_dist["L5f"] = new_females
+        lice_dist["L5m"] = (num_to_move - new_females)
 
         # L3 -> L4
-        num_lice = self.lice_population['L3']
+        num_lice = self.lice_population["L3"]
         stage_ages = self.get_evolution_ages(num_lice, minimum_age=15, mean=18)
         l3_to_l4 = dev_times(self.cfg.delta_p["L3"], self.cfg.delta_m10["L3"], self.cfg.delta_s["L3"],
                              ave_temp, stage_ages)
         num_to_move = min(np.random.poisson(np.sum(l3_to_l4)), num_lice)
         new_L4 = num_to_move
 
-        lice_dist['L4'] = num_to_move
+        lice_dist["L4"] = num_to_move
 
         # L2 -> L3
         # This is done in do_infection_events()
 
         # L1 -> L2
-        num_lice = self.lice_population['L2']
+        num_lice = self.lice_population["L2"]
         stage_ages = self.get_evolution_ages(num_lice, minimum_age=3, mean=4)
         l1_to_l2 = dev_times(self.cfg.delta_p["L1"], self.cfg.delta_m10["L1"], self.cfg.delta_s["L1"],
                              ave_temp, stage_ages)
         num_to_move = min(np.random.poisson(np.sum(l1_to_l2)), num_lice)
         new_L2 = num_to_move
 
-        lice_dist['L2'] = num_to_move
+        lice_dist["L2"] = num_to_move
 
-        self.logger.debug('      distribution of new lice lifecycle stages on farm {}/cage {} = {}'
+        self.logger.debug("      distribution of new lice lifecycle stages on farm {}/cage {} = {}"
                           .format(self.farm_id, self.id, lice_dist))
 
         return new_L2, new_L4, new_females, new_males
@@ -303,7 +303,7 @@ class Cage:
         Get the new number of fish after a step size.
         """
 
-        self.logger.debug('    updating fish population')
+        self.logger.debug("    updating fish population")
 
         def fb_mort(days):
             """
@@ -334,7 +334,7 @@ class Cage:
         fish_deaths_natural = np.random.poisson(ebf_death)
         fish_deaths_from_lice = np.random.poisson(elf_death)
 
-        self.logger.debug('      number of background fish death {}, from lice {}'
+        self.logger.debug("      number of background fish death {}, from lice {}"
                           .format(fish_deaths_natural, fish_deaths_from_lice))
 
         return fish_deaths_natural, fish_deaths_from_lice
@@ -352,8 +352,8 @@ class Cage:
         """
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease).
-        age_distrib = self.get_stage_ages_distrib('L2')
-        num_avail_lice = round(self.lice_population['L2'] * np.sum(age_distrib[1:]))
+        age_distrib = self.get_stage_ages_distrib("L2")
+        num_avail_lice = round(self.lice_population["L2"] * np.sum(age_distrib[1:]))
         if num_avail_lice > 0:
             num_fish_in_farm = sum([c.num_fish for c in self.farm.cages])
 
@@ -499,20 +499,20 @@ class Cage:
             treatment_delta = self.lice_population[stage] - num_dead
             self.lice_population[stage] = max(0, treatment_delta)
 
-        self.lice_population['L5m'] += new_males
-        self.lice_population['L5f'] += new_females
+        self.lice_population["L5m"] += new_males
+        self.lice_population["L5f"] += new_females
 
-        update_L4 = self.lice_population['L4'] - (new_males + new_females) + new_L4
-        self.lice_population['L4'] = max(0, update_L4)
+        update_L4 = self.lice_population["L4"] - (new_males + new_females) + new_L4
+        self.lice_population["L4"] = max(0, update_L4)
 
-        update_L3 = self.lice_population['L3'] - new_L4 + new_infections
-        self.lice_population['L3'] = max(0, update_L3)
+        update_L3 = self.lice_population["L3"] - new_L4 + new_infections
+        self.lice_population["L3"] = max(0, update_L3)
 
-        update_L2 = self.lice_population['L2'] + new_L2 - new_infections + lice_from_reservoir["L2"]
-        self.lice_population['L2'] = max(0, update_L2)
+        update_L2 = self.lice_population["L2"] + new_L2 - new_infections + lice_from_reservoir["L2"]
+        self.lice_population["L2"] = max(0, update_L2)
 
-        update_L1 = self.lice_population['L1'] - new_L2 + lice_from_reservoir["L1"]
-        self.lice_population['L1'] = max(0, update_L1)
+        update_L1 = self.lice_population["L1"] - new_L2 + lice_from_reservoir["L1"]
+        self.lice_population["L1"] = max(0, update_L1)
 
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice
@@ -536,7 +536,7 @@ class Cage:
             mortality = min(np.random.poisson(mortality_rate), lice_population[stage])
             dead_lice_dist[stage] = mortality
 
-        self.logger.debug('    background mortality distribn of dead lice = {}'.format(dead_lice_dist))
+        self.logger.debug("    background mortality distribn of dead lice = {}".format(dead_lice_dist))
         return dead_lice_dist
 
     def fish_growth_rate(self, days):
@@ -568,5 +568,5 @@ class Cage:
         
         num_L1 = self.cfg.rng.integers(low=0, high=pressure, size=1)[0]
         new_lice_dist = {"L1": num_L1, "L2": pressure - num_L1}
-        self.logger.debug('    distribn of new lice from reservoir = {}'.format(new_lice_dist))
+        self.logger.debug("    distribn of new lice from reservoir = {}".format(new_lice_dist))
         return new_lice_dist
