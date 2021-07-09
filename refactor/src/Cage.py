@@ -431,19 +431,38 @@ class Cage:
 
     def do_mating_events(self):
         """
-        TODO
-        """
-
-        """
-
+         will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs 
+         assume males don't become unavailable? in this case we don't need a delta for sires
+         TODO: deal properly with fewer individuals than matings required
+         TODO: right now discrete mode is hard-coded, once we have quantitative egg generation implemented, need to add a switch
         """
         
         
         distrib_sire_available = self.geno_by_lifestage['L5m']
         distrib_dam_available = self.available_dams 
         
-        delta_avail_dams, delta_eggs = self.generate_matings_discrete()
-        return delta_avail_dams, delta_eggs
+        delta_eggs = {}
+        num_matings = self.get_num_mating_events()
+        
+        distrib_sire_available = self.geno_by_lifestage['L5m']
+        distrib_dam_available = self.available_dams
+        
+        delta_dams = self.select_dams(distrib_dam_available, num_matings)
+        
+        if sum(distrib_sire_available.values()) == 0 or sum(distrib_dam_available.values()) == 0:
+          return {}, {}
+      
+  #       TODO - need to add dealing with fewer males/females than the number of matings
+        
+        for dam_geno in delta_dams:
+          for _ in range(int(delta_dams[dam_geno])):
+            sire_geno = self.choose_from_distrib(distrib_sire_available)
+            
+            new_eggs = self.generate_eggs(sire_geno, dam_geno, 'discrete')
+            
+            self.update_distrib_discrete_add(new_eggs, delta_eggs)
+      
+        return delta_dams, delta_eggs
 
         
     # if we're in the discrete 2-gene setting, assume for now that genotypes are tuples - so in a A/a genetic system, genotypes
@@ -527,39 +546,7 @@ class Cage:
             delta_dams_selected[this_dam] += 1
             
         return delta_dams_selected
-            
-        
-        
-    
-    # Assuming that these distribs are counts, and that they 
-    # contain only individuals available for mating
-    # will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs 
-    # assume males don't become unavailable? in this case we don't need a delta for sires
-    def generate_matings_discrete(self):
-      delta_eggs = {}
-      num_matings = self.get_num_mating_events()
-      
-      distrib_sire_available = self.geno_by_lifestage['L5m']
-      distrib_dam_available = self.available_dams
-      
-      delta_dams = self.select_dams(distrib_dam_available, num_matings)
-      
-      if sum(distrib_sire_available.values()) == 0 or sum(distrib_dam_available.values()) == 0:
-        return {}, {}
-    
-#       TODO - need to add dealing with fewer males/females than the number of matings
-      
-      for dam_geno in delta_dams:
-        for _ in range(int(delta_dams[dam_geno])):
-          sire_geno = self.choose_from_distrib(distrib_sire_available)
-      
-          new_eggs = self.generate_eggs(sire_geno, dam_geno, 'discrete')
-          
-          self.update_distrib_discrete_add(new_eggs, delta_eggs)
-    
-      return delta_dams, delta_eggs
-    
-    
+                
     
     def choose_from_distrib(self, distrib):
       max_val = sum(distrib.values())
