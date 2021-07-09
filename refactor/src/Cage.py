@@ -478,22 +478,16 @@ class Cage:
 
         assert female_population >= mated_females
         age_distrib = self.get_stage_ages_distrib("L5f")
-        # Deprecated in favour of a more deterministic number of matings
-        # which, for highly aggregated cages, approximates a poisson thus yielding a similar formula to below
-        # See Cox et al. (2017), § Methods ("Data Analysis")
-        # density_rate_t = female_population * age_distrib / self.num_fish
-        # density_rate = mated_females * age_distrib/ self.num_fish
         age_range = np.arange(1, len(age_distrib) + 1)
 
-        # density_factor_t = np.ones_like(density_rate_t) - np.exp(-self.cfg.reproduction_density_dependence * density_rate_t)
-        density_factor = mated_females * age_distrib #/ self.num_infected_fish
+        mated_females_distrib = mated_females * age_distrib
         ave_temp = self.farm.year_temperatures[cur_month - 1]
         temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
 
         reproduction_rates = self.cfg.reproduction_eggs_first_extruded * \
                              (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1)
 
-        return np.random.poisson(np.round(np.sum(reproduction_rates * density_factor)))
+        return np.random.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
 
     def create_offspring(self):
         """
