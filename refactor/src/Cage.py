@@ -442,7 +442,7 @@ class Cage:
         distrib_sire_available = self.geno_by_lifestage['L5m']
         distrib_dam_available = self.available_dams 
         
-        delta_avail_dams, delta_eggs = self.generate_matings_discrete(distrib_sire_available, distrib_dam_available)
+        delta_avail_dams, delta_eggs = self.generate_matings_discrete()
         return delta_avail_dams, delta_eggs
 
         
@@ -535,10 +535,12 @@ class Cage:
     # contain only individuals available for mating
     # will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs 
     # assume males don't become unavailable? in this case we don't need a delta for sires
-    # right now only does one mating - need to deal with dams becoming unavailable if mating events is similar to number of dams
-    def generate_matings_discrete(self, distrib_sire_available, distrib_dam_available):
+    def generate_matings_discrete(self):
       delta_eggs = {}
       num_matings = self.get_num_mating_events()
+      
+      distrib_sire_available = self.geno_by_lifestage['L5m']
+      distrib_dam_available = self.available_dams
       
       delta_dams = self.select_dams(distrib_dam_available, num_matings)
       
