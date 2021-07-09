@@ -257,7 +257,7 @@ class TestCage:
 
         cur_day = first_cage.date + datetime.timedelta(days=1)
         matings = first_cage.get_num_matings()
-        assert 4800 <= first_cage.get_num_eggs(matings, cur_day.month) <= 5000
+        assert 270 <= first_cage.get_num_eggs(matings, cur_day.month) <= 290
 
         cur_day = first_cage.date + datetime.timedelta(days=90)
-        assert 4400 <= first_cage.get_num_eggs(matings, cur_day.month) <= 4600
+        assert 250 <= first_cage.get_num_eggs(matings, cur_day.month) <= 270

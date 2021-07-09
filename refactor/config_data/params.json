@@ -100,7 +100,7 @@
   },
   "reproduction_eggs_first_extruded": {
     "description": "Initial number of viable eggs after the first extrusion (from Aldrin et al., 2017)",
-    "value": 493
+    "value": 172.5
   },
   "reproduction_age_dependence": {
     "description": "Exponential coefficient on viable eggs depending on age",
