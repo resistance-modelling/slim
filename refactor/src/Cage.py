@@ -30,12 +30,14 @@ class Cage:
         self.farm_id = farm.name
         self.start_date = cfg.farms[self.farm_id].cages_start[cage_id]
         self.date = cfg.start_date
+
+        self.lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 0}
         self.num_fish = cfg.farms[self.farm_id].num_fish
-        self.num_infected_fish = 0
+        self.num_infected_fish = self.get_mean_infected_fish()
         self.farm = farm
 
         # TODO: update with calculations
-        self.lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 0}
+
 
         # The original code was a IBM, here we act on populations so the age in each stage must
         # be a distribution.
@@ -103,10 +105,11 @@ class Cage:
         # Infection events
         num_infection_events = self.do_infection_events(days_since_start)
 
-        # TODO: Mating events
+        # TODO: Mating events - merge with Jess's PR
         #matings = self.do_mating_events()
+        num_matings = self.get_num_matings()
 
-        eggs = self.get_num_eggs(cur_date.month)
+        num_eggs = self.get_num_eggs(num_matings, cur_date.month)
 
         # TODO: should we keep eggs in a queue until they hatch? Or should we keep a typical age distribution for them?
 
@@ -384,18 +387,51 @@ class Cage:
         inf_events = np.random.poisson(Einf * num_avail_lice)
         return min(inf_events, num_avail_lice)
 
-    def get_infected_fish(self) -> int:
-        # the number of infections is equal to the population size from stage 3 onward
+    def get_infecting_population(self) -> int:
         infective_stages = ["L3", "L4", "L5m", "L5f"]
-        attached_lice = sum(self.lice_population[stage] for stage in infective_stages)
+        return sum(self.lice_population[stage] for stage in infective_stages)
+
+    def get_mean_infected_fish(self) -> int:
+        # the number of infections is equal to the population size from stage 3 onward
+        attached_lice = self.get_infecting_population()
 
         # see: https://stats.stackexchange.com/a/296053
         num_infected_fish = int(self.num_fish * (1 - ((self.num_fish - 1) / self.num_fish) ** attached_lice))
         return num_infected_fish
 
-    def do_mating_events(self) -> int:
+    def get_variance_infected_fish(self) -> float:
+        # same line of reasoning as above, but compute the variance
+        # remember that Var(sum of i.i.d. variables) = sum(Var of each variable), and do some simplifications...
+        attached_lice = self.get_infecting_population()
+        n = self.num_fish
+        n_prime = ((n-1)/n)**attached_lice
+        return n * (1 - n_prime)*n_prime
+
+    def get_num_matings(self) -> int:
         """
-        TODO: do we still need this?
+        Get the number of matings. Implement Cox's approach assuming an unbiased sex distribution
+        """
+
+        # Background: AF and AM are randomly assigned to fish according to a negative multinomial distribution.
+        # What we want is determining what is the expected likelihood there is _at least_ one AF and _at
+        # least_ one AM on the same fish.
+
+        males = self.lice_population["L5m"]
+        females = self.lice_population["L5f"]
+
+        if males == 0 or females == 0:
+            return 0
+
+        # VMR: variance-mean ratio; VMR = m/k + 1 -> k = m / (VMR - 1) with k being an "aggregation factor"
+        vmr = self.get_variance_infected_fish()/self.get_mean_infected_fish()
+        aggregation_factor = males / (vmr - 1)
+
+        prob_matching = 1 - (1 + males/((males + females)*aggregation_factor)) ** (-1-aggregation_factor)
+        return np.random.poisson(prob_matching * females)
+
+    def do_mating_events(self):
+        """
+        TODO
         """
 
         """
@@ -429,30 +465,29 @@ class Cage:
 
         pass
 
-    def get_num_eggs(self, cur_month) -> int:
+    def get_num_eggs(self, mated_females, cur_month) -> int:
         """
         Get the number of new eggs
+        :param mated_females the number of mated females that reproduce
         :param cur_month the current month (to compute the temperature)
         :returns the number of eggs produced
         """
 
         # See Aldrin et al. 2017, §2.2.6
-        # TODO: in Aldrin matings are not taken into account. This may change
         female_population = self.lice_population["L5f"]
+
+        assert female_population >= mated_females
         age_distrib = self.get_stage_ages_distrib("L5f")
-        density_rate = female_population * age_distrib / self.num_fish
-        # density_rate = mated_females / self.num_fish
         age_range = np.arange(1, len(age_distrib) + 1)
 
-        density_factor = np.ones_like(density_rate) - np.exp(-self.cfg.reproduction_density_dependence * density_rate)
+        mated_females_distrib = mated_females * age_distrib
         ave_temp = self.farm.year_temperatures[cur_month - 1]
         temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
 
         reproduction_rates = self.cfg.reproduction_eggs_first_extruded * \
-                             age_range ** self.cfg.reproduction_age_dependence * \
-                             density_factor / (temperature_factor + 1)
+                             (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1)
 
-        return int(np.round(np.sum(reproduction_rates) * female_population))
+        return np.random.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
 
     def create_offspring(self):
         """
@@ -548,7 +583,7 @@ class Cage:
         self.num_fish -= fish_deaths_from_lice
 
         # treatment may kill some lice attached to the fish, thus update at the very end
-        self.num_infected_fish = self.get_infected_fish()
+        self.num_infected_fish = self.get_mean_infected_fish()
 
         return self.lice_population
 

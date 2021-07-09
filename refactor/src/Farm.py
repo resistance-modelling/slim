@@ -68,7 +68,7 @@ class Farm:
 
         degs = (tarbert_temps - ardrishaig_temps) / abs(tarbert_northing - ardrishaig_northing)
 
-        Ndiff = self.loc_x - tarbert_northing
+        Ndiff = self.loc_y - tarbert_northing
         return np.round(tarbert_temps - Ndiff * degs, 1)
 
 

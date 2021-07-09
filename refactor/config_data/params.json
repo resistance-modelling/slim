@@ -10,7 +10,7 @@
       "L2": 10,
       "L3": 25,
       "L4": 11,
-      "L5f": 30
+      "L5f": 80
     }
   },
   "delta_p": {
@@ -100,7 +100,7 @@
   },
   "reproduction_eggs_first_extruded": {
     "description": "Initial number of viable eggs after the first extrusion (from Aldrin et al., 2017)",
-    "value": 493
+    "value": 172.5
   },
   "reproduction_age_dependence": {
     "description": "Exponential coefficient on viable eggs depending on age",

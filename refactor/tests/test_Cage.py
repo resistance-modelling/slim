@@ -16,7 +16,7 @@ class TestCage:
         assert first_cage.id == 0
         assert first_cage.start_date == to_dt("2017-10-01 00:00:00")
         assert first_cage.num_fish == 4000
-        assert first_cage.num_infected_fish == 0
+        assert first_cage.num_infected_fish == first_cage.get_mean_infected_fish()
         # this will likely break
         assert first_cage.lice_population == {
             'L1': 150,
@@ -118,7 +118,7 @@ class TestCage:
         new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(1)
 
         assert new_l2 == 0
-        assert new_l4 == 30 and first_cage.lice_population["L3"] > 0
+        assert new_l4 == 1 and first_cage.lice_population["L3"] > 0
         assert new_males == 2 and first_cage.lice_population["L4"] > 0
         assert new_females == 2
 
@@ -166,10 +166,23 @@ class TestCage:
         first_cage.lice_population["L5m"] = 0
         first_cage.lice_population["L5f"] = 0
 
-        assert first_cage.get_infected_fish() == 0
+        assert first_cage.get_mean_infected_fish() == 0
+        assert first_cage.get_variance_infected_fish() == 0
 
     def test_get_infected_fish(self, first_cage):
-        assert first_cage.get_infected_fish() == int(4000 * (1 - (3999/4000)**70))
+        assert first_cage.get_mean_infected_fish() == int(4000 * (1 - (3999 / 4000) ** 70))
+        assert 60 <= first_cage.get_variance_infected_fish() <= 70
+
+    def test_get_std_infected_fish(self, first_cage):
+        assert first_cage.get_variance_infected_fish() > 0
+
+    def test_get_num_matings_noinfection(self, first_cage):
+        # in the fixture there are no males
+        assert first_cage.get_num_matings() == 0
+
+    def test_get_num_matings(self, first_cage):
+        first_cage.lice_population["L5m"] = first_cage.lice_population["L5f"]
+        assert 1 <= first_cage.get_num_matings() <= 10
 
     def test_update_deltas_no_negative_raise(self, first_cage):
         first_cage.lice_population["L3"] = 0
@@ -234,11 +247,17 @@ class TestCage:
     def test_get_num_eggs_no_females(self, first_cage):
         first_cage.lice_population['L5f'] = 0
         cur_day = first_cage.date + datetime.timedelta(days=1)
-        assert first_cage.get_num_eggs(cur_day.month) == 0
+        assert first_cage.get_num_eggs(0, cur_day.month) == 0
+
+        with pytest.raises(AssertionError):
+            first_cage.get_num_eggs(10, cur_day.month)
 
     def test_get_num_eggs(self, first_cage):
+        first_cage.lice_population['L5m'] = first_cage.lice_population['L5f']
+
         cur_day = first_cage.date + datetime.timedelta(days=1)
-        assert first_cage.get_num_eggs(cur_day.month) == 1862
+        matings = first_cage.get_num_matings()
+        assert 270 <= first_cage.get_num_eggs(matings, cur_day.month) <= 290
 
         cur_day = first_cage.date + datetime.timedelta(days=90)
-        assert first_cage.get_num_eggs(cur_day.month) == 1775
+        assert 250 <= first_cage.get_num_eggs(matings, cur_day.month) <= 270
