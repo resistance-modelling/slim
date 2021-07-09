@@ -203,6 +203,25 @@ class TestCage:
 
         for population in first_cage.lice_population.values():
             assert population >= 0
+    
+    def test_do_mating_events(self, first_cage):
+        first_cage.geno_by_lifestage['L5m'] = {('A'): 5, ('a'): 5, ('A', 'a'): 5}
+        first_cage.available_dams  = {('A'): 10}
+        # 
+        target_eggs = {('A',): 3500.0, tuple(sorted(('a', 'A'))): 1500.0}
+        target_delta_dams = {'A': 10}
+        
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
+        for key in delta_eggs:
+             assert delta_eggs[key] == target_eggs[key]
+        for key in delta_avail_dams:
+             assert delta_avail_dams[key] == target_delta_dams[key]
+    
+    def test_generate_eggs(self):
+        pass
+    
+    def test_generate_matings_discrete(self):
+        pass
 
     def test_update_step(self, first_cage):
         cur_day = first_cage.date + datetime.timedelta(days=1)
