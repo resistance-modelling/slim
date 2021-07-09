@@ -427,8 +427,7 @@ class Cage:
                 df_list[fc].loc[df_list[fc].index.isin(sires),'resistanceT1'].values
         """
 
-        # for now only consider a sensible number of lice that can mate
-        return min([10, self.lice_population["L5f"], self.lice_population["L5m"]])
+        pass
 
     def get_num_eggs(self, cur_month) -> int:
         """
@@ -439,7 +438,7 @@ class Cage:
 
         # See Aldrin et al. 2017, §2.2.6
         # TODO: in Aldrin matings are not taken into account. This may change
-        female_population = self.lice_population['L5f']
+        female_population = self.lice_population["L5f"]
         age_distrib = self.get_stage_ages_distrib("L5f")
         density_rate = female_population * age_distrib / self.num_fish
         # density_rate = mated_females / self.num_fish

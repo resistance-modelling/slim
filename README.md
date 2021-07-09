@@ -53,7 +53,8 @@ Originally devised: sea lice grows on a given fish obtained by this formula: ```
 
 TODO: source.
 
-New approach: use a sigmoid function on the current adult female population. Even this is based on Aldrin et al. 2017.
+New approach: use a sigmoid function on the current adult female population.
+Based on [Aldrin et al. 2017](https://doi.org/10.1016/j.ecolmodel.2017.05.019).
 
 Advantages:
 
