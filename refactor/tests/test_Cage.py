@@ -230,3 +230,15 @@ class TestCage:
     def test_get_stage_ages_distrib_edge_cases(self, first_cage):
         age_distrib = first_cage.get_stage_ages_distrib("L_dummy", 5, 5)
         assert all(age_distrib > 0)
+
+    def test_get_num_eggs_no_females(self, first_cage):
+        first_cage.lice_population['L5f'] = 0
+        cur_day = first_cage.date + datetime.timedelta(days=1)
+        assert first_cage.get_num_eggs(cur_day.month) == 0
+
+    def test_get_num_eggs(self, first_cage):
+        cur_day = first_cage.date + datetime.timedelta(days=1)
+        assert first_cage.get_num_eggs(cur_day.month) == 1862
+
+        cur_day = first_cage.date + datetime.timedelta(days=90)
+        assert first_cage.get_num_eggs(cur_day.month) == 1775
