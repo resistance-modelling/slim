@@ -47,7 +47,7 @@ class Farm:
     def __repr__(self):
         return json.dumps(self, cls=CustomFarmEncoder, indent=4)
 
-    def __eq__(self, other): 
+    def __eq__(self, other):
         if not isinstance(other, Farm):
             # don't attempt to compare against unrelated types
             return NotImplemented
@@ -71,7 +71,6 @@ class Farm:
         Ndiff = self.loc_x - tarbert_northing
         return np.round(tarbert_temps - Ndiff * degs, 1)
 
-
     def update(self, cur_date, step_size):
         """
         Update the status of the farm given the growth of fish and change in population of
@@ -82,18 +81,64 @@ class Farm:
 
         # TODO: add new offspring to cages
 
-        # set probabilities for lice from reservoir to end up in each cage
-        # (equal chances each)
-        probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
-
         # get number of lice from reservoir to be put in each cage
-        pressures_per_cage = self.cfg.rng.multinomial(self.cfg.ext_pressure,
-                                                      probs_per_cage,
-                                                      size=1)[0]
+        pressures_per_cage = self.get_cage_pressures()
 
         # update cages
+        total_lice_offspring = 0
         for cage in self.cages:
-            cage.update(cur_date, step_size, pressures_per_cage[cage.id])
+            total_lice_offspring += cage.update(cur_date,
+                                                step_size,
+                                                pressures_per_cage[cage.id])
+
+        # disperse total offspring among the cages (cage-cage movement)
+        self.disperse_offspring(total_lice_offspring)
+
+        # log info
+        self.logger.debug("\tFinal populations".format(cage.id))
+        for cage in self.cages:
+            self.logger.debug("\t\tcage {}".format(cage.id))
+            self.logger.debug("\t\t\tfinal lice population = {}".format(cage.lice_population))
+            self.logger.debug("\t\t\tfinal fish population = {}".format(cage.num_fish))
+
+    def get_cage_pressures(self):
+        """Get external pressure divided into cages
+
+        :return: List of values of external pressure for each cage
+        :rtype: list
+        """
+        # assume equal chances for each cage
+        probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
+
+        return list(self.cfg.rng.multinomial(self.cfg.ext_pressure,
+                                        probs_per_cage,
+                                        size=1)[0])
+
+    def disperse_offspring(self, total_lice_offspring):
+        """Allocate new offspring between the cages.
+        
+        Assumes the lice can float freely across a given farm so that
+        they are not bound to a single cage while not attached to a fish.
+
+        :param total_lice_offspring: The number of L1 lice to disperse.
+        :type total_lice_offspring: int
+        """
+
+        self.logger.debug("\tDispersing total offspring = {}".format(total_lice_offspring))
+
+        # assume equal chances for each cage
+        probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
+
+        # get the distribution
+        offspring_per_cage = list(self.cfg.rng.multinomial(total_lice_offspring,
+                                                      probs_per_cage,
+                                                      size=1)[0])
+        
+        self.logger.debug("\t\tOffspring cage distribution = {}".format(offspring_per_cage))
+
+        # update the lice populations in the cages
+        for cage in self.cages:
+            cage.lice_population["L1"] += offspring_per_cage[cage.id]
 
     def to_csv(self):
         """

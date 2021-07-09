@@ -82,9 +82,9 @@ class Cage:
         :type pressure: int
         """
 
-        self.logger.debug(f"  Updating farm {self.farm_id} / cage {self.id}")
-        self.logger.debug(f"    initial lice population = {self.lice_population}")
-        self.logger.debug(f"    initial fish population = {self.num_fish}")
+        self.logger.debug(f"\tUpdating farm {self.farm_id} / cage {self.id}")
+        self.logger.debug(f"\t\tinitial lice population = {self.lice_population}")
+        self.logger.debug(f"\t\tinitial fish population = {self.num_fish}")
 
         days_since_start = (cur_date - self.date).days
 
@@ -107,7 +107,8 @@ class Cage:
         self.do_mating_events()
 
         # TODO: create offspring
-        self.create_offspring()
+        # TODO: at the moment, assume integer is returned
+        num_offpring = self.create_offspring()
 
         # lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure)
@@ -124,8 +125,10 @@ class Cage:
                            num_infection_events,
                            lice_from_reservoir)
 
-        self.logger.debug("    final lice population = {}".format(self.lice_population))
-        self.logger.debug("    final fish population = {}".format(self.num_fish))
+        self.logger.debug("\t\tupdated lice population (no offspring)= {}".format(self.lice_population))
+        self.logger.debug("\t\tcage lice offspring = {}".format(num_offpring))
+
+        return num_offpring
 
     def get_lice_treatment_mortality_rate(self, cur_date):
         """
@@ -135,7 +138,7 @@ class Cage:
 
         # TODO: take temperatures into account? See #22
         if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
-            self.logger.debug("    treating farm {}/cage {} on date {}".format(self.farm_id,
+            self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
                                                                                self.id, cur_date))
 
             # number of lice in those stages that are susceptible to Emamectin Benzoate (i.e.
@@ -185,7 +188,7 @@ class Cage:
                 if num_dead > 0:
                     dead_lice_dist[stage] = num_dead
 
-            self.logger.debug("      distribution of dead lice on farm {}/cage {} = {}"
+            self.logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
                               .format(self.farm_id, self.id, dead_lice_dist))
 
             assert num_dead_lice == sum(list(dead_lice_dist.values()))
@@ -232,7 +235,7 @@ class Cage:
         Move lice between lifecycle stages.
         See Section 2.1 of Aldrin et al. (2017)
         """
-        self.logger.debug("    updating lice lifecycle stages")
+        self.logger.debug("\t\tupdating lice lifecycle stages")
 
         def dev_times(del_p, del_m10, del_s, temp_c, ages):
             """
@@ -293,7 +296,7 @@ class Cage:
 
         lice_dist["L2"] = num_to_move
 
-        self.logger.debug("      distribution of new lice lifecycle stages on farm {}/cage {} = {}"
+        self.logger.debug("	\t\t\tdistribution of new lice lifecycle stages on farm {}/cage {} = {}"
                           .format(self.farm_id, self.id, lice_dist))
 
         return new_L2, new_L4, new_females, new_males
@@ -303,7 +306,7 @@ class Cage:
         Get the new number of fish after a step size.
         """
 
-        self.logger.debug("    updating fish population")
+        self.logger.debug("\t\tupdating fish population")
 
         def fb_mort(days):
             """
@@ -334,7 +337,7 @@ class Cage:
         fish_deaths_natural = np.random.poisson(ebf_death)
         fish_deaths_from_lice = np.random.poisson(elf_death)
 
-        self.logger.debug("      number of background fish death {}, from lice {}"
+        self.logger.debug("\t\t\tnumber of background fish death {}, from lice {}"
                           .format(fish_deaths_natural, fish_deaths_from_lice))
 
         return fish_deaths_natural, fish_deaths_from_lice
@@ -478,7 +481,9 @@ class Cage:
                         offspring = offspring.append(offs, ignore_index=True)
                         del offs
         """
-        pass
+        
+        # dummy
+        return 10
 
     def update_deltas(self, dead_lice_dist, treatment_mortality,
                       fish_deaths_natural, fish_deaths_from_lice,
@@ -536,7 +541,7 @@ class Cage:
             mortality = min(np.random.poisson(mortality_rate), lice_population[stage])
             dead_lice_dist[stage] = mortality
 
-        self.logger.debug("    background mortality distribn of dead lice = {}".format(dead_lice_dist))
+        self.logger.debug("\t\tbackground mortality distribution of dead lice = {}".format(dead_lice_dist))
         return dead_lice_dist
 
     def fish_growth_rate(self, days):
@@ -568,5 +573,5 @@ class Cage:
         
         num_L1 = self.cfg.rng.integers(low=0, high=pressure, size=1)[0]
         new_lice_dist = {"L1": num_L1, "L2": pressure - num_L1}
-        self.logger.debug("    distribn of new lice from reservoir = {}".format(new_lice_dist))
+        self.logger.debug("\t\tdistribution of new lice from reservoir = {}".format(new_lice_dist))
         return new_lice_dist
