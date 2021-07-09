@@ -412,13 +412,13 @@ class Cage:
         """
         return 10
     
-    def get_num_eggs_distrib(self):
+    def get_num_eggs(self):
         """
         TODO
         
         probably depends on water temperature, maybe other things?
         """
-        return {400:5, 500 : 10, 600:5}
+        return 500
 
     def get_infected_fish(self):
         # the number of infections is equal to the population size from stage 3 onward
@@ -441,9 +441,8 @@ class Cage:
         
         distrib_sire_available = self.geno_by_lifestage['L5m']
         distrib_dam_available = self.geno_by_lifestage['L5f']
-        distrib_eggs_per_mating = self.get_num_eggs_distrib()
         
-        delta_avail_dams, delta_eggs = self.generate_matings_discrete(distrib_sire_available, distrib_dam_available, distrib_eggs_per_mating, num_mating_events)
+        delta_avail_dams, delta_eggs = self.generate_matings_discrete(distrib_sire_available, distrib_dam_available, num_mating_events)
         return delta_avail_dams, delta_eggs
 
         
@@ -452,7 +451,9 @@ class Cage:
     #  right now number of offspring with each genotype are deterministic, and might be missing one (we should update to add jitter in future,
     # but this is a reasonable approx)
     # note another todo: doesn't do anything sensible re: integer/real numbers of offspring     
-    def generate_eggs(self, sire, dam, breeding_method, number_eggs):
+    def generate_eggs(self, sire, dam, breeding_method):
+      number_eggs = self.get_num_eggs()  
+        
       if breeding_method == 'discrete':
         eggs_generated = {}
         if len(sire) == 1 and len(dam) == 1:
@@ -534,7 +535,7 @@ class Cage:
     # will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs 
     # assume males don't become unavailable? in this case we don't need a delta for sires
     # right now only does one mating - need to deal with dams becoming unavailable if mating events is similar to number of dams
-    def generate_matings_discrete(self, distrib_sire_available, distrib_dam_available, distrib_eggs_per_mating, num_matings):
+    def generate_matings_discrete(self, distrib_sire_available, distrib_dam_available, num_matings):
       delta_eggs = {}
       delta_dams = self.select_dams(distrib_dam_available, num_matings)
       if sum(distrib_sire_available.values()) == 0 or sum(distrib_dam_available.values()) == 0:
@@ -547,7 +548,7 @@ class Cage:
           sire_geno = self.choose_from_distrib(distrib_sire_available)
           num_eggs = self.choose_from_distrib(distrib_eggs_per_mating)
       
-          new_eggs = self.generate_eggs(sire_geno, dam_geno, 'discrete', num_eggs)
+          new_eggs = self.generate_eggs(sire_geno, dam_geno, 'discrete')
           
           self.update_distrib_discrete_add(new_eggs, delta_eggs)
     
