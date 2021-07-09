@@ -207,7 +207,6 @@ class TestCage:
     def test_do_mating_events(self, first_cage):
         first_cage.geno_by_lifestage['L5m'] = {('A'): 5, ('a'): 5, ('A', 'a'): 5}
         first_cage.available_dams  = {('A'): 10}
-        # 
         target_eggs = {('A',): 3500.0, tuple(sorted(('a', 'A'))): 1500.0}
         target_delta_dams = {'A': 10}
         
@@ -217,8 +216,42 @@ class TestCage:
         for key in delta_avail_dams:
              assert delta_avail_dams[key] == target_delta_dams[key]
     
-    def test_generate_eggs(self):
-        pass
+    def test_generate_eggs_discrete(self, first_cage):
+        breeding_method = 'discrete'
+        
+        sire = ('A')
+        dam = ('A')
+        hom_dom_target = {('A'): 500}
+        egg_result_hom_dom = first_cage.generate_eggs(sire, dam, breeding_method)
+        
+        sire = ('a')
+        dam = ('a')
+        hom_rec_target = {('a',): 500}
+        egg_result_hom_rec = first_cage.generate_eggs(sire, dam, breeding_method)
+        for geno in egg_result_hom_rec:
+            assert egg_result_hom_rec[geno] == hom_rec_target[geno]
+        
+        sire = tuple(sorted(('a', 'A')))
+        dam = ('a')
+        het_target_sire = {('a',): 250, tuple(sorted(('a', 'A'))): 250}
+        egg_result_het_sire = first_cage.generate_eggs(sire, dam, breeding_method)
+        for geno in egg_result_het_sire:
+            assert egg_result_het_sire[geno] ==  het_target_sire [geno]
+        
+        dam = tuple(sorted(('a', 'A')))
+        sire = ('a')
+        het_target_dam = {('a',): 250, tuple(sorted(('a', 'A'))): 250}
+        egg_result_het_dam = first_cage.generate_eggs(sire, dam, breeding_method)
+        for geno in egg_result_het_dam:
+            assert egg_result_het_dam[geno] == het_target_dam[geno]
+        
+        dam = tuple(sorted(('a', 'A')))
+        sire = tuple(sorted(('a', 'A')))
+        het_target = {('A', 'a'): 250.0, ('A',): 125.0, ('a',): 125.0}
+        egg_result_het = first_cage.generate_eggs(sire, dam, breeding_method)
+        for geno in egg_result_het:
+            assert egg_result_het[geno] == het_target[geno]
+        
     
     def test_generate_matings_discrete(self):
         pass
