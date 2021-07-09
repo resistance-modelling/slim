@@ -48,7 +48,7 @@ class Cage:
         # for now I've hard-coded in one mechanism in this setup, and a particular genotype starting point. Should probably be from a config file?
         self.genetic_mechanism = 'discrete'
         
-        generic_discrete_props = {('A'):0.25, ('a'): 0.25, ('A', 'a'): 0.5}
+        generic_discrete_props = {('A'):0.25, ('a'): 0.25, tuple(sorted(('A', 'a'))): 0.5}
         
         self.geno_by_lifestage = {}
         for stage in self.lice_population:
@@ -437,12 +437,12 @@ class Cage:
         """
 
         """
-        num_mating_events = self.get_num_mating_events()
+        
         
         distrib_sire_available = self.geno_by_lifestage['L5m']
-        distrib_dam_available = self.geno_by_lifestage['L5f']
+        distrib_dam_available = self.available_dams 
         
-        delta_avail_dams, delta_eggs = self.generate_matings_discrete(distrib_sire_available, distrib_dam_available, num_mating_events)
+        delta_avail_dams, delta_eggs = self.generate_matings_discrete(distrib_sire_available, distrib_dam_available)
         return delta_avail_dams, delta_eggs
 
         
@@ -457,20 +457,21 @@ class Cage:
       if breeding_method == 'discrete':
         eggs_generated = {}
         if len(sire) == 1 and len(dam) == 1:
-          eggs_generated[tuple(set((sire[0], dam[0])))] = number_eggs
+          eggs_generated[tuple(sorted(tuple(set((sire[0], dam[0])))))] = number_eggs
         elif len(sire) == 2 and len(dam) == 1:
-          eggs_generated[tuple(set((sire[0], dam[0])))] = number_eggs/2
-          eggs_generated[tuple(set((sire[1], dam[0])))] = number_eggs/2
+          eggs_generated[tuple(sorted(tuple(set((sire[0], dam[0])))))] = number_eggs/2
+          eggs_generated[tuple(sorted(tuple(set((sire[1], dam[0])))))] = number_eggs/2
         elif len(sire) == 1 and len(dam) == 2:
-          eggs_generated[tuple(set((sire[0], dam[0])))] = number_eggs/2
-          eggs_generated[tuple(set((sire[0], dam[1])))] = number_eggs/2
+          eggs_generated[tuple(sorted(tuple(set((sire[0], dam[0])))))] = number_eggs/2
+          eggs_generated[tuple(sorted(tuple(set((sire[0], dam[1])))))] = number_eggs/2
         else: #
           # drawing both from the sire in the first case ensures heterozygotes
           # but is a bit hacky.
-          eggs_generated[tuple(set((sire[0], sire[1])))] = number_eggs/2
+          eggs_generated[tuple(sorted(tuple(set((sire[0], sire[1])))))] = number_eggs/2
           # and the below gets us our two types of homozygotes
-          eggs_generated[tuple(set((sire[0], dam[0])))] = number_eggs/4
-          eggs_generated[tuple(set((sire[1], dam[1])))] = number_eggs/4
+          eggs_generated[tuple(sorted(tuple(set((sire[0], dam[0])))))] = number_eggs/4
+          eggs_generated[tuple(sorted(tuple(set((sire[1], dam[1])))))] = number_eggs/4
+          
         return eggs_generated
       else:
         # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
@@ -535,9 +536,12 @@ class Cage:
     # will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs 
     # assume males don't become unavailable? in this case we don't need a delta for sires
     # right now only does one mating - need to deal with dams becoming unavailable if mating events is similar to number of dams
-    def generate_matings_discrete(self, distrib_sire_available, distrib_dam_available, num_matings):
+    def generate_matings_discrete(self, distrib_sire_available, distrib_dam_available):
       delta_eggs = {}
+      num_matings = self.get_num_mating_events()
+      
       delta_dams = self.select_dams(distrib_dam_available, num_matings)
+      
       if sum(distrib_sire_available.values()) == 0 or sum(distrib_dam_available.values()) == 0:
         return {}, {}
     
@@ -546,7 +550,6 @@ class Cage:
       for dam_geno in delta_dams:
         for _ in range(int(delta_dams[dam_geno])):
           sire_geno = self.choose_from_distrib(distrib_sire_available)
-          num_eggs = self.choose_from_distrib(distrib_eggs_per_mating)
       
           new_eggs = self.generate_eggs(sire_geno, dam_geno, 'discrete')
           
@@ -558,7 +561,7 @@ class Cage:
     
     def choose_from_distrib(self, distrib):
       max_val = sum(distrib.values())
-      this_draw = random.randrange(max_val)
+      this_draw = np.random.randint(0, high=max_val)
       sum_so_far = 0
       for val in distrib:
         sum_so_far += distrib[val]
