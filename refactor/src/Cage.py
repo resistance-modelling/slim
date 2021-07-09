@@ -464,13 +464,16 @@ class Cage:
       
         return delta_dams, delta_eggs
 
-        
-    # if we're in the discrete 2-gene setting, assume for now that genotypes are tuples - so in a A/a genetic system, genotypes
-    # could be ('A'), ('a'), or ('A', 'a')     
-    #  right now number of offspring with each genotype are deterministic, and might be missing one (we should update to add jitter in future,
-    # but this is a reasonable approx)
-    # note another todo: doesn't do anything sensible re: integer/real numbers of offspring     
+           
     def generate_eggs(self, sire, dam, breeding_method):
+      """
+       if we're in the discrete 2-gene setting, assume for now that genotypes are tuples - so in a A/a genetic system, genotypes
+       could be ('A'), ('a'), or ('A', 'a')     
+       right now number of offspring with each genotype are deterministic, and might be missing one (we should update to add jitter in future,
+       but this is a reasonable approx)
+       TODO: doesn't do anything sensible re: integer/real numbers of offspring  
+      """
+        
       number_eggs = self.get_num_eggs()  
         
       if breeding_method == 'discrete':
@@ -505,13 +508,16 @@ class Cage:
         return eggs_generated
     
     
-    # I've assumed that both distrib and delta are dictionaries
-    # and are *not* normalised (that is, they are effectively counts)
-    # I've also assumed that we never want a count below zero
-    # Code is naive - interpret as algorithm spec
-    # combine these two functions with a negation of a dict?
+
     def update_distrib_discrete_add(self, distrib_delta, distrib):
-      # print('adding distribs')
+      """
+       I've assumed that both distrib and delta are dictionaries
+       and are *not* normalised (that is, they are effectively counts)
+       I've also assumed that we never want a count below zero
+       Code is naive - interpret as algorithm spec
+       combine these two functions with a negation of a dict?
+      """
+
       for geno in distrib_delta:
         if geno not in distrib:
           distrib[geno] = 0
@@ -526,13 +532,16 @@ class Cage:
           distrib[geno] = 0
     
     
-    # Assumes the usual dictionary representation of number
-    # of dams - genotype:number_available
-    # function separated from other breeding processses to make it easier to come back and optimise
-    # related TODO: there must be a faster way to do this. 
-    # returns a dictionary in the same format giving genotpye:numer_selected
-    # if the num_dams exceeds number available, gives back all the dams
+
     def select_dams(self, distrib_dams_available, num_dams):
+        """
+        Assumes the usual dictionary representation of number
+        of dams - genotype:number_available
+        function separated from other breeding processses to make it easier to come back and optimise
+        TODO: there must be a faster way to do this. 
+        returns a dictionary in the same format giving genotype:number_selected
+        if the num_dams exceeds number available, gives back all the dams
+        """    
         delta_dams_selected = {}
         copy_dams_avail = copy.deepcopy(distrib_dams_available)
         if sum(distrib_dams_available.values()) <= num_dams:
