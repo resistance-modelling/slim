@@ -6,3 +6,4 @@ dependencies:
   - pandas=1.2.4
   - scipy=1.6.2
   - pytest=6.2.4
+  - pytest-cov=2.12.1
