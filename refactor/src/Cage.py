@@ -1,6 +1,7 @@
 import datetime as dt
 import math
 import json
+import copy
 
 import numpy as np
 from scipy import stats
@@ -31,13 +32,30 @@ class Cage:
         self.start_date = cfg.farms[self.farm_id].cages_start[cage_id]
         self.date = cfg.start_date
 
-        self.lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 0}
+        # TODO: update with calculations
+        self.lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 10}
         self.num_fish = cfg.farms[self.farm_id].num_fish
         self.num_infected_fish = self.get_mean_infected_fish()
         self.farm = farm
 
-        # TODO: update with calculations
+        self.egg_genotypes = {}
+        self.available_dams = {}
+        
+        # TODO/Question: what's the best way to deal with having multiple possible genetic schemes?
+        # TODO/Question: I suppose some of this initial genotype information ought to come from the config file
+        # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
+        # for now I've hard-coded in one mechanism in this setup, and a particular genotype starting point. Should probably be from a config file?
+        self.genetic_mechanism = 'discrete'
+        
+        generic_discrete_props = {('A',):0.25, ('a',): 0.25, ('A', 'a'): 0.5}
+        
+        self.geno_by_lifestage = {}
+        for stage in self.lice_population:
+            self.geno_by_lifestage[stage] = {}
+            for geno in generic_discrete_props:
+                self.geno_by_lifestage[stage][geno] = np.round(generic_discrete_props[geno]*self.lice_population[stage], 0)
 
+        self.available_dams = copy.deepcopy(self.geno_by_lifestage['L5f'])
 
         # The original code was a IBM, here we act on populations so the age in each stage must
         # be a distribution.
@@ -69,6 +87,11 @@ class Cage:
         for k in filtered_vars:
             if isinstance(filtered_vars[k], dt.datetime):
                 filtered_vars[k] = filtered_vars[k].strftime("%Y-%m-%d %H:%M:%S")
+        
+        # May want to improve these or change them if we change the representation for genotype distribs         
+        filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
+        filtered_vars["available_dams"] = {str(key): val for key, val in filtered_vars["available_dams"].items()}
+        filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in filtered_vars["geno_by_lifestage"].items()}
 
         return json.dumps(filtered_vars, indent=4)
         # return json.dumps(self, cls=CustomCageEncoder, indent=4)
@@ -105,21 +128,19 @@ class Cage:
         # Infection events
         num_infection_events = self.do_infection_events(days_since_start)
 
-        # TODO: Mating events - merge with Jess's PR
-        #matings = self.do_mating_events()
-        num_matings = self.get_num_matings()
-
-        num_eggs = self.get_num_eggs(num_matings, cur_date.month)
+        # Mating events that create eggs
+        delta_avail_dams, delta_eggs = self.do_mating_events()
 
         # TODO: should we keep eggs in a queue until they hatch? Or should we keep a typical age distribution for them?
 
         # TODO: create offspring.
-        self.create_offspring()
+        # self.create_offspring()
 
         # lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure)
 
         # TODO
+
         self.update_deltas(dead_lice_dist,
                            treatment_mortality,
                            fish_deaths_natural,
@@ -129,7 +150,8 @@ class Cage:
                            new_females,
                            new_males,
                            num_infection_events,
-                           lice_from_reservoir)
+                           lice_from_reservoir,
+                           delta_avail_dams, delta_eggs)
 
         self.logger.debug("    final lice population = {}".format(self.lice_population))
         self.logger.debug("    final fish population = {}".format(self.num_fish))
@@ -431,63 +453,162 @@ class Cage:
 
     def do_mating_events(self):
         """
-        TODO
+        will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
+        assume males don't become unavailable? in this case we don't need a delta for sires
+        :param cur_date the current day (used for temperature calculation)
+
+        TODO: deal properly with fewer individuals than matings required
+        TODO: right now discrete mode is hard-coded, once we have quantitative egg generation implemented, need to add a switch
+        TODO: current date is required by get_num_eggs as of now, but the relationship between extrusion and temperature is not clear
+        """
+        
+        delta_eggs = {}
+        num_matings = self.get_num_matings()
+
+        distrib_sire_available = self.geno_by_lifestage['L5m']
+        distrib_dam_available = self.available_dams
+        
+        delta_dams = self.select_dams(distrib_dam_available, num_matings)
+        
+        if sum(distrib_sire_available.values()) == 0 or sum(distrib_dam_available.values()) == 0:
+          return {}, {}
+      
+        # TODO - need to add dealing with fewer males/females than the number of matings
+        
+        for dam_geno in delta_dams:
+            for _ in range(int(delta_dams[dam_geno])):
+                sire_geno = self.choose_from_distrib(distrib_sire_available)
+                new_eggs = self.generate_eggs(sire_geno, dam_geno, 'discrete', num_matings)
+                self.update_distrib_discrete_add(new_eggs, delta_eggs)
+      
+        return delta_dams, delta_eggs
+
+    def generate_eggs(self, sire, dam, breeding_method: str, num_matings: int):
+        """
+        Generate the eggs with a given genomic distribution
+        If we're in the discrete 2-gene setting, assume for now that genotypes are tuples - so in a A/a genetic system, genotypes
+        could be ('A'), ('a'), or ('A', 'a')
+        right now number of offspring with each genotype are deterministic, and might be missing one (we should update to add jitter in future,
+        but this is a reasonable approx)
+        TODO: doesn't do anything sensible re: integer/real numbers of offspring
+        :param sire the genomics of the sires
+        :param dam the genomics of the dams
+        :param breeding_method the breeding strategy. Can be either "additive" or "discrete"
+        :param num_matings the number of matings
+        :returns a distribution on the number of generated eggs according to the distribution
+        """
+        
+        number_eggs = self.get_num_eggs(num_matings)
+
+        if breeding_method == 'discrete':
+            eggs_generated = {}
+            if len(sire) == 1 and len(dam) == 1:
+                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs
+            elif len(sire) == 2 and len(dam) == 1:
+                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 2
+                eggs_generated[tuple(sorted(tuple({sire[1], dam[0]})))] = number_eggs / 2
+            elif len(sire) == 1 and len(dam) == 2:
+                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 2
+                eggs_generated[tuple(sorted(tuple({sire[0], dam[1]})))] = number_eggs / 2
+            else: #
+                # drawing both from the sire in the first case ensures heterozygotes
+                # but is a bit hacky.
+                eggs_generated[tuple(sorted(tuple({sire[0], sire[1]})))] = number_eggs / 2
+                # and the below gets us our two types of homozygotes
+                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 4
+                eggs_generated[tuple(sorted(tuple({sire[1], dam[1]})))] = number_eggs / 4
+
+            return eggs_generated
+        else:
+            # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
+            # because we're only dealing with the heritable part here don't need to do any of the comparison
+            # to population mean or impact of heritability, etc - that would appear in the code dealing with treatment
+            # so we could use just the mid-parent value for this genetic recording for children
+            # as with the discrete genetic model, this will be deterministic for now
+            eggs_generated = {}
+            mid_parent = np.round((sire + dam)/2, 1)
+            eggs_generated[mid_parent] = number_eggs
+
+            return eggs_generated
+
+    def update_distrib_discrete_add(self, distrib_delta, distrib):
+        """
+        I've assumed that both distrib and delta are dictionaries
+        and are *not* normalised (that is, they are effectively counts)
+        I've also assumed that we never want a count below zero
+        Code is naive - interpret as algorithm spec
+        combine these two functions with a negation of a dict?
         """
 
-        """
-        TODO - convert this (it is an IBM so we will also need to think about the numbers of events rather than who is mating).
-        This code assumes ALL available females and males are mating (at least, the minimum between the two).
-        When breaking ties, the youngest ones are usually preferred.
-        Mating is performed mainly to re-calculate their resistance factors, but otherwise I believe we can get away
-        with a simple sigmoid. For a more advanced approach see: https://doi.org/10.1002/ecs2.2040
-                        #Mating events---------------------------------------------------------------------
-                #who is mating
-                females = df_list[fc].loc[(df_list[fc].stage==5) & (df_list[fc].avail==0)].index
-                males = df_list[fc].loc[(df_list[fc].stage==6) & (df_list[fc].avail==0)].index
-                nmating = min(sum(df_list[fc].index.isin(females)),\
-                          sum(df_list[fc].index.isin(males)))
-                if nmating>0:
-                    sires = np.random.choice(males, nmating, replace=False)
-                    p_dams = 1 - (df_list[fc].loc[df_list[fc].index.isin(females),'stage_age']/
-                                np.sum(df_list[fc].loc[df_list[fc].index.isin(females),'stage_age'])+1)
-                    dams = np.random.choice(females, nmating, p=np.array(p_dams/np.sum(p_dams)).tolist(), replace=False)
-                else:
-                    sires = []
-                    dams = []
-                df_list[fc].loc[df_list[fc].index.isin(dams),'avail'] = 1
-                df_list[fc].loc[df_list[fc].index.isin(sires),'avail'] = 1
-                df_list[fc].loc[df_list[fc].index.isin(dams),'nmates'] = df_list[fc].loc[df_list[fc].index.isin(dams),'nmates'].values + 1
-                df_list[fc].loc[df_list[fc].index.isin(sires),'nmates'] = df_list[fc].loc[df_list[fc].index.isin(sires),'nmates'].values + 1
-                #Add genotype of sire to dam info
-                df_list[fc].loc[df_list[fc].index.isin(dams),'mate_resistanceT1'] = \
-                df_list[fc].loc[df_list[fc].index.isin(sires),'resistanceT1'].values
-        """
+        for geno in distrib_delta:
+            if geno not in distrib:
+                distrib[geno] = 0
+            distrib[geno] += distrib_delta[geno]
 
-        pass
+    def update_distrib_discrete_subtract(self, distrib_delta, distrib):
+        for geno in distrib:
+            if geno in distrib_delta:
+                distrib[geno] -= distrib_delta[geno]
+            if distrib[geno] < 0:
+                distrib[geno] = 0
 
-    def get_num_eggs(self, mated_females, cur_month) -> int:
+    def select_dams(self, distrib_dams_available, num_dams):
+        """
+        Assumes the usual dictionary representation of number
+        of dams - genotype:number_available
+        function separated from other breeding processses to make it easier to come back and optimise
+        TODO: there must be a faster way to do this. 
+        returns a dictionary in the same format giving genotype:number_selected
+        if the num_dams exceeds number available, gives back all the dams
+        """    
+        delta_dams_selected = {}
+        copy_dams_avail = copy.deepcopy(distrib_dams_available)
+        if sum(distrib_dams_available.values()) <= num_dams:
+            return copy_dams_avail
+        
+        for _ in range(num_dams):
+            this_dam = self.choose_from_distrib(copy_dams_avail)
+            copy_dams_avail[this_dam] -= 1
+            if this_dam not in delta_dams_selected:
+                delta_dams_selected[this_dam] = 0
+            delta_dams_selected[this_dam] += 1
+            
+        return delta_dams_selected
+
+    def choose_from_distrib(self, distrib):
+        max_val = sum(distrib.values())
+        this_draw = np.random.randint(0, high=max_val)
+        sum_so_far = 0
+        for val in distrib:
+            sum_so_far += distrib[val]
+            if this_draw <= sum_so_far:
+                return val
+        
+    def get_num_eggs(self, mated_females) -> int:
         """
         Get the number of new eggs
         :param mated_females the number of mated females that reproduce
-        :param cur_month the current month (to compute the temperature)
         :returns the number of eggs produced
         """
 
         # See Aldrin et al. 2017, §2.2.6
-        female_population = self.lice_population["L5f"]
-
-        assert female_population >= mated_females
         age_distrib = self.get_stage_ages_distrib("L5f")
         age_range = np.arange(1, len(age_distrib) + 1)
 
+        # TODO: keep track of free females before calculating mating
         mated_females_distrib = mated_females * age_distrib
-        ave_temp = self.farm.year_temperatures[cur_month - 1]
-        temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
+        eggs = self.cfg.reproduction_eggs_first_extruded *\
+            (age_range ** self.cfg.reproduction_age_dependence) * mated_females_distrib
 
-        reproduction_rates = self.cfg.reproduction_eggs_first_extruded * \
-                             (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1)
+        return np.random.poisson(np.round(np.sum(eggs)))
+        # TODO: We are deprecating this. Need to investigate if temperature data is useful. See #46
+        # ave_temp = self.farm.year_temperatures[cur_month - 1]
+        #temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
 
-        return np.random.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
+        #reproduction_rates = self.cfg.reproduction_eggs_first_extruded * \
+        #                     (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1)
+
+        #return np.random.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
 
     def create_offspring(self):
         """
@@ -548,10 +669,13 @@ class Cage:
     def update_deltas(self, dead_lice_dist, treatment_mortality,
                       fish_deaths_natural, fish_deaths_from_lice,
                       new_L2, new_L4, new_females, new_males,
-                      new_infections, lice_from_reservoir):
+                      new_infections, lice_from_reservoir,
+                      delta_avail_dams, delta_eggs):
         """
         Update the number of fish and the lice in each life stage given
-        the number that move between stages in this time period.
+        the number that move between stages in this time period, as well as
+        genotypes of each life stage,
+        the genotypes of unavailable females, and the genotypes of eggs after mating.
         """
 
         for stage in self.lice_population:
@@ -578,6 +702,13 @@ class Cage:
 
         update_L1 = self.lice_population['L1'] - new_L2 + lice_from_reservoir["L1"]
         self.lice_population['L1'] = max(0, update_L1)
+
+        self.update_distrib_discrete_subtract(delta_avail_dams, self.available_dams)
+        self.update_distrib_discrete_add(delta_eggs, self.egg_genotypes)
+        
+         #  TODO: update life-stage progression genotypes as well
+         #  TODO: remove females that leave L5f by dying from available_dams
+        
 
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice

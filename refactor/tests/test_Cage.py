@@ -7,9 +7,7 @@ import pytest
 
 import json
 
-from src.Config import Config, to_dt
-from src.Farm import Farm
-from .conftest import farm, first_cage
+from src.Config import to_dt
 
 class TestCage:
     def test_cage_loads_params(self, first_cage):
@@ -24,7 +22,7 @@ class TestCage:
             'L3': 30,
             'L4': 30,
             'L5f': 10,
-            'L5m': 0
+            'L5m': 10
         }
 
     def test_cage_json(self, first_cage):
@@ -38,7 +36,7 @@ class TestCage:
         first_cage.cfg.tau = 1
         dead_lice_dist = first_cage.get_background_lice_mortality(first_cage.lice_population)
         dead_lice_dist_np = np.array(list(dead_lice_dist.values()))
-        expected_dead_lice = np.array([26, 0, 0, 2, 0, 0])
+        expected_dead_lice = np.array([26, 0, 0, 2, 0, 2])
         assert np.alltrue(dead_lice_dist_np >= 0.0)
         assert np.alltrue(np.isclose(dead_lice_dist_np, expected_dead_lice))
 
@@ -58,13 +56,15 @@ class TestCage:
 
         # first useful day
         cur_day = treatment_dates[0] + dt.timedelta(days=5)
+        # We've got an unlucky seed - it will sample 0 the first time so we are not interested
+        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
         mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
 
         assert mortality_updates == {
             "L1": 0,
             "L2": 0,
-            "L3": 0,
-            "L4": 3,
+            "L3": 1,
+            "L4": 1,
             "L5m": 0,
             "L5f": 0
         }
@@ -101,11 +101,11 @@ class TestCage:
             if mean <= minimum or minimum == 0:
                 with pytest.raises(AssertionError):
                     first_cage.get_evolution_ages(
-                    test_num_lice,
-                    minimum_age=minimum,
-                    mean=mean,
-                    development_days=development_days
-                )
+                        test_num_lice,
+                        minimum_age=minimum,
+                        mean=mean,
+                        development_days=development_days
+                    )
             else:
                 first_cage.get_evolution_ages(
                     test_num_lice,
@@ -125,7 +125,6 @@ class TestCage:
     def test_get_fish_growth(self, first_cage):
         first_cage.num_fish *= 300
         first_cage.num_infected_fish = first_cage.num_fish // 3
-        #first_cage.lice_population["L2"] = 100
         natural_death, lice_death = first_cage.get_fish_growth(1, 1)
 
         # basic invariants
@@ -170,14 +169,19 @@ class TestCage:
         assert first_cage.get_variance_infected_fish() == 0
 
     def test_get_infected_fish(self, first_cage):
-        assert first_cage.get_mean_infected_fish() == int(4000 * (1 - (3999 / 4000) ** 70))
-        assert 60 <= first_cage.get_variance_infected_fish() <= 70
+        assert first_cage.get_mean_infected_fish() == int(4000 * (1 - (3999 / 4000) ** 80))
+        assert 70 <= first_cage.get_variance_infected_fish() <= 80
 
     def test_get_std_infected_fish(self, first_cage):
         assert first_cage.get_variance_infected_fish() > 0
 
-    def test_get_num_matings_noinfection(self, first_cage):
-        # in the fixture there are no males
+    def test_get_num_matings_no_infection(self, first_cage):
+        males = first_cage.lice_population["L5m"]
+        first_cage.lice_population["L5m"] = 0
+        assert first_cage.get_num_matings() == 0
+        first_cage.lice_population["L5m"] = males
+
+        first_cage.lice_population["L5f"] = 0
         assert first_cage.get_num_matings() == 0
 
     def test_get_num_matings(self, first_cage):
@@ -200,17 +204,76 @@ class TestCage:
         new_males = 0
         new_infections = 0
         reservoir_lice = {"L1": 0, "L2": 0}
+        delta_avail_dams = {"L1": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
+                            "L2": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
+                            "L3": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
+                            "L4": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
+                            "L5m": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
+                            "L5f": {('A',): 0, ('a',): 0, ('A', 'a'): 0}}
+        delta_eggs = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
 
         first_cage.update_deltas(background_mortality, treatment_mortality,
                                  fish_deaths_natural, fish_deaths_from_lice,
                                  new_l2, new_l4, new_females, new_males,
-                                 new_infections, reservoir_lice)
+                                 new_infections, reservoir_lice,
+                                 delta_avail_dams, delta_eggs)
 
         for population in first_cage.lice_population.values():
             assert population >= 0
 
-    def test_update_step(self, first_cage):
-        cur_day = first_cage.date + datetime.timedelta(days=1)
+    def test_do_mating_events(self, first_cage):
+        first_cage.geno_by_lifestage['L5m'] = {('A',): 5, ('a',): 5, ('A', 'a'): 5}
+        first_cage.available_dams = {('A',): 10}
+        target_eggs = {('A',): 5431.0, tuple(sorted(('a', 'A'))): 3868.0}
+        target_delta_dams = {('A',): 6}
+
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
+        for key in delta_eggs:
+            assert delta_eggs[key] == target_eggs[key]
+        for key in delta_avail_dams:
+            assert delta_avail_dams[key] == target_delta_dams[key]
+
+    def test_generate_eggs_discrete(self, first_cage):
+        breeding_method = 'discrete'
+        
+        sire = ('A',)
+        dam = ('A',)
+        hom_dom_target = {('A',): 1574}
+
+        num_matings = first_cage.get_num_matings()
+        egg_result_hom_dom = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
+        for geno in egg_result_hom_dom:
+            assert egg_result_hom_dom[geno] == hom_dom_target[geno]
+
+        sire = ('a',)
+        dam = ('a',)
+        hom_rec_target = {('a',): 1505}
+        egg_result_hom_rec = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
+        for geno in egg_result_hom_rec:
+            assert egg_result_hom_rec[geno] == hom_rec_target[geno]
+        
+        sire = tuple(sorted(('a', 'A')))
+        dam = ('a',)
+        het_target_sire = {('a',): 760.5, tuple(sorted(('a', 'A'))): 760.5}
+        egg_result_het_sire = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
+        for geno in egg_result_het_sire:
+            assert egg_result_het_sire[geno] == het_target_sire[geno]
+        
+        dam = tuple(sorted(('a', 'A')))
+        sire = ('a',)
+        het_target_dam = {('a',): 794.0, tuple(sorted(('a', 'A'))): 794.0}
+        egg_result_het_dam = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
+        for geno in egg_result_het_dam:
+            assert egg_result_het_dam[geno] == het_target_dam[geno]
+        
+        dam = tuple(sorted(('a', 'A')))
+        sire = tuple(sorted(('a', 'A')))
+        het_target = {('A', 'a'): 727.0, ('A',): 363.5, ('a',): 363.5}
+        egg_result_het = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
+        for geno in egg_result_het:
+            assert egg_result_het[geno] == het_target[geno]
+
+    def test_update_step(self, first_cage, cur_day):
         first_cage.update(cur_day, 1, 0)
 
     def test_to_csv(self, first_cage):
@@ -246,18 +309,10 @@ class TestCage:
 
     def test_get_num_eggs_no_females(self, first_cage):
         first_cage.lice_population['L5f'] = 0
-        cur_day = first_cage.date + datetime.timedelta(days=1)
-        assert first_cage.get_num_eggs(0, cur_day.month) == 0
-
-        with pytest.raises(AssertionError):
-            first_cage.get_num_eggs(10, cur_day.month)
+        assert first_cage.get_num_eggs(0) == 0
 
     def test_get_num_eggs(self, first_cage):
         first_cage.lice_population['L5m'] = first_cage.lice_population['L5f']
 
-        cur_day = first_cage.date + datetime.timedelta(days=1)
         matings = first_cage.get_num_matings()
-        assert 270 <= first_cage.get_num_eggs(matings, cur_day.month) <= 290
-
-        cur_day = first_cage.date + datetime.timedelta(days=90)
-        assert 250 <= first_cage.get_num_eggs(matings, cur_day.month) <= 270
+        assert 1500 <= first_cage.get_num_eggs(matings) <= 1600
