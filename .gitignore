@@ -37,3 +37,6 @@ communication/
 .vscode-workspace/
 .idea/
 venv/
+
+# Mac specific annoyances
+.DS_Store

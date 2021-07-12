@@ -9,12 +9,14 @@
       "L1": 4.3,
       "L2": 10,
       "L3": 25,
-      "L4": 11
+      "L4": 11,
+      "L5f": 80
     }
   },
   "delta_p": {
     "description": "Weibull power transformation constant for each development stage",
     "value": {
+      "L0": 0.401,
       "L1": 0.401,
       "L3": 1.305,
       "L4": 0.866
@@ -31,6 +33,7 @@
   "delta_m10": {
     "description": "10 °C median development time",
     "value": {
+      "L0": 4.866,
       "L1": 8.814,
       "L3": 18.934,
       "L4": 10.742
@@ -94,6 +97,18 @@
       "L5f": 0.02,
       "L5m": 0.06
     }
+  },
+  "reproduction_eggs_first_extruded": {
+    "description": "Initial number of viable eggs after the first extrusion (from Aldrin et al., 2017)",
+    "value": 172.5
+  },
+  "reproduction_age_dependence": {
+    "description": "Exponential coefficient on viable eggs depending on age",
+    "value": 0.2
+  },
+  "reproduction_density_dependence": {
+    "description": "Female adults-to-salmon density dependence",
+    "value": 493
   },
   "farm_data": {
     "description": "Average temperatures at known farm locations. Farm temperatures will be interpolated from them. Data taken from www.seatemperature.org",
