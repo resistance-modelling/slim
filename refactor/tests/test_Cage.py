@@ -188,7 +188,7 @@ class TestCage:
         first_cage.lice_population["L5m"] = first_cage.lice_population["L5f"]
         assert 1 <= first_cage.get_num_matings() <= 10
 
-    def test_update_deltas_no_negative_raise(self, first_cage):
+    def test_update_deltas_no_negative_raise(self, first_cage, null_egg_batch, null_offspring_distrib):
         first_cage.lice_population["L3"] = 0
         first_cage.lice_population["L4"] = 0
         first_cage.lice_population["L5m"] = 0
@@ -216,7 +216,7 @@ class TestCage:
                                  fish_deaths_natural, fish_deaths_from_lice,
                                  new_l2, new_l4, new_females, new_males,
                                  new_infections, reservoir_lice,
-                                 delta_avail_dams, delta_eggs)
+                                 delta_avail_dams, delta_eggs, null_egg_batch, null_offspring_distrib)
 
         for population in first_cage.lice_population.values():
             assert population >= 0
