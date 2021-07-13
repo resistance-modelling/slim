@@ -5,6 +5,7 @@ import datetime
 
 from src.Config import Config, to_dt
 from src.Farm import Farm
+from src.Cage import EggBatch
 
 
 @pytest.fixture
@@ -27,3 +28,18 @@ def first_cage(farm):
 @pytest.fixture
 def cur_day(first_cage):
     return first_cage.date + datetime.timedelta(days=1)
+
+
+
+@pytest.fixture
+def null_offspring_distrib():
+    return {
+        ('A',): 0,
+        ('a',): 0,
+        ('A', 'a'): 0,
+    }
+
+
+@pytest.fixture
+def null_egg_batch(null_offspring_distrib, farm):
+    return EggBatch(farm.start_date, null_offspring_distrib)
