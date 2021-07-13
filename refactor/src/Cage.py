@@ -1,10 +1,19 @@
+from collections import defaultdict
+import copy
+from dataclasses import dataclass, field
 import datetime as dt
 import math
 import json
-import copy
+from queue import PriorityQueue
 
 import numpy as np
 from scipy import stats
+
+
+@dataclass(order=True)
+class EggBatch:
+    hatching_time: dt.datetime
+    geno_distrib: dict = field(compare=False)
 
 
 class Cage:
@@ -57,6 +66,8 @@ class Cage:
 
         self.available_dams = copy.deepcopy(self.geno_by_lifestage['L5f'])
 
+        self.hatching_events = PriorityQueue()
+
         # The original code was a IBM, here we act on populations so the age in each stage must
         # be a distribution.
 
@@ -92,6 +103,7 @@ class Cage:
         filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
         filtered_vars["available_dams"] = {str(key): val for key, val in filtered_vars["available_dams"].items()}
         filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in filtered_vars["geno_by_lifestage"].items()}
+        filtered_vars["hatching_events"] = sorted(list(self.hatching_events.queue))
 
         return json.dumps(filtered_vars, indent=4)
         # return json.dumps(self, cls=CustomCageEncoder, indent=4)
@@ -131,15 +143,13 @@ class Cage:
         # Mating events that create eggs
         delta_avail_dams, delta_eggs = self.do_mating_events()
 
-        # TODO: should we keep eggs in a queue until they hatch? Or should we keep a typical age distribution for them?
+        new_egg_batch = self.get_egg_batch(cur_date, delta_eggs)
 
-        # TODO: create offspring.
-        # self.create_offspring()
+        # Egg hatching
+        new_offspring_distrib = self.create_offspring(cur_date)
 
         # lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure)
-
-        # TODO
 
         self.update_deltas(dead_lice_dist,
                            treatment_mortality,
@@ -151,7 +161,9 @@ class Cage:
                            new_males,
                            num_infection_events,
                            lice_from_reservoir,
-                           delta_avail_dams, delta_eggs)
+                           delta_avail_dams, delta_eggs,
+                           new_egg_batch,
+                           new_offspring_distrib)
 
         self.logger.debug("    final lice population = {}".format(self.lice_population))
         self.logger.debug("    final fish population = {}".format(self.num_fish))
@@ -451,11 +463,11 @@ class Cage:
         prob_matching = 1 - (1 + males/((males + females)*aggregation_factor)) ** (-1-aggregation_factor)
         return np.random.poisson(prob_matching * females)
 
-    def do_mating_events(self):
+    def do_mating_events(self) -> (dict, dict):
         """
         will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
         assume males don't become unavailable? in this case we don't need a delta for sires
-        :param cur_date the current day (used for temperature calculation)
+        :returns a pair (delta_dams, new_eggs)
 
         TODO: deal properly with fewer individuals than matings required
         TODO: right now discrete mode is hard-coded, once we have quantitative egg generation implemented, need to add a switch
@@ -610,7 +622,48 @@ class Cage:
 
         #return np.random.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
 
-    def create_offspring(self):
+    def get_egg_batch(self, cur_time: dt.datetime, egg_distrib: dict) -> EggBatch:
+        """
+        Get the expected arrival date of an egg batch
+        :param cur_time the current time
+        :param egg_distrib the egg distribution
+        :returns an egg batch to add to the event queue
+        """
+
+        # We use Stien et al (2005)'s regressed formula
+        # τE= [β1/(T – 10 + β1β2)]**2  (see equation 8)
+        # where β2**(-2) is the average temperature centered at around 10 degrees
+        # and β1 is a shaping factor. This function is formally known as Belehrádek’s function
+        cur_month = cur_time.month
+        ave_temp = self.farm.year_temperatures[cur_month - 1]
+
+        beta_1 = self.cfg.delta_m10["L0"]
+        beta_2 = self.cfg.delta_p["L0"]
+        expected_time = (self.cfg.delta_m10["L0"] / (ave_temp - 10 + beta_1 * beta_2))**2
+        expected_hatching_time = cur_time + dt.timedelta(np.random.poisson(expected_time))
+        return EggBatch(expected_hatching_time, egg_distrib)
+
+    def create_offspring(self, cur_time: dt.datetime) -> dict:
+        """
+        Hatch the eggs from the event queue
+        :param cur_time the current time
+        :returns a delta egg genomics
+        """
+
+        # TODO: this does not take into account f2f-c2c movements
+        delta_egg_offspring = {}
+        for geno in self.geno_by_lifestage['L5f']:
+            delta_egg_offspring[geno] = 0
+
+        # process all the due events
+        # Note: queues miss a "peek" method, and this line relies on an implementation detail.
+        while not self.hatching_events.empty() and self.hatching_events.queue[0].hatching_time <= cur_time:
+            egg_event = self.hatching_events.get()
+            for geno, value in egg_event.geno_distrib.items():
+                delta_egg_offspring[geno] += value
+
+        return delta_egg_offspring
+
         """
         TODO - convert this ().
                 #create offspring
@@ -664,18 +717,29 @@ class Cage:
                         offspring = offspring.append(offs, ignore_index=True)
                         del offs
         """
-        pass
 
     def update_deltas(self, dead_lice_dist, treatment_mortality,
                       fish_deaths_natural, fish_deaths_from_lice,
                       new_L2, new_L4, new_females, new_males,
                       new_infections, lice_from_reservoir,
-                      delta_avail_dams, delta_eggs):
+                      delta_avail_dams, delta_eggs, new_egg_batch: EggBatch,
+                      new_offspring_distrib: dict):
         """
-        Update the number of fish and the lice in each life stage given
-        the number that move between stages in this time period, as well as
-        genotypes of each life stage,
-        the genotypes of unavailable females, and the genotypes of eggs after mating.
+        Update the number of fish and the lice in each life stage
+        :param dead_lice_dist the number of dead lice due to background death (as a distribution)
+        :param treatment_mortality the number of dead lice due to treatment (as a distribution)
+        :param fish_deaths_natural the number of natural fish death events
+        :param fish_deaths_from_lice the number of lice-induced fish death events
+        :param new_L2 number of new L2 fish
+        :param new_L4 number of new L4 fish
+        :param new_females number of new adult females
+        :param new_males number of new adult males
+        :param new_infections the number of new infections (i.e. progressions from L2 to L3)
+        :param lice_from_reservoir the number of lice taken from the reservoir
+        :param delta_avail_dams the genotypes of now-unavailable females
+        :param delta_eggs the genotypes of eggs after mating
+        :param new_egg_batch the expected hatching time of those egg with a related genomics
+        :param new_offspring_distrib the new offspring obtained from hatching and migrations
         """
 
         for stage in self.lice_population:
@@ -700,12 +764,15 @@ class Cage:
         update_L2 = self.lice_population['L2'] + new_L2 - new_infections + lice_from_reservoir["L2"]
         self.lice_population['L2'] = max(0, update_L2)
 
-        update_L1 = self.lice_population['L1'] - new_L2 + lice_from_reservoir["L1"]
+        update_L1 = self.lice_population['L1'] - new_L2 + lice_from_reservoir["L1"] + sum(new_offspring_distrib.values())
         self.lice_population['L1'] = max(0, update_L1)
 
         self.update_distrib_discrete_subtract(delta_avail_dams, self.available_dams)
         self.update_distrib_discrete_add(delta_eggs, self.egg_genotypes)
-        
+        self.update_distrib_discrete_subtract(delta_eggs, new_offspring_distrib)
+
+        self.hatching_events.put(new_egg_batch)
+
          #  TODO: update life-stage progression genotypes as well
          #  TODO: remove females that leave L5f by dying from available_dams
         

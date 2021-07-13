@@ -14,9 +14,9 @@
     }
   },
   "delta_p": {
-    "description": "Weibull power transformation constant for each development stage",
+    "description": "Weibull power transformation constant for each development stage. L0's value is taken from Stien et al. (2005) as beta_2, while the others are taken from Aldrin et al. (2017)",
     "value": {
-      "L0": 0.401,
+      "L0": 0.338,
       "L1": 0.401,
       "L3": 1.305,
       "L4": 0.866
@@ -31,9 +31,9 @@
     }
   },
   "delta_m10": {
-    "description": "10 °C median development time",
+    "description": "10 °C median development time. L0's value is taken from Stien et al. (2005) as beta_1, while the others are taken from Aldrin et al. (2017)",
     "value": {
-      "L0": 4.866,
+      "L0": 41.98,
       "L1": 8.814,
       "L3": 18.934,
       "L4": 10.742
