@@ -15,6 +15,19 @@
         "description": "Sealice per day per cage/farm arriving from wildlife. Note that this value has been determined experimentally in the original code.",
         "value": 150
     },
+    "interfarm_data": {
+        "description": "",
+        "value": {
+            "interfarm_times_path": {
+                "description": "Path to csv file with expected planctonic lice travel time between farms.",
+                "value": "config_data/Fyne_Edays.csv"
+            },
+            "interfarm_probs_path": {
+                "description": "Path to csv file with probability of interfarm planctonic lice travel",
+                "value": "config_data/Fyne_props.csv"
+            }
+        }
+    },
     "farms": [
         {
             "description": "Test farm",

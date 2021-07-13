@@ -116,13 +116,28 @@ Also:
 TODO: source of data (f_meanEMB, f_sigEMB, EMBmort, env_meanEMB, env_sigEMB)
 
 ## Usage
+### Refactored
 To run the WIP refactored model, enter the ```refactor``` directory and run:
 
-```python -m src.SeaLiceMgmt output_folder simulation_name config_json_path```
+```python -m src.SeaLiceMgmt output_folder simulation_name config_json_path simulation_params_json_path```
+
+For example:
+```python -m src.SeaLiceMgmt out 0 config_data/params.json config_data/test.json```
 
 To test, also from ```refactor``` directory, run:
 
 ```pytest```
+
+### Original
+To run the original code, enter ```original``` directory and run:
+
+```` python model/slm.py param_module_name output_folder simulation_name```
+
+For example:
+
+```` python model/slm.py dummy_vars /out/ 0```
+
+*Note that at the moment dummy_vars is a copy of Fyne_vars and code execution takes a while.*
 
 ### Requirements
 Details on required packages and versions can be found in ```environment.yml``` which can be used to create a [conda](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) environment for the project. 

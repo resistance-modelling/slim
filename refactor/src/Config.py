@@ -51,6 +51,14 @@ class Config:
                       for farm_data in data["farms"]]
         self.nfarms = len(self.farms)
 
+        interfarm_data = data["interfarm_data"]["value"]
+
+        with open(interfarm_data["interfarm_times_path"]["value"]) as times_csv:
+            self.interfarm_times = np.loadtxt(times_csv, delimiter=",")
+        
+        with open(interfarm_data["interfarm_probs_path"]["value"]) as probs_csv:
+            self.interfarm_probs = np.loadtxt(probs_csv, delimiter=",")
+
     def __getattr__(self, name):
         # obscure marshalling trick.
         params = self.__getattribute__("params")
