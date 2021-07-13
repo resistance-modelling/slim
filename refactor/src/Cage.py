@@ -632,7 +632,8 @@ class Cage:
 
         # We use Stien et al (2005)'s regressed formula
         # τE= [β1/(T – 10 + β1β2)]**2  (see equation 8)
-        # where β1 is the average temperature centered at around 10 degrees
+        # where β2**(-2) is the average temperature centered at around 10 degrees
+        # and β1 is a shaping factor. This function is formally known as Belehrádek’s function
         cur_month = cur_time.month
         ave_temp = self.farm.year_temperatures[cur_month - 1]
 
@@ -654,6 +655,8 @@ class Cage:
         for geno in self.geno_by_lifestage['L5f']:
             delta_egg_offspring[geno] = 0
 
+        # process all the due events
+        # Note: queues miss a "peek" method, and this line relies on an implementation detail.
         while not self.hatching_events.empty() and self.hatching_events.queue[0].hatching_time <= cur_time:
             egg_event = self.hatching_events.get()
             for geno, value in egg_event.geno_distrib.items():

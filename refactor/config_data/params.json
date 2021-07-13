@@ -14,7 +14,7 @@
     }
   },
   "delta_p": {
-    "description": "Weibull power transformation constant for each development stage. L0's value is taken from Stiel et al. (2005) as beta_2, while the others are taken from Aldrin et al. (2017)",
+    "description": "Weibull power transformation constant for each development stage. L0's value is taken from Stien et al. (2005) as beta_2, while the others are taken from Aldrin et al. (2017)",
     "value": {
       "L0": 0.338,
       "L1": 0.401,
