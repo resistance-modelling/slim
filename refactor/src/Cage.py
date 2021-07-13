@@ -638,7 +638,7 @@ class Cage:
 
         beta_1 = self.cfg.delta_m10["L0"]
         beta_2 = self.cfg.delta_p["L0"]
-        expected_time = self.cfg.delta_m10["L0"] * (10 - ave_temp + beta_1 * beta_2)
+        expected_time = (self.cfg.delta_m10["L0"] / (ave_temp - 10 + beta_1 * beta_2))**2
         expected_hatching_time = cur_time + dt.timedelta(np.random.poisson(expected_time))
         return EggBatch(expected_hatching_time, egg_distrib)
 
@@ -650,13 +650,16 @@ class Cage:
         """
 
         # TODO: this does not take into account f2f-c2c movements
-        delta_egg_offspring = defaultdict(lambda k: 0)
-        while not self.hatching_events.empty() and self.hatching_events.queue[0] <= cur_time:
+        delta_egg_offspring = {}
+        for geno in self.geno_by_lifestage['L5f']:
+            delta_egg_offspring[geno] = 0
+
+        while not self.hatching_events.empty() and self.hatching_events.queue[0].hatching_time <= cur_time:
             egg_event = self.hatching_events.get()
             for geno, value in egg_event.geno_distrib.items():
                 delta_egg_offspring[geno] += value
 
-        return dict(delta_egg_offspring)
+        return delta_egg_offspring
 
         """
         TODO - convert this ().
