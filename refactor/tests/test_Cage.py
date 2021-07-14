@@ -10,6 +10,7 @@ import json
 from src.Config import to_dt
 from src.Cage import EggBatch
 
+
 class TestCage:
     def test_cage_loads_params(self, first_cage):
         assert first_cage.id == 0
@@ -161,7 +162,7 @@ class TestCage:
         assert num_infected_fish > 0
         assert num_infected_fish == 15
 
-    def test_get_infected_fish_noinfection(self, first_cage):
+    def test_get_infected_fish_no_infection(self, first_cage):
         # TODO: maybe make a fixture of this?
         first_cage.lice_population["L3"] = 0
         first_cage.lice_population["L4"] = 0
@@ -191,7 +192,7 @@ class TestCage:
         first_cage.lice_population["L5m"] = first_cage.lice_population["L5f"]
         assert 1 <= first_cage.get_num_matings() <= 10
 
-    def test_update_deltas_no_negative_raise(self, first_cage, null_egg_batch, null_offspring_distrib):
+    def test_update_deltas_no_negative_raise(self, first_cage, null_egg_batch, null_offspring_distrib, null_dams_batch):
         first_cage.lice_population["L3"] = 0
         first_cage.lice_population["L4"] = 0
         first_cage.lice_population["L5m"] = 0
@@ -207,6 +208,7 @@ class TestCage:
         new_males = 0
         new_infections = 0
         reservoir_lice = {"L1": 0, "L2": 0}
+
         delta_avail_dams = {"L1": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
                             "L2": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
                             "L3": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
@@ -215,9 +217,11 @@ class TestCage:
                             "L5f": {('A',): 0, ('a',): 0, ('A', 'a'): 0}}
         delta_eggs = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
 
+
+
         first_cage.update_deltas(background_mortality, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice,
                                  new_l2, new_l4, new_females, new_males, new_infections, reservoir_lice,
-                                 delta_avail_dams, null_egg_batch, null_offspring_distrib)
+                                 null_dams_batch, null_egg_batch, null_offspring_distrib, null_offspring_distrib)
 
         for population in first_cage.lice_population.values():
             assert population >= 0
@@ -225,14 +229,12 @@ class TestCage:
     def test_do_mating_events(self, first_cage):
         first_cage.geno_by_lifestage['L5m'] = {('A',): 5, ('a',): 5, ('A', 'a'): 5}
         first_cage.available_dams = {('A',): 10}
-        target_eggs = {('A',): 5431.0, tuple(sorted(('a', 'A'))): 3868.0}
-        target_delta_dams = {('A',): 6}
+        target_eggs = {('a',): 2322.0, ('A',): 3861.0, tuple(sorted(('a', 'A'))): 3116.0}
+        target_delta_dams = {('A',): 2, ('A', 'a'): 3, ('a',): 1}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
-        for key in delta_eggs:
-            assert delta_eggs[key] == target_eggs[key]
-        for key in delta_avail_dams:
-            assert delta_avail_dams[key] == target_delta_dams[key]
+        assert delta_eggs == target_eggs
+        assert delta_avail_dams == target_delta_dams
 
     def test_generate_eggs_discrete(self, first_cage):
         breeding_method = 'discrete'
@@ -334,7 +336,7 @@ class TestCage:
 
         new_egg_batch = first_cage.get_egg_batch(cur_day, new_eggs)
         assert new_egg_batch == EggBatch(
-            hatching_time=datetime.datetime(2017, 10, 6, 0, 0),
+            time=datetime.datetime(2017, 10, 7, 0, 0),
             geno_distrib=target_egg_distrib)
 
     def test_get_egg_batch_across_time(self, first_cage):

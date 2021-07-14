@@ -1,4 +1,5 @@
-from collections import defaultdict
+import logging
+from collections.abc import MutableMapping
 import copy
 from dataclasses import dataclass, field
 import datetime as dt
@@ -22,6 +23,41 @@ class DamAvailabilityBatch:
     geno_distrib: dict = field(compare=False)
 
 
+# See https://stackoverflow.com/a/7760938
+class LicePopulation(dict, MutableMapping):
+    """
+    Wrapper to keep the global population and genotype information updated
+    """
+    def __init__(self, initial_population: dict, geno_data: dict, available_dams: dict, logger: logging.Logger):
+        super().__init__()
+        self.geno_data = geno_data
+        self._available_dams = available_dams
+        self.logger = logger
+        for k, v in initial_population.items():
+            super().__setitem__(k, v)
+
+    def __setitem__(self, stage, value):
+        if sum(self.geno_data[stage].values()) == 0:
+            self.logger.warning(f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
+            self.geno_data[stage] = Cage.multiply_distrib(Cage.generic_discrete_props, value)
+        else:
+            self.geno_data[stage] = Cage.multiply_distrib(self.geno_data[stage], value)
+        if stage == "L5f":
+            self._available_dams = Cage.multiply_distrib(self._available_dams, value)
+        super().__setitem__(stage, value)
+
+    @property
+    def available_dams(self):
+        return self._available_dams
+
+    @available_dams.setter
+    def available_dams(self, new_value: dict):
+        for geno in new_value:
+            assert self.geno_data["L5f"][geno] >= new_value[geno], f"current population geno {geno}:{self.geno_data['L5f'][geno]} is smaller than new value geno {new_value[geno]}"
+
+        self._available_dams = new_value
+
+
 class Cage:
     """
     Fish cages contain the fish.
@@ -29,6 +65,8 @@ class Cage:
 
     lice_stages = ['L1', 'L2', 'L3', 'L4', 'L5f', 'L5m']
     susceptible_stages = lice_stages[2:]
+
+    generic_discrete_props = {('A',): 0.25, ('a',): 0.25, ('A', 'a'): 0.5}
 
     def __init__(self, cage_id, cfg, farm):
         """
@@ -48,9 +86,8 @@ class Cage:
         self.date = cfg.start_date
 
         # TODO: update with calculations
-        self.lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 10}
-        self.num_fish = cfg.farms[self.farm_id].num_fish
-        self.num_infected_fish = self.get_mean_infected_fish()
+        lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 10}
+
         self.farm = farm
 
         self.egg_genotypes = {}
@@ -62,13 +99,16 @@ class Cage:
         # for now I've hard-coded in one mechanism in this setup, and a particular genotype starting point. Should probably be from a config file?
         self.genetic_mechanism = 'discrete'
         
-        generic_discrete_props = {('A',): 0.25, ('a',): 0.25, ('A', 'a'): 0.5}
-        
         self.geno_by_lifestage = {}
-        for stage in self.lice_population:
-            self.geno_by_lifestage[stage] = self.multiply_distrib(generic_discrete_props, self.lice_population[stage])
+        for stage in lice_population:
+            self.geno_by_lifestage[stage] = self.multiply_distrib(self.generic_discrete_props, lice_population[stage])
 
+        # TODO: should we move available_dams inside LicePopulation?
         self.available_dams = copy.deepcopy(self.geno_by_lifestage['L5f'])
+        self.lice_population = LicePopulation(lice_population, self.geno_by_lifestage, self.available_dams, self.logger)
+
+        self.num_fish = cfg.farms[self.farm_id].num_fish
+        self.num_infected_fish = self.get_mean_infected_fish()
 
         self.hatching_events = PriorityQueue()
         self.busy_dams = PriorityQueue()
@@ -89,6 +129,7 @@ class Cage:
         # self.avail = 0
         # self.arrival = 0
         # self.nmates = 0
+
 
     def __str__(self):
         """
@@ -467,7 +508,7 @@ class Cage:
 
         males = self.lice_population["L5m"]
         #females = self.lice_population["L5f"]
-        females = sum(self.available_dams.values())
+        females = sum(self.lice_population.available_dams.values())
 
         if males == 0 or females == 0:
             return 0
@@ -494,7 +535,7 @@ class Cage:
         num_matings = self.get_num_matings()
 
         distrib_sire_available = self.geno_by_lifestage['L5m']
-        distrib_dam_available = self.available_dams
+        distrib_dam_available = self.lice_population.available_dams
         
         delta_dams = self.select_dams(distrib_dam_available, num_matings)
         
@@ -586,7 +627,10 @@ class Cage:
     def multiply_distrib(distrib: dict, population: int):
         keys = distrib.keys()
         values = list(distrib.values())
-        np_values = np.array(values) * population
+        np_values = np.array(values)
+        if np.isclose(np.sum(np_values), 0.0) or population == 0:
+            return dict(zip(keys, map(int, np.zeros_like(np_values))))
+        np_values = np_values * population / np.sum(np_values)
         np_values = np_values.round().astype('int32')
         # correct casting errors
         np_values[-1] += population - np.sum(np_values)
