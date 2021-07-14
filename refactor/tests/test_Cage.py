@@ -8,7 +8,7 @@ import pytest
 import json
 
 from src.Config import to_dt
-from src.Cage import EggBatch
+from src.Cage import EggBatch, DamAvailabilityBatch
 
 
 class TestCage:
@@ -28,6 +28,9 @@ class TestCage:
         }
 
         assert sum(first_cage.available_dams.values()) == 10
+
+        for stage in first_cage.lice_stages:
+            assert first_cage.lice_population[stage] == sum(first_cage.geno_by_lifestage[stage].values())
 
     def test_cage_json(self, first_cage):
         return_str = str(first_cage)
@@ -169,6 +172,9 @@ class TestCage:
         first_cage.lice_population["L5m"] = 0
         first_cage.lice_population["L5f"] = 0
 
+        for stage in first_cage.lice_stages:
+            assert first_cage.lice_population[stage] == sum(first_cage.geno_by_lifestage[stage].values())
+
         assert first_cage.get_mean_infected_fish() == 0
         assert first_cage.get_variance_infected_fish() == 0
 
@@ -183,10 +189,15 @@ class TestCage:
         males = first_cage.lice_population["L5m"]
         first_cage.lice_population["L5m"] = 0
         assert first_cage.get_num_matings() == 0
+        for stage in first_cage.lice_stages:
+            assert first_cage.lice_population[stage] == sum(first_cage.geno_by_lifestage[stage].values())
         first_cage.lice_population["L5m"] = males
 
         first_cage.lice_population["L5f"] = 0
         assert first_cage.get_num_matings() == 0
+        for stage in first_cage.lice_stages:
+            assert first_cage.lice_population[stage] == sum(first_cage.geno_by_lifestage[stage].values())
+
 
     def test_get_num_matings(self, first_cage):
         first_cage.lice_population["L5m"] = first_cage.lice_population["L5f"]
@@ -339,6 +350,12 @@ class TestCage:
             time=datetime.datetime(2017, 10, 7, 0, 0),
             geno_distrib=target_egg_distrib)
 
+    def test_avail_batch_lt(self, first_cage, null_offspring_distrib, cur_day):
+        batch1 = DamAvailabilityBatch(cur_day, null_offspring_distrib)
+        batch2 = DamAvailabilityBatch(cur_day + dt.timedelta(days=1), null_offspring_distrib)
+        assert batch1 != batch2
+        assert batch1 < batch2
+
     def test_get_egg_batch_across_time(self, first_cage):
         egg_offspring = {
             ('A',): 10,
@@ -387,3 +404,29 @@ class TestCage:
         offspring = first_cage.create_offspring(cur_day + dt.timedelta(days=3))
         for val in offspring.values():
             assert val == 30
+
+    def test_avail_dams_freed_early(self, first_cage, cur_day):
+        dams, _ = first_cage.do_mating_events()
+
+        first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
+        assert all(x == 0 for x in first_cage.free_dams(cur_day).values())
+
+    def test_avail_dams_freed_same_day_once(self, first_cage, cur_day):
+        dams, _ = first_cage.do_mating_events()
+        target_dams = {('A',): 2,
+                       ('a',): 1,
+                       ('A', 'a'): 3}
+
+        first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
+        assert first_cage.free_dams(cur_day + dt.timedelta(days=1)) == target_dams
+
+    def test_avail_dams_freed_same_day_thrice(self, first_cage, cur_day):
+        dams, _ = first_cage.do_mating_events()
+        target_dams = {('A',): 6,
+                       ('a',): 3,
+                       ('A', 'a'): 9}
+
+        for i in range(3):
+            first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams))
+        assert first_cage.free_dams(cur_day + dt.timedelta(days=3)) == target_dams
+
