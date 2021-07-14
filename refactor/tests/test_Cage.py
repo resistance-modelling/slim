@@ -26,6 +26,8 @@ class TestCage:
             'L5m': 10
         }
 
+        assert sum(first_cage.available_dams.values()) == 10
+
     def test_cage_json(self, first_cage):
         return_str = str(first_cage)
         imported_cage = json.loads(return_str)
@@ -213,11 +215,9 @@ class TestCage:
                             "L5f": {('A',): 0, ('a',): 0, ('A', 'a'): 0}}
         delta_eggs = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
 
-        first_cage.update_deltas(background_mortality, treatment_mortality,
-                                 fish_deaths_natural, fish_deaths_from_lice,
-                                 new_l2, new_l4, new_females, new_males,
-                                 new_infections, reservoir_lice,
-                                 delta_avail_dams, delta_eggs, null_egg_batch, null_offspring_distrib)
+        first_cage.update_deltas(background_mortality, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice,
+                                 new_l2, new_l4, new_females, new_males, new_infections, reservoir_lice,
+                                 delta_avail_dams, null_egg_batch, null_offspring_distrib)
 
         for population in first_cage.lice_population.values():
             assert population >= 0
@@ -347,19 +347,19 @@ class TestCage:
         # October
         cur_day = to_dt("2017-10-01 00:00:00")
         egg_batch = first_cage.get_egg_batch(cur_day, egg_offspring)
-        assert (egg_batch.hatching_time - cur_day).days == 11
+        assert (egg_batch.time - cur_day).days == 11
         assert egg_batch.geno_distrib == egg_offspring
 
         # August
         cur_day = to_dt("2017-08-01 00:00:00")
         egg_batch = first_cage.get_egg_batch(cur_day, egg_offspring)
-        assert (egg_batch.hatching_time - cur_day).days == 3
+        assert (egg_batch.time - cur_day).days == 3
         assert egg_batch.geno_distrib == egg_offspring
 
         # February
         cur_day = to_dt("2017-02-01 00:00:00")
         egg_batch = first_cage.get_egg_batch(cur_day, egg_offspring)
-        assert (egg_batch.hatching_time - cur_day).days == 12
+        assert (egg_batch.time - cur_day).days == 12
         assert egg_batch.geno_distrib == egg_offspring
 
     def test_create_offspring_early(self, first_cage, cur_day, null_offspring_distrib):
