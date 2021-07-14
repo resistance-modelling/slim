@@ -41,5 +41,5 @@ def null_offspring_distrib():
 
 
 @pytest.fixture
-def null_egg_batch(null_offspring_distrib, farm):
-    return EggBatch(farm.start_date, null_offspring_distrib)
+def null_hatched_arrivals(null_offspring_distrib, farm):
+    return {farm.start_date: null_offspring_distrib}

@@ -3,9 +3,6 @@ import json
 
 import numpy as np
 
-import src.Farm as frm
-from src.Config import Config, FarmConfig
-
 
 class CustomFarmEncoder(json.JSONEncoder):
     """

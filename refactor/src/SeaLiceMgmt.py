@@ -4,7 +4,6 @@ a given body of water.
 See README.md for details.
 """
 import argparse
-import copy
 import datetime as dt
 import logging
 import sys
@@ -95,12 +94,22 @@ def run_model(path, sim_id, cfg, farms):
         cur_date += dt.timedelta(days=cfg.tau)
         days = (cur_date - cfg.start_date).days
 
+        # update the farms and get the offspring
+        offspring_dict = {}
         for farm in farms:
 
             #if days == 1:
             #    resistance_bv.write_text(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext)
 
-            farm.update(cur_date, cfg.tau)
+            offspring = farm.update(cur_date, cfg.tau)
+            offspring_dict[farm.name] = offspring
+
+        # once all of the offspring is collected
+        # it can be dispersed (interfarm and intercage movement)
+        # note: this is done on driver level because it requires access to
+        # other farms - and will allow muliprocessing of the main update
+        for farm_ix, offspring in offspring_dict.items():
+            farms[farm_ix].disperse_offspring(offspring, farms, cur_date)
 
         # Save the data
         data_str = str(cur_date) + ", " + str(days)

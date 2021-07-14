@@ -1,12 +1,15 @@
 """
 Defines a Farm class that encapsulates a salmon farm containing several cages.
 """
-from src.Cage import Cage
-from src.JSONEncoders import CustomFarmEncoder
-from src.Config import Config
-
+import datetime as dt
 import json
+from collections import Counter
+
 import numpy as np
+
+from src.Cage import Cage
+from src.Config import Config
+from src.JSONEncoders import CustomFarmEncoder
 
 
 class Farm:
@@ -71,74 +74,116 @@ class Farm:
         Ndiff = self.loc_y - tarbert_northing
         return np.round(tarbert_temps - Ndiff * degs, 1)
 
-    def update(self, cur_date, step_size):
-        """
-        Update the status of the farm given the growth of fish and change in population of
-        parasites.
-        :return: none
-        """
-        self.logger.debug("Updating farm {}".format(self.name))
+    def update(self, cur_date: dt.datetime, step_size: int) -> dict:
+        """Update the status of the farm given the growth of fish and change
+        in population of parasites.
 
-        # TODO: add new offspring to cages
+        :param cur_date: Current date
+        :param step_size: Step size for tau-leaping
+        :return: Dictionary of genotype distributions based on hatch date
+        """
+
+        self.logger.debug("Updating farm {}".format(self.name))
 
         # get number of lice from reservoir to be put in each cage
         pressures_per_cage = self.get_cage_pressures()
 
-        # update cages
-        total_lice_offspring = 0
+        # collate egg batches by hatch time
+        eggs_by_hatch_date = {}
         for cage in self.cages:
-            total_lice_offspring += cage.update(cur_date,
-                                                step_size,
-                                                pressures_per_cage[cage.id])
 
-        # disperse total offspring among the cages (cage-cage movement)
-        self.disperse_offspring(total_lice_offspring)
+            # update the cage and collect the offspring info
+            egg_distrib, hatch_date = cage.update(cur_date,
+                                                  step_size,
+                                                  pressures_per_cage[cage.id])
 
-        # log info
-        self.logger.debug("\tFinal populations".format(cage.id))
-        for cage in self.cages:
-            self.logger.debug("\t\tcage {}".format(cage.id))
-            self.logger.debug("\t\t\tfinal lice population = {}".format(cage.lice_population))
-            self.logger.debug("\t\t\tfinal fish population = {}".format(cage.num_fish))
+            # update the total offspring info
+            if hatch_date in eggs_by_hatch_date:
+                eggs_by_hatch_date[hatch_date] += Counter(egg_distrib)
+            else:
+                eggs_by_hatch_date[hatch_date] = Counter(egg_distrib)
 
-    def get_cage_pressures(self):
+        return eggs_by_hatch_date
+
+    def get_cage_pressures(self) -> list:
         """Get external pressure divided into cages
 
         :return: List of values of external pressure for each cage
-        :rtype: list
         """
         # assume equal chances for each cage
         probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
 
         return list(self.cfg.rng.multinomial(self.cfg.ext_pressure,
-                                        probs_per_cage,
-                                        size=1)[0])
+                                             probs_per_cage,
+                                             size=1)[0])
 
-    def disperse_offspring(self, total_lice_offspring):
-        """Allocate new offspring between the cages.
-        
+    def get_egg_allocation(self, nbins: int, eggs_by_hatch_date: dict) -> list:
+        """Return allocation of eggs for given number of bins.
+
+        :param nbins: Number of bins to allocate to
+        :param eggs_by_hatch_date: Dictionary of genotype distributions based on hatch date
+        :return: List of dictionaries of genotype distributions based on hatch date per bin
+        """
+
+        # TODO complete the probabilities
+        # probs_per_farm = self.cfg.interfarm_probs[self.name]
+        probs_per_bin = np.full(nbins, 1 / nbins)
+
+        # preconstruct the data structure
+        hatch_list = [{hatch_date: {} for hatch_date in eggs_by_hatch_date} for n in range(nbins)]
+        for hatch_date, geno_dict in eggs_by_hatch_date.items():
+            for genotype in geno_dict:
+                # generate the bin distribution of this genotype with this hatch date
+                genotype_per_bin = self.cfg.rng.multinomial(geno_dict[genotype],
+                                                            probs_per_bin,
+                                                            size=1)[0]
+                # update the info
+                for bin_ix, n in enumerate(genotype_per_bin):
+                    hatch_list[bin_ix][hatch_date][genotype] = n
+
+        return hatch_list
+
+    def disperse_offspring(self, eggs_by_hatch_date: dict, farms: list, cur_date: dt.datetime):
+        """Allocate new offspring between the farms and cages.
+
         Assumes the lice can float freely across a given farm so that
         they are not bound to a single cage while not attached to a fish.
 
-        :param total_lice_offspring: The number of L1 lice to disperse.
-        :type total_lice_offspring: int
+        NOTE: This method is not multiprocessing safe.
+
+        :param eggs_by_hatch_date: Dictionary of genotype distributions based
+        on hatch date
+        :param farms: List of Farm objects
+        :param cur_date: Current date of the simulation
         """
 
-        self.logger.debug("\tDispersing total offspring = {}".format(total_lice_offspring))
+        self.logger.debug("\tDispersing total offspring")
 
-        # assume equal chances for each cage
-        probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
+        # allocate eggs (in batches based on hatch date) between the farms
+        arrivals_per_farm = self.get_egg_allocation(len(farms), eggs_by_hatch_date)
 
-        # get the distribution
-        offspring_per_cage = list(self.cfg.rng.multinomial(total_lice_offspring,
-                                                      probs_per_cage,
-                                                      size=1)[0])
-        
-        self.logger.debug("\t\tOffspring cage distribution = {}".format(offspring_per_cage))
+        for farm in farms:
 
-        # update the lice populations in the cages
-        for cage in self.cages:
-            cage.lice_population["L1"] += offspring_per_cage[cage.id]
+            if farm.name == self.name:
+                self.logger.debug("\tFarm {}:".format(farm.name))
+            else:
+                self.logger.debug("\tFarm {} (current):".format(farm.name))
+
+            # allocate eggs to cages
+            farm_arrivals = arrivals_per_farm[farm.name]
+            arrivals_per_cage = self.get_egg_allocation(len(farm.cages), farm_arrivals)
+
+            # self.logger.debug("\t\tTotal egg travels = {}".format(farm_arrivals))
+            # self.logger.debug("\t\tCage lice arrivals distribution = {}".format(arrivals_per_cage))
+
+            # get the arrival time of the egg batch at the allocated
+            # destination
+            travel_time = self.cfg.rng.poisson(self.cfg.interfarm_times[self.name][farm.name])
+            arrival_date = cur_date + dt.timedelta(days=travel_time)
+
+            # update the cages
+            for cage in farm.cages:
+                cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
     def to_csv(self):
         """

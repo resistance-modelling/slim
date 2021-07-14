@@ -189,7 +189,7 @@ class TestCage:
         first_cage.lice_population["L5m"] = first_cage.lice_population["L5f"]
         assert 1 <= first_cage.get_num_matings() <= 10
 
-    def test_update_deltas_no_negative_raise(self, first_cage, null_egg_batch, null_offspring_distrib):
+    def test_update_deltas_no_negative_raise(self, first_cage, null_offspring_distrib):
         first_cage.lice_population["L3"] = 0
         first_cage.lice_population["L4"] = 0
         first_cage.lice_population["L5m"] = 0
@@ -212,12 +212,17 @@ class TestCage:
                             "L5m": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
                             "L5f": {('A',): 0, ('a',): 0, ('A', 'a'): 0}}
         delta_eggs = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
+        null_hatched_arrivals = null_offspring_distrib
 
-        first_cage.update_deltas(background_mortality, treatment_mortality,
-                                 fish_deaths_natural, fish_deaths_from_lice,
+        first_cage.update_deltas(background_mortality,
+                                 treatment_mortality,
+                                 fish_deaths_natural,
+                                 fish_deaths_from_lice,
                                  new_l2, new_l4, new_females, new_males,
                                  new_infections, reservoir_lice,
-                                 delta_avail_dams, delta_eggs, null_egg_batch, null_offspring_distrib)
+                                 delta_avail_dams, delta_eggs,
+                                 null_offspring_distrib,
+                                 null_hatched_arrivals)
 
         for population in first_cage.lice_population.values():
             assert population >= 0
@@ -236,7 +241,7 @@ class TestCage:
 
     def test_generate_eggs_discrete(self, first_cage):
         breeding_method = 'discrete'
-        
+
         sire = ('A',)
         dam = ('A',)
         hom_dom_target = {('A',): 1574}
@@ -252,21 +257,21 @@ class TestCage:
         egg_result_hom_rec = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
         for geno in egg_result_hom_rec:
             assert egg_result_hom_rec[geno] == hom_rec_target[geno]
-        
+
         sire = tuple(sorted(('a', 'A')))
         dam = ('a',)
         het_target_sire = {('a',): 760.5, tuple(sorted(('a', 'A'))): 760.5}
         egg_result_het_sire = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
         for geno in egg_result_het_sire:
             assert egg_result_het_sire[geno] == het_target_sire[geno]
-        
+
         dam = tuple(sorted(('a', 'A')))
         sire = ('a',)
         het_target_dam = {('a',): 794.0, tuple(sorted(('a', 'A'))): 794.0}
         egg_result_het_dam = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
         for geno in egg_result_het_dam:
             assert egg_result_het_dam[geno] == het_target_dam[geno]
-        
+
         dam = tuple(sorted(('a', 'A')))
         sire = tuple(sorted(('a', 'A')))
         het_target = {('A', 'a'): 727.0, ('A',): 363.5, ('a',): 363.5}
@@ -318,9 +323,9 @@ class TestCage:
         matings = first_cage.get_num_matings()
         assert 1500 <= first_cage.get_num_eggs(matings) <= 1600
 
-    def test_egg_batch_null(self, first_cage, null_offspring_distrib, cur_day):
-        batch_egg = first_cage.get_egg_batch(cur_day, null_offspring_distrib)
-        assert batch_egg.geno_distrib == null_offspring_distrib
+    def test_get_egg_batch_null(self, first_cage, null_offspring_distrib, cur_day):
+        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, null_offspring_distrib)
+        assert egg_distrib == null_offspring_distrib
 
     def test_egg_batch_lt(self, first_cage, null_offspring_distrib, cur_day):
         batch1 = EggBatch(cur_day, null_offspring_distrib)
@@ -332,10 +337,9 @@ class TestCage:
         busy_dams, new_eggs = first_cage.do_mating_events()
         target_egg_distrib = {('A', 'a'): 4644.5, ('A',): 2698.25, ('a',): 1927.25}
 
-        new_egg_batch = first_cage.get_egg_batch(cur_day, new_eggs)
-        assert new_egg_batch == EggBatch(
-            hatching_time=datetime.datetime(2017, 10, 6, 0, 0),
-            geno_distrib=target_egg_distrib)
+        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, new_eggs)
+        assert egg_distrib == target_egg_distrib
+        assert hatch_date == datetime.datetime(2017, 10, 6, 0, 0)
 
     def test_get_egg_batch_across_time(self, first_cage):
         egg_offspring = {
@@ -346,21 +350,21 @@ class TestCage:
 
         # October
         cur_day = to_dt("2017-10-01 00:00:00")
-        egg_batch = first_cage.get_egg_batch(cur_day, egg_offspring)
-        assert (egg_batch.hatching_time - cur_day).days == 11
-        assert egg_batch.geno_distrib == egg_offspring
+        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, egg_offspring)
+        assert (hatch_date - cur_day).days == 11
+        assert egg_distrib == egg_offspring
 
         # August
         cur_day = to_dt("2017-08-01 00:00:00")
-        egg_batch = first_cage.get_egg_batch(cur_day, egg_offspring)
-        assert (egg_batch.hatching_time - cur_day).days == 3
-        assert egg_batch.geno_distrib == egg_offspring
+        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, egg_offspring)
+        assert (hatch_date - cur_day).days == 3
+        assert egg_distrib == egg_offspring
 
         # February
         cur_day = to_dt("2017-02-01 00:00:00")
-        egg_batch = first_cage.get_egg_batch(cur_day, egg_offspring)
-        assert (egg_batch.hatching_time - cur_day).days == 12
-        assert egg_batch.geno_distrib == egg_offspring
+        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, egg_offspring)
+        assert (hatch_date - cur_day).days == 12
+        assert egg_distrib == egg_offspring
 
     def test_create_offspring_early(self, first_cage, cur_day, null_offspring_distrib):
         egg_offspring = {
@@ -369,7 +373,9 @@ class TestCage:
             ('A', 'a'): 10,
         }
 
-        first_cage.hatching_events.put(first_cage.get_egg_batch(cur_day, egg_offspring))
+        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, egg_offspring)
+
+        first_cage.hatching_events.put(EggBatch(hatch_date, egg_distrib))
         assert first_cage.create_offspring(cur_day) == null_offspring_distrib
 
     def test_create_offspring_same_day(self, first_cage, cur_day):
