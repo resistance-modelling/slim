@@ -233,6 +233,31 @@ class TestCage:
             assert delta_eggs[key] == target_eggs[key]
         for key in delta_avail_dams:
             assert delta_avail_dams[key] == target_delta_dams[key]
+    
+    
+    def test_no_available_sires_do_mating_events(self, first_cage):
+        first_cage.geno_by_lifestage['L5m'] = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
+        
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
+        assert not bool(delta_avail_dams)
+        assert not bool(delta_eggs)
+        
+    def test_generate_eggs_quantitative(self, first_cage):
+        sire = 0.7
+        dam = 0.0
+        num_matings = 10
+        target_eggs = {0.4: 2537}
+        eggs = first_cage.generate_eggs(sire, dam, 'quantitative', num_matings)
+        for key in eggs:
+            assert eggs[key] == target_eggs[key]
+            
+        sire = 0.2
+        dam = 0.2
+        num_matings = 10
+        target_eggs = {0.2: 2545}
+        eggs = first_cage.generate_eggs(sire, dam, 'quantitative', num_matings)
+        for key in eggs:
+            assert eggs[key] == target_eggs[key]
 
     def test_generate_eggs_discrete(self, first_cage):
         breeding_method = 'discrete'
@@ -273,6 +298,20 @@ class TestCage:
         egg_result_het = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
         for geno in egg_result_het:
             assert egg_result_het[geno] == het_target[geno]
+            
+    def test_not_enough_dams_select_dams(self, first_cage):
+        
+        distrib_dams_available = {('a',): 760, tuple(sorted(('a', 'A'))): 760}
+        total_dams = sum(distrib_dams_available.values())
+        num_dams = 2*total_dams
+        
+        delta_dams = first_cage.select_dams(distrib_dams_available, num_dams)
+        for key in delta_dams:
+            assert delta_dams[key] == distrib_dams_available[key]
+        for key in delta_dams:
+            assert  distrib_dams_available[key] == delta_dams[key]
+        
+        
 
     def test_update_step(self, first_cage, cur_day):
         first_cage.update(cur_day, 1, 0)
