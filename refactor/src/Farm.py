@@ -110,6 +110,13 @@ class Farm:
 
         :return: List of values of external pressure for each cage
         """
+
+        if len(self.cages) < 1:
+            raise Exception("Farm must have at least one cage.")
+        if self.cfg.ext_pressure < 0:
+            raise Exception("External pressure cannot be negative.")
+
+
         # assume equal chances for each cage
         probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
 
@@ -125,7 +132,12 @@ class Farm:
         :return: List of dictionaries of genotype distributions based on hatch date per bin
         """
 
-        # TODO complete the probabilities
+        if nbins < 1:
+            raise Exception("Number of bins must be positive.")
+
+        # dummy implmentation - assumes equal probabilities
+        # for both intercage and interfarm travel
+        # TODO: complete with actual probabilities
         # probs_per_farm = self.cfg.interfarm_probs[self.name]
         probs_per_bin = np.full(nbins, 1 / nbins)
 
@@ -133,7 +145,8 @@ class Farm:
         hatch_list = [{hatch_date: {} for hatch_date in eggs_by_hatch_date} for n in range(nbins)]
         for hatch_date, geno_dict in eggs_by_hatch_date.items():
             for genotype in geno_dict:
-                # generate the bin distribution of this genotype with this hatch date
+                # generate the bin distribution of this genotype with 
+                # this hatch date
                 genotype_per_bin = self.cfg.rng.multinomial(geno_dict[genotype],
                                                             probs_per_bin,
                                                             size=1)[0]
@@ -173,6 +186,7 @@ class Farm:
             farm_arrivals = arrivals_per_farm[farm.name]
             arrivals_per_cage = self.get_egg_allocation(len(farm.cages), farm_arrivals)
 
+            # TODO: add logging
             # self.logger.debug("\t\tTotal egg travels = {}".format(farm_arrivals))
             # self.logger.debug("\t\tCage lice arrivals distribution = {}".format(arrivals_per_cage))
 

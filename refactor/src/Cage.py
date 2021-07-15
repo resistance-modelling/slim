@@ -138,14 +138,15 @@ class Cage:
         delta_avail_dams, delta_eggs = self.do_mating_events()
         egg_distrib, hatch_date = self.get_egg_batch(cur_date, delta_eggs)
 
+        # Lice coming from other cages and farms
+        # NOTE: arrivals first then hatching
+        hatched_arrivals_dist = self.get_arrivals(cur_date)
+
         # Egg hatching
         new_offspring_distrib = self.create_offspring(cur_date)
 
         # Lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure)
-
-        # Lice coming from other cages and farms
-        hatched_arrivals_dist = self.get_arrivals(cur_date)
 
         self.update_deltas(dead_lice_dist,
                            treatment_mortality,
@@ -675,9 +676,9 @@ class Cage:
         # check queue for arrivals at current date
         while not self.arrival_events.empty() and self.arrival_events.queue[0].arrival_date <= cur_date:
             batch = self.arrival_events.get()
-
+            
             # if the hatch date is after current date, add to stationary egg queue
-            if batch.hatch_date > cur_date:
+            if batch.hatch_date >= cur_date:
                 stationary_batch = EggBatch(batch.hatch_date, batch.geno_distrib)
                 self.hatching_events.put(stationary_batch)
 
@@ -769,6 +770,11 @@ class Cage:
         """
 
         for hatch_date in arrivals_dict:
+            
+            # skip if there are no eggs in the dictionary
+            if sum(arrivals_dict[hatch_date].values()) == 0:
+                continue
+
             # create new travelling batch and update the queue
             batch = TravellingEggBatch(arrival_date, hatch_date, arrivals_dict[hatch_date])
             self.arrival_events.put(batch)

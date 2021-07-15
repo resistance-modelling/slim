@@ -19,6 +19,12 @@ def farm_config():
 def farm(farm_config):
     return Farm(0, farm_config)
 
+@pytest.fixture
+def farm_two(farm_config):
+    # use config of farm 1 but change the name
+    farm = Farm(0, farm_config)
+    farm.name = 1
+    return farm
 
 @pytest.fixture
 def first_cage(farm):
@@ -30,7 +36,6 @@ def cur_day(first_cage):
     return first_cage.date + datetime.timedelta(days=1)
 
 
-
 @pytest.fixture
 def null_offspring_distrib():
     return {
@@ -39,7 +44,18 @@ def null_offspring_distrib():
         ('A', 'a'): 0,
     }
 
+@pytest.fixture
+def sample_offspring_distrib():
+    return {
+        ('A',): 100,
+        ('a',): 200,
+        ('A', 'a'): 300,
+    }
 
 @pytest.fixture
 def null_hatched_arrivals(null_offspring_distrib, farm):
+    return {farm.start_date: null_offspring_distrib}
+
+@pytest.fixture
+def sample_eggs_by_hatch_date(sample_offspring_distrib, farm):
     return {farm.start_date: null_offspring_distrib}

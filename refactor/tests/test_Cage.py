@@ -8,7 +8,7 @@ import pytest
 import json
 
 from src.Config import to_dt
-from src.Cage import EggBatch
+from src.Cage import EggBatch, TravellingEggBatch
 
 class TestCage:
     def test_cage_loads_params(self, first_cage):
@@ -391,3 +391,51 @@ class TestCage:
         offspring = first_cage.create_offspring(cur_day + dt.timedelta(days=3))
         for val in offspring.values():
             assert val == 30
+
+    def test_get_arrivals(self, first_cage, cur_day, sample_offspring_distrib):
+        hatch_date_unhatched = cur_day + dt.timedelta(5)
+        unhatched_batch = TravellingEggBatch(cur_day, hatch_date_unhatched, sample_offspring_distrib)
+        first_cage.arrival_events.put(unhatched_batch)
+
+        hatched_at_travel_dist = {
+                                    ('A',): 10,
+                                    ('a',): 10,
+                                    ('A', 'a'): 10,
+                                }
+        hatch_date_hatched = cur_day - dt.timedelta(1)
+        hatched_batch = TravellingEggBatch(cur_day, hatch_date_hatched, hatched_at_travel_dist)
+        first_cage.arrival_events.put(hatched_batch)
+
+        hatched_dist = first_cage.get_arrivals(cur_day)
+
+        assert first_cage.hatching_events.qsize() == 1
+        assert first_cage.hatching_events.get() == EggBatch(hatch_date_unhatched, sample_offspring_distrib)
+        assert hatched_dist == hatched_at_travel_dist
+
+    def test_get_arrivals_empty_queue(self, first_cage, cur_day):
+        hatched_dist = first_cage.get_arrivals(cur_day)
+        assert hatched_dist == {}
+
+    def test_get_arrivals_no_arrivals(self, first_cage, cur_day, sample_offspring_distrib):
+        arrival_date = cur_day + dt.timedelta(1)
+        batch = TravellingEggBatch(arrival_date, arrival_date, sample_offspring_distrib)
+        first_cage.arrival_events.put(batch)
+        hatched_dist = first_cage.get_arrivals(cur_day)
+
+        assert hatched_dist == {}
+        assert first_cage.arrival_events.qsize() == 1
+        assert first_cage.hatching_events.qsize() == 0
+
+    def test_update_arrivals(self, first_cage, sample_offspring_distrib, cur_day):
+        arrival_dict = {
+            cur_day + dt.timedelta(5): {
+                        ('A',): 100,
+                        ('a',): 100,
+                        ('A', 'a'): 100,
+                     }
+        }
+
+        arrival_date = dt.timedelta(2)
+        first_cage.update_arrivals(arrival_dict, arrival_date)
+
+        assert first_cage.arrival_events.qsize() == 1
