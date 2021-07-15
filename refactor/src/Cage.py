@@ -334,7 +334,7 @@ class Cage:
 
         lice_dist["L2"] = num_to_move
 
-        self.logger.debug("	\t\t\tdistribution of new lice lifecycle stages on farm {}/cage {} = {}"
+        self.logger.debug("\t\t\tdistribution of new lice lifecycle stages on farm {}/cage {} = {}"
                           .format(self.farm_id, self.id, lice_dist))
 
         return new_L2, new_L4, new_females, new_males
