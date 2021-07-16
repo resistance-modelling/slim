@@ -15,6 +15,9 @@ lice_counts*.txt
 
 # Testing
 .pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
 
 # Original .gitignore
 Figures/
