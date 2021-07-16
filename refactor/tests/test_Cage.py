@@ -10,6 +10,7 @@ import json
 from src.Config import to_dt
 from src.Cage import EggBatch, TravellingEggBatch
 
+
 class TestCage:
     def test_cage_loads_params(self, first_cage):
         assert first_cage.id == 0
@@ -238,15 +239,15 @@ class TestCage:
             assert delta_eggs[key] == target_eggs[key]
         for key in delta_avail_dams:
             assert delta_avail_dams[key] == target_delta_dams[key]
-    
-    
+
+
     def test_no_available_sires_do_mating_events(self, first_cage):
         first_cage.geno_by_lifestage['L5m'] = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
-        
+
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert not bool(delta_avail_dams)
         assert not bool(delta_eggs)
-        
+
     def test_generate_eggs_quantitative(self, first_cage):
         sire = 0.7
         dam = 0.0
@@ -255,7 +256,7 @@ class TestCage:
         eggs = first_cage.generate_eggs(sire, dam, 'quantitative', num_matings)
         for key in eggs:
             assert eggs[key] == target_eggs[key]
-            
+
         sire = 0.2
         dam = 0.2
         num_matings = 10
@@ -303,20 +304,20 @@ class TestCage:
         egg_result_het = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
         for geno in egg_result_het:
             assert egg_result_het[geno] == het_target[geno]
-            
+
     def test_not_enough_dams_select_dams(self, first_cage):
-        
+
         distrib_dams_available = {('a',): 760, tuple(sorted(('a', 'A'))): 760}
         total_dams = sum(distrib_dams_available.values())
         num_dams = 2*total_dams
-        
+
         delta_dams = first_cage.select_dams(distrib_dams_available, num_dams)
         for key in delta_dams:
             assert delta_dams[key] == distrib_dams_available[key]
         for key in delta_dams:
             assert  distrib_dams_available[key] == delta_dams[key]
-        
-        
+
+
 
     def test_update_step(self, first_cage, cur_day):
         first_cage.update(cur_day, 1, 0)
@@ -478,3 +479,28 @@ class TestCage:
         first_cage.update_arrivals(arrival_dict, arrival_date)
 
         assert first_cage.arrival_events.qsize() == 1
+
+    def test_update_arrivals_empty_geno_dict(self, first_cage, sample_offspring_distrib, cur_day):
+        arrival_dict = {
+            cur_day + dt.timedelta(5): {
+                        ('A',): 0,
+                        ('a',): 0,
+                        ('A', 'a'): 0,
+                     }
+        }
+
+        arrival_date = dt.timedelta(2)
+        first_cage.update_arrivals(arrival_dict, arrival_date)
+
+        assert first_cage.arrival_events.qsize() == 0
+
+    def test_get_reservoir_lice(self, first_cage):
+        pressure = 100
+        dist = first_cage.get_reservoir_lice(pressure)
+
+        assert sum(dist.values()) == pressure
+        for value in dist.values():
+            assert value >= 0
+
+    def test_get_reservoir_lice_no_pressure(self, first_cage):
+        assert first_cage.get_reservoir_lice(0) == {"L1": 0, "L2": 0}
