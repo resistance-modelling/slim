@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from src.Config import to_dt
+import datetime as dt
 
 
 class TestFarm:
@@ -123,3 +124,38 @@ class TestFarm:
         for farm in farms:
             for cage in farm.cages:
                 assert cage.arrival_events.qsize() == 1
+
+    def test_get_cage_arrivals_stats(self, farm, cur_day):
+
+        next_day = cur_day + dt.timedelta(1)
+
+        cage_1 = {
+            cur_day: {
+                        ('A',): 10,
+                        ('a',): 10,
+                        ('A', 'a'): 10,
+                     },
+            next_day: {
+                        ('A',): 10,
+                        ('a',): 10,
+                        ('A', 'a'): 20,
+                     }}
+
+        cage_2 = {
+            cur_day: {
+                        ('A',): 5,
+                        ('a',): 5,
+                        ('A', 'a'): 5,
+                     },
+            next_day: {
+                        ('A',): 5,
+                        ('a',): 5,
+                        ('A', 'a'): 10,
+                     }}
+
+        arrivals = [cage_1, cage_2]
+
+        total, by_cage = farm.get_cage_arrivals_stats(arrivals)
+
+        assert total == 105
+        assert by_cage == [70, 35]

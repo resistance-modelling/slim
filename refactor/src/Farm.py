@@ -170,7 +170,7 @@ class Farm:
         :param cur_date: Current date of the simulation
         """
 
-        self.logger.debug("\tDispersing total offspring")
+        self.logger.debug("\tDispersing total offspring Farm {}".format(self.name))
 
         # allocate eggs (in batches based on hatch date) between the farms
         arrivals_per_farm = self.get_egg_allocation(len(farms), eggs_by_hatch_date)
@@ -178,17 +178,17 @@ class Farm:
         for farm in farms:
 
             if farm.name == self.name:
-                self.logger.debug("\tFarm {}:".format(farm.name))
+                self.logger.debug("\t\tFarm {}:".format(farm.name))
             else:
-                self.logger.debug("\tFarm {} (current):".format(farm.name))
+                self.logger.debug("\t\tFarm {} (current):".format(farm.name))
 
             # allocate eggs to cages
             farm_arrivals = arrivals_per_farm[farm.name]
             arrivals_per_cage = self.get_egg_allocation(len(farm.cages), farm_arrivals)
 
-            # TODO: add logging
-            # self.logger.debug("\t\tTotal egg travels = {}".format(farm_arrivals))
-            # self.logger.debug("\t\tCage lice arrivals distribution = {}".format(arrivals_per_cage))
+            total, by_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
+            self.logger.debug("\t\t\tTotal new eggs = {}".format(total))
+            self.logger.debug("\t\t\tPer cage distribution = {}".format(by_cage))
 
             # get the arrival time of the egg batch at the allocated
             # destination
@@ -198,6 +198,22 @@ class Farm:
             # update the cages
             for cage in farm.cages:
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
+
+    def get_cage_arrivals_stats(self, cage_arrivals: list) -> tuple:
+        """Get stats about the cage arrivals for logging
+
+        :param cage_arrivals: Dictionary of genotype distributions based
+        on hatch date
+        :return: Tuple representing total number of arrivals and arrival 
+        distribution
+        """
+        
+        by_cage = []
+        for hatch_dict in cage_arrivals:
+            cage_total = sum([n for genotype_dict in hatch_dict.values() for n in genotype_dict.values()])
+            by_cage.append(cage_total)
+        
+        return sum(by_cage), by_cage
 
     def to_csv(self):
         """
