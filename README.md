@@ -119,11 +119,19 @@ TODO: source of data (f_meanEMB, f_sigEMB, EMBmort, env_meanEMB, env_sigEMB)
 ### Refactored
 To run the WIP refactored model, enter the ```refactor``` directory and run:
 
-```python -m src.SeaLiceMgmt output_folder simulation_name config_json_path simulation_params_json_path```
+```python -m src.SeaLiceMgmt output_folder simulation_name config_json_path simulation_params_directory```
 
 For example:
-```python -m src.SeaLiceMgmt out 0 config_data/params.json config_data/test.json```
+```python -m src.SeaLiceMgmt out 0 config_data/config.json config_data/Fyne```
 
+#### Simulation parameters directory
+The program expects three files in the simulation parameters directory:
+- `params.json` with simulation parameters
+- `interfarm_time.csv` with travel time of sealice between two given farms
+- `interfarm_prob.csv` with probability of sealice travel between two given farms
+See `refactor/config_data/Fyne` for examples.
+
+#### Testing
 To test, also from ```refactor``` directory, run:
 
 ```pytest```

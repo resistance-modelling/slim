@@ -11,7 +11,7 @@ from src.Cage import EggBatch
 @pytest.fixture
 def farm_config():
     np.random.seed(0)
-    cfg = Config("config_data/test.json", "config_data/params.json", logging.getLogger('dummy'))
+    cfg = Config("config_data/config.json", "config_data/Fyne", logging.getLogger('dummy'))
     return cfg
 
 

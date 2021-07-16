@@ -135,12 +135,12 @@ if __name__ == "__main__":
     parser.add_argument("id",
                         type=str,
                         help="Experiment name")
-    parser.add_argument("sim_path",
-                        type=str,
-                        help="Path to simulation params JSON file")
     parser.add_argument("cfg_path",
                         type=str,
-                        help="Path to config JSON file")
+                        help="Path to simulation config JSON file")
+    parser.add_argument("param_dir",
+                        type=str,
+                        help="Directory of simulation parameters files.")
     parser.add_argument("--quiet",
                         help="Don't log to console or file.",
                         default=False,
@@ -163,7 +163,7 @@ if __name__ == "__main__":
         logger.addFilter(lambda record: False)
 
     # create the config object
-    cfg = Config(args.cfg_path, args.sim_path, logger)
+    cfg = Config(args.cfg_path, args.param_dir, logger)
 
     # set the seed
     if "seed" in args:
