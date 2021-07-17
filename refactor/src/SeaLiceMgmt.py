@@ -4,7 +4,6 @@ a given body of water.
 See README.md for details.
 """
 import argparse
-import copy
 import datetime as dt
 import logging
 import sys
@@ -27,20 +26,20 @@ def setup(data_folder, sim_id):
     # lice_counts.unlink(missing_ok=True)
     # resistance_bv.unlink(missing_ok=False)
 
-    resistance_bv.write_text('cur_date, muEMB, sigEMB, prop_ext')
+    resistance_bv.write_text("cur_date, muEMB, sigEMB, prop_ext")
 
 
 def create_logger():
     """
     Create a logger that logs to both file (in debug mode) and terminal (info).
     """
-    logger = logging.getLogger('SeaLiceManagementGame')
+    logger = logging.getLogger("SeaLiceManagementGame")
     logger.setLevel(logging.DEBUG)
-    file_handler = logging.FileHandler('SeaLiceManagementGame.log', mode='w')
+    file_handler = logging.FileHandler("SeaLiceManagementGame.log", mode="w")
     file_handler.setLevel(logging.DEBUG)
     term_handler = logging.StreamHandler()
     term_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     term_handler.setFormatter(formatter)
     file_handler.setFormatter(formatter)
     logger.addHandler(term_handler)
@@ -60,7 +59,7 @@ def initialise(data_folder, sim_id, cfg):
     resistance_bv = data_folder / "resistanceBVs_{}.txt".format(sim_id)
     lice_counts.unlink(missing_ok=True)
     resistance_bv.unlink(missing_ok=True)
-    resistance_bv.write_text('cur_date, muEMB, sigEMB, prop_ext')
+    resistance_bv.write_text("cur_date, muEMB, sigEMB, prop_ext")
 
     farms = [Farm(i, cfg) for i in range(cfg.nfarms)]
 
@@ -81,26 +80,36 @@ def run_model(path, sim_id, cfg, farms):
     :param farms: List of Farm objects.
     :type farms: list
     """
-    cfg.logger.info('running simulation, saving to %s', path)
+    cfg.logger.info("running simulation, saving to %s", path)
     cur_date = cfg.start_date
 
     # create a file to store the population data from our simulation
     data_file = path / "simulation_data_{}.txt".format(sim_id)
     data_file.unlink(missing_ok=True)
-    data_file = (data_file).open(mode='a')
+    data_file = (data_file).open(mode="a")
 
     while cur_date <= cfg.end_date:
-        cfg.logger.debug('Current date = %s', cur_date)
+        cfg.logger.debug("Current date = %s", cur_date)
 
         cur_date += dt.timedelta(days=cfg.tau)
         days = (cur_date - cfg.start_date).days
 
+        # update the farms and get the offspring
+        offspring_dict = {}
         for farm in farms:
 
             #if days == 1:
             #    resistance_bv.write_text(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext)
 
-            farm.update(cur_date, cfg.tau)
+            offspring = farm.update(cur_date, cfg.tau)
+            offspring_dict[farm.name] = offspring
+
+        # once all of the offspring is collected
+        # it can be dispersed (interfarm and intercage movement)
+        # note: this is done on driver level because it requires access to
+        # other farms - and will allow muliprocessing of the main update
+        for farm_ix, offspring in offspring_dict.items():
+            farms[farm_ix].disperse_offspring(offspring, farms, cur_date)
 
         # Save the data
         data_str = str(cur_date) + ", " + str(days)
@@ -126,16 +135,16 @@ if __name__ == "__main__":
     parser.add_argument("id",
                         type=str,
                         help="Experiment name")
-    parser.add_argument("sim_path",
-                        type=str,
-                        help="Path to simulation params JSON file")
     parser.add_argument("cfg_path",
                         type=str,
-                        help="Path to config JSON file")
+                        help="Path to simulation config JSON file")
+    parser.add_argument("param_dir",
+                        type=str,
+                        help="Directory of simulation parameters files.")
     parser.add_argument("--quiet",
                         help="Don't log to console or file.",
                         default=False,
-                        action='store_true')
+                        action="store_true")
     parser.add_argument("--seed",
                         type=int,
                         help="Provide a seed for random generation.",
@@ -154,7 +163,7 @@ if __name__ == "__main__":
         logger.addFilter(lambda record: False)
 
     # create the config object
-    cfg = Config(args.cfg_path, args.sim_path, logger)
+    cfg = Config(args.cfg_path, args.param_dir, logger)
 
     # set the seed
     if "seed" in args:

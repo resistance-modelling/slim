@@ -8,6 +8,11 @@ __pycache__/
 resistanceBVs_*.txt
 simulation_data_*.txt
 
+# logging original
+resistanceBVs*.txt
+resistanceBVs*.csv
+lice_counts*.txt
+
 # Testing
 .pytest_cache/
 .coverage
