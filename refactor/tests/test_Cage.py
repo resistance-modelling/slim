@@ -30,7 +30,7 @@ class TestCage:
         assert sum(first_cage.available_dams.values()) == 10
 
         for stage in first_cage.lice_stages:
-            assert first_cage.lice_population[stage] == sum(first_cage.geno_by_lifestage[stage].values())
+            assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
 
     def test_cage_json(self, first_cage):
         return_str = str(first_cage)
@@ -173,35 +173,42 @@ class TestCage:
         first_cage.lice_population["L5f"] = 0
 
         for stage in first_cage.lice_stages:
-            assert first_cage.lice_population[stage] == sum(first_cage.geno_by_lifestage[stage].values())
+            assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
 
         assert first_cage.get_mean_infected_fish() == 0
-        assert first_cage.get_variance_infected_fish() == 0
+        assert first_cage.get_variance_infected_fish(first_cage.num_fish, 0) == 0
 
     def test_get_infected_fish(self, first_cage):
-        assert first_cage.get_mean_infected_fish() == int(4000 * (1 - (3999 / 4000) ** 80))
-        assert 70 <= first_cage.get_variance_infected_fish() <= 80
+        assert 70 <= first_cage.get_mean_infected_fish() <= 80
 
     def test_get_std_infected_fish(self, first_cage):
-        assert first_cage.get_variance_infected_fish() > 0
+        infecting = first_cage.get_infecting_population()
+        assert first_cage.get_variance_infected_fish(first_cage.num_fish, infecting) > 0
 
     def test_get_num_matings_no_infection(self, first_cage):
         males = first_cage.lice_population["L5m"]
         first_cage.lice_population["L5m"] = 0
         assert first_cage.get_num_matings() == 0
         for stage in first_cage.lice_stages:
-            assert first_cage.lice_population[stage] == sum(first_cage.geno_by_lifestage[stage].values())
+            assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
         first_cage.lice_population["L5m"] = males
 
         first_cage.lice_population["L5f"] = 0
         assert first_cage.get_num_matings() == 0
         for stage in first_cage.lice_stages:
-            assert first_cage.lice_population[stage] == sum(first_cage.geno_by_lifestage[stage].values())
-
+            assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
 
     def test_get_num_matings(self, first_cage):
-        first_cage.lice_population["L5m"] = first_cage.lice_population["L5f"]
-        assert 1 <= first_cage.get_num_matings() <= 10
+        # only 20 lice out of 4000 aren't that great
+        assert first_cage.get_num_matings() == 0
+
+        first_cage.lice_population["L5m"] = 100
+        first_cage.lice_population["L5f"] = 100
+        assert 70 <= first_cage.get_num_matings() <= 90
+
+        first_cage.lice_population["L5m"] = 1000
+        first_cage.lice_population["L5f"] = 1000
+        assert 900 <= first_cage.get_num_matings() <= 1000
 
     def test_update_deltas_no_negative_raise(self, first_cage, null_egg_batch, null_offspring_distrib, null_dams_batch):
         first_cage.lice_population["L3"] = 0
@@ -237,11 +244,17 @@ class TestCage:
         for population in first_cage.lice_population.values():
             assert population >= 0
 
+    def test_invalid_update_raises(self, first_cage):
+        first_cage.lice_population.geno_by_lifestage['L5m'] = {('A',): 5, ('a',): 5, ('A', 'a'): 5}
+        with pytest.raises(AssertionError):
+            first_cage.lice_population.available_dams = {('A',): 10}
+
     def test_do_mating_events(self, first_cage):
-        first_cage.geno_by_lifestage['L5m'] = {('A',): 5, ('a',): 5, ('A', 'a'): 5}
-        first_cage.available_dams = {('A',): 10}
-        target_eggs = {('a',): 2322.0, ('A',): 3861.0, tuple(sorted(('a', 'A'))): 3116.0}
-        target_delta_dams = {('A',): 2, ('A', 'a'): 3, ('a',): 1}
+        first_cage.lice_population.geno_by_lifestage['L5f'] = {('A',): 15, ('a',): 15, ('A', 'a'): 15}
+        first_cage.lice_population.available_dams = {('A',): 15, ('a',): 15}
+
+        target_eggs = {('a',): 3096.5, ('A',): 2216.0, tuple(sorted(('a', 'A'))): 3833.5}
+        target_delta_dams = {('A',): 3, ('a',): 3}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert delta_eggs == target_eggs
@@ -249,40 +262,40 @@ class TestCage:
 
     def test_generate_eggs_discrete(self, first_cage):
         breeding_method = 'discrete'
-        
+
         sire = ('A',)
         dam = ('A',)
-        hom_dom_target = {('A',): 1574}
+        hom_dom_target = {('A',): 1523}
 
-        num_matings = first_cage.get_num_matings()
+        num_matings = 6
         egg_result_hom_dom = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
         for geno in egg_result_hom_dom:
             assert egg_result_hom_dom[geno] == hom_dom_target[geno]
 
         sire = ('a',)
         dam = ('a',)
-        hom_rec_target = {('a',): 1505}
+        hom_rec_target = {('a',): 1529}
         egg_result_hom_rec = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
         for geno in egg_result_hom_rec:
             assert egg_result_hom_rec[geno] == hom_rec_target[geno]
         
         sire = tuple(sorted(('a', 'A')))
         dam = ('a',)
-        het_target_sire = {('a',): 760.5, tuple(sorted(('a', 'A'))): 760.5}
+        het_target_sire = {('a',): 754.5, tuple(sorted(('a', 'A'))): 754.5}
         egg_result_het_sire = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
         for geno in egg_result_het_sire:
             assert egg_result_het_sire[geno] == het_target_sire[geno]
         
         dam = tuple(sorted(('a', 'A')))
         sire = ('a',)
-        het_target_dam = {('a',): 794.0, tuple(sorted(('a', 'A'))): 794.0}
+        het_target_dam = {('a',): 755.5, tuple(sorted(('a', 'A'))): 755.5}
         egg_result_het_dam = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
         for geno in egg_result_het_dam:
             assert egg_result_het_dam[geno] == het_target_dam[geno]
         
         dam = tuple(sorted(('a', 'A')))
         sire = tuple(sorted(('a', 'A')))
-        het_target = {('A', 'a'): 727.0, ('A',): 363.5, ('a',): 363.5}
+        het_target = {('A', 'a'): 813.0, ('A',): 406.5, ('a',): 406.5}
         egg_result_het = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
         for geno in egg_result_het:
             assert egg_result_het[geno] == het_target[geno]
@@ -326,9 +339,7 @@ class TestCage:
         assert first_cage.get_num_eggs(0) == 0
 
     def test_get_num_eggs(self, first_cage):
-        first_cage.lice_population['L5m'] = first_cage.lice_population['L5f']
-
-        matings = first_cage.get_num_matings()
+        matings = 6
         assert 1500 <= first_cage.get_num_eggs(matings) <= 1600
 
     def test_egg_batch_null(self, first_cage, null_offspring_distrib, cur_day):
@@ -412,19 +423,23 @@ class TestCage:
         assert all(x == 0 for x in first_cage.free_dams(cur_day).values())
 
     def test_avail_dams_freed_same_day_once(self, first_cage, cur_day):
+        first_cage.lice_population["L5m"] = 1000
+        first_cage.lice_population["L5f"] = 1000
         dams, _ = first_cage.do_mating_events()
-        target_dams = {('A',): 2,
-                       ('a',): 1,
-                       ('A', 'a'): 3}
+        target_dams = {('A',): 200,
+                       ('a',): 200,
+                       ('A', 'a'): 600}
 
         first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
         assert first_cage.free_dams(cur_day + dt.timedelta(days=1)) == target_dams
 
     def test_avail_dams_freed_same_day_thrice(self, first_cage, cur_day):
+        first_cage.lice_population["L5m"] = 1000
+        first_cage.lice_population["L5f"] = 1000
         dams, _ = first_cage.do_mating_events()
-        target_dams = {('A',): 6,
-                       ('a',): 3,
-                       ('A', 'a'): 9}
+        target_dams = {('A',): 600,
+                       ('a',): 600,
+                       ('A', 'a'): 1800}
 
         for i in range(3):
             first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams))

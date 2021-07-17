@@ -27,23 +27,29 @@ class DamAvailabilityBatch:
 class LicePopulation(dict, MutableMapping):
     """
     Wrapper to keep the global population and genotype information updated
+    This is definitely a convoluted way to do this, but I wanted to memoise as much as possible.
     """
     def __init__(self, initial_population: dict, geno_data: dict, available_dams: dict, logger: logging.Logger):
         super().__init__()
-        self.geno_data = geno_data
+        self.geno_by_lifestage = GenotypePopulation(self, geno_data)
         self._available_dams = available_dams
         self.logger = logger
         for k, v in initial_population.items():
             super().__setitem__(k, v)
 
     def __setitem__(self, stage, value):
-        if sum(self.geno_data[stage].values()) == 0:
+        # If one attempts to make gross modifications to the population these will be repartitioned according to the
+        # current genotype information.
+        if sum(self.geno_by_lifestage[stage].values()) == 0:
             self.logger.warning(f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
-            self.geno_data[stage] = Cage.multiply_distrib(Cage.generic_discrete_props, value)
+            self.geno_by_lifestage.raw_update_value(stage, Cage.multiply_distrib(Cage.generic_discrete_props, value))
         else:
-            self.geno_data[stage] = Cage.multiply_distrib(self.geno_data[stage], value)
+            self.geno_by_lifestage.raw_update_value(stage, Cage.multiply_distrib(self.geno_by_lifestage[stage], value))
         if stage == "L5f":
             self._available_dams = Cage.multiply_distrib(self._available_dams, value)
+        super().__setitem__(stage, value)
+
+    def raw_update_value(self, stage, value):
         super().__setitem__(stage, value)
 
     @property
@@ -53,9 +59,25 @@ class LicePopulation(dict, MutableMapping):
     @available_dams.setter
     def available_dams(self, new_value: dict):
         for geno in new_value:
-            assert self.geno_data["L5f"][geno] >= new_value[geno], f"current population geno {geno}:{self.geno_data['L5f'][geno]} is smaller than new value geno {new_value[geno]}"
+            assert self.geno_by_lifestage["L5f"][geno] >= new_value[geno], f"current population geno {geno}:{self.geno_by_lifestage['L5f'][geno]} is smaller than new value geno {new_value[geno]}"
 
         self._available_dams = new_value
+
+
+class GenotypePopulation(dict, MutableMapping):
+    def __init__(self, gross_lice_population: LicePopulation, geno_data: dict):
+        super().__init__()
+        self._lice_population = gross_lice_population
+        for k, v in geno_data.items():
+            super().__setitem__(k, v)
+
+    def __setitem__(self, stage: str, value: dict):
+        # update the value and the gross population accordingly
+        super().__setitem__(stage, value)
+        self._lice_population.raw_update_value(stage, sum(value.values()))
+
+    def raw_update_value(self, stage, value):
+        super().__setitem__(stage, value)
 
 
 class Cage:
@@ -99,13 +121,13 @@ class Cage:
         # for now I've hard-coded in one mechanism in this setup, and a particular genotype starting point. Should probably be from a config file?
         self.genetic_mechanism = 'discrete'
         
-        self.geno_by_lifestage = {}
+        geno_by_lifestage = {}
         for stage in lice_population:
-            self.geno_by_lifestage[stage] = self.multiply_distrib(self.generic_discrete_props, lice_population[stage])
+            geno_by_lifestage[stage] = self.multiply_distrib(self.generic_discrete_props, lice_population[stage])
 
         # TODO: should we move available_dams inside LicePopulation?
-        self.available_dams = copy.deepcopy(self.geno_by_lifestage['L5f'])
-        self.lice_population = LicePopulation(lice_population, self.geno_by_lifestage, self.available_dams, self.logger)
+        self.available_dams = copy.deepcopy(geno_by_lifestage['L5f'])
+        self.lice_population = LicePopulation(lice_population, geno_by_lifestage, self.available_dams, self.logger)
 
         self.num_fish = cfg.farms[self.farm_id].num_fish
         self.num_infected_fish = self.get_mean_infected_fish()
@@ -148,7 +170,7 @@ class Cage:
         # May want to improve these or change them if we change the representation for genotype distribs         
         filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
         filtered_vars["available_dams"] = {str(key): val for key, val in filtered_vars["available_dams"].items()}
-        filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in filtered_vars["geno_by_lifestage"].items()}
+        filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in self.lice_population.geno_by_lifestage.items()}
         filtered_vars["hatching_events"] = sorted(list(self.hatching_events.queue))
         filtered_vars["busy_dams"] = sorted(list(self.busy_dams.queue))
 
@@ -477,25 +499,36 @@ class Cage:
         inf_events = np.random.poisson(Einf * num_avail_lice)
         return min(inf_events, num_avail_lice)
 
-    def get_infecting_population(self) -> int:
-        infective_stages = ["L3", "L4", "L5m", "L5f"]
+    def get_infecting_population(self, *args) -> int:
+        if args is None or len(args) == 0:
+            infective_stages = ["L3", "L4", "L5m", "L5f"]
+        else:
+            infective_stages = args
         return sum(self.lice_population[stage] for stage in infective_stages)
 
-    def get_mean_infected_fish(self) -> int:
-        # the number of infections is equal to the population size from stage 3 onward
-        attached_lice = self.get_infecting_population()
+    def get_mean_infected_fish(self, *args) -> int:
+        """
+        Get the average number of infected fish
+        :param *args the stages to consider (optional, by default all stages from the third onward are taken into account)
+        :returns the number of infected fish
+        """
+        attached_lice = self.get_infecting_population(*args)
 
         # see: https://stats.stackexchange.com/a/296053
         num_infected_fish = int(self.num_fish * (1 - ((self.num_fish - 1) / self.num_fish) ** attached_lice))
         return num_infected_fish
 
-    def get_variance_infected_fish(self) -> float:
-        # same line of reasoning as above, but compute the variance
-        # remember that Var(sum of i.i.d. variables) = sum(Var of each variable), and do some simplifications...
-        attached_lice = self.get_infecting_population()
-        n = self.num_fish
-        n_prime = ((n-1)/n)**attached_lice
-        return n * (1 - n_prime)*n_prime
+    def get_variance_infected_fish(self, n, k) -> float:
+        # For now make a very quick and dirty approximation.
+        # TODO this has O(n) time complexity. Replace when a closed formula is found
+
+        bins = np.zeros((n,))
+        for i in range(k):
+            bins[np.random.randint(0, n-1)] += 1
+
+        assert np.sum(bins) == k
+        return np.var(bins)*k
+
 
     def get_num_matings(self) -> int:
         """
@@ -507,17 +540,24 @@ class Cage:
         # least_ one AM on the same fish.
 
         males = self.lice_population["L5m"]
-        #females = self.lice_population["L5f"]
         females = sum(self.lice_population.available_dams.values())
 
         if males == 0 or females == 0:
             return 0
 
         # VMR: variance-mean ratio; VMR = m/k + 1 -> k = m / (VMR - 1) with k being an "aggregation factor"
-        vmr = self.get_variance_infected_fish()/self.get_mean_infected_fish()
-        aggregation_factor = males / (vmr - 1)
+        mean = (males + females) / self.get_mean_infected_fish("L5m", "L5f")
+
+        n = self.num_fish
+        k = self.get_infecting_population("L5m", "L5f")
+        variance = self.get_variance_infected_fish(n, k)
+        vmr = variance/mean
+        if vmr <= 1.0:
+            return 0
+        aggregation_factor = mean / (vmr- 1)
 
         prob_matching = 1 - (1 + males/((males + females)*aggregation_factor)) ** (-1-aggregation_factor)
+        # TODO: using a poisson distribution can lead to a high std for high prob*females
         return np.random.poisson(prob_matching * females)
 
     def do_mating_events(self) -> (dict, dict):
@@ -534,7 +574,7 @@ class Cage:
         delta_eggs = {}
         num_matings = self.get_num_matings()
 
-        distrib_sire_available = self.geno_by_lifestage['L5m']
+        distrib_sire_available = self.lice_population.geno_by_lifestage['L5m']
         distrib_dam_available = self.lice_population.available_dams
         
         delta_dams = self.select_dams(distrib_dam_available, num_matings)
@@ -736,7 +776,7 @@ class Cage:
 
         # TODO: this does not take into account f2f-c2c movements
         delta_egg_offspring = {}
-        for geno in self.geno_by_lifestage['L5f']:
+        for geno in self.lice_population.geno_by_lifestage['L5f']:
             delta_egg_offspring[geno] = 0
 
         self.pop_from_queue(self.hatching_events, cur_time, delta_egg_offspring)
@@ -804,11 +844,14 @@ class Cage:
         :returns the genotype population of dams that return available today
         """
         delta_avail_dams = {}
-        for geno in self.geno_by_lifestage['L5f']:
+        for geno in self.lice_population.geno_by_lifestage['L5f']:
             delta_avail_dams[geno] = 0
 
         self.pop_from_queue(self.busy_dams, cur_time, delta_avail_dams)
         return delta_avail_dams
+
+    def promote_population(self, orig_stage, next_stage):
+        pass
 
     def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2,
                       new_L4, new_females, new_males, new_infections, lice_from_reservoir,
