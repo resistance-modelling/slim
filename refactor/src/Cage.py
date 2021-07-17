@@ -6,6 +6,7 @@ import datetime as dt
 import math
 import json
 from queue import PriorityQueue
+from typing import Union, Optional
 
 import numpy as np
 from scipy import stats
@@ -850,8 +851,26 @@ class Cage:
         self.pop_from_queue(self.busy_dams, cur_time, delta_avail_dams)
         return delta_avail_dams
 
-    def promote_population(self, orig_stage, next_stage):
-        pass
+    def promote_population(self, prev_stage: Union[str, dict], cur_stage: str, leaving_lice: int, entering_lice: Optional[int]):
+        """
+        Promote the population by stage and respect the genotypes
+        :param prev_stage the lice stage from which cur_stage evolves
+        :param cur_stage the lice stage that is about to evolve
+        :param leaving_lice the number of lice in the cur_stage=>next_stage progression
+        :param entering_lice the number of lice in the prev_stage=>cur_stage progression.
+               If prev_stage is a dict, entering_lice must be None
+        """
+        if isinstance(prev_stage, str):
+            prev_stage_geno = self.lice_population.geno_by_lifestage[prev_stage]
+            entering_geno_distrib = self.multiply_distrib(prev_stage_geno, entering_lice)
+        else:
+            entering_geno_distrib = prev_stage
+        cur_stage_geno = self.lice_population.geno_by_lifestage[cur_stage]
+
+        leaving_geno_distrib = self.multiply_distrib(cur_stage_geno, leaving_lice)
+
+        self.update_distrib_discrete_add(entering_geno_distrib, cur_stage_geno)
+        self.update_distrib_discrete_subtract(leaving_geno_distrib, cur_stage_geno)
 
     def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2,
                       new_L4, new_females, new_males, new_infections, lice_from_reservoir,
@@ -888,17 +907,21 @@ class Cage:
         self.lice_population['L5m'] += new_males
         self.lice_population['L5f'] += new_females
 
-        update_L4 = self.lice_population['L4'] - (new_males + new_females) + new_L4
-        self.lice_population['L4'] = max(0, update_L4)
+        #update_L4 = self.lice_population['L4'] - (new_males + new_females) + new_L4
+        #self.lice_population['L4'] = max(0, update_L4)
+        self.promote_population("L3", "L4", new_males + new_females, new_L4)
 
-        update_L3 = self.lice_population['L3'] - new_L4 + new_infections
-        self.lice_population['L3'] = max(0, update_L3)
+        #update_L3 = self.lice_population['L3'] - new_L4 + new_infections
+        #self.lice_population['L3'] = max(0, update_L3)
+        self.promote_population("L2", "L3", new_L4, new_infections)
 
-        update_L2 = self.lice_population['L2'] + new_L2 - new_infections + lice_from_reservoir["L2"]
-        self.lice_population['L2'] = max(0, update_L2)
+        #update_L2 = self.lice_population['L2'] + new_L2 - new_infections + lice_from_reservoir["L2"]
+        #self.lice_population['L2'] = max(0, update_L2)
+        self.promote_population("L1", "L2", new_infections, new_L2 + lice_from_reservoir["L2"])
 
-        update_L1 = self.lice_population['L1'] - new_L2 + lice_from_reservoir["L1"] + sum(new_offspring_distrib.values())
-        self.lice_population['L1'] = max(0, update_L1)
+        #update_L1 = self.lice_population['L1'] - new_L2 + lice_from_reservoir["L1"] + sum(new_offspring_distrib.values())
+        #self.lice_population['L1'] = max(0, update_L1)
+        self.promote_population(new_offspring_distrib, "L1", new_L2, None)
 
         delta_eggs = new_egg_batch.geno_distrib
         delta_avail_dams = delta_dams_batch.geno_distrib
@@ -913,7 +936,6 @@ class Cage:
         #  TODO: update life-stage progression genotypes as well
         #  TODO: remove females that leave L5f by dying from available_dams
         
-
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice
 
@@ -939,7 +961,8 @@ class Cage:
         self.logger.debug('    background mortality distribn of dead lice = {}'.format(dead_lice_dist))
         return dead_lice_dist
 
-    def fish_growth_rate(self, days):
+    @staticmethod
+    def fish_growth_rate(days):
         return 10000/(1 + math.exp(-0.01*(days-475)))
 
     def to_csv(self):
