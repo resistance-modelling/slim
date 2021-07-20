@@ -30,7 +30,6 @@ def cur_day(first_cage):
     return first_cage.date + datetime.timedelta(days=1)
 
 
-
 @pytest.fixture
 def null_offspring_distrib():
     return {

@@ -1,3 +1,4 @@
+import copy
 import datetime
 import datetime as dt
 import itertools
@@ -444,4 +445,43 @@ class TestCage:
         for i in range(3):
             first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams))
         assert first_cage.free_dams(cur_day + dt.timedelta(days=3)) == target_dams
+
+    def test_promote_population(self, first_cage):
+        first_cage.lice_population.geno_by_lifestage["L3"] = {('A',): 1000, ('a',): 1000, ('A', 'a'): 1000}
+        first_cage.lice_population.geno_by_lifestage["L4"] = {('A',): 500, ('a',): 500, ('A', 'a'): 500}
+
+        old_L3 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L3"])
+        old_L4 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L4"])
+
+        leaving_lice = 100  # new males and females combined that leave L4 to enter L5{m,f}
+        entering_lice = 200  # L3 lice that enter L4
+
+        first_cage.promote_population("L3", "L4", leaving_lice, entering_lice)
+
+        new_L4 = first_cage.lice_population.geno_by_lifestage["L4"]
+
+        target_population = sum(old_L4.values()) + entering_lice - leaving_lice
+        target_geno = {('A',): 534, ('a',): 534, ('A', 'a'): 532}
+
+        assert new_L4 == target_geno
+        assert sum(new_L4.values()) == sum(old_L4.values()) + entering_lice - leaving_lice
+        assert first_cage.lice_population["L4"] == target_population
+
+        # L3 must be unchanged
+        assert first_cage.lice_population.geno_by_lifestage["L3"] == {('A',): 1000, ('a',): 1000, ('A', 'a'): 1000}
+
+    def test_promote_population_offspring(self, first_cage):
+        offspring_distrib = {('A',): 500, ('a',): 500, ('A', 'a'): 500}
+        new_L2 = 10
+        old_L1 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L1"])
+        first_cage.promote_population(offspring_distrib, "L1", new_L2)
+        new_L1 = first_cage.lice_population.geno_by_lifestage["L1"]
+
+        target_population = sum(old_L1.values()) + sum(offspring_distrib.values()) - new_L2
+        target_geno = {('A',): 535, ('a',): 535, ('A', 'a'): 570}
+
+        assert new_L1 != old_L1
+        assert sum(new_L1.values()) == target_population
+        assert first_cage.lice_population["L1"] == target_population
+        assert new_L1 == target_geno
 

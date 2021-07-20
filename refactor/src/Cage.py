@@ -851,14 +851,20 @@ class Cage:
         self.pop_from_queue(self.busy_dams, cur_time, delta_avail_dams)
         return delta_avail_dams
 
-    def promote_population(self, prev_stage: Union[str, dict], cur_stage: str, leaving_lice: int, entering_lice: Optional[int]):
+    def promote_population(
+        self,
+        prev_stage: Union[str, dict],
+        cur_stage: str,
+        leaving_lice: int,
+        entering_lice: Optional[int] = None
+    ):
         """
         Promote the population by stage and respect the genotypes
         :param prev_stage the lice stage from which cur_stage evolves
         :param cur_stage the lice stage that is about to evolve
         :param leaving_lice the number of lice in the cur_stage=>next_stage progression
         :param entering_lice the number of lice in the prev_stage=>cur_stage progression.
-               If prev_stage is a dict, entering_lice must be None
+               If prev_stage is a a string, entering_lice must be an int
         """
         if isinstance(prev_stage, str):
             prev_stage_geno = self.lice_population.geno_by_lifestage[prev_stage]
@@ -871,6 +877,9 @@ class Cage:
 
         self.update_distrib_discrete_add(entering_geno_distrib, cur_stage_geno)
         self.update_distrib_discrete_subtract(leaving_geno_distrib, cur_stage_geno)
+
+        # update gross population. This is a bit hairy but I cannot think of anything simpler.
+        self.lice_population.geno_by_lifestage[cur_stage] = cur_stage_geno
 
     def update_deltas(self, dead_lice_dist, treatment_mortality, fish_deaths_natural, fish_deaths_from_lice, new_L2,
                       new_L4, new_females, new_males, new_infections, lice_from_reservoir,
