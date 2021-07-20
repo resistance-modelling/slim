@@ -1,7 +1,9 @@
-import json
 import datetime as dt
-import pandas as pd
+import json
+import os
+
 import numpy as np
+import pandas as pd
 
 
 def to_dt(string_date):
@@ -12,19 +14,19 @@ def to_dt(string_date):
     :return: Date as Datetime
     :rtype: [type]
     """
-    dt_format = '%Y-%m-%d %H:%M:%S'
+    dt_format = "%Y-%m-%d %H:%M:%S"
     return dt.datetime.strptime(string_date, dt_format)
 
 
 class Config:
     """Simulation configuration and parameters"""
 
-    def __init__(self, environment_file, param_file, logger):
+    def __init__(self, config_file, simulation_dir, logger):
         """@DynamicAttrs Read the configuration from files
 
-        :param environment_file: Path to the environment JSON file
-        :type environment_file: string
-        :param param_file: path to the simulator parameters JSON file
+        :param config_file: Path to the environment JSON file
+        :type config_file: string
+        :param simulation_dir: path to the simulator parameters JSON file
         :param logger: Logger to be used
         :type logger: logging.Logger
         """
@@ -33,10 +35,10 @@ class Config:
         self.logger = logger
 
         # read and set the params
-        with open(environment_file) as f:
+        with open(os.path.join(simulation_dir, "params.json")) as f:
             data = json.load(f)
 
-        self.params = RuntimeConfig(param_file)
+        self.params = RuntimeConfig(config_file)
 
         # time and dates
         self.start_date = to_dt(data["start_date"]["value"])
@@ -50,6 +52,12 @@ class Config:
         self.farms = [FarmConfig(farm_data["value"], self.logger)
                       for farm_data in data["farms"]]
         self.nfarms = len(self.farms)
+
+        with open(os.path.join(simulation_dir, "interfarm_prob.csv")) as times_csv:
+            self.interfarm_times = np.loadtxt(times_csv, delimiter=",")
+        
+        with open(os.path.join(simulation_dir, "interfarm_time.csv")) as probs_csv:
+            self.interfarm_probs = np.loadtxt(probs_csv, delimiter=",")
 
     def __getattr__(self, name):
         # obscure marshalling trick.

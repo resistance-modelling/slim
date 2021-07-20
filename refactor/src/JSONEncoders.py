@@ -3,9 +3,6 @@ import json
 
 import numpy as np
 
-import src.Farm as frm
-from src.Config import Config, FarmConfig
-
 
 class CustomFarmEncoder(json.JSONEncoder):
     """
@@ -18,7 +15,7 @@ class CustomFarmEncoder(json.JSONEncoder):
         :param o: The object to be encoded as a json string.
         :return: the json representation of o.
         """
-        return_str = ''
+        return_str = ""
         if isinstance(o, np.ndarray):
             return_str = str(o)
         elif isinstance(o, np.int64):
@@ -26,6 +23,6 @@ class CustomFarmEncoder(json.JSONEncoder):
         elif isinstance(o, dt.datetime):
             return_str = o.strftime("%Y-%m-%d %H:%M:%S")
         else:
-            return_str = {'__{}__'.format(o.__class__.__name__): o.__dict__}
+            return_str = {"__{}__".format(o.__class__.__name__): o.__dict__}
 
         return return_str

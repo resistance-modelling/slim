@@ -13,18 +13,31 @@ jobs:
         python-version: "3.8"
         environment-file: environment.yml
         activate-environment: slp
-
     - uses: actions/checkout@v1
     - name: Conda info sanity check
       shell: bash -l {0}
       run: |
         conda info
         conda list
-
     - name: Perform Unit testing
       # TODO: as soon as refactoring is done the refactor/ source folder will
       # move to src/. Not sure whether tests should be under refactor or in
       # a different folder...
       shell: bash -l {0}
-      run: pytest
+      run: pytest --cov=src/ --cov-config=.coveragerc  --cov-context=test --cov-report=xml
       working-directory: ./refactor
+    - name: Install git
+      shell: bash -l {0}
+
+      run: |
+        sudo apt update
+        sudo apt install -y git curl
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        directory: ./refactor/
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: true
+        fail_to_write_report: ./codecov_report
+        verbose: true
