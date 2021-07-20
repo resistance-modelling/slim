@@ -103,7 +103,7 @@ class Cage:
     generic_discrete_props = {('A',): 0.25, ('a',): 0.25, ('A', 'a'): 0.5}
 
     # TODO: annotating the farm here causes import issues
-    def __init__(self, cage_id: int, cfg: Config, farm: 'Farm'):
+    def __init__(self, cage_id: int, cfg: Config, farm: "Farm"):
         """
         Create a cage on a farm
         :param cage_id: the label (id) of the cage within the farm
@@ -131,14 +131,14 @@ class Cage:
         # TODO/Question: I suppose some of this initial genotype information ought to come from the config file
         # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
         # for now I've hard-coded in one mechanism in this setup, and a particular genotype starting point. Should probably be from a config file?
-        self.genetic_mechanism = 'discrete'
+        self.genetic_mechanism = "discrete"
         
         geno_by_lifestage = {}
         for stage in lice_population:
             geno_by_lifestage[stage] = self.multiply_distrib(self.generic_discrete_props, lice_population[stage])
 
         # TODO: should we move available_dams inside LicePopulation?
-        self.available_dams = copy.deepcopy(geno_by_lifestage['L5f'])
+        self.available_dams = copy.deepcopy(geno_by_lifestage["L5f"])
         self.lice_population = LicePopulation(lice_population, geno_by_lifestage, self.available_dams, self.logger)
 
         self.num_fish = cfg.farms[self.farm_id].num_fish
@@ -314,7 +314,7 @@ class Cage:
             assert num_dead_lice == sum(list(dead_lice_dist.values()))
         return dead_lice_dist
 
-    def get_stage_ages_distrib(self, stage: str, size=15, stage_age_max_days = None):
+    def get_stage_ages_distrib(self, stage: str, size=15, stage_age_max_days=None):
         """
         Create an age distribution (in days) for the sea lice within a lifecycle stage.
         In absence of further data or constraints, we simply assume it's a uniform distribution
@@ -944,7 +944,7 @@ class Cage:
         self.update_distrib_discrete_subtract(delta_eggs, new_offspring_distrib)
 
         self.hatching_events.put(new_egg_batch)
-        self.busy_dams.put(delta_avail_dams)
+        self.busy_dams.put(delta_dams_batch)
 
         #  TODO: remove females that leave L5f by dying from available_dams
         
