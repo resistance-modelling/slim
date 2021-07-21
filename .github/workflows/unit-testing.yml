@@ -13,6 +13,7 @@ jobs:
         python-version: "3.8"
         environment-file: environment.yml
         activate-environment: slp
+        channels: conda-forge
     - uses: actions/checkout@v1
     - name: Conda info sanity check
       shell: bash -l {0}
