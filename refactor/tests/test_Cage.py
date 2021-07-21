@@ -211,7 +211,7 @@ class TestCage:
         first_cage.lice_population["L5f"] = 1000
         assert 900 <= first_cage.get_num_matings() <= 1000
 
-    def test_update_deltas_no_negative_raise(self, first_cage, null_egg_batch, null_offspring_distrib, null_dams_batch):
+    def test_update_deltas_no_negative_raise(self, first_cage, null_offspring_distrib, null_dams_batch):
         first_cage.lice_population["L3"] = 0
         first_cage.lice_population["L4"] = 0
         first_cage.lice_population["L5m"] = 0
@@ -244,7 +244,6 @@ class TestCage:
             new_infections,
             reservoir_lice,
             null_dams_batch,
-            null_egg_batch,
             null_offspring_distrib,
             null_returned_dams,
             null_hatched_arrivals

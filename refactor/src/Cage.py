@@ -231,7 +231,6 @@ class Cage:
             num_infection_events,
             lice_from_reservoir,
             avail_dams_batch,
-            new_egg_batch,
             new_offspring_distrib,
             returned_dams,
             hatched_arrivals_dist
@@ -877,7 +876,6 @@ class Cage:
             new_infections: int,
             lice_from_reservoir: dict,
             delta_dams_batch: DamAvailabilityBatch,
-            new_egg_batch: EggBatch,
             new_offspring_distrib: dict,
             returned_dams: dict,
             hatched_arrivals_dist: dict
@@ -894,7 +892,6 @@ class Cage:
         :param new_infections the number of new infections (i.e. progressions from L2 to L3)
         :param lice_from_reservoir the number of lice taken from the reservoir
         :param delta_dams_batch the genotypes of now-unavailable females in batch events
-        :param new_egg_batch the expected hatching time of those egg with a related genomics
         :param new_offspring_distrib the new offspring obtained from hatching and migrations
         :param returned_dams the genotypes of returned dams
         :param hatched_arrivals_dist: new offspring obtained from arrivals
@@ -925,13 +922,10 @@ class Cage:
         # in absence of wildlife genotype, simply upgrade accordingly
         # TODO: switch to generic genotype distribs?
         self.lice_population["L1"] += lice_from_reservoir["L1"]
-
-        delta_eggs = new_egg_batch.geno_distrib
+        
         delta_avail_dams = delta_dams_batch.geno_distrib
         self.update_distrib_discrete_subtract(delta_avail_dams, self.lice_population.available_dams)
         self.update_distrib_discrete_add(returned_dams, self.lice_population.available_dams)
-        self.update_distrib_discrete_add(delta_eggs, self.egg_genotypes)
-        self.update_distrib_discrete_subtract(delta_eggs, new_offspring_distrib)
 
         self.busy_dams.put(delta_dams_batch)
 
