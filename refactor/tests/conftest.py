@@ -5,7 +5,7 @@ import datetime
 
 from src.Config import Config, to_dt
 from src.Farm import Farm
-from src.Cage import EggBatch
+from src.Cage import EggBatch, DamAvailabilityBatch
 
 
 @pytest.fixture
@@ -52,9 +52,21 @@ def sample_offspring_distrib():
         ('A', 'a'): 300,
     }
 
+
 @pytest.fixture
 def null_hatched_arrivals(null_offspring_distrib, farm):
     return {farm.start_date: null_offspring_distrib}
+
+
+@pytest.fixture
+def null_egg_batch(null_offspring_distrib, farm):
+    return EggBatch(farm.start_date, null_offspring_distrib)
+
+
+@pytest.fixture
+def null_dams_batch(null_offspring_distrib, farm):
+    return DamAvailabilityBatch(farm.start_date, null_offspring_distrib)
+
 
 @pytest.fixture
 def sample_eggs_by_hatch_date(sample_offspring_distrib, farm):

@@ -110,6 +110,10 @@
     "description": "Female adults-to-salmon density dependence",
     "value": 493
   },
+  "dam_unavailability": {
+    "description": "Female unavailability time after mating (in days)",
+    "value": 3
+  },
   "farm_data": {
     "description": "Average temperatures at known farm locations. Farm temperatures will be interpolated from them. Data taken from www.seatemperature.org",
     "value": {

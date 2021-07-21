@@ -1,3 +1,4 @@
+import copy
 import datetime
 import datetime as dt
 import itertools
@@ -8,7 +9,7 @@ import pytest
 import json
 
 from src.Config import to_dt
-from src.Cage import EggBatch, TravellingEggBatch
+from src.Cage import EggBatch, DamAvailabilityBatch, TravellingEggBatch
 
 
 class TestCage:
@@ -27,6 +28,11 @@ class TestCage:
             "L5m": 10
         }
 
+        assert sum(first_cage.lice_population.available_dams.values()) == 10
+
+        for stage in first_cage.lice_stages:
+            assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
+
     def test_cage_json(self, first_cage):
         return_str = str(first_cage)
         imported_cage = json.loads(return_str)
@@ -38,7 +44,7 @@ class TestCage:
         first_cage.cfg.tau = 1
         dead_lice_dist = first_cage.get_background_lice_mortality(first_cage.lice_population)
         dead_lice_dist_np = np.array(list(dead_lice_dist.values()))
-        expected_dead_lice = np.array([26, 0, 0, 2, 0, 2])
+        expected_dead_lice = np.array([28, 0, 0, 0, 0, 2])
         assert np.alltrue(dead_lice_dist_np >= 0.0)
         assert np.alltrue(np.isclose(dead_lice_dist_np, expected_dead_lice))
 
@@ -65,7 +71,7 @@ class TestCage:
         assert mortality_updates == {
             "L1": 0,
             "L2": 0,
-            "L3": 1,
+            "L3": 0,
             "L4": 1,
             "L5m": 0,
             "L5f": 0
@@ -119,23 +125,23 @@ class TestCage:
     def test_get_lice_lifestage(self, first_cage):
         new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(1)
 
-        assert new_l2 == 0
-        assert new_l4 == 1 and first_cage.lice_population["L3"] > 0
-        assert new_males == 2 and first_cage.lice_population["L4"] > 0
-        assert new_females == 2
+        assert 0 <= new_l2 <= 10
+        assert 0 <= new_l4 <= 10
+        assert new_females == 1
+        assert new_males == 1
 
     def test_get_fish_growth(self, first_cage):
         first_cage.num_fish *= 300
-        first_cage.num_infected_fish = first_cage.num_fish // 3
+        first_cage.num_infected_fish = first_cage.num_fish // 2
         natural_death, lice_death = first_cage.get_fish_growth(1, 1)
 
         # basic invariants
-        assert natural_death > 0
-        assert lice_death > 0
+        assert natural_death >= 0
+        assert lice_death >= 0
 
         # exact figures
-        assert natural_death == 688
-        assert lice_death == 4
+        assert 600 <= natural_death <= 700
+        assert 0 <= lice_death <= 5
 
     def test_get_fish_growth_no_lice(self, first_cage):
         first_cage.num_infected_fish = 0
@@ -158,39 +164,54 @@ class TestCage:
         num_infected_fish = first_cage.do_infection_events(1)
 
         assert num_infected_fish > 0
-        assert num_infected_fish == 15
+        assert num_infected_fish == 17
 
-    def test_get_infected_fish_noinfection(self, first_cage):
+    def test_get_infected_fish_no_infection(self, first_cage):
         # TODO: maybe make a fixture of this?
         first_cage.lice_population["L3"] = 0
         first_cage.lice_population["L4"] = 0
         first_cage.lice_population["L5m"] = 0
         first_cage.lice_population["L5f"] = 0
 
+        for stage in first_cage.lice_stages:
+            assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
+
         assert first_cage.get_mean_infected_fish() == 0
-        assert first_cage.get_variance_infected_fish() == 0
+        assert first_cage.get_variance_infected_fish(first_cage.num_fish, 0) == 0
 
     def test_get_infected_fish(self, first_cage):
-        assert first_cage.get_mean_infected_fish() == int(4000 * (1 - (3999 / 4000) ** 80))
-        assert 70 <= first_cage.get_variance_infected_fish() <= 80
+        assert 70 <= first_cage.get_mean_infected_fish() <= 80
 
     def test_get_std_infected_fish(self, first_cage):
-        assert first_cage.get_variance_infected_fish() > 0
+        infecting = first_cage.get_infecting_population()
+        assert first_cage.get_variance_infected_fish(first_cage.num_fish, infecting) > 0
 
     def test_get_num_matings_no_infection(self, first_cage):
         males = first_cage.lice_population["L5m"]
         first_cage.lice_population["L5m"] = 0
         assert first_cage.get_num_matings() == 0
+        for stage in first_cage.lice_stages:
+            assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
         first_cage.lice_population["L5m"] = males
 
         first_cage.lice_population["L5f"] = 0
         assert first_cage.get_num_matings() == 0
+        for stage in first_cage.lice_stages:
+            assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
 
     def test_get_num_matings(self, first_cage):
-        first_cage.lice_population["L5m"] = first_cage.lice_population["L5f"]
-        assert 1 <= first_cage.get_num_matings() <= 10
+        # only 20 lice out of 4000 aren't that great
+        assert first_cage.get_num_matings() == 0
 
-    def test_update_deltas_no_negative_raise(self, first_cage, null_offspring_distrib):
+        first_cage.lice_population["L5m"] = 100
+        first_cage.lice_population["L5f"] = 100
+        assert 70 <= first_cage.get_num_matings() <= 100
+
+        first_cage.lice_population["L5m"] = 1000
+        first_cage.lice_population["L5f"] = 1000
+        assert 900 <= first_cage.get_num_matings() <= 1000
+
+    def test_update_deltas_no_negative_raise(self, first_cage, null_egg_batch, null_offspring_distrib, null_dams_batch):
         first_cage.lice_population["L3"] = 0
         first_cage.lice_population["L4"] = 0
         first_cage.lice_population["L5m"] = 0
@@ -205,44 +226,51 @@ class TestCage:
         new_females = 0
         new_males = 0
         new_infections = 0
-        reservoir_lice = {"L1": 0, "L2": 0}
-        delta_avail_dams = {"L1": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
-                            "L2": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
-                            "L3": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
-                            "L4": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
-                            "L5m": {('A',): 0, ('a',): 0, ('A', 'a'): 0},
-                            "L5f": {('A',): 0, ('a',): 0, ('A', 'a'): 0}}
-        delta_eggs = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
-        null_hatched_arrivals = null_offspring_distrib
 
-        first_cage.update_deltas(background_mortality,
-                                 treatment_mortality,
-                                 fish_deaths_natural,
-                                 fish_deaths_from_lice,
-                                 new_l2, new_l4, new_females, new_males,
-                                 new_infections, reservoir_lice,
-                                 delta_avail_dams, delta_eggs,
-                                 null_offspring_distrib,
-                                 null_hatched_arrivals)
+        reservoir_lice = {"L1": 0, "L2": 0}
+
+        null_hatched_arrivals = null_offspring_distrib
+        null_returned_dams = null_offspring_distrib
+
+        first_cage.update_deltas(
+            background_mortality,
+            treatment_mortality,
+            fish_deaths_natural,
+            fish_deaths_from_lice,
+            new_l2,
+            new_l4,
+            new_females,
+            new_males,
+            new_infections,
+            reservoir_lice,
+            null_dams_batch,
+            null_egg_batch,
+            null_offspring_distrib,
+            null_returned_dams,
+            null_hatched_arrivals
+        )
 
         for population in first_cage.lice_population.values():
             assert population >= 0
 
+    def test_invalid_update_raises(self, first_cage):
+        first_cage.lice_population.geno_by_lifestage['L5m'] = {('A',): 5, ('a',): 5, ('A', 'a'): 5}
+        with pytest.raises(AssertionError):
+            first_cage.lice_population.available_dams = {('A',): 10}
+
     def test_do_mating_events(self, first_cage):
-        first_cage.geno_by_lifestage['L5m'] = {('A',): 5, ('a',): 5, ('A', 'a'): 5}
-        first_cage.available_dams = {('A',): 10}
-        target_eggs = {('A',): 5431.0, tuple(sorted(('a', 'A'))): 3868.0}
-        target_delta_dams = {('A',): 6}
+        first_cage.lice_population.geno_by_lifestage['L5f'] = {('A',): 15, ('a',): 15, ('A', 'a'): 15}
+        first_cage.lice_population.available_dams = {('A',): 15, ('a',): 15}
+
+        target_eggs = {('a',): 3024.5, ('A',): 2320.5, tuple(sorted(('a', 'A'))): 3773.0}
+        target_delta_dams = {('A',): 2, ('a',): 4}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
-        for key in delta_eggs:
-            assert delta_eggs[key] == target_eggs[key]
-        for key in delta_avail_dams:
-            assert delta_avail_dams[key] == target_delta_dams[key]
-
+        assert delta_eggs == target_eggs
+        assert delta_avail_dams == target_delta_dams
 
     def test_no_available_sires_do_mating_events(self, first_cage):
-        first_cage.geno_by_lifestage['L5m'] = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
+        first_cage.lice_population.geno_by_lifestage['L5m'] = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert not bool(delta_avail_dams)
@@ -252,7 +280,7 @@ class TestCage:
         sire = 0.7
         dam = 0.0
         num_matings = 10
-        target_eggs = {0.4: 2537}
+        target_eggs = {0.4: 2550}
         eggs = first_cage.generate_eggs(sire, dam, 'quantitative', num_matings)
         for key in eggs:
             assert eggs[key] == target_eggs[key]
@@ -260,7 +288,7 @@ class TestCage:
         sire = 0.2
         dam = 0.2
         num_matings = 10
-        target_eggs = {0.2: 2545}
+        target_eggs = {0.2: 2401}
         eggs = first_cage.generate_eggs(sire, dam, 'quantitative', num_matings)
         for key in eggs:
             assert eggs[key] == target_eggs[key]
@@ -270,40 +298,35 @@ class TestCage:
 
         sire = ('A',)
         dam = ('A',)
-        hom_dom_target = {('A',): 1574}
+        hom_dom_target = {('A',): 1533}
 
-        num_matings = first_cage.get_num_matings()
+        num_matings = 6
         egg_result_hom_dom = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
-        for geno in egg_result_hom_dom:
-            assert egg_result_hom_dom[geno] == hom_dom_target[geno]
+        assert egg_result_hom_dom == hom_dom_target
 
         sire = ('a',)
         dam = ('a',)
-        hom_rec_target = {('a',): 1505}
+        hom_rec_target = {('a',): 1418}
         egg_result_hom_rec = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
-        for geno in egg_result_hom_rec:
-            assert egg_result_hom_rec[geno] == hom_rec_target[geno]
+        assert egg_result_hom_rec == hom_rec_target
 
         sire = tuple(sorted(('a', 'A')))
         dam = ('a',)
-        het_target_sire = {('a',): 760.5, tuple(sorted(('a', 'A'))): 760.5}
+        het_target_sire = {('a',): 778.5, tuple(sorted(('a', 'A'))): 778.5}
         egg_result_het_sire = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
-        for geno in egg_result_het_sire:
-            assert egg_result_het_sire[geno] == het_target_sire[geno]
+        assert egg_result_het_sire == het_target_sire
 
         dam = tuple(sorted(('a', 'A')))
         sire = ('a',)
-        het_target_dam = {('a',): 794.0, tuple(sorted(('a', 'A'))): 794.0}
+        het_target_dam = {('a',): 765.0, tuple(sorted(('a', 'A'))): 765.0}
         egg_result_het_dam = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
-        for geno in egg_result_het_dam:
-            assert egg_result_het_dam[geno] == het_target_dam[geno]
+        assert egg_result_het_dam == het_target_dam
 
         dam = tuple(sorted(('a', 'A')))
         sire = tuple(sorted(('a', 'A')))
-        het_target = {('A', 'a'): 727.0, ('A',): 363.5, ('a',): 363.5}
+        het_target = {('A', 'a'): 761.5, ('A',): 380.75, ('a',): 380.75}
         egg_result_het = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
-        for geno in egg_result_het:
-            assert egg_result_het[geno] == het_target[geno]
+        assert egg_result_het == het_target
 
     def test_not_enough_dams_select_dams(self, first_cage):
 
@@ -316,8 +339,6 @@ class TestCage:
             assert delta_dams[key] == distrib_dams_available[key]
         for key in delta_dams:
             assert  distrib_dams_available[key] == delta_dams[key]
-
-
 
     def test_update_step(self, first_cage, cur_day):
         first_cage.update(cur_day, 1, 0)
@@ -358,14 +379,12 @@ class TestCage:
         assert first_cage.get_num_eggs(0) == 0
 
     def test_get_num_eggs(self, first_cage):
-        first_cage.lice_population['L5m'] = first_cage.lice_population['L5f']
-
-        matings = first_cage.get_num_matings()
+        matings = 6
         assert 1500 <= first_cage.get_num_eggs(matings) <= 1600
 
     def test_get_egg_batch_null(self, first_cage, null_offspring_distrib, cur_day):
-        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, null_offspring_distrib)
-        assert egg_distrib == null_offspring_distrib
+        egg_batch = first_cage.get_egg_batch(cur_day, null_offspring_distrib)
+        assert egg_batch.geno_distrib == null_offspring_distrib
 
     def test_egg_batch_lt(self, first_cage, null_offspring_distrib, cur_day):
         batch1 = EggBatch(cur_day, null_offspring_distrib)
@@ -377,9 +396,16 @@ class TestCage:
         busy_dams, new_eggs = first_cage.do_mating_events()
         target_egg_distrib = {('A', 'a'): 4644.5, ('A',): 2698.25, ('a',): 1927.25}
 
-        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, new_eggs)
-        assert egg_distrib == target_egg_distrib
-        assert hatch_date == datetime.datetime(2017, 10, 6, 0, 0)
+        new_egg_batch = first_cage.get_egg_batch(cur_day, new_eggs)
+        assert new_egg_batch == EggBatch(
+            hatch_date=datetime.datetime(2017, 10, 11, 0, 0),
+            geno_distrib=target_egg_distrib)
+
+    def test_avail_batch_lt(self, first_cage, null_offspring_distrib, cur_day):
+        batch1 = DamAvailabilityBatch(cur_day, null_offspring_distrib)
+        batch2 = DamAvailabilityBatch(cur_day + dt.timedelta(days=1), null_offspring_distrib)
+        assert batch1 != batch2
+        assert batch1 < batch2
 
     def test_get_egg_batch_across_time(self, first_cage):
         egg_offspring = {
@@ -390,21 +416,21 @@ class TestCage:
 
         # October
         cur_day = to_dt("2017-10-01 00:00:00")
-        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, egg_offspring)
-        assert (hatch_date - cur_day).days == 11
-        assert egg_distrib == egg_offspring
+        egg_batch = first_cage.get_egg_batch(cur_day, egg_offspring)
+        assert (egg_batch.hatch_date - cur_day).days == 3
+        assert egg_batch.geno_distrib == egg_offspring
 
         # August
         cur_day = to_dt("2017-08-01 00:00:00")
-        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, egg_offspring)
-        assert (hatch_date - cur_day).days == 3
-        assert egg_distrib == egg_offspring
+        egg_batch = first_cage.get_egg_batch(cur_day, egg_offspring)
+        assert (egg_batch.hatch_date - cur_day).days == 7
+        assert egg_batch.geno_distrib == egg_offspring
 
         # February
         cur_day = to_dt("2017-02-01 00:00:00")
-        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, egg_offspring)
-        assert (hatch_date - cur_day).days == 12
-        assert egg_distrib == egg_offspring
+        egg_batch = first_cage.get_egg_batch(cur_day, egg_offspring)
+        assert (egg_batch.hatch_date - cur_day).days == 17
+        assert egg_batch.geno_distrib == egg_offspring
 
     def test_create_offspring_early(self, first_cage, cur_day, null_offspring_distrib):
         egg_offspring = {
@@ -413,9 +439,9 @@ class TestCage:
             ('A', 'a'): 10,
         }
 
-        egg_distrib, hatch_date = first_cage.get_egg_batch(cur_day, egg_offspring)
+        egg_batch = first_cage.get_egg_batch(cur_day, egg_offspring)
 
-        first_cage.hatching_events.put(EggBatch(hatch_date, egg_distrib))
+        first_cage.hatching_events.put(egg_batch)
         assert first_cage.create_offspring(cur_day) == null_offspring_distrib
 
     def test_create_offspring_same_day(self, first_cage, cur_day):
@@ -431,6 +457,74 @@ class TestCage:
         offspring = first_cage.create_offspring(cur_day + dt.timedelta(days=3))
         for val in offspring.values():
             assert val == 30
+
+    def test_avail_dams_freed_early(self, first_cage, cur_day):
+        dams, _ = first_cage.do_mating_events()
+
+        first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
+        assert all(x == 0 for x in first_cage.free_dams(cur_day).values())
+
+    def test_avail_dams_freed_same_day_once(self, first_cage, cur_day):
+        first_cage.lice_population["L5m"] = 1000
+        first_cage.lice_population["L5f"] = 1000
+        dams, _ = first_cage.do_mating_events()
+        target_dams = {('A',): 188,
+                       ('a',): 182,
+                       ('A', 'a'): 556}
+
+        first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
+        assert first_cage.free_dams(cur_day + dt.timedelta(days=1)) == target_dams
+
+    def test_avail_dams_freed_same_day_thrice(self, first_cage, cur_day):
+        first_cage.lice_population["L5m"] = 1000
+        first_cage.lice_population["L5f"] = 1000
+        dams, _ = first_cage.do_mating_events()
+        target_dams = {('A',): 564,
+                       ('a',): 546,
+                       ('A', 'a'): 1668}
+
+        for i in range(3):
+            first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams))
+        assert first_cage.free_dams(cur_day + dt.timedelta(days=3)) == target_dams
+
+    def test_promote_population(self, first_cage):
+        first_cage.lice_population.geno_by_lifestage["L3"] = {('A',): 1000, ('a',): 1000, ('A', 'a'): 1000}
+        first_cage.lice_population.geno_by_lifestage["L4"] = {('A',): 500, ('a',): 500, ('A', 'a'): 500}
+
+        old_L3 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L3"])
+        old_L4 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L4"])
+
+        leaving_lice = 100  # new males and females combined that leave L4 to enter L5{m,f}
+        entering_lice = 200  # L3 lice that enter L4
+
+        first_cage.promote_population("L3", "L4", leaving_lice, entering_lice)
+
+        new_L4 = first_cage.lice_population.geno_by_lifestage["L4"]
+
+        target_population = sum(old_L4.values()) + entering_lice - leaving_lice
+        target_geno = {('A',): 534, ('a',): 534, ('A', 'a'): 532}
+
+        assert new_L4 == target_geno
+        assert sum(new_L4.values()) == sum(old_L4.values()) + entering_lice - leaving_lice
+        assert first_cage.lice_population["L4"] == target_population
+
+        # L3 must be unchanged
+        assert first_cage.lice_population.geno_by_lifestage["L3"] == {('A',): 1000, ('a',): 1000, ('A', 'a'): 1000}
+
+    def test_promote_population_offspring(self, first_cage):
+        offspring_distrib = {('A',): 500, ('a',): 500, ('A', 'a'): 500}
+        new_L2 = 10
+        old_L1 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L1"])
+        first_cage.promote_population(offspring_distrib, "L1", new_L2)
+        new_L1 = first_cage.lice_population.geno_by_lifestage["L1"]
+
+        target_population = sum(old_L1.values()) + sum(offspring_distrib.values()) - new_L2
+        target_geno = {('A',): 535, ('a',): 535, ('A', 'a'): 570}
+
+        assert new_L1 != old_L1
+        assert sum(new_L1.values()) == target_population
+        assert first_cage.lice_population["L1"] == target_population
+        assert new_L1 == target_geno
 
     def test_get_arrivals(self, first_cage, cur_day, sample_offspring_distrib):
         hatch_date_unhatched = cur_day + dt.timedelta(5)
