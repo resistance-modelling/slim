@@ -178,6 +178,10 @@ class Cage:
         date
         """
 
+        if cur_date < self.start_date:
+            self.logger.debug("\tSkipping farm {} / cage {} (not started yet)".format(self.farm_id, self.id))
+            return {}
+
         self.logger.debug(f"\tUpdating farm {self.farm_id} / cage {self.id}")
         self.logger.debug(f"\t\tinitial lice population = {self.lice_population}")
         self.logger.debug(f"\t\tinitial fish population = {self.num_fish}")

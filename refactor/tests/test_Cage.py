@@ -597,3 +597,9 @@ class TestCage:
 
     def test_get_reservoir_lice_no_pressure(self, first_cage):
         assert first_cage.get_reservoir_lice(0) == {"L1": 0, "L2": 0}
+
+    def test_update_step_before_start(self, first_cage):
+        cur_date = first_cage.start_date - dt.timedelta(1)
+        offspring = first_cage.update(cur_date, 1, 0)
+
+        assert offspring == {}

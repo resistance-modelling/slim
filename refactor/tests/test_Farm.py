@@ -159,3 +159,9 @@ class TestFarm:
 
         assert total == 105
         assert by_cage == [70, 35]
+
+    def test_farm_update_before_start(self, farm):
+        cur_date = farm.start_date - dt.timedelta(1)
+        offspring = farm.update(cur_date, 1)
+
+        assert offspring == {}

@@ -83,6 +83,10 @@ class Farm:
         :return: Dictionary of genotype distributions based on hatch date
         """
 
+        if cur_date < self.start_date:
+            self.logger.debug("Skipping farm {} (not started yet)".format(self.name))
+            return {}
+
         self.logger.debug("Updating farm {}".format(self.name))
 
         # get number of lice from reservoir to be put in each cage
