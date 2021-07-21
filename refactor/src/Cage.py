@@ -41,10 +41,10 @@ class LicePopulation(dict, MutableMapping):
     Wrapper to keep the global population and genotype information updated
     This is definitely a convoluted way to do this, but I wanted to memoise as much as possible.
     """
-    def __init__(self, initial_population: dict, geno_data: dict, available_dams: dict, logger: logging.Logger):
+    def __init__(self, initial_population: dict, geno_data: dict, logger: logging.Logger):
         super().__init__()
         self.geno_by_lifestage = GenotypePopulation(self, geno_data)
-        self._available_dams = available_dams
+        self._available_dams = copy.deepcopy(self.geno_by_lifestage["L5f"])
         self.logger = logger
         for k, v in initial_population.items():
             super().__setitem__(k, v)
@@ -120,13 +120,11 @@ class Cage:
         self.date = cfg.start_date
 
         # TODO: update with calculations
-        lice_population = {'L1': cfg.ext_pressure, 'L2': 0, 'L3': 30, 'L4': 30, 'L5f': 10, 'L5m': 10}
+        lice_population = {"L1": cfg.ext_pressure, "L2": 0, "L3": 30, "L4": 30, "L5f": 10, "L5m": 10}
 
         self.farm = farm
 
         self.egg_genotypes = {}
-        self.available_dams = {}
-
         # TODO/Question: what's the best way to deal with having multiple possible genetic schemes?
         # TODO/Question: I suppose some of this initial genotype information ought to come from the config file
         # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
@@ -137,9 +135,7 @@ class Cage:
         for stage in lice_population:
             geno_by_lifestage[stage] = self.multiply_distrib(self.generic_discrete_props, lice_population[stage])
 
-        # TODO: should we move available_dams inside LicePopulation?
-        self.available_dams = copy.deepcopy(geno_by_lifestage["L5f"])
-        self.lice_population = LicePopulation(lice_population, geno_by_lifestage, self.available_dams, self.logger)
+        self.lice_population = LicePopulation(lice_population, geno_by_lifestage, self.logger)
 
         self.num_fish = cfg.farms[self.farm_id].num_fish
         self.num_infected_fish = self.get_mean_infected_fish()
@@ -164,7 +160,6 @@ class Cage:
 
         # May want to improve these or change them if we change the representation for genotype distribs
         filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
-        filtered_vars["available_dams"] = {str(key): val for key, val in filtered_vars["available_dams"].items()}
         filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in self.lice_population.geno_by_lifestage.items()}
         filtered_vars["hatching_events"] = sorted(list(self.hatching_events.queue))
         filtered_vars["busy_dams"] = sorted(list(self.busy_dams.queue))
@@ -221,7 +216,7 @@ class Cage:
         # Restore lice availability
         returned_dams = self.free_dams(cur_date)
 
-        # lice coming from reservoir
+        # Lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure)
 
         self.update_deltas(
@@ -268,8 +263,8 @@ class Cage:
 
             # model the resistence of each lice in the susceptible stages (phenoEMB) and estimate
             # the mortality rate due to treatment (ETmort).
-            pheno_emb = np.random.normal(self.cfg.f_meanEMB, self.cfg.f_sigEMB, num_susc) \
-                        + np.random.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
+            pheno_emb = self.cfg.rng.normal(self.cfg.f_meanEMB, self.cfg.f_sigEMB, num_susc) \
+                        + self.cfg.rng.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
             pheno_emb = 1 / (1 + np.exp(pheno_emb))
             mortality_rate = sum(pheno_emb) * self.cfg.EMBmort
             return mortality_rate, pheno_emb, num_susc
@@ -287,7 +282,7 @@ class Cage:
         mortality_rate, pheno_emb, num_susc = self.get_lice_treatment_mortality_rate(cur_date)
 
         if mortality_rate > 0:
-            num_dead_lice = np.random.poisson(mortality_rate)
+            num_dead_lice = self.cfg.rng.poisson(mortality_rate)
             num_dead_lice = min(num_dead_lice, num_susc)
 
             # Now we need to decide how many lice from each stage die,
@@ -298,7 +293,7 @@ class Cage:
             #        cumulative sum of the lice in each stage and finding out how many of our
             #        dead lice falls into this bin.
             p = (pheno_emb) / np.sum(pheno_emb)
-            dead_lice = np.random.choice(range(num_susc), num_dead_lice, p=p,
+            dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, p=p,
                                          replace=False).tolist()
             total_so_far = 0
             for stage in self.susceptible_stages:
@@ -327,8 +322,7 @@ class Cage:
         p[:stage_age_max_days] = 1
         return p / np.sum(p)
 
-    @staticmethod
-    def get_evolution_ages(size: int, minimum_age: int, mean: int, development_days=25):
+    def get_evolution_ages(self, size: int, minimum_age: int, mean: int, development_days=25):
         """
         Create an age distribution (in days) for the sea lice within a lifecycle stage.
         TODO: This actually computes the evolution ages.
@@ -348,7 +342,7 @@ class Cage:
 
         p = stats.poisson.pmf(range(max_quantile), k)
         p = p / np.sum(p)  # probs need to add up to one
-        return np.random.choice(range(max_quantile), size, p=p) + minimum_age
+        return self.cfg.rng.choice(range(max_quantile), size, p=p) + minimum_age
 
     def get_lice_lifestage(self, cur_month):
         """
@@ -386,8 +380,8 @@ class Cage:
 
         l4_to_l5 = dev_times(self.cfg.delta_p["L4"], self.cfg.delta_m10["L4"], self.cfg.delta_s["L4"],
                              ave_temp, stage_ages)
-        num_to_move = min(np.random.poisson(np.sum(l4_to_l5)), num_lice)
-        new_females = np.random.choice([math.floor(num_to_move / 2.0), math.ceil(num_to_move / 2.0)])
+        num_to_move = min(self.cfg.rng.poisson(np.sum(l4_to_l5)), num_lice)
+        new_females = self.cfg.rng.choice([math.floor(num_to_move / 2.0), math.ceil(num_to_move / 2.0)])
         new_males = (num_to_move - new_females)
 
         lice_dist["L5f"] = new_females
@@ -398,7 +392,7 @@ class Cage:
         stage_ages = self.get_evolution_ages(num_lice, minimum_age=15, mean=18)
         l3_to_l4 = dev_times(self.cfg.delta_p["L3"], self.cfg.delta_m10["L3"], self.cfg.delta_s["L3"],
                              ave_temp, stage_ages)
-        num_to_move = min(np.random.poisson(np.sum(l3_to_l4)), num_lice)
+        num_to_move = min(self.cfg.rng.poisson(np.sum(l3_to_l4)), num_lice)
         new_L4 = num_to_move
 
         lice_dist["L4"] = num_to_move
@@ -411,7 +405,7 @@ class Cage:
         stage_ages = self.get_evolution_ages(num_lice, minimum_age=3, mean=4)
         l1_to_l2 = dev_times(self.cfg.delta_p["L1"], self.cfg.delta_m10["L1"], self.cfg.delta_s["L1"],
                              ave_temp, stage_ages)
-        num_to_move = min(np.random.poisson(np.sum(l1_to_l2)), num_lice)
+        num_to_move = min(self.cfg.rng.poisson(np.sum(l1_to_l2)), num_lice)
         new_L2 = num_to_move
 
         lice_dist["L2"] = num_to_move
@@ -454,8 +448,8 @@ class Cage:
 
         ebf_death = fb_mort(days) * step_size * self.num_fish
         elf_death = self.num_infected_fish * step_size * prob_lice_death
-        fish_deaths_natural = np.random.poisson(ebf_death)
-        fish_deaths_from_lice = np.random.poisson(elf_death)
+        fish_deaths_natural = self.cfg.rng.poisson(ebf_death)
+        fish_deaths_from_lice = self.cfg.rng.poisson(elf_death)
 
         self.logger.debug("\t\t\tnumber of background fish death {}, from lice {}"
                           .format(fish_deaths_natural, fish_deaths_from_lice))
@@ -500,7 +494,7 @@ class Cage:
         if Einf == 0:
             return 0
 
-        inf_events = np.random.poisson(Einf * num_avail_lice)
+        inf_events = self.cfg.rng.poisson(Einf * num_avail_lice)
         return min(inf_events, num_avail_lice)
 
     def get_infecting_population(self, *args) -> int:
@@ -522,17 +516,15 @@ class Cage:
         num_infected_fish = int(self.num_fish * (1 - ((self.num_fish - 1) / self.num_fish) ** attached_lice))
         return num_infected_fish
 
-    def get_variance_infected_fish(self, n, k) -> float:
-        # For now make a very quick and dirty approximation.
-        # TODO this has O(n) time complexity. Replace when a closed formula is found
+    def get_variance_infected_fish(self, n: int, k: int) -> float:
+        # Rationale: assuming that we generate N bins that sum to K, we can model this as a multinomial distribution
+        # where all p_i are the same. Therefore, the variance of each bin is k*(n-1)/(n**2)
+        # This is still incorrect but the error should be relatively small for now
 
-        bins = np.zeros((n,))
-        for i in range(k):
-            bins[np.random.randint(0, n-1)] += 1
+        probs = np.full(n, 1/n)
+        bins = self.cfg.rng.multinomial(k, probs)
 
-        assert np.sum(bins) == k
         return np.var(bins)*k
-
 
     def get_num_matings(self) -> int:
         """
@@ -562,7 +554,7 @@ class Cage:
 
         prob_matching = 1 - (1 + males/((males + females)*aggregation_factor)) ** (-1-aggregation_factor)
         # TODO: using a poisson distribution can lead to a high std for high prob*females
-        return np.random.poisson(prob_matching * females)
+        return np.clip(self.cfg.rng.poisson(prob_matching * females), 0, min(males, females))
 
     def do_mating_events(self) -> (dict, dict):
         """
@@ -704,10 +696,9 @@ class Cage:
 
         return delta_dams_selected
 
-    @staticmethod
-    def choose_from_distrib(distrib):
+    def choose_from_distrib(self, distrib):
         max_val = sum(distrib.values())
-        this_draw = np.random.randint(0, high=max_val)
+        this_draw = self.cfg.rng.integers(0, high=max_val)
         sum_so_far = 0
         for val in distrib:
             sum_so_far += distrib[val]
@@ -730,7 +721,7 @@ class Cage:
         eggs = self.cfg.reproduction_eggs_first_extruded *\
             (age_range ** self.cfg.reproduction_age_dependence) * mated_females_distrib
 
-        return np.random.poisson(np.round(np.sum(eggs)))
+        return self.cfg.rng.poisson(np.round(np.sum(eggs)))
         # TODO: We are deprecating this. Need to investigate if temperature data is useful. See #46
         # ave_temp = self.farm.year_temperatures[cur_month - 1]
         #temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
@@ -738,7 +729,7 @@ class Cage:
         #reproduction_rates = self.cfg.reproduction_eggs_first_extruded * \
         #                     (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1)
 
-        #return np.random.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
+        #return self.cfg.rng.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
 
     def get_egg_batch(self, cur_date: dt.datetime, egg_distrib: dict) -> EggBatch:
         """
@@ -758,7 +749,7 @@ class Cage:
         beta_1 = self.cfg.delta_m10["L0"]
         beta_2 = self.cfg.delta_p["L0"]
         expected_time = (self.cfg.delta_m10["L0"] / (ave_temp - 10 + beta_1 * beta_2))**2
-        expected_hatching_date = cur_date + dt.timedelta(np.random.poisson(expected_time))
+        expected_hatching_date = cur_date + dt.timedelta(self.cfg.rng.poisson(expected_time))
         return EggBatch(expected_hatching_date, egg_distrib)
 
     @staticmethod
@@ -787,7 +778,6 @@ class Cage:
             event = queue.get()
             for geno, value in event.geno_distrib.items():
                 output_geno_distrib[geno] += value
-
 
     def create_offspring(self, cur_time: dt.datetime) -> dict:
         """
@@ -938,12 +928,11 @@ class Cage:
 
         delta_eggs = new_egg_batch.geno_distrib
         delta_avail_dams = delta_dams_batch.geno_distrib
-        self.update_distrib_discrete_subtract(delta_avail_dams, self.available_dams)
-        self.update_distrib_discrete_add(returned_dams, self.available_dams)
+        self.update_distrib_discrete_subtract(delta_avail_dams, self.lice_population.available_dams)
+        self.update_distrib_discrete_add(returned_dams, self.lice_population.available_dams)
         self.update_distrib_discrete_add(delta_eggs, self.egg_genotypes)
         self.update_distrib_discrete_subtract(delta_eggs, new_offspring_distrib)
 
-        self.hatching_events.put(new_egg_batch)
         self.busy_dams.put(delta_dams_batch)
 
         #  TODO: remove females that leave L5f by dying from available_dams
@@ -982,7 +971,7 @@ class Cage:
         dead_lice_dist = {}
         for stage in lice_population:
             mortality_rate = lice_population[stage] * lice_mortality_rates[stage] * self.cfg.tau
-            mortality = min(np.random.poisson(mortality_rate), lice_population[stage])
+            mortality = min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
             dead_lice_dist[stage] = mortality
 
         self.logger.debug("\t\tbackground mortality distribution of dead lice = {}".format(dead_lice_dist))
