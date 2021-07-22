@@ -30,9 +30,7 @@ jobs:
 
     - name: Type-check
       shell: bash -l {0}
-      # note: for some reason conda gives environment resolution conflicts
       run: |
-        pip install pytype
         pytype --config pytype.cfg refactor
     - name: Install git
       shell: bash -l {0}
