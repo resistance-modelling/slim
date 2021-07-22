@@ -598,7 +598,7 @@ class Cage:
         TODO: doesn't do anything sensible re: integer/real numbers of offspring
         :param sire the genomics of the sires
         :param dam the genomics of the dams
-        :param breeding_method the breeding strategy. Can be either "additive" or "discrete"
+        :param breeding_method the breeding strategy. Can be "maternal" "quantitative" or "discrete"
         :param num_matings the number of matings
         :returns a distribution on the number of generated eggs according to the distribution
         """
@@ -624,7 +624,7 @@ class Cage:
                 eggs_generated[tuple(sorted(tuple({sire[1], dam[1]})))] = number_eggs / 4
 
             return eggs_generated
-        elif breeding_mathod == 'additive':
+        elif breeding_method == 'quantitative':
             # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
             # because we're only dealing with the heritable part here don't need to do any of the comparison
             # to population mean or impact of heritability, etc - that would appear in the code dealing with treatment

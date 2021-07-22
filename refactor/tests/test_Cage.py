@@ -275,7 +275,17 @@ class TestCage:
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert not bool(delta_avail_dams)
         assert not bool(delta_eggs)
-
+    
+    def test_generate_eggs_maternal(self, first_cage):
+        sire = 'z'
+        dam = 'Z'
+        num_matings = 10
+        target_eggs = {dam: 2550}
+        eggs = first_cage.generate_eggs(sire, dam, 'maternal', num_matings)
+        for key in eggs:
+            assert key == dam
+            assert eggs[key] == target_eggs[key]
+    
     def test_generate_eggs_quantitative(self, first_cage):
         sire = 0.7
         dam = 0.0
