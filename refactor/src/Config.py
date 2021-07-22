@@ -53,8 +53,8 @@ class Config:
                       for farm_data in data["farms"]]
         self.nfarms = len(self.farms)
 
-        self.interfarm_times = np.load_text(os.path.join(simulation_dir, "interfarm_time.csv"), delimiter=",")
-        self.interfarm_probs = np.load_text(os.path.join(simulation_dir, "interfarm_probs.csv"), delimiter=",")
+        self.interfarm_times = np.loadtxt(os.path.join(simulation_dir, "interfarm_time.csv"), delimiter=",")
+        self.interfarm_probs = np.loadtxt(os.path.join(simulation_dir, "interfarm_prob.csv"), delimiter=",")
 
     def __getattr__(self, name):
         # obscure marshalling trick.

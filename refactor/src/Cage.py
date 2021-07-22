@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-from collections.abc import MutableMapping
 import datetime as dt
 import json
 import logging
@@ -9,13 +8,16 @@ import math
 from functools import singledispatch
 from dataclasses import dataclass, field
 from queue import PriorityQueue
-from typing import Union, Optional, Dict, Tuple, cast
+from typing import Union, Optional, Dict, Tuple, cast, MutableMapping
 
 import numpy as np
 from scipy import stats
 
 from src.Config import Config
-from src.Farm import Farm
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.Farm import Farm
 
 LifeStage = str
 Allele = str
@@ -712,8 +714,8 @@ class Cage:
         return delta_dams_selected
 
     def choose_from_distrib(self, distrib: GenoDistrib) -> Alleles:
-        distrib_values = np.array(distrib.values())
-        return self.cfg.rng.choice(distrib.keys(), p=distrib_values / np.sum(distrib_values))
+        distrib_values = np.array(list(distrib.values()))
+        return tuple(self.cfg.rng.choice(list(distrib.keys()), p=distrib_values / np.sum(distrib_values)))
 
     def get_num_eggs(self, mated_females) -> int:
         """
