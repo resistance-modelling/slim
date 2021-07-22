@@ -1,7 +1,8 @@
 [![codecov](https://codecov.io/gh/resistance-modelling/slim/branch/master/graph/badge.svg?token=ykA9vESc7B)](https://codecov.io/gh/resistance-modelling/slim)
 
-<img src = "https://user-images.githubusercontent.com/6224231/126653948-4d698656-b22f-4dbd-9bee-e919b56407aa.png" width= "150">
-
+<p align="center">
+<img src = "https://user-images.githubusercontent.com/6224231/126653948-4d698656-b22f-4dbd-9bee-e919b56407aa.png" width="60%"/>
+</p>
 
 
 # Sea Lice Modelling
