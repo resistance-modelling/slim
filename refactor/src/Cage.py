@@ -624,7 +624,7 @@ class Cage:
                 eggs_generated[tuple(sorted(tuple({sire[1], dam[1]})))] = number_eggs / 4
 
             return eggs_generated
-        else:
+        elif breeding_mathod == 'additive':
             # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
             # because we're only dealing with the heritable part here don't need to do any of the comparison
             # to population mean or impact of heritability, etc - that would appear in the code dealing with treatment
@@ -634,6 +634,12 @@ class Cage:
             mid_parent = np.round((sire + dam)/2, 1)
             eggs_generated[mid_parent] = number_eggs
 
+            return eggs_generated
+        else:
+            # maternal-only inheritance - all eggs have mother's genotype
+            eggs_generated = {}
+            eggs_generated[dam] = number_eggs
+            
             return eggs_generated
 
     @staticmethod
