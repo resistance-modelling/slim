@@ -141,7 +141,7 @@ class Cage:
         # TODO/Question: I suppose some of this initial genotype information ought to come from the config file
         # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
         # for now I've hard-coded in one mechanism in this setup, and a particular genotype starting point. Should probably be from a config file?
-        self.genetic_mechanism = "discrete"
+        self.genetic_mechanism = self.cfg.genetic_mechanism
         
         geno_by_lifestage = {stage: self.multiply_distrib(self.generic_discrete_props, lice_population[stage])
                              for stage in lice_population}
@@ -594,7 +594,7 @@ class Cage:
         for dam_geno in delta_dams:
             for _ in range(int(delta_dams[dam_geno])):
                 sire_geno = self.choose_from_distrib(distrib_sire_available)
-                new_eggs = self.generate_eggs(sire_geno, dam_geno, 'discrete', num_matings)
+                new_eggs = self.generate_eggs(sire_geno, dam_geno, num_matings)
                 self.update_distrib_discrete_add(new_eggs, delta_eggs)
 
         return delta_dams, delta_eggs
@@ -603,7 +603,6 @@ class Cage:
             self,
             sire: Union[Alleles, np.ndarray],
             dam: Union[Alleles, np.ndarray],
-            breeding_method: str,
             num_matings: int
     ) -> GenoDistrib:
         """
@@ -615,15 +614,15 @@ class Cage:
         TODO: doesn't do anything sensible re: integer/real numbers of offspring
         :param sire the genomics of the sires
         :param dam the genomics of the dams
-        :param breeding_method the breeding strategy. Can be either "additive" or "discrete"
         :param num_matings the number of matings
         :returns a distribution on the number of generated eggs according to the distribution
         """
 
         number_eggs = self.get_num_eggs(num_matings)
 
-        if breeding_method == 'discrete':
-            eggs_generated = {}
+        eggs_generated = {}
+        if self.genetic_mechanism == "discrete":
+            
             if len(sire) == 1 and len(dam) == 1:
                 eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = float(number_eggs)
             elif len(sire) == 2 and len(dam) == 1:
@@ -640,18 +639,22 @@ class Cage:
                 eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 4
                 eggs_generated[tuple(sorted(tuple({sire[1], dam[1]})))] = number_eggs / 4
 
-            return eggs_generated
-        else:
+        elif self.genetic_mechanism == "quantitative":
             # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
             # because we're only dealing with the heritable part here don't need to do any of the comparison
             # to population mean or impact of heritability, etc - that would appear in the code dealing with treatment
             # so we could use just the mid-parent value for this genetic recording for children
             # as with the discrete genetic model, this will be deterministic for now
-            eggs_generated = {}
             mid_parent = np.round((sire + dam)/2, 1)
             eggs_generated[mid_parent] = number_eggs
 
-            return eggs_generated
+        elif self.genetic_mechanism == "maternal":
+            # maternal-only inheritance - all eggs have mother's genotype
+            eggs_generated[dam] = number_eggs
+        else:
+            raise Exception("Genetic mechanism must be 'maternal', 'quantitative' or 'discrete' - '{}' given".format(self.genetic_mechanism))
+            
+        return eggs_generated
 
     @staticmethod
     def update_distrib_discrete_add(distrib_delta, distrib):
