@@ -111,6 +111,7 @@ class RuntimeConfig:
         self.reproduction_age_dependence = data["reproduction_age_dependence"]["value"]
         self.reproduction_density_dependence = data["reproduction_density_dependence"]["value"]
         self.dam_unavailability = data["dam_unavailability"]["value"]
+        self.genetic_mechanism = data["genetic_mechanism"]["value"]
 
         # Farm data
         self.farm_data = data["farm_data"]["value"]

@@ -254,12 +254,12 @@ class TestCage:
             assert population >= 0
 
     def test_invalid_update_raises(self, first_cage):
-        first_cage.lice_population.geno_by_lifestage['L5m'] = {('A',): 5, ('a',): 5, ('A', 'a'): 5}
+        first_cage.lice_population.geno_by_lifestage["L5m"] = {('A',): 5, ('a',): 5, ('A', 'a'): 5}
         with pytest.raises(AssertionError):
             first_cage.lice_population.available_dams = {('A',): 10}
 
     def test_do_mating_events(self, first_cage):
-        first_cage.lice_population.geno_by_lifestage['L5f'] = {('A',): 15, ('a',): 15, ('A', 'a'): 15}
+        first_cage.lice_population.geno_by_lifestage["L5f"] = {('A',): 15, ('a',): 15, ('A', 'a'): 15}
         first_cage.lice_population.available_dams = {('A',): 15, ('a',): 15}
 
         target_eggs = {('a',): 3024.5, ('A',): 2320.5, tuple(sorted(('a', 'A'))): 3773.0}
@@ -270,18 +270,30 @@ class TestCage:
         assert delta_avail_dams == target_delta_dams
 
     def test_no_available_sires_do_mating_events(self, first_cage):
-        first_cage.lice_population.geno_by_lifestage['L5m'] = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
+        first_cage.lice_population.geno_by_lifestage["L5m"] = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert not bool(delta_avail_dams)
         assert not bool(delta_eggs)
-
+    
+    def test_generate_eggs_maternal(self, first_cage):
+        first_cage.genetic_mechanism = "maternal"
+        sire = 'z'
+        dam = 'Z'
+        num_matings = 10
+        target_eggs = {dam: 2550}
+        eggs = first_cage.generate_eggs(sire, dam, num_matings)
+        for key in eggs:
+            assert key == dam
+            assert eggs[key] == target_eggs[key]
+    
     def test_generate_eggs_quantitative(self, first_cage):
+        first_cage.genetic_mechanism = "quantitative"
         sire = 0.7
         dam = 0.0
         num_matings = 10
         target_eggs = {0.4: 2550}
-        eggs = first_cage.generate_eggs(sire, dam, 'quantitative', num_matings)
+        eggs = first_cage.generate_eggs(sire, dam, num_matings)
         for key in eggs:
             assert eggs[key] == target_eggs[key]
 
@@ -289,44 +301,53 @@ class TestCage:
         dam = 0.2
         num_matings = 10
         target_eggs = {0.2: 2401}
-        eggs = first_cage.generate_eggs(sire, dam, 'quantitative', num_matings)
+        eggs = first_cage.generate_eggs(sire, dam, num_matings)
         for key in eggs:
             assert eggs[key] == target_eggs[key]
 
     def test_generate_eggs_discrete(self, first_cage):
-        breeding_method = 'discrete'
+        first_cage.genetic_mechanism = "discrete"
 
         sire = ('A',)
         dam = ('A',)
         hom_dom_target = {('A',): 1533}
 
         num_matings = 6
-        egg_result_hom_dom = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
+        egg_result_hom_dom = first_cage.generate_eggs(sire, dam, num_matings)
         assert egg_result_hom_dom == hom_dom_target
 
         sire = ('a',)
         dam = ('a',)
         hom_rec_target = {('a',): 1418}
-        egg_result_hom_rec = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
+        egg_result_hom_rec = first_cage.generate_eggs(sire, dam, num_matings)
         assert egg_result_hom_rec == hom_rec_target
 
         sire = tuple(sorted(('a', 'A')))
         dam = ('a',)
         het_target_sire = {('a',): 778.5, tuple(sorted(('a', 'A'))): 778.5}
-        egg_result_het_sire = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
+        egg_result_het_sire = first_cage.generate_eggs(sire, dam, num_matings)
         assert egg_result_het_sire == het_target_sire
 
         dam = tuple(sorted(('a', 'A')))
         sire = ('a',)
         het_target_dam = {('a',): 765.0, tuple(sorted(('a', 'A'))): 765.0}
-        egg_result_het_dam = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
+        egg_result_het_dam = first_cage.generate_eggs(sire, dam, num_matings)
         assert egg_result_het_dam == het_target_dam
 
         dam = tuple(sorted(('a', 'A')))
         sire = tuple(sorted(('a', 'A')))
         het_target = {('A', 'a'): 761.5, ('A',): 380.75, ('a',): 380.75}
-        egg_result_het = first_cage.generate_eggs(sire, dam, breeding_method, num_matings)
+        egg_result_het = first_cage.generate_eggs(sire, dam, num_matings)
         assert egg_result_het == het_target
+
+    def test_generate_eggs_bad_mechanism(self, first_cage):
+        sire = ('A',)
+        dam = ('A',)
+        num_matings = 6
+        first_cage.genetic_mechanism = "dummy"
+
+        with pytest.raises(Exception):
+            first_cage.generate_eggs(sire, dam, num_matings)
 
     def test_not_enough_dams_select_dams(self, first_cage):
 
@@ -375,7 +396,7 @@ class TestCage:
         assert all(age_distrib > 0)
 
     def test_get_num_eggs_no_females(self, first_cage):
-        first_cage.lice_population['L5f'] = 0
+        first_cage.lice_population["L5f"] = 0
         assert first_cage.get_num_eggs(0) == 0
 
     def test_get_num_eggs(self, first_cage):
