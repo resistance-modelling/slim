@@ -20,6 +20,7 @@ def to_dt(string_date):
 
 class Config:
     """Simulation configuration and parameters"""
+    _HAS_DYNAMIC_ATTRIBUTES = True
 
     def __init__(self, config_file, simulation_dir, logger):
         """@DynamicAttrs Read the configuration from files
@@ -53,15 +54,12 @@ class Config:
                       for farm_data in data["farms"]]
         self.nfarms = len(self.farms)
 
-        with open(os.path.join(simulation_dir, "interfarm_prob.csv")) as times_csv:
-            self.interfarm_times = np.loadtxt(times_csv, delimiter=",")
-        
-        with open(os.path.join(simulation_dir, "interfarm_time.csv")) as probs_csv:
-            self.interfarm_probs = np.loadtxt(probs_csv, delimiter=",")
+        self.interfarm_times = np.loadtxt(os.path.join(simulation_dir, "interfarm_time.csv"), delimiter=",")
+        self.interfarm_probs = np.loadtxt(os.path.join(simulation_dir, "interfarm_prob.csv"), delimiter=",")
 
     def __getattr__(self, name):
         # obscure marshalling trick.
-        params = self.__getattribute__("params")
+        params = self.__getattribute__("params")  # type: RuntimeConfig
         if name in dir(params):
             return params.__getattribute__(name)
         return self.__getattribute__(name)

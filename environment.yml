@@ -1,9 +1,13 @@
 name: slp
 channels:
   - defaults
+  - conda-forge
 dependencies:
   - python=3.8.0
   - pandas=1.2.4
   - scipy=1.6.2
   - pytest=6.2.4
   - pytest-cov=2.12.1
+  - mypy=0.910
+  - data-science-types=0.2.23
+  - pytype=2020.10.8

@@ -262,7 +262,7 @@ class TestCage:
         first_cage.lice_population.geno_by_lifestage["L5f"] = {('A',): 15, ('a',): 15, ('A', 'a'): 15}
         first_cage.lice_population.available_dams = {('A',): 15, ('a',): 15}
 
-        target_eggs = {('a',): 3024.5, ('A',): 2320.5, tuple(sorted(('a', 'A'))): 3773.0}
+        target_eggs = {('a',): 3062.5, ('A',): 1509.5, tuple(sorted(('a', 'A'))): 4579.0}
         target_delta_dams = {('A',): 2, ('a',): 4}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
@@ -490,8 +490,8 @@ class TestCage:
         first_cage.lice_population["L5f"] = 1000
         dams, _ = first_cage.do_mating_events()
         target_dams = {('A',): 188,
-                       ('a',): 182,
-                       ('A', 'a'): 556}
+                       ('a',): 181,
+                       ('A', 'a'): 557}
 
         first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
         assert first_cage.free_dams(cur_day + dt.timedelta(days=1)) == target_dams
@@ -501,8 +501,8 @@ class TestCage:
         first_cage.lice_population["L5f"] = 1000
         dams, _ = first_cage.do_mating_events()
         target_dams = {('A',): 564,
-                       ('a',): 546,
-                       ('A', 'a'): 1668}
+                       ('a',): 543,
+                       ('A', 'a'): 1671}
 
         for i in range(3):
             first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams))
