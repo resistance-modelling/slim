@@ -30,7 +30,9 @@ jobs:
 
     - name: Type-check
       shell: bash -l {0}
+      # note: for some reason conda does not install all the dependencies of pytype...
       run: |
+        pip install pytype
         pytype --config pytype.cfg refactor
     - name: Install git
       shell: bash -l {0}
