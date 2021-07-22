@@ -24,9 +24,9 @@ tau: float = 1
 # Farm and cage configuration,
 # For testing and development only
 nfarms: int = 1
-ncages: np.array = np.array([6])
-fishf: np.array = [40000]
-farm_locations: np.array = np.array([[190300, 665300]])
+ncages: np.ndarray = np.ndarray([6])
+fishf = [40000]
+farm_locations: np.ndarray = np.ndarray([[190300, 665300]])
 farm_start = [dt.datetime(2017, 10, 1)]
 cages_start =  [[dt.datetime(2017, 10, 1, 0, 0), dt.datetime(2017, 10, 8, 0, 0), dt.datetime(2017, 10, 15, 0, 0), dt.datetime(2017, 10, 22, 0, 0), dt.datetime(2017, 10, 29, 0, 0), dt.datetime(2017, 11, 5, 0, 0)]]
 treatment_dates =  [[] for i in range(nfarms)]
@@ -40,9 +40,9 @@ treatment_dates[0].extend(pd.date_range(dt.datetime(2018, 5, 1), dt.datetime(201
 
 """
 nfarms: int = 9
-ncages: np.array = np.array([6, 4, 8, 12, 9, 9, 8, 9, 9])
-fishf: np.array = [40000, 40000, 40000, 40000, 40000, 40000, 40000, 40000, 40000]
-farm_locations: np.array = np.array([[190300, 665300], [192500, 668200], [191800, 669500],
+ncages: np.ndarray = np.ndarray([6, 4, 8, 12, 9, 9, 8, 9, 9])
+fishf: np.ndarray = [40000, 40000, 40000, 40000, 40000, 40000, 40000, 40000, 40000]
+farm_locations: np.ndarray = np.ndarray([[190300, 665300], [192500, 668200], [191800, 669500],
                                [186500, 674500], [190400, 676800], [186300, 679600],
                                [190800, 681000], [195300, 692200], [199800, 698000]])
 farm_start = [dt.datetime(2017, 10, 1), dt.datetime(2017, 9, 1), dt.datetime(2017, 10, 1), dt.datetime(2017, 10, 1), dt.datetime(2017, 10, 1), dt.datetime(2017, 8, 1), dt.datetime(2017, 9, 1), dt.datetime(2017, 10, 1), dt.datetime(2017, 9, 1)]
@@ -101,23 +101,23 @@ prop_influx: float = 0.33
 
 # ???
 eggs: int = 1200  # 3 broods #[50,50,40,40,50,60,80,80,80,80,70,50]
-d_hatching: np.array = [9, 10, 11, 9, 8, 6, 4, 4, 4, 4, 5, 7]
+d_hatching = [9, 10, 11, 9, 8, 6, 4, 4, 4, 4, 5, 7]
 
 
 # www.seatemperature.org
-Ardrishaig_AveTemp: np.array = np.array([8.2, 7.55, 7.45, 8.25, 9.65, 11.35, 13.15, 13.75, 13.65,
+Ardrishaig_AveTemp: np.ndarray = np.ndarray([8.2, 7.55, 7.45, 8.25, 9.65, 11.35, 13.15, 13.75, 13.65,
                                          12.85, 11.75, 9.85])
-Tarbert_AveTemp: np.array = np.array([8.4, 7.8, 7.7, 8.6, 9.8, 11.65, 13.4, 13.9, 13.9, 13.2,
+Tarbert_AveTemp: np.ndarray = np.ndarray([8.4, 7.8, 7.7, 8.6, 9.8, 11.65, 13.4, 13.9, 13.9, 13.2,
                                       12.15, 10.2])
 
 
 # "roughly" based on marine scotland fixed engine catch data for west of scotland from 2000-2018
-Enfish_res: np.array = [3] * 12  # [4,5,6,6,8,15,37,22,10,2,2,3]
+Enfish_res = [3] * 12  # [4,5,6,6,8,15,37,22,10,2,2,3]
 Ewt_res: int = 2500
 
 
-cpw: np.array = [1, 1, 1, 2, 3, 1, 1, 2, 1, 1]
-numwk: np.array = [1, 6, 4, 4, 4, 9, 9, 4, 9, 9]
+cpw = [1, 1, 1, 2, 3, 1, 1, 2, 1, 1]
+numwk = [1, 6, 4, 4, 4, 9, 9, 4, 9, 9]
 
 #prop_arrive: pd.DataFrame = pd.read_csv('./Data/Fyne_props.csv', header=None)
 #hrs_travel: pd.DataFrame = pd.read_csv('./Data/Fyne_Edays.csv', header=None)

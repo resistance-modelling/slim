@@ -20,6 +20,7 @@ def to_dt(string_date):
 
 class Config:
     """Simulation configuration and parameters"""
+    _HAS_DYNAMIC_ATTRIBUTES = True
 
     def __init__(self, config_file, simulation_dir, logger):
         """@DynamicAttrs Read the configuration from files
@@ -58,7 +59,7 @@ class Config:
 
     def __getattr__(self, name):
         # obscure marshalling trick.
-        params = self.__getattribute__("params")
+        params = self.__getattribute__("params")  # type: RuntimeConfig
         if name in dir(params):
             return params.__getattribute__(name)
         return self.__getattribute__(name)
