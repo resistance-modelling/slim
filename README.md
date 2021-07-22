@@ -1,5 +1,9 @@
 [![codecov](https://codecov.io/gh/resistance-modelling/slim/branch/master/graph/badge.svg?token=ykA9vESc7B)](https://codecov.io/gh/resistance-modelling/slim)
 
+<img src = "https://user-images.githubusercontent.com/6224231/126653948-4d698656-b22f-4dbd-9bee-e919b56407aa.png" width= "150">
+
+
+
 # Sea Lice Modelling
 **Sea lice** (*singular sea louse*) are a type of parasitic organisms that occur on salmonid species (salmon, trout, char). We differentiate between farm **salmon** (in the **sea cages**) and **wild fish** (wild salmonid species in the **reservoir**, that is external environment). Salmon in sea cages can be infected when the sea lice crosses into the sea cage from the reservoir where it occurs on the wild fish. 
 
