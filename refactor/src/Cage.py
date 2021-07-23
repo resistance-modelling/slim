@@ -640,8 +640,11 @@ class Cage:
         return delta_dams_selected
 
     def choose_from_distrib(self, distrib: GenoDistrib) -> Alleles:
-        distrib_values = np.array(list(distrib.values()), dtype=object)
-        return tuple(self.cfg.rng.choice(list(distrib.keys()), p=distrib_values / np.sum(distrib_values)))
+        distrib_values = np.array(list(distrib.values()))
+        keys = list(distrib.keys())
+        choice_ix = self.cfg.rng.choice(range(len(keys)), p=distrib_values / np.sum(distrib_values))
+
+        return tuple(keys[choice_ix])
 
     def get_num_eggs(self, mated_females) -> int:
         """
