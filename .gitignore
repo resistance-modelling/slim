@@ -19,6 +19,9 @@ lice_counts*.txt
 htmlcov/
 coverage.xml
 
+# Typechecking
+/.pytype
+
 # Original .gitignore
 Figures/
 reading/

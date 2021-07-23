@@ -8,7 +8,7 @@ from typing import Optional
 
 import numpy as np
 
-from src.Cage import Cage
+from src.Cage import Cage  # pytype: disable=pyi-error
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 

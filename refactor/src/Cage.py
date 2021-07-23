@@ -12,12 +12,13 @@ import numpy as np
 from scipy import stats
 
 from src.Config import Config
-from src.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
-                                LicePopulation)
-from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
 
 if TYPE_CHECKING:
     from src.Farm import Farm
+
+from src.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
+                                LicePopulation)
+from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
 
 
 class Cage:
@@ -184,14 +185,15 @@ class Cage:
 
         self.logger.debug("\t\tfinal lice population= {}".format(self.lice_population))
 
-        if cur_date >= self.start_date:
+        egg_distrib = {}    # type: GenoDistrib
+        hatch_date = None   # type: Optional[dt.datetime]
+        if cur_date >= self.start_date and new_egg_batch:
             self.logger.debug("\t\tfinal fish population = {}".format(self.num_fish))
             egg_distrib = new_egg_batch.geno_distrib
             hatch_date = new_egg_batch.hatch_date
             self.logger.debug("\t\tlice offspring = {}".format(sum(egg_distrib.values())))
-            return egg_distrib, hatch_date
-        else:
-            return {}, None
+
+        return egg_distrib, hatch_date
 
     def get_lice_treatment_mortality_rate(self, cur_date):
         """
