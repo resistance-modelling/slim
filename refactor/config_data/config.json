@@ -126,5 +126,9 @@
         "temperatures": [8.4,7.8,7.7,8.6,9.8,11.65,13.4,13.9,13.9,13.2,12.15,10.2]
       }
     }
+  },
+  "genetic_ratios": {
+    "description": "Genetic ratios of lice population",
+    "value": {"A": 0.25, "a": 0.25, "A,a": 0.5}
   }
 }

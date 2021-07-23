@@ -112,6 +112,9 @@ class RuntimeConfig:
         self.reproduction_density_dependence = data["reproduction_density_dependence"]["value"]
         self.dam_unavailability = data["dam_unavailability"]["value"]
 
+        # TODO: take into account processing of non-discrete keys
+        self.genetic_ratios = {tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"]["value"].items()}
+
         # Farm data
         self.farm_data = data["farm_data"]["value"]
 

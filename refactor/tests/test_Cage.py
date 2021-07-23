@@ -9,7 +9,7 @@ import pytest
 import json
 
 from src.Config import to_dt
-from src.Cage import EggBatch, DamAvailabilityBatch, TravellingEggBatch
+from src.QueueBatches import EggBatch, DamAvailabilityBatch, TravellingEggBatch
 
 
 class TestCage:
@@ -129,6 +129,15 @@ class TestCage:
         assert 0 <= new_l4 <= 10
         assert new_females == 1
         assert new_males == 1
+
+    def test_get_lice_lifestage_planctonic_only(self, first_cage, planctonic_only_population):
+        first_cage.lice_population = planctonic_only_population
+
+        _, new_l4, new_females, new_males = first_cage.get_lice_lifestage(1)
+
+        assert new_l4 == 0
+        assert new_females == 0
+        assert new_females == 0
 
     def test_get_fish_growth(self, first_cage):
         first_cage.num_fish *= 300
@@ -598,8 +607,92 @@ class TestCage:
     def test_get_reservoir_lice_no_pressure(self, first_cage):
         assert first_cage.get_reservoir_lice(0) == {"L1": 0, "L2": 0}
 
-    def test_update_step_before_start(self, first_cage):
-        cur_date = first_cage.start_date - dt.timedelta(1)
-        offspring = first_cage.update(cur_date, 1, 0)
+    def test_update_step_before_start_date_two_days(self, first_cage, planctonic_only_population):
+        cur_date = first_cage.start_date - dt.timedelta(5)
+        first_cage.lice_population = planctonic_only_population
+
+        hatch_date = cur_date + dt.timedelta(1)
+        geno_hatch = {("a",): 10, ("A", "a"): 0, ("A",): 0}
+        first_cage.arrival_events.put(TravellingEggBatch(cur_date, hatch_date, geno_hatch))
+
+        pressure = 10
+
+        offspring, hatch_date = first_cage.update(cur_date, 1, pressure)
 
         assert offspring == {}
+        assert hatch_date is None
+        assert first_cage.lice_population["L3"] == 0
+        assert first_cage.lice_population["L4"] == 0
+        assert first_cage.lice_population["L5f"] == 0
+        assert first_cage.lice_population["L5m"] == 0
+        assert first_cage.num_fish == 4000
+        assert first_cage.num_infected_fish == 0
+        assert first_cage.arrival_events.qsize() == 0
+        assert first_cage.hatching_events.qsize() == 1
+
+        cur_date += dt.timedelta(1)
+        offspring, hatch_date = first_cage.update(cur_date, 1, pressure)
+
+        assert offspring == {}
+        assert hatch_date is None
+        assert first_cage.lice_population["L3"] == 0
+        assert first_cage.lice_population["L4"] == 0
+        assert first_cage.lice_population["L5f"] == 0
+        assert first_cage.lice_population["L5m"] == 0
+        assert first_cage.num_fish == 4000
+        assert first_cage.num_infected_fish == 0
+        assert first_cage.arrival_events.qsize() == 0
+        assert first_cage.hatching_events.qsize() == 0
+
+    def test_update_step_before_start_date_no_deaths(self, first_cage, planctonic_only_population):
+        cur_date = first_cage.start_date - dt.timedelta(5)
+        first_cage.lice_population = planctonic_only_population
+
+        hatch_date = cur_date
+        geno_hatch = {("a",): 10, ("A", "a"): 0, ("A",): 0}
+        first_cage.hatching_events.put(EggBatch(hatch_date, geno_hatch))
+        pressure = 10
+
+        population_before = sum(first_cage.lice_population.values())
+        inflow = pressure + sum(geno_hatch.values())
+
+        # set mortality to 0
+        first_cage.cfg.background_lice_mortality_rates = {key: 0 for key in first_cage.lice_population}
+
+        offspring, hatch_date = first_cage.update(cur_date, 1, pressure)
+
+        assert offspring == {}
+        assert hatch_date is None
+        assert first_cage.lice_population["L3"] == 0
+        assert first_cage.lice_population["L4"] == 0
+        assert first_cage.lice_population["L5f"] == 0
+        assert first_cage.lice_population["L5m"] == 0
+        assert first_cage.num_fish == 4000
+        assert first_cage.num_infected_fish == 0
+
+        current_population = sum(first_cage.lice_population.values())
+        assert current_population == population_before + inflow
+
+    def test_update_step_before_start_date_only_deaths(self, first_cage, planctonic_only_population):
+        cur_date = first_cage.start_date - dt.timedelta(5)
+        first_cage.lice_population = planctonic_only_population
+
+        population_before = sum(first_cage.lice_population.values())
+
+        # make sure there will be deaths
+        first_cage.cfg.background_lice_mortality_rates = {key: 1 for key in first_cage.lice_population}
+        pressure = 0
+
+        offspring, hatch_date = first_cage.update(cur_date, 1, pressure)
+
+        assert offspring == {}
+        assert hatch_date is None
+        assert first_cage.lice_population["L3"] == 0
+        assert first_cage.lice_population["L4"] == 0
+        assert first_cage.lice_population["L5f"] == 0
+        assert first_cage.lice_population["L5m"] == 0
+        assert first_cage.num_fish == 4000
+        assert first_cage.num_infected_fish == 0
+
+        current_population = sum(first_cage.lice_population.values())
+        assert current_population < population_before

@@ -18,11 +18,12 @@ class Farm:
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name: int, cfg: Config):
+    def __init__(self, name: int, cfg: Config, initial_lice_pop: dict = None):
         """
         Create a farm.
         :param name: the id of the farm.
         :param cfg: the farm configuration
+        ::param initial_lice_pop: if provided, overrides default generated lice population
         """
 
         self.logger = cfg.logger
@@ -35,7 +36,7 @@ class Farm:
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.treatment_dates = farm_cfg.treatment_dates
-        self.cages = [Cage(i, cfg, self) for i in range(farm_cfg.n_cages)]
+        self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]
 
         self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
 
@@ -82,12 +83,11 @@ class Farm:
         :param step_size: Step size for tau-leaping
         :return: Dictionary of genotype distributions based on hatch date
         """
-
-        if cur_date < self.start_date:
-            self.logger.debug("Skipping farm {} (not started yet)".format(self.name))
-            return {}
-
-        self.logger.debug("Updating farm {}".format(self.name))
+        
+        if cur_date >= self.start_date:
+            self.logger.debug("Updating farm {}".format(self.name))
+        else:
+            self.logger.debug("Updating farm {} (non-operational)".format(self.name))
 
         # get number of lice from reservoir to be put in each cage
         pressures_per_cage = self.get_cage_pressures()
@@ -100,12 +100,13 @@ class Farm:
             egg_distrib, hatch_date = cage.update(cur_date,
                                                   step_size,
                                                   pressures_per_cage[cage.id])
-
-            # update the total offspring info
-            if hatch_date in eggs_by_hatch_date:
-                eggs_by_hatch_date[hatch_date] += Counter(egg_distrib)
-            else:
-                eggs_by_hatch_date[hatch_date] = Counter(egg_distrib)
+                                                  
+            if hatch_date:
+                # update the total offspring info
+                if hatch_date in eggs_by_hatch_date:
+                    eggs_by_hatch_date[hatch_date] += Counter(egg_distrib)
+                else:
+                    eggs_by_hatch_date[hatch_date] = Counter(egg_distrib)
 
         return eggs_by_hatch_date
 
@@ -119,7 +120,6 @@ class Farm:
             raise Exception("Farm must have at least one cage.")
         if self.cfg.ext_pressure < 0:
             raise Exception("External pressure cannot be negative.")
-
 
         # assume equal chances for each cage
         probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
