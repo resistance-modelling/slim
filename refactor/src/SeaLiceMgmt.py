@@ -63,8 +63,8 @@ def initialise(data_folder, sim_id, cfg):
 
     farms = [Farm(i, cfg) for i in range(cfg.nfarms)]
 
-    #print(cfg.prop_arrive)
-    #print(cfg.hrs_travel)
+    # print(cfg.prop_arrive)
+    # print(cfg.hrs_travel)
     return farms
 
 
@@ -98,7 +98,7 @@ def run_model(path, sim_id, cfg, farms):
         offspring_dict = {}
         for farm in farms:
 
-            #if days == 1:
+            # if days == 1:
             #    resistance_bv.write_text(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext)
 
             offspring = farm.update(cur_date, cfg.tau)

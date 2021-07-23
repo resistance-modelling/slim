@@ -130,5 +130,9 @@
   "genetic_ratios": {
     "description": "Genetic ratios of lice population",
     "value": {"A": 0.25, "a": 0.25, "A,a": 0.5}
+  },
+  "genetic_mechanism": {
+    "description": "The breeding strategy. Can be 'maternal', 'quantitative' or 'discrete'",
+    "value": "discrete"
   }
 }

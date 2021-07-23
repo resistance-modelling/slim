@@ -88,4 +88,4 @@ def planctonic_only_population(first_cage):
     geno = {stage: {("a",): 0, ("A", "a"): 0, ("A",): 0} for stage in lice_pop.keys()}
     geno["L1"][("a",)] = 100
     geno["L2"][("a",)] = 200
-    return LicePopulation(lice_pop, geno, {}, first_cage.logger)
+    return LicePopulation(lice_pop, geno, first_cage.cfg)

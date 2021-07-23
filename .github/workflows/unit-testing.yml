@@ -13,6 +13,7 @@ jobs:
         python-version: "3.8"
         environment-file: environment.yml
         activate-environment: slp
+        channels: conda-forge
     - uses: actions/checkout@v1
     - name: Conda info sanity check
       shell: bash -l {0}
@@ -26,9 +27,15 @@ jobs:
       shell: bash -l {0}
       run: pytest --cov=src/ --cov-config=.coveragerc  --cov-context=test --cov-report=xml
       working-directory: ./refactor
+
+    - name: Type-check
+      shell: bash -l {0}
+      # note: for some reason conda does not install all the dependencies of pytype...
+      run: |
+        pip install pytype
+        pytype --config pytype.cfg refactor
     - name: Install git
       shell: bash -l {0}
-
       run: |
         sudo apt update
         sudo apt install -y git curl

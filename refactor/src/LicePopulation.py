@@ -1,17 +1,25 @@
 import copy
-from collections.abc import MutableMapping
+from typing import Dict, MutableMapping, Tuple, Union
 
 import numpy as np
+
 from src.Config import Config
+
+LifeStage = str
+Allele = str
+Alleles = Tuple[Allele, ...]
+GenoDistrib = Dict[Alleles, Union[int, float]]
+GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
+GrossLiceDistrib = Dict[LifeStage, int]
 
 
 # See https://stackoverflow.com/a/7760938
-class LicePopulation(dict, MutableMapping):
+class LicePopulation(dict, MutableMapping[LifeStage, int]):
     """
     Wrapper to keep the global population and genotype information updated
     This is definitely a convoluted way to do this, but I wanted to memoise as much as possible.
     """
-    def __init__(self, initial_population: dict, geno_data: dict, cfg: Config):
+    def __init__(self, initial_population: GrossLiceDistrib, geno_data: GenoLifeStageDistrib, cfg: Config):
         super().__init__()
         self.geno_by_lifestage = GenotypePopulation(self, geno_data)
         self._available_dams = copy.deepcopy(self.geno_by_lifestage["L5f"])
@@ -20,11 +28,12 @@ class LicePopulation(dict, MutableMapping):
         for k, v in initial_population.items():
             super().__setitem__(k, v)
 
-    def __setitem__(self, stage, value):
+    def __setitem__(self, stage: LifeStage, value: int):
         # If one attempts to make gross modifications to the population these will be repartitioned according to the
         # current genotype information.
         if sum(self.geno_by_lifestage[stage].values()) == 0:
-            self.logger.warning(f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
+            if value > 0:
+                self.logger.warning(f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
             self.geno_by_lifestage.raw_update_value(stage, self.multiply_distrib(self.genetic_ratios, value))
         else:
             self.geno_by_lifestage.raw_update_value(stage, self.multiply_distrib(self.geno_by_lifestage[stage], value))
@@ -32,7 +41,7 @@ class LicePopulation(dict, MutableMapping):
             self._available_dams = self.multiply_distrib(self._available_dams, value)
         super().__setitem__(stage, value)
 
-    def raw_update_value(self, stage, value):
+    def raw_update_value(self, stage: LifeStage, value: int):
         super().__setitem__(stage, value)
 
     @property
@@ -40,9 +49,10 @@ class LicePopulation(dict, MutableMapping):
         return self._available_dams
 
     @available_dams.setter
-    def available_dams(self, new_value: dict):
+    def available_dams(self, new_value: GenoDistrib):
         for geno in new_value:
-            assert self.geno_by_lifestage["L5f"][geno] >= new_value[geno], f"current population geno {geno}:{self.geno_by_lifestage['L5f'][geno]} is smaller than new value geno {new_value[geno]}"
+            assert self.geno_by_lifestage["L5f"][geno] >= new_value[geno], \
+                f"current population geno {geno}:{self.geno_by_lifestage['L5f'][geno]} is smaller than new value geno {new_value[geno]}"
 
         self._available_dams = new_value
 
@@ -61,17 +71,17 @@ class LicePopulation(dict, MutableMapping):
         return dict(zip(keys, map(int, np_values)))
 
 
-class GenotypePopulation(dict, MutableMapping):
-    def __init__(self, gross_lice_population: LicePopulation, geno_data: dict):
+class GenotypePopulation(dict, MutableMapping[LifeStage, GenoDistrib]):
+    def __init__(self, gross_lice_population: LicePopulation, geno_data: GenoLifeStageDistrib):
         super().__init__()
         self._lice_population = gross_lice_population
         for k, v in geno_data.items():
             super().__setitem__(k, v)
 
-    def __setitem__(self, stage: str, value: dict):
+    def __setitem__(self, stage: LifeStage, value: GenoDistrib):
         # update the value and the gross population accordingly
         super().__setitem__(stage, value)
         self._lice_population.raw_update_value(stage, sum(value.values()))
 
-    def raw_update_value(self, stage, value):
+    def raw_update_value(self, stage: LifeStage, value: GenoDistrib):
         super().__setitem__(stage, value)

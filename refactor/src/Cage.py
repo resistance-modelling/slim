@@ -1,17 +1,23 @@
+from __future__ import annotations
+
 import copy
 import datetime as dt
 import json
 import math
 from functools import singledispatch
 from queue import PriorityQueue
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union, cast
 
 import numpy as np
 from scipy import stats
 
 from src.Config import Config
-from src.LicePopulation import LicePopulation
+from src.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
+                                LicePopulation)
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
+
+if TYPE_CHECKING:
+    from src.Farm import Farm
 
 
 class Cage:
@@ -22,14 +28,14 @@ class Cage:
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
     susceptible_stages = lice_stages[2:]
 
-    def __init__(self, cage_id: int, cfg: Config, farm: "Farm",
-                 lice_population: dict = None):
+    def __init__(self, cage_id: int, cfg: Config, farm: Farm,
+                 initial_lice_pop: Optional[GrossLiceDistrib] = None):
         """
         Create a cage on a farm
         :param cage_id: the label (id) of the cage within the farm
         :param cfg: the farm configuration
         :param farm: a Farm object
-        :param lice_population: if provided, overrides default generated lice population
+        :param initial_lice_pop: if provided, overrides default generated lice population
         """
 
         self.cfg = cfg
@@ -41,30 +47,31 @@ class Cage:
         self.date = cfg.start_date
 
         # TODO: update with calculations
-        if lice_population is None:
-            lice_population = {"L1": cfg.ext_pressure, "L2": 0, "L3": 0, "L4": 0, "L5f": 0, "L5m": 0}
+        if initial_lice_pop is None:
+            lice_population = {"L1": cfg.ext_pressure, "L2": 0, "L3": 0, "L4": 0, "L5f": 0, "L5m": 0}   # type: GrossLiceDistrib
+        else:
+            lice_population = initial_lice_pop
 
         self.farm = farm
 
-        self.egg_genotypes = {}
+        self.egg_genotypes = {}  # type: GenoDistrib
         # TODO/Question: what's the best way to deal with having multiple possible genetic schemes?
         # TODO/Question: I suppose some of this initial genotype information ought to come from the config file
         # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
         # for now I've hard-coded in one mechanism in this setup, and a particular genotype starting point. Should probably be from a config file?
-        self.genetic_mechanism = "discrete"
+        self.genetic_mechanism = self.cfg.genetic_mechanism
 
-        geno_by_lifestage = {}
-        for stage in lice_population:
-            geno_by_lifestage[stage] = LicePopulation.multiply_distrib(self.cfg.genetic_ratios, lice_population[stage])
+        geno_by_lifestage = {stage: LicePopulation.multiply_distrib(self.cfg.genetic_ratios, lice_population[stage])
+                             for stage in lice_population}
 
         self.lice_population = LicePopulation(lice_population, geno_by_lifestage, self.cfg)
 
         self.num_fish = cfg.farms[self.farm_id].num_fish
         self.num_infected_fish = self.get_mean_infected_fish()
 
-        self.hatching_events = PriorityQueue()
-        self.busy_dams = PriorityQueue()
-        self.arrival_events = PriorityQueue()
+        self.hatching_events = PriorityQueue()  # type: PriorityQueue[EggBatch]
+        self.busy_dams = PriorityQueue()  # type: PriorityQueue[DamAvailabilityBatch]
+        self.arrival_events = PriorityQueue()  # type: PriorityQueue[TravellingEggBatch]
 
     def __str__(self):
         """
@@ -235,7 +242,7 @@ class Cage:
             #        dead lice falls into this bin.
             p = (pheno_emb) / np.sum(pheno_emb)
             dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, p=p,
-                                         replace=False).tolist()
+                                            replace=False).tolist()
             total_so_far = 0
             for stage in self.susceptible_stages:
                 num_dead = len([x for x in dead_lice if total_so_far <= x <
@@ -292,7 +299,7 @@ class Cage:
         """
         self.logger.debug("\t\tupdating lice lifecycle stages")
 
-        def dev_times(del_p, del_m10, del_s, temp_c, ages):
+        def dev_times(del_p: float, del_m10: float, del_s: float, temp_c: float, ages: np.ndarray):
             """
             Probability of developing after n_days days in a stage as given by Aldrin et al 2017
             See section 2.2.4 of Aldrin et al. (2017)
@@ -307,8 +314,8 @@ class Cage:
             del_m = del_m10 * (10 / temp_c) ** del_p
 
             unbounded = math.log(2) * del_s * ages ** (del_s - 1) * del_m ** (-del_s)
-            unbounded = np.clip(unbounded, epsilon, 1)
-            return unbounded.astype("float64")
+            unbounded = np.clip(unbounded, np.float64(epsilon), np.float64(1.0))
+            return unbounded.astype(np.float64)
 
         lice_dist = {}
         ave_temp = self.farm.year_temperatures[cur_month - 1]
@@ -401,7 +408,7 @@ class Cage:
         return self.cfg.infection_main_delta + math.log(num_fish_in_farm) + self.cfg.infection_weight_delta * \
                (math.log(self.fish_growth_rate(days)) - self.cfg.delta_expectation_weight_log)
 
-    def get_infection_rates(self, days) -> (float, int):
+    def get_infection_rates(self, days) -> Tuple[float, int]:
         """
         Compute the number of lice that can infect and what their infection rate (number per fish) is
 
@@ -409,7 +416,7 @@ class Cage:
         :returns a pair (Einf, num_avail_lice)
         """
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
-        # but at what point does the distribution mean decrease).
+        # but at what point does the distribution mean decrease)./
         age_distrib = self.get_stage_ages_distrib("L2")
         num_avail_lice = round(self.lice_population["L2"] * np.sum(age_distrib[1:]))
         if num_avail_lice > 0:
@@ -421,7 +428,7 @@ class Cage:
 
             return Einf, num_avail_lice
 
-        return 0, num_avail_lice
+        return 0.0, num_avail_lice
 
     def do_infection_events(self, days) -> int:
         """
@@ -442,7 +449,7 @@ class Cage:
         if args is None or len(args) == 0:
             infective_stages = ["L3", "L4", "L5m", "L5f"]
         else:
-            infective_stages = args
+            infective_stages = list(args)
         return sum(self.lice_population[stage] for stage in infective_stages)
 
     def get_mean_infected_fish(self, *args) -> int:
@@ -465,7 +472,7 @@ class Cage:
         probs = np.full(n, 1/n)
         bins = self.cfg.rng.multinomial(k, probs)
 
-        return np.var(bins)*k
+        return np.var(bins) * k
 
     def get_num_matings(self) -> int:
         """
@@ -491,13 +498,13 @@ class Cage:
         vmr = variance/mean
         if vmr <= 1.0:
             return 0
-        aggregation_factor = mean / (vmr- 1)
+        aggregation_factor = mean / (vmr - 1)
 
         prob_matching = 1 - (1 + males/((males + females)*aggregation_factor)) ** (-1-aggregation_factor)
         # TODO: using a poisson distribution can lead to a high std for high prob*females
-        return np.clip(self.cfg.rng.poisson(prob_matching * females), 0, min(males, females))
+        return int(np.clip(self.cfg.rng.poisson(prob_matching * females), np.int32(0), np.int32(min(males, females))))
 
-    def do_mating_events(self) -> (dict, dict):
+    def do_mating_events(self) -> Tuple[GenoDistrib, GenoDistrib]:
         """
         will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
         assume males don't become unavailable? in this case we don't need a delta for sires
@@ -508,7 +515,7 @@ class Cage:
         TODO: current date is required by get_num_eggs as of now, but the relationship between extrusion and temperature is not clear
         """
 
-        delta_eggs = {}
+        delta_eggs = {}  # type: GenoDistrib
         num_matings = self.get_num_matings()
 
         distrib_sire_available = self.lice_population.geno_by_lifestage["L5m"]
@@ -524,12 +531,17 @@ class Cage:
         for dam_geno in delta_dams:
             for _ in range(int(delta_dams[dam_geno])):
                 sire_geno = self.choose_from_distrib(distrib_sire_available)
-                new_eggs = self.generate_eggs(sire_geno, dam_geno, 'discrete', num_matings)
+                new_eggs = self.generate_eggs(sire_geno, dam_geno, num_matings)
                 self.update_distrib_discrete_add(new_eggs, delta_eggs)
 
         return delta_dams, delta_eggs
 
-    def generate_eggs(self, sire, dam, breeding_method: str, num_matings: int):
+    def generate_eggs(
+            self,
+            sire: Union[Alleles, np.ndarray],
+            dam: Union[Alleles, np.ndarray],
+            num_matings: int
+    ) -> GenoDistrib:
         """
         Generate the eggs with a given genomic distribution
         If we're in the discrete 2-gene setting, assume for now that genotypes are tuples - so in a A/a genetic system, genotypes
@@ -539,24 +551,24 @@ class Cage:
         TODO: doesn't do anything sensible re: integer/real numbers of offspring
         :param sire the genomics of the sires
         :param dam the genomics of the dams
-        :param breeding_method the breeding strategy. Can be either "additive" or "discrete"
         :param num_matings the number of matings
         :returns a distribution on the number of generated eggs according to the distribution
         """
 
         number_eggs = self.get_num_eggs(num_matings)
 
-        if breeding_method == 'discrete':
-            eggs_generated = {}
+        eggs_generated = {}
+        if self.genetic_mechanism == "discrete":
+
             if len(sire) == 1 and len(dam) == 1:
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs
+                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = float(number_eggs)
             elif len(sire) == 2 and len(dam) == 1:
                 eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 2
                 eggs_generated[tuple(sorted(tuple({sire[1], dam[0]})))] = number_eggs / 2
             elif len(sire) == 1 and len(dam) == 2:
                 eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 2
                 eggs_generated[tuple(sorted(tuple({sire[0], dam[1]})))] = number_eggs / 2
-            else: #
+            else:
                 # drawing both from the sire in the first case ensures heterozygotes
                 # but is a bit hacky.
                 eggs_generated[tuple(sorted(tuple({sire[0], sire[1]})))] = number_eggs / 2
@@ -564,18 +576,22 @@ class Cage:
                 eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 4
                 eggs_generated[tuple(sorted(tuple({sire[1], dam[1]})))] = number_eggs / 4
 
-            return eggs_generated
-        else:
+        elif self.genetic_mechanism == "quantitative":
             # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
             # because we're only dealing with the heritable part here don't need to do any of the comparison
             # to population mean or impact of heritability, etc - that would appear in the code dealing with treatment
             # so we could use just the mid-parent value for this genetic recording for children
             # as with the discrete genetic model, this will be deterministic for now
-            eggs_generated = {}
             mid_parent = np.round((sire + dam)/2, 1)
             eggs_generated[mid_parent] = number_eggs
 
-            return eggs_generated
+        elif self.genetic_mechanism == "maternal":
+            # maternal-only inheritance - all eggs have mother's genotype
+            eggs_generated[dam] = number_eggs
+        else:
+            raise Exception("Genetic mechanism must be 'maternal', 'quantitative' or 'discrete' - '{}' given".format(self.genetic_mechanism))
+
+        return eggs_generated
 
     @staticmethod
     def update_distrib_discrete_add(distrib_delta, distrib):
@@ -623,14 +639,9 @@ class Cage:
 
         return delta_dams_selected
 
-    def choose_from_distrib(self, distrib):
-        max_val = sum(distrib.values())
-        this_draw = self.cfg.rng.integers(0, high=max_val)
-        sum_so_far = 0
-        for val in distrib:
-            sum_so_far += distrib[val]
-            if this_draw <= sum_so_far:
-                return val
+    def choose_from_distrib(self, distrib: GenoDistrib) -> Alleles:
+        distrib_values = np.array(list(distrib.values()), dtype=object)
+        return tuple(self.cfg.rng.choice(list(distrib.keys()), p=distrib_values / np.sum(distrib_values)))
 
     def get_num_eggs(self, mated_females) -> int:
         """
@@ -651,12 +662,12 @@ class Cage:
         return self.cfg.rng.poisson(np.round(np.sum(eggs)))
         # TODO: We are deprecating this. Need to investigate if temperature data is useful. See #46
         # ave_temp = self.farm.year_temperatures[cur_month - 1]
-        #temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
+        # temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
 
-        #reproduction_rates = self.cfg.reproduction_eggs_first_extruded * \
+        # reproduction_rates = self.cfg.reproduction_eggs_first_extruded * \
         #                     (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1)
 
-        #return self.cfg.rng.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
+        # return self.cfg.rng.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
 
     def get_egg_batch(self, cur_date: dt.datetime, egg_distrib: dict) -> EggBatch:
         """
@@ -680,10 +691,9 @@ class Cage:
         return EggBatch(expected_hatching_date, egg_distrib)
 
     @staticmethod
-    def pop_from_queue(queue: PriorityQueue, cur_time: dt.datetime, output_geno_distrib: dict) -> dict:
+    def pop_from_queue(queue: PriorityQueue, cur_time: dt.datetime, output_geno_distrib: dict):
         # process all the due events
         # Note: queues miss a "peek" method, and this line relies on an implementation detail.
-
 
         @singledispatch
         def access_time_lt(_peek_element, _cur_time: dt.datetime):
@@ -709,7 +719,7 @@ class Cage:
     def create_offspring(self, cur_time: dt.datetime) -> dict:
         """
         Hatch the eggs from the event queue
-        :param cur_date the current time
+        :param cur_time the current time
         :returns a delta egg genomics
         """
 
@@ -761,8 +771,8 @@ class Cage:
         self,
         prev_stage: Union[str, dict],
         cur_stage: str,
-        leaving_lice: int,
-        entering_lice: Optional[int] = None
+        leaving_lice: np.int64,
+        entering_lice: Optional[np.int64] = None
     ):
         """
         Promote the population by stage and respect the genotypes
@@ -773,6 +783,7 @@ class Cage:
                If prev_stage is a a string, entering_lice must be an int
         """
         if isinstance(prev_stage, str):
+            entering_lice = cast(np.int64, entering_lice)
             prev_stage_geno = self.lice_population.geno_by_lifestage[prev_stage]
             entering_geno_distrib = LicePopulation.multiply_distrib(prev_stage_geno, entering_lice)
         else:
