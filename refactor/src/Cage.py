@@ -20,6 +20,9 @@ from src.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation)
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
 
+OptionalDamBatch = Optional[DamAvailabilityBatch]
+OptionalEggBatch = Optional[EggBatch]
+
 
 class Cage:
     """
@@ -97,7 +100,7 @@ class Cage:
 
         return json.dumps(filtered_vars, indent=4)
 
-    def update(self, cur_date: dt.datetime, step_size: int, pressure: int) -> tuple:
+    def update(self, cur_date: dt.datetime, step_size: int, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime]]:
         """Update the cage at the current time step.
 
         :param cur_date: Current date of simulation
@@ -132,10 +135,19 @@ class Cage:
         # Lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure)
 
-        if cur_date >= self.start_date:
-            # Events that only happen when cage is populated with fish
-            # (after start date)
+        if cur_date < self.start_date:
+            # Values that are not used before the start date
+            treatment_mortality = {}
+            fish_deaths_natural, fish_deaths_from_lice = 0, 0  # type: Tuple[int, int]
+            num_infection_events = 0  # type: int
+            delta_avail_dams, delta_eggs = {}, {}  # type: Tuple[GenoDistrib, GenoDistrib]
+            avail_dams_batch = None  # type: OptionalDamBatch
+            new_egg_batch = None  # type: OptionalEggBatch
+            returned_dams = {}
 
+        else:
+            # Events that happen when cage is populated with fish
+            # (after start date)
             days_since_start = (cur_date - self.date).days
 
             # Treatment mortality events
@@ -156,15 +168,6 @@ class Cage:
 
             # Restore lice availability
             returned_dams = self.free_dams(cur_date)
-        else:
-            # Nullify and zero the values otherwise
-            treatment_mortality = {}
-            fish_deaths_natural, fish_deaths_from_lice = 0, 0
-            num_infection_events = 0
-            delta_avail_dams, delta_eggs = {}, {}
-            avail_dams_batch = None
-            new_egg_batch = None
-            returned_dams = {}
 
         self.update_deltas(
             dead_lice_dist,
@@ -474,7 +477,7 @@ class Cage:
         probs = np.full(n, 1/n)
         bins = self.cfg.rng.multinomial(k, probs)
 
-        return np.var(bins) * k
+        return float(np.var(bins) * k)
 
     def get_num_matings(self) -> int:
         """
@@ -618,7 +621,7 @@ class Cage:
             if distrib[geno] < 0:
                 distrib[geno] = 0
 
-    def select_dams(self, distrib_dams_available, num_dams):
+    def select_dams(self, distrib_dams_available: GenoDistrib, num_dams: int):
         """
         Assumes the usual dictionary representation of number
         of dams - genotype:number_available
@@ -815,7 +818,7 @@ class Cage:
             new_males: np.int64,
             new_infections: int,
             lice_from_reservoir: dict,
-            delta_dams_batch: DamAvailabilityBatch,
+            delta_dams_batch: OptionalDamBatch,
             new_offspring_distrib: dict,
             returned_dams: dict,
             hatched_arrivals_dist: dict
