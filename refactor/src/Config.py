@@ -1,4 +1,5 @@
 import datetime as dt
+import enum
 import json
 import os
 
@@ -109,8 +110,8 @@ class RuntimeConfig:
         self.reproduction_age_dependence = data["reproduction_age_dependence"]["value"]
         self.reproduction_density_dependence = data["reproduction_density_dependence"]["value"]
         self.dam_unavailability = data["dam_unavailability"]["value"]
-        self.genetic_mechanism = data["genetic_mechanism"]["value"]
-        self.pheno_resistance = data["pheno_resistance"]["value"]
+        self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"]["value"]]
+        self.pheno_resistance = self.parse_pheno_resistance(data["pheno_resistance"]["value"])
 
         # Farm data
         self.farm_data = data["farm_data"]["value"]
@@ -122,6 +123,16 @@ class RuntimeConfig:
 
         self.rng = np.random.default_rng(seed=self.seed)
 
+    @staticmethod
+    def parse_pheno_resistance(pheno_resistance_dict: dict):
+        pheno_resistance = {}
+        keys_enums = [Treatment[key] for key in pheno_resistance_dict.keys()]
+        for key, treated_key in zip(pheno_resistance_dict.keys(), keys_enums):
+            pheno_resistance[treated_key] = {}
+            for trait, value in pheno_resistance_dict[key].items():
+                pheno_resistance[treated_key][HeterozygousResistance[trait]] = value
+
+        return pheno_resistance
 
 class FarmConfig:
     """Config for individual farm"""
@@ -147,7 +158,7 @@ class FarmConfig:
                             for date in data["cages_start_dates"]["value"]]
 
         # TODO: a farm may employ different chemicals
-        self.treatment_type = data["treatment_type"]["value"]
+        self.treatment_type = Treatment[data["treatment_type"]["value"]]
 
         # generate treatment dates from ranges
         self.treatment_dates = []
@@ -156,3 +167,32 @@ class FarmConfig:
             to_date = to_dt(range_data["to"])
             self.treatment_dates.extend(
                 pd.date_range(from_date, to_date).to_pydatetime().tolist())
+
+
+# TODO: move these somewhere else? Maybe wait for Sara's PR to be merged first
+
+class Treatment(enum.IntEnum):
+    """
+    A stub for treatment types
+    """
+    emb = 1
+    dmb = 2
+    h2o2 = 3
+
+
+class GeneticMechanism(enum.IntEnum):
+    """
+    Genetic mechanism to be used when generating egg genotypes
+    """
+    discrete = 1
+    maternal = 2
+    quantitative = 3
+
+
+class HeterozygousResistance(enum.IntEnum):
+    """
+    Resistance in a monogenic, heterozygous setting.
+    """
+    dominant = 1
+    incompletely_dominant = 2
+    recessive = 3

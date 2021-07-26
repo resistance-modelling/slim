@@ -135,8 +135,8 @@
     "description": "Lookup table to translate between genotype",
     "value": {
       "emb": {
-        "dominance": 0.9,
-        "incomplete_dominance": 0.9,
+        "dominant": 0.99,
+        "incompletely_dominant": 0.99,
         "recessive": 0
       }
     }

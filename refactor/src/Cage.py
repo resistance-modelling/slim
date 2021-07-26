@@ -13,7 +13,7 @@ from typing import Union, Optional, Dict, Tuple, cast, MutableMapping, TYPE_CHEC
 import numpy as np
 from scipy import stats
 
-from src.Config import Config
+from src.Config import Config, Treatment, GeneticMechanism, HeterozygousResistance
 
 if TYPE_CHECKING:
     from src.Farm import Farm
@@ -151,7 +151,7 @@ class Cage:
         # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
         # for now I've hard-coded in one mechanism in this setup, and a particular genotype starting point. Should probably be from a config file?
         self.genetic_mechanism = self.cfg.genetic_mechanism
-        
+
         geno_by_lifestage = {stage: self.multiply_distrib(self.generic_discrete_props, lice_population[stage])
                              for stage in lice_population}
 
@@ -273,36 +273,44 @@ an
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
         num_susc_per_geno = {}
 
-
         for stage in self.susceptible_stages:
             self.update_distrib_discrete_add(self.lice_population.geno_by_lifestage[stage], num_susc_per_geno)
 
-
         geno_treatment_distrib = {geno: (0.0, np.array([]), 0) for geno in num_susc_per_geno}
 
-        # TODO: take temperatures into account? See #22
-        if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
-            self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
-                                                                               self.id, cur_date))
+        treatment = self.farm.farm_cfg.treatment_type
 
-            # For now, assume a simple heterozygote distribution with a mere linear resistance factor
-            for geno, num_susc in num_susc_per_geno.items():
-                if 'A' in geno:
-                    if 'a' in geno:
-                        trait = "incomplete_dominance"
+        # TODO: replace this with an enum
+        if treatment == Treatment.emb:
+
+            # TODO: take temperatures into account? See #22
+            # NOTE: some treatments (e.g. H2O2) are temperature-independent
+            if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
+                self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
+                                                                                   self.id, cur_date))
+
+                # For now, assume a simple heterozygous distribution with a mere linear resistance factor
+                for geno, num_susc in num_susc_per_geno.items():
+                    if 'A' in geno:
+                        if 'a' in geno:
+                            trait = HeterozygousResistance.incompletely_dominant
+                        else:
+                            trait = HeterozygousResistance.dominant
                     else:
-                        trait = "dominant"
-                else:
-                    trait = "recessive"
+                        trait = HeterozygousResistance.recessive
 
-                # model the resistence of each lice in the susceptible stages (phenoEMB) and estimate
-                # the mortality rate due to treatment (ETmort).
-                f_meanEMB = self.cfg.f_meanEMB * (1.0 - self.cfg.pheno_resistance[trait])
-                pheno_emb = self.cfg.rng.normal(f_meanEMB, self.cfg.f_sigEMB, num_susc) \
-                            + self.cfg.rng.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
-                pheno_emb = 1 / (1 + np.exp(pheno_emb))
-                mortality_rate = sum(pheno_emb) * self.cfg.EMBmort
-                geno_treatment_distrib[geno] = (mortality_rate, pheno_emb, num_susc)
+                    susceptibility_factor = 1.0 - self.cfg.pheno_resistance[treatment][trait]
+                    # model the resistance of each lice in the susceptible stages (phenoEMB) and estimate
+                    # the mortality rate due to treatment (ETmort).
+                    f_meanEMB = self.cfg.f_meanEMB * susceptibility_factor
+                    f_sigEMB = self.cfg.f_sigEMB * susceptibility_factor
+                    pheno_emb = self.cfg.rng.normal(f_meanEMB, f_sigEMB, num_susc) \
+                                + self.cfg.rng.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
+                    pheno_emb = 1 / (1 + np.exp(pheno_emb))
+                    mortality_rate = sum(pheno_emb) * self.cfg.EMBmort
+                    geno_treatment_distrib[geno] = (mortality_rate, pheno_emb, num_susc)
+        else:
+            raise NotImplemented("Only EMB treatment is supported")
 
         return geno_treatment_distrib
 
@@ -322,7 +330,7 @@ an
             # we assume the mortality rate is the same across all stages and ages, but this may change in the future
             # (or with different chemicals)
 
-            # model the resistence of each lice in the susceptible stages (phenoEMB) and estimate
+            # model the resistance of each lice in the susceptible stages (phenoEMB) and estimate
             # the mortality rate due to treatment (ETmort).
             pheno_emb = self.cfg.rng.normal(self.cfg.f_meanEMB, self.cfg.f_sigEMB, num_susc) \
                         + self.cfg.rng.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
@@ -672,7 +680,7 @@ an
 
         distrib_sire_available = self.lice_population.geno_by_lifestage["L5m"]
         distrib_dam_available = self.lice_population.available_dams
-        
+
         delta_dams = self.select_dams(distrib_dam_available, num_matings)
 
         if sum(distrib_sire_available.values()) == 0 or sum(distrib_dam_available.values()) == 0:
@@ -710,8 +718,8 @@ an
         number_eggs = self.get_num_eggs(num_matings)
 
         eggs_generated = {}
-        if self.genetic_mechanism == "discrete":
-            
+        if self.genetic_mechanism == GeneticMechanism.discrete:
+
             if len(sire) == 1 and len(dam) == 1:
                 eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = float(number_eggs)
             elif len(sire) == 2 and len(dam) == 1:
@@ -728,7 +736,7 @@ an
                 eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 4
                 eggs_generated[tuple(sorted(tuple({sire[1], dam[1]})))] = number_eggs / 4
 
-        elif self.genetic_mechanism == "quantitative":
+        elif self.genetic_mechanism == GeneticMechanism.quantitative:
             # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
             # because we're only dealing with the heritable part here don't need to do any of the comparison
             # to population mean or impact of heritability, etc - that would appear in the code dealing with treatment
@@ -737,12 +745,12 @@ an
             mid_parent = np.round((sire + dam)/2, 1)
             eggs_generated[mid_parent] = number_eggs
 
-        elif self.genetic_mechanism == "maternal":
+        elif self.genetic_mechanism == GeneticMechanism.maternal:
             # maternal-only inheritance - all eggs have mother's genotype
             eggs_generated[dam] = number_eggs
         else:
             raise Exception("Genetic mechanism must be 'maternal', 'quantitative' or 'discrete' - '{}' given".format(self.genetic_mechanism))
-            
+
         return eggs_generated
 
     @staticmethod
@@ -1041,7 +1049,7 @@ an
         self.busy_dams.put(delta_dams_batch)
 
         #  TODO: remove females that leave L5f by dying from available_dams
-        
+
         self.num_fish -= fish_deaths_natural
         self.num_fish -= fish_deaths_from_lice
 
@@ -1056,7 +1064,7 @@ an
         """
 
         for hatch_date in arrivals_dict:
-            
+
             # skip if there are no eggs in the dictionary
             if sum(arrivals_dict[hatch_date].values()) == 0:
                 continue

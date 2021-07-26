@@ -8,7 +8,7 @@ import pytest
 
 import json
 
-from src.Config import to_dt
+from src.Config import to_dt, GeneticMechanism
 from src.Cage import EggBatch, DamAvailabilityBatch, TravellingEggBatch
 
 
@@ -305,7 +305,7 @@ class TestCage:
         assert not bool(delta_eggs)
     
     def test_generate_eggs_maternal(self, first_cage):
-        first_cage.genetic_mechanism = "maternal"
+        first_cage.genetic_mechanism = GeneticMechanism.maternal
         sire = 'z'
         dam = 'Z'
         num_matings = 10
@@ -316,7 +316,7 @@ class TestCage:
             assert eggs[key] == target_eggs[key]
     
     def test_generate_eggs_quantitative(self, first_cage):
-        first_cage.genetic_mechanism = "quantitative"
+        first_cage.genetic_mechanism = GeneticMechanism.quantitative
         sire = 0.7
         dam = 0.0
         num_matings = 10
@@ -334,7 +334,7 @@ class TestCage:
             assert eggs[key] == target_eggs[key]
 
     def test_generate_eggs_discrete(self, first_cage):
-        first_cage.genetic_mechanism = "discrete"
+        first_cage.genetic_mechanism = GeneticMechanism.discrete
 
         sire = ('A',)
         dam = ('A',)
