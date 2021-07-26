@@ -2,23 +2,26 @@
 Defines a Farm class that encapsulates a salmon farm containing several cages.
 """
 from __future__ import annotations
+
 import copy
 import datetime as dt
 import json
 from collections import Counter
-from typing import Optional
+from typing import Counter as CounterType
+from typing import Dict, List, Optional, Tuple
+from mypy_extensions import TypedDict
 
 import numpy as np
 
 # TODO: deal with the pytype dependency error
-from src.Cage import Cage, Alleles  # pytype: disable=pyi-error
+from src.Cage import Cage  # pytype: disable=pyi-error
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
-from typing import Dict, List
-from typing import Counter as CounterType
+from src.LicePopulation import Alleles, GrossLiceDistrib
 
 GenoDistribByHatchDate = Dict[dt.datetime, CounterType[Alleles]]
 CageAllocation = List[GenoDistribByHatchDate]
+LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
 
 
 class Farm:
@@ -27,7 +30,7 @@ class Farm:
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name: int, cfg: Config, initial_lice_pop: Optional[dict] = None):
+    def __init__(self, name: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None):
         """
         Create a farm.
         :param name: the id of the farm.
@@ -67,7 +70,7 @@ class Farm:
 
         return self.name == other.name
 
-    def initialize_temperatures(self, temperatures):
+    def initialize_temperatures(self, temperatures: Dict[str, LocationTemps]) -> float:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at
         month c_month interpolating data taken from
@@ -84,7 +87,7 @@ class Farm:
         Ndiff = self.loc_y - tarbert_northing
         return np.round(tarbert_temps - Ndiff * degs, 1)
 
-    def update(self, cur_date: dt.datetime, step_size: int) -> dict:
+    def update(self, cur_date: dt.datetime, step_size: int) -> GenoDistribByHatchDate:
         """Update the status of the farm given the growth of fish and change
         in population of parasites.
 
@@ -119,7 +122,7 @@ class Farm:
 
         return eggs_by_hatch_date
 
-    def get_cage_pressures(self) -> list:
+    def get_cage_pressures(self) -> List[int]:
         """Get external pressure divided into cages
 
         :return: List of values of external pressure for each cage
@@ -243,7 +246,7 @@ class Farm:
             for cage in farm.cages:
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
-    def get_cage_arrivals_stats(self, cage_arrivals: CageAllocation) -> tuple:
+    def get_cage_arrivals_stats(self, cage_arrivals: CageAllocation) -> Tuple[int, List[int]]:
         """Get stats about the cage arrivals for logging
 
         :param cage_arrivals: Dictionary of genotype distributions based
@@ -259,7 +262,7 @@ class Farm:
 
         return sum(by_cage), by_cage
 
-    def to_csv(self):
+    def to_csv(self) -> str:
         """
         Save the contents of this cage as a CSV string for writing to a file later.
         """

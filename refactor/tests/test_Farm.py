@@ -82,9 +82,9 @@ class TestFarm:
                 10
             ),
         ])
-    def test_get_egg_allocation(self, farm, eggs_by_hatch_date, nbins):
+    def test_get_cage_allocation(self, farm, eggs_by_hatch_date, nbins):
 
-        allocation = farm.get_egg_allocation(nbins, eggs_by_hatch_date)
+        allocation = farm.get_cage_allocation(nbins, eggs_by_hatch_date)
 
         allocation_list = [n for bin_dict in allocation for hatch_dict in bin_dict.values() for n in hatch_dict.values()]
         sum_eggs_by_hatch_date = sum([n for hatch_dict in eggs_by_hatch_date.values() for n in hatch_dict.values()])
@@ -101,9 +101,9 @@ class TestFarm:
             assert allocation_keys == hatch_keys
 
     @pytest.mark.parametrize("nbins", [(0), (-10)])
-    def test_get_egg_allocation_nonpositive_bins(self, farm, nbins):
+    def test_get_cage_allocation_nonpositive_bins(self, farm, nbins):
         with pytest.raises(Exception):
-            farm.get_egg_allocation(nbins, {})
+            farm.get_cage_allocation(nbins, {})
 
     def test_disperse_offspring(self, farm, farm_two):
         farms = [farm, farm_two]
