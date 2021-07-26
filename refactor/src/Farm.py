@@ -1,6 +1,8 @@
 """
 Defines a Farm class that encapsulates a salmon farm containing several cages.
 """
+from __future__ import annotations
+import copy
 import datetime as dt
 import json
 from collections import Counter
@@ -9,9 +11,14 @@ from typing import Optional
 import numpy as np
 
 # TODO: deal with the pytype dependency error
-from src.Cage import Cage  # pytype: disable=pyi-error
+from src.Cage import Cage, Alleles  # pytype: disable=pyi-error
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
+from typing import Dict, List
+from typing import Counter as CounterType
+
+GenoDistribByHatchDate = Dict[dt.datetime, CounterType[Alleles]]
+CageAllocation = List[GenoDistribByHatchDate]
 
 
 class Farm:
@@ -95,7 +102,7 @@ class Farm:
         pressures_per_cage = self.get_cage_pressures()
 
         # collate egg batches by hatch time
-        eggs_by_hatch_date = {}
+        eggs_by_hatch_date = {}  # type: GenoDistribByHatchDate
         for cage in self.cages:
 
             # update the cage and collect the offspring info
@@ -130,25 +137,59 @@ class Farm:
                                              probs_per_cage,
                                              size=1)[0])
 
-    def get_egg_allocation(self, nbins: int, eggs_by_hatch_date: dict) -> list:
-        """Return allocation of eggs for given number of bins.
+    def get_farm_allocation(self, target_farm: Farm, eggs_by_hatch_date: GenoDistribByHatchDate) -> GenoDistribByHatchDate:
+        """Return farm allocation of arrivals, that is a dictionary of genotype distributions based
+        on hatch date updated to take into account probability of making it to the target farm.
 
-        :param nbins: Number of bins to allocate to
+        The probability accounts for interfarm water movement (currents) as well as lice egg survival.
+
+        :param target_farm: Farm the eggs are travelling to
+        :param eggs_by_hatch_date: Dictionary of genotype distributions based
+        on hatch date
+        :return: Updated dictionary of genotype distributions based
+        on hatch date
+        """
+
+        # base the new survived arrival dictionary on the offspring one
+        farm_allocation = copy.deepcopy(eggs_by_hatch_date)
+
+        for hatch_date, geno_dict in farm_allocation.items():
+            for genotype, n in geno_dict.items():
+
+                # get the interfarm travel probability between the two farms
+                travel_prob = self.cfg.interfarm_probs[self.name][target_farm.name]
+
+                # calculate number of arrivals based on the probability and total
+                # number of offspring
+                # NOTE: This works only when the travel probabilities are very low.
+                #       Otherwise there is possibility that total number of arrivals
+                #       would be higher than total number of offspring.
+                arrivals = self.cfg.rng.poisson(travel_prob * n)
+
+                # update the arrival dict
+                farm_allocation[hatch_date][genotype] = arrivals
+
+        return farm_allocation
+
+    def get_cage_allocation(self, ncages: int, eggs_by_hatch_date: GenoDistribByHatchDate) -> CageAllocation:
+        """Return allocation of eggs for given number of cages.
+
+        :param ncages: Number of bins to allocate to
         :param eggs_by_hatch_date: Dictionary of genotype distributions based on hatch date
         :return: List of dictionaries of genotype distributions based on hatch date per bin
         """
 
-        if nbins < 1:
+        if ncages < 1:
             raise Exception("Number of bins must be positive.")
 
         # dummy implmentation - assumes equal probabilities
         # for both intercage and interfarm travel
         # TODO: complete with actual probabilities
         # probs_per_farm = self.cfg.interfarm_probs[self.name]
-        probs_per_bin = np.full(nbins, 1 / nbins)
+        probs_per_bin = np.full(ncages, 1 / ncages)
 
         # preconstruct the data structure
-        hatch_list = [{hatch_date: {} for hatch_date in eggs_by_hatch_date} for n in range(nbins)]
+        hatch_list = [{hatch_date: Counter() for hatch_date in eggs_by_hatch_date} for n in range(ncages)]  # type: CageAllocation
         for hatch_date, geno_dict in eggs_by_hatch_date.items():
             for genotype in geno_dict:
                 # generate the bin distribution of this genotype with
@@ -162,7 +203,7 @@ class Farm:
 
         return hatch_list
 
-    def disperse_offspring(self, eggs_by_hatch_date: dict, farms: list, cur_date: dt.datetime):
+    def disperse_offspring(self, eggs_by_hatch_date: GenoDistribByHatchDate, farms: List[Farm], cur_date: dt.datetime):
         """Allocate new offspring between the farms and cages.
 
         Assumes the lice can float freely across a given farm so that
@@ -178,9 +219,6 @@ class Farm:
 
         self.logger.debug("\tDispersing total offspring Farm {}".format(self.name))
 
-        # allocate eggs (in batches based on hatch date) between the farms
-        arrivals_per_farm = self.get_egg_allocation(len(farms), eggs_by_hatch_date)
-
         for farm in farms:
 
             if farm.name == self.name:
@@ -189,8 +227,8 @@ class Farm:
                 self.logger.debug("\t\tFarm {} (current):".format(farm.name))
 
             # allocate eggs to cages
-            farm_arrivals = arrivals_per_farm[farm.name]
-            arrivals_per_cage = self.get_egg_allocation(len(farm.cages), farm_arrivals)
+            farm_arrivals = self.get_farm_allocation(farm, eggs_by_hatch_date)
+            arrivals_per_cage = self.get_cage_allocation(len(farm.cages), farm_arrivals)
 
             total, by_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
             self.logger.debug("\t\t\tTotal new eggs = {}".format(total))
@@ -205,7 +243,7 @@ class Farm:
             for cage in farm.cages:
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
-    def get_cage_arrivals_stats(self, cage_arrivals: list) -> tuple:
+    def get_cage_arrivals_stats(self, cage_arrivals: CageAllocation) -> tuple:
         """Get stats about the cage arrivals for logging
 
         :param cage_arrivals: Dictionary of genotype distributions based
