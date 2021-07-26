@@ -110,6 +110,7 @@ class RuntimeConfig:
         self.reproduction_density_dependence = data["reproduction_density_dependence"]["value"]
         self.dam_unavailability = data["dam_unavailability"]["value"]
         self.genetic_mechanism = data["genetic_mechanism"]["value"]
+        self.pheno_resistance = data["pheno_resistance"]["value"]
 
         # Farm data
         self.farm_data = data["farm_data"]["value"]
@@ -144,6 +145,9 @@ class FarmConfig:
         self.farm_start = to_dt(data["start_date"]["value"])
         self.cages_start = [to_dt(date)
                             for date in data["cages_start_dates"]["value"]]
+
+        # TODO: a farm may employ different chemicals
+        self.treatment_type = data["treatment_type"]["value"]
 
         # generate treatment dates from ranges
         self.treatment_dates = []

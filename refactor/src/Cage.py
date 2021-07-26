@@ -8,16 +8,18 @@ import math
 from functools import singledispatch
 from dataclasses import dataclass, field
 from queue import PriorityQueue
-from typing import Union, Optional, Dict, Tuple, cast, MutableMapping
+from typing import Union, Optional, Dict, Tuple, cast, MutableMapping, TYPE_CHECKING, NamedTuple
 
 import numpy as np
 from scipy import stats
 
 from src.Config import Config
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.Farm import Farm
+
+# TYPE ANNOTATIONS
+# TODO: move these annotations to another file?
 
 LifeStage = str
 Allele = str
@@ -25,6 +27,14 @@ Alleles = Tuple[Allele, ...]
 GenoDistrib = Dict[Alleles, Union[int, float]]
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
 GrossLiceDistrib = Dict[LifeStage, int]
+
+class GenoTreatmentValue(NamedTuple):
+    mortality_rate: float
+    pheno_emb: np.ndarray
+    num_susc: int
+
+GenoTreatmentDistrib = Dict[Alleles, GenoTreatmentValue]
+
 
 
 @dataclass(order=True)
@@ -44,7 +54,6 @@ class TravellingEggBatch:
 class DamAvailabilityBatch:
     availability_date: dt.datetime # expected return time
     geno_distrib: dict = field(compare=False)
-
 
 # See https://stackoverflow.com/a/7760938
 class LicePopulation(dict, MutableMapping[LifeStage, int]):
@@ -178,9 +187,14 @@ class Cage:
 
         return json.dumps(filtered_vars, indent=4)
 
+    def get_empty_geno_distrib(self) -> GenoDistrib:
+        # A little factory method to get empty genos
+        genos = self.lice_population.geno_by_lifestage["L1"].keys()
+        return {geno: 0 for geno in genos}
+
     def update(self, cur_date: dt.datetime, step_size: int, pressure: int) -> tuple:
         """Update the cage at the current time step.
-
+an
         :param cur_date: Current date of simulation
         :param step_size: Step size
         :param pressure: External pressure, planctonic lice coming from
@@ -199,7 +213,7 @@ class Cage:
         dead_lice_dist = self.get_background_lice_mortality(self.lice_population)
 
         # Treatment mortality events
-        treatment_mortality = self.get_lice_treatment_mortality(cur_date)
+        treatment_mortality = self.get_lice_treatment_mortality_old(cur_date)
 
         # Development events
         new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date.month)
@@ -256,7 +270,44 @@ class Cage:
 
         return egg_distrib, hatch_date
 
-    def get_lice_treatment_mortality_rate(self, cur_date):
+    def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
+        num_susc_per_geno = {}
+
+
+        for stage in self.susceptible_stages:
+            self.update_distrib_discrete_add(self.lice_population.geno_by_lifestage[stage], num_susc_per_geno)
+
+
+        geno_treatment_distrib = {geno: (0.0, np.array([]), 0) for geno in num_susc_per_geno}
+
+        # TODO: take temperatures into account? See #22
+        if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
+            self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
+                                                                               self.id, cur_date))
+
+            # For now, assume a simple heterozygote distribution with a mere linear resistance factor
+            for geno, num_susc in num_susc_per_geno.items():
+                if 'A' in geno:
+                    if 'a' in geno:
+                        trait = "incomplete_dominance"
+                    else:
+                        trait = "dominant"
+                else:
+                    trait = "recessive"
+
+                # model the resistence of each lice in the susceptible stages (phenoEMB) and estimate
+                # the mortality rate due to treatment (ETmort).
+                f_meanEMB = self.cfg.f_meanEMB * (1.0 - self.cfg.pheno_resistance[trait])
+                pheno_emb = self.cfg.rng.normal(f_meanEMB, self.cfg.f_sigEMB, num_susc) \
+                            + self.cfg.rng.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
+                pheno_emb = 1 / (1 + np.exp(pheno_emb))
+                mortality_rate = sum(pheno_emb) * self.cfg.EMBmort
+                geno_treatment_distrib[geno] = (mortality_rate, pheno_emb, num_susc)
+
+        return geno_treatment_distrib
+
+
+    def get_lice_treatment_mortality_rate_old(self, cur_date):
         """
         Compute the mortality rate due to chemotherapeutic treatment (See Aldrin et al, 2017, §2.2.3)
         """
@@ -266,7 +317,6 @@ class Cage:
         if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
             self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
                                                                                self.id, cur_date))
-
             # number of lice in those stages that are susceptible to Emamectin Benzoate (i.e.
             # those L3 or above)
             # we assume the mortality rate is the same across all stages and ages, but this may change in the future
@@ -283,14 +333,14 @@ class Cage:
         else:
             return 0, 0, num_susc
 
-    def get_lice_treatment_mortality(self, cur_date):
+    def get_lice_treatment_mortality_old(self, cur_date):
         """
         Calculate the number of lice in each stage killed by treatment.
         """
 
         dead_lice_dist = {stage: 0 for stage in self.lice_stages}
 
-        mortality_rate, pheno_emb, num_susc = self.get_lice_treatment_mortality_rate(cur_date)
+        mortality_rate, pheno_emb, num_susc = self.get_lice_treatment_mortality_rate_old(cur_date)
 
         if mortality_rate > 0:
             num_dead_lice = self.cfg.rng.poisson(mortality_rate)
@@ -319,6 +369,45 @@ class Cage:
 
             assert num_dead_lice == sum(list(dead_lice_dist.values()))
         return dead_lice_dist
+
+    def get_lice_treatment_mortality(self, cur_date) -> GenoLifeStageDistrib:
+        """
+        Calculate the number of lice in each stage killed by treatment.
+        """
+
+        dead_lice_dist = {stage: self.get_empty_geno_distrib() for stage in self.lice_stages}
+
+        dead_mortality_distrib = self.get_lice_treatment_mortality_rate(cur_date)
+
+        for geno, (mortality_rate, pheno_emb, num_susc) in dead_mortality_distrib.items():
+            if mortality_rate > 0:
+                num_dead_lice = self.cfg.rng.poisson(mortality_rate)
+                num_dead_lice = min(num_dead_lice, num_susc)
+
+                # Now we need to decide how many lice from each stage die,
+                #   the algorithm is to label each louse  1...num_susc
+                #   assign each of these a probability of dying as (phenoEMB)/np.sum(phenoEMB)
+                #   randomly pick lice according to this probability distribution
+                #        now we need to find out which stages these lice are in by calculating the
+                #        cumulative sum of the lice in each stage and finding out how many of our
+                #        dead lice falls into this bin.
+                p = (pheno_emb) / np.sum(pheno_emb)
+                dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, p=p,
+                                             replace=False).tolist()
+                total_so_far = 0
+                for stage in self.susceptible_stages:
+                    available_in_stage = self.lice_population.geno_by_lifestage[stage][geno]
+                    num_dead = len([x for x in dead_lice if total_so_far <= x <
+                                    (total_so_far + available_in_stage)])
+                    total_so_far += available_in_stage
+                    if num_dead > 0:
+                        dead_lice_dist[stage][geno] = num_dead
+
+                self.logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
+                                  .format(self.farm_id, self.id, dead_lice_dist))
+
+            return dead_lice_dist
+
 
     def get_stage_ages_distrib(self, stage: str, size=15, stage_age_max_days=None):
         """

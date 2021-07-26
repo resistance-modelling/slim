@@ -130,5 +130,15 @@
   "genetic_mechanism": {
     "description": "The breeding strategy. Can be 'maternal', 'quantitative' or 'discrete'",
     "value": "discrete"
+  },
+  "pheno_resistance": {
+    "description": "Lookup table to translate between genotype",
+    "value": {
+      "emb": {
+        "dominance": 0.9,
+        "incomplete_dominance": 0.9,
+        "recessive": 0
+      }
+    }
   }
 }
