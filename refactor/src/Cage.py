@@ -138,8 +138,8 @@ class Cage:
         if cur_date < self.start_date:
             # Values that are not used before the start date
             treatment_mortality = {}
-            fish_deaths_natural, fish_deaths_from_lice = 0, 0  # type: Tuple[int, int]
-            num_infection_events = 0  # type: int
+            fish_deaths_natural, fish_deaths_from_lice = 0, 0
+            num_infection_events = 0
             delta_avail_dams, delta_eggs = {}, {}  # type: Tuple[GenoDistrib, GenoDistrib]
             avail_dams_batch = None  # type: OptionalDamBatch
             new_egg_batch = None  # type: OptionalEggBatch
@@ -537,7 +537,7 @@ class Cage:
             for _ in range(int(delta_dams[dam_geno])):
                 sire_geno = self.choose_from_distrib(distrib_sire_available)
                 new_eggs = self.generate_eggs(sire_geno, dam_geno, num_matings)
-                self.update_distrib_discrete_add(new_eggs, delta_eggs)
+                LicePopulation.update_distrib_discrete_add(new_eggs, delta_eggs)
 
         return delta_dams, delta_eggs
 
@@ -598,29 +598,6 @@ class Cage:
 
         return eggs_generated
 
-    @staticmethod
-    def update_distrib_discrete_add(distrib_delta, distrib):
-        """
-        I've assumed that both distrib and delta are dictionaries
-        and are *not* normalised (that is, they are effectively counts)
-        I've also assumed that we never want a count below zero
-        Code is naive - interpret as algorithm spec
-        combine these two functions with a negation of a dict?
-        """
-
-        for geno in distrib_delta:
-            if geno not in distrib:
-                distrib[geno] = 0
-            distrib[geno] += distrib_delta[geno]
-
-    @staticmethod
-    def update_distrib_discrete_subtract(distrib_delta, distrib):
-        for geno in distrib:
-            if geno in distrib_delta:
-                distrib[geno] -= distrib_delta[geno]
-            if distrib[geno] < 0:
-                distrib[geno] = 0
-
     def select_dams(self, distrib_dams_available: GenoDistrib, num_dams: int):
         """
         Assumes the usual dictionary representation of number
@@ -677,7 +654,7 @@ class Cage:
 
         # return self.cfg.rng.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
 
-    def get_egg_batch(self, cur_date: dt.datetime, egg_distrib: dict) -> EggBatch:
+    def get_egg_batch(self, cur_date: dt.datetime, egg_distrib: GenoDistrib) -> EggBatch:
         """
         Get the expected arrival date of an egg batch
         :param cur_date the current time
@@ -699,7 +676,7 @@ class Cage:
         return EggBatch(expected_hatching_date, egg_distrib)
 
     @staticmethod
-    def pop_from_queue(queue: PriorityQueue, cur_time: dt.datetime, output_geno_distrib: dict):
+    def pop_from_queue(queue: PriorityQueue, cur_time: dt.datetime, output_geno_distrib: GenoDistrib):
         # process all the due events
         # Note: queues miss a "peek" method, and this line relies on an implementation detail.
 
@@ -724,19 +701,19 @@ class Cage:
             for geno, value in event.geno_distrib.items():
                 output_geno_distrib[geno] += value
 
-    def create_offspring(self, cur_time: dt.datetime) -> dict:
+    def create_offspring(self, cur_time: dt.datetime) -> GenoDistrib:
         """
         Hatch the eggs from the event queue
         :param cur_time the current time
         :returns a delta egg genomics
         """
 
-        delta_egg_offspring = {geno: 0 for geno in self.cfg.genetic_ratios}
+        delta_egg_offspring = {geno: 0 for geno in self.cfg.genetic_ratios}  # type: GenoDistrib
         self.pop_from_queue(self.hatching_events, cur_time, delta_egg_offspring)
 
         return delta_egg_offspring
 
-    def get_arrivals(self, cur_date: dt.datetime) -> dict:
+    def get_arrivals(self, cur_date: dt.datetime) -> GenoDistrib:
         """Process the arrivals queue.
         :param cur_date: Current date of simulation
         :return: Genotype distribution of eggs hatched in travel
@@ -800,16 +777,16 @@ class Cage:
 
         leaving_geno_distrib = LicePopulation.multiply_distrib(cur_stage_geno, leaving_lice)
 
-        self.update_distrib_discrete_add(entering_geno_distrib, cur_stage_geno)
-        self.update_distrib_discrete_subtract(leaving_geno_distrib, cur_stage_geno)
+        LicePopulation.update_distrib_discrete_add(entering_geno_distrib, cur_stage_geno)
+        LicePopulation.update_distrib_discrete_subtract(leaving_geno_distrib, cur_stage_geno)
 
         # update gross population. This is a bit hairy but I cannot think of anything simpler.
         self.lice_population.geno_by_lifestage[cur_stage] = cur_stage_geno
 
     def update_deltas(
             self,
-            dead_lice_dist: dict,
-            treatment_mortality: dict,
+            dead_lice_dist: GrossLiceDistrib,
+            treatment_mortality: GrossLiceDistrib,
             fish_deaths_natural: int,
             fish_deaths_from_lice: int,
             new_L2: int,
@@ -817,11 +794,11 @@ class Cage:
             new_females: np.int64,
             new_males: np.int64,
             new_infections: int,
-            lice_from_reservoir: dict,
+            lice_from_reservoir: GrossLiceDistrib,
             delta_dams_batch: OptionalDamBatch,
-            new_offspring_distrib: dict,
-            returned_dams: dict,
-            hatched_arrivals_dist: dict
+            new_offspring_distrib: GenoDistrib,
+            returned_dams: GenoDistrib,
+            hatched_arrivals_dist: GenoDistrib
     ):
         """Update the number of fish and the lice in each life stage
         :param dead_lice_dist the number of dead lice due to background death (as a distribution)
@@ -867,8 +844,8 @@ class Cage:
         self.lice_population["L1"] += lice_from_reservoir["L1"]
 
         delta_avail_dams = delta_dams_batch.geno_distrib if delta_dams_batch is not None else {}
-        self.update_distrib_discrete_subtract(delta_avail_dams, self.lice_population.available_dams)
-        self.update_distrib_discrete_add(returned_dams, self.lice_population.available_dams)
+        LicePopulation.update_distrib_discrete_subtract(delta_avail_dams, self.lice_population.available_dams)
+        LicePopulation.update_distrib_discrete_add(returned_dams, self.lice_population.available_dams)
 
         if delta_dams_batch:
             self.busy_dams.put(delta_dams_batch)
@@ -881,6 +858,7 @@ class Cage:
         # treatment may kill some lice attached to the fish, thus update at the very end
         self.num_infected_fish = self.get_mean_infected_fish()
 
+    # TODO: update arrivals dict type
     def update_arrivals(self, arrivals_dict: dict, arrival_date: dt.datetime):
         """Update the arrivals queue
 
@@ -931,13 +909,11 @@ class Cage:
 
         return ", ".join(data)
 
-    def get_reservoir_lice(self, pressure):
+    def get_reservoir_lice(self, pressure: int) -> GrossLiceDistrib:
         """Get distribution of lice coming from the reservoir
 
         :param pressure: External pressure
-        :type pressure: int
         :return: Distribution of lice in L1 and L2
-        :rtype: dict
         """
 
         if pressure == 0:

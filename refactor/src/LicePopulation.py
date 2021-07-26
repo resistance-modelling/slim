@@ -70,6 +70,29 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
 
         return dict(zip(keys, map(int, np_values)))
 
+    @staticmethod
+    def update_distrib_discrete_add(distrib_delta, distrib):
+        """
+        I've assumed that both distrib and delta are dictionaries
+        and are *not* normalised (that is, they are effectively counts)
+        I've also assumed that we never want a count below zero
+        Code is naive - interpret as algorithm spec
+        combine these two functions with a negation of a dict?
+        """
+
+        for geno in distrib_delta:
+            if geno not in distrib:
+                distrib[geno] = 0
+            distrib[geno] += distrib_delta[geno]
+
+    @staticmethod
+    def update_distrib_discrete_subtract(distrib_delta, distrib):
+        for geno in distrib:
+            if geno in distrib_delta:
+                distrib[geno] -= distrib_delta[geno]
+            if distrib[geno] < 0:
+                distrib[geno] = 0
+
 
 class GenotypePopulation(dict, MutableMapping[LifeStage, GenoDistrib]):
     def __init__(self, gross_lice_population: LicePopulation, geno_data: GenoLifeStageDistrib):

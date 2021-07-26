@@ -2,14 +2,13 @@ import copy
 import datetime
 import datetime as dt
 import itertools
+import json
 
 import numpy as np
 import pytest
-
-import json
-
+from src.Cage import Cage
 from src.Config import to_dt
-from src.QueueBatches import EggBatch, DamAvailabilityBatch, TravellingEggBatch
+from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
 
 
 class TestCage:
@@ -83,7 +82,7 @@ class TestCage:
         min_development_stage = 4
         mean_development_stage = 8
 
-        for i in range(100):
+        for _ in range(100):
             stage_ages = first_cage.get_evolution_ages(
                 test_num_lice,
                 minimum_age=min_development_stage,
@@ -137,7 +136,7 @@ class TestCage:
 
         assert new_l4 == 0
         assert new_females == 0
-        assert new_females == 0
+        assert new_males == 0
 
     def test_get_fish_growth(self, first_cage):
         first_cage.num_fish *= 300
@@ -158,6 +157,8 @@ class TestCage:
             first_cage.lice_population[k] = 0
 
         _, lice_death = first_cage.get_fish_growth(1, 1)
+
+        assert lice_death == 0
 
     def test_get_infection_rates(self, first_cage):
         first_cage.lice_population["L2"] = 100
@@ -283,7 +284,7 @@ class TestCage:
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert not bool(delta_avail_dams)
         assert not bool(delta_eggs)
-    
+
     def test_generate_eggs_maternal(self, first_cage):
         first_cage.genetic_mechanism = "maternal"
         sire = 'z'
@@ -294,7 +295,7 @@ class TestCage:
         for key in eggs:
             assert key == dam
             assert eggs[key] == target_eggs[key]
-    
+
     def test_generate_eggs_quantitative(self, first_cage):
         first_cage.genetic_mechanism = "quantitative"
         sire = 0.7
@@ -367,7 +368,7 @@ class TestCage:
         for key in delta_dams:
             assert delta_dams[key] == distrib_dams_available[key]
         for key in delta_dams:
-            assert  distrib_dams_available[key] == delta_dams[key]
+            assert distrib_dams_available[key] == delta_dams[key]
 
     def test_update_step(self, first_cage, cur_day):
         first_cage.update(cur_day, 1, 0)
@@ -422,7 +423,7 @@ class TestCage:
         assert batch1 < batch2
 
     def test_get_egg_batch(self, first_cage, cur_day):
-        busy_dams, new_eggs = first_cage.do_mating_events()
+        _, new_eggs = first_cage.do_mating_events()
         target_egg_distrib = {('A', 'a'): 4644.5, ('A',): 2698.25, ('a',): 1927.25}
 
         new_egg_batch = first_cage.get_egg_batch(cur_day, new_eggs)
@@ -538,7 +539,7 @@ class TestCage:
         assert first_cage.lice_population["L4"] == target_population
 
         # L3 must be unchanged
-        assert first_cage.lice_population.geno_by_lifestage["L3"] == {('A',): 1000, ('a',): 1000, ('A', 'a'): 1000}
+        assert first_cage.lice_population.geno_by_lifestage["L3"] == old_L3
 
     def test_promote_population_offspring(self, first_cage):
         offspring_distrib = {('A',): 500, ('a',): 500, ('A', 'a'): 500}
@@ -642,10 +643,7 @@ class TestCage:
 
         assert offspring == {}
         assert hatch_date is None
-        assert first_cage.lice_population["L3"] == 0
-        assert first_cage.lice_population["L4"] == 0
-        assert first_cage.lice_population["L5f"] == 0
-        assert first_cage.lice_population["L5m"] == 0
+        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in Cage.susceptible_stages)
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
         assert first_cage.arrival_events.qsize() == 0
@@ -656,10 +654,7 @@ class TestCage:
 
         assert offspring == {}
         assert hatch_date is None
-        assert first_cage.lice_population["L3"] == 0
-        assert first_cage.lice_population["L4"] == 0
-        assert first_cage.lice_population["L5f"] == 0
-        assert first_cage.lice_population["L5m"] == 0
+        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in Cage.susceptible_stages)
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
         assert first_cage.arrival_events.qsize() == 0
@@ -684,10 +679,7 @@ class TestCage:
 
         assert offspring == {}
         assert hatch_date is None
-        assert first_cage.lice_population["L3"] == 0
-        assert first_cage.lice_population["L4"] == 0
-        assert first_cage.lice_population["L5f"] == 0
-        assert first_cage.lice_population["L5m"] == 0
+        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in Cage.susceptible_stages)
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
 
@@ -708,10 +700,7 @@ class TestCage:
 
         assert offspring == {}
         assert hatch_date is None
-        assert first_cage.lice_population["L3"] == 0
-        assert first_cage.lice_population["L4"] == 0
-        assert first_cage.lice_population["L5f"] == 0
-        assert first_cage.lice_population["L5m"] == 0
+        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in Cage.susceptible_stages)
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
 
