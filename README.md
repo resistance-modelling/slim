@@ -146,11 +146,11 @@ To test, also from ```refactor``` directory, run:
 ### Original
 To run the original code, enter ```original``` directory and run:
 
-```` python model/slm.py param_module_name output_folder simulation_name```
+```python model/slm.py param_module_name output_folder simulation_name```
 
 For example:
 
-```` python model/slm.py dummy_vars /out/ 0```
+```python model/slm.py dummy_vars /out/ 0```
 
 *Note that at the moment dummy_vars is a copy of Fyne_vars and code execution takes a while.*
 

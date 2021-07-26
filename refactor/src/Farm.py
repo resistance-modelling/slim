@@ -4,10 +4,12 @@ Defines a Farm class that encapsulates a salmon farm containing several cages.
 import datetime as dt
 import json
 from collections import Counter
+from typing import Optional
 
 import numpy as np
 
-from src.Cage import Cage
+# TODO: deal with the pytype dependency error
+from src.Cage import Cage  # pytype: disable=pyi-error
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 
@@ -18,11 +20,12 @@ class Farm:
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name: int, cfg: Config):
+    def __init__(self, name: int, cfg: Config, initial_lice_pop: Optional[dict] = None):
         """
         Create a farm.
         :param name: the id of the farm.
         :param cfg: the farm configuration
+        ::param initial_lice_pop: if provided, overrides default generated lice population
         """
 
         self.logger = cfg.logger
@@ -35,7 +38,7 @@ class Farm:
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.treatment_dates = farm_cfg.treatment_dates
-        self.cages = [Cage(i, cfg, self) for i in range(farm_cfg.n_cages)]
+        self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]
 
         self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
 
@@ -83,7 +86,10 @@ class Farm:
         :return: Dictionary of genotype distributions based on hatch date
         """
 
-        self.logger.debug("Updating farm {}".format(self.name))
+        if cur_date >= self.start_date:
+            self.logger.debug("Updating farm {}".format(self.name))
+        else:
+            self.logger.debug("Updating farm {} (non-operational)".format(self.name))
 
         # get number of lice from reservoir to be put in each cage
         pressures_per_cage = self.get_cage_pressures()
@@ -97,11 +103,12 @@ class Farm:
                                                   step_size,
                                                   pressures_per_cage[cage.id])
 
-            # update the total offspring info
-            if hatch_date in eggs_by_hatch_date:
-                eggs_by_hatch_date[hatch_date] += Counter(egg_distrib)
-            else:
-                eggs_by_hatch_date[hatch_date] = Counter(egg_distrib)
+            if hatch_date:
+                # update the total offspring info
+                if hatch_date in eggs_by_hatch_date:
+                    eggs_by_hatch_date[hatch_date] += Counter(egg_distrib)
+                else:
+                    eggs_by_hatch_date[hatch_date] = Counter(egg_distrib)
 
         return eggs_by_hatch_date
 
@@ -115,7 +122,6 @@ class Farm:
             raise Exception("Farm must have at least one cage.")
         if self.cfg.ext_pressure < 0:
             raise Exception("External pressure cannot be negative.")
-
 
         # assume equal chances for each cage
         probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
@@ -145,7 +151,7 @@ class Farm:
         hatch_list = [{hatch_date: {} for hatch_date in eggs_by_hatch_date} for n in range(nbins)]
         for hatch_date, geno_dict in eggs_by_hatch_date.items():
             for genotype in geno_dict:
-                # generate the bin distribution of this genotype with 
+                # generate the bin distribution of this genotype with
                 # this hatch date
                 genotype_per_bin = self.cfg.rng.multinomial(geno_dict[genotype],
                                                             probs_per_bin,
@@ -204,15 +210,15 @@ class Farm:
 
         :param cage_arrivals: Dictionary of genotype distributions based
         on hatch date
-        :return: Tuple representing total number of arrivals and arrival 
+        :return: Tuple representing total number of arrivals and arrival
         distribution
         """
-        
+
         by_cage = []
         for hatch_dict in cage_arrivals:
             cage_total = sum([n for genotype_dict in hatch_dict.values() for n in genotype_dict.values()])
             by_cage.append(cage_total)
-        
+
         return sum(by_cage), by_cage
 
     def to_csv(self):
@@ -227,13 +233,13 @@ class Farm:
         return farm_data + cages_data
 
 
-#def d_hatching(c_temp):
+# def d_hatching(c_temp):
 #    """
 #    TODO: ???
 #    """
 #    return 3*(3.3 - 0.93*np.log(c_temp/3) -0.16*np.log(c_temp/3)**2) #for 3 broods
 #
-#def ave_dev_days(del_p, del_m10, del_s, temp_c):
+# def ave_dev_days(del_p, del_m10, del_s, temp_c):
 #    """
 #    Average dev days using dev_time method, not used in model but handy to have
 #        # 5deg: 5.2,-,67.5,2
@@ -249,7 +255,7 @@ class Farm:
 #                   - 0.001 * sum([dev_time(del_p, del_m10, del_s, temp_c, i)
 #                          for i in np.arange(0, 100.001, 0.001)])
 #
-#def eudist(point_a, point_b):
+# def eudist(point_a, point_b):
 #    """
 #    Obtain the [Euclidean] distance between two points.
 #    :param point_a: the first point (location of farm 1)
@@ -258,7 +264,7 @@ class Farm:
 #    """
 #    return distance.euclidean(point_a, point_b)
 #
-#def egg_gen(farm, sig, eggs_plus, data):
+# def egg_gen(farm, sig, eggs_plus, data):
 #    """
 #    TODO ???
 #    :param farm:
