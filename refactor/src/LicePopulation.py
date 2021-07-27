@@ -1,5 +1,5 @@
 import copy
-from typing import Dict, MutableMapping, Tuple, Union, cast
+from typing import Dict, MutableMapping, Tuple, Union
 
 import numpy as np
 

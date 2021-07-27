@@ -1,7 +1,9 @@
+import datetime as dt
+
 import numpy as np
 import pytest
+from src.Cage import Cage
 from src.Config import to_dt
-import datetime as dt
 
 
 class TestFarm:
@@ -105,6 +107,21 @@ class TestFarm:
         with pytest.raises(Exception):
             farm.get_cage_allocation(nbins, {})
 
+    def test_get_farm_allocation(self, farm, farm_two, sample_offspring_distrib):
+        farm.cfg.interfarm_probs[farm.name][farm_two.name] = 0.1
+
+        total_eggs_by_date = {farm.start_date: sample_offspring_distrib}
+        farm_eggs_by_date = farm.get_farm_allocation(farm_two, total_eggs_by_date)
+
+        assert len(farm_eggs_by_date) == len(total_eggs_by_date)
+        assert farm_eggs_by_date[farm.start_date].keys() == total_eggs_by_date[farm.start_date].keys()
+        for geno in total_eggs_by_date[farm.start_date]:
+            assert farm_eggs_by_date[farm.start_date][geno] <= total_eggs_by_date[farm.start_date][geno]
+
+    def test_get_farm_allocation_empty(self, farm, farm_two):
+        farm_eggs_by_date = farm.get_farm_allocation(farm_two, {})
+        assert farm_eggs_by_date == {}
+
     def test_disperse_offspring(self, farm, farm_two):
         farms = [farm, farm_two]
         eggs_by_hatch_date = {to_dt("2017-01-05 00:00:00"): {
@@ -165,3 +182,26 @@ class TestFarm:
         offspring = farm.update(cur_date, 1)
 
         assert offspring == {}
+
+    def test_update(self, farm, sample_offspring_distrib):
+
+        # ensure number of matings
+        initial_lice_pop = {stage: 100 for stage in Cage.lice_stages}
+
+        # ensure number of different hatching dates through a number of cages
+        farm.cfg.farms[farm.name].cages_start = [farm.start_date for i in range(10)]
+        farm.cages = [Cage(i, farm.cfg, farm, initial_lice_pop) for i in range(10)]
+
+        eggs_by_hatch_date = farm.update(farm.start_date, 1)
+
+        for hatch_date in eggs_by_hatch_date:
+            assert hatch_date > farm.start_date
+
+            for geno in eggs_by_hatch_date[hatch_date]:
+                assert eggs_by_hatch_date[hatch_date][geno] > 0
+
+    def test_eq(self, farm, farm_two):
+        assert farm == farm
+        assert farm != farm_two
+        assert farm != 0
+        assert farm != "dummy"
