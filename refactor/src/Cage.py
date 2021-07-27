@@ -16,7 +16,7 @@ from src.Config import Config
 if TYPE_CHECKING:
     from src.Farm import Farm
 
-from src.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
+from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation)
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
 
@@ -216,8 +216,8 @@ class Cage:
 
             # model the resistence of each lice in the susceptible stages (phenoEMB) and estimate
             # the mortality rate due to treatment (ETmort).
-            pheno_emb = self.cfg.rng.normal(self.cfg.f_meanEMB, self.cfg.f_sigEMB, num_susc) \
-                        + self.cfg.rng.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
+            pheno_emb = (self.cfg.rng.normal(self.cfg.f_meanEMB, self.cfg.f_sigEMB, num_susc) +
+                         self.cfg.rng.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc))
             pheno_emb = 1 / (1 + np.exp(pheno_emb))
             mortality_rate = sum(pheno_emb) * self.cfg.EMBmort
             return mortality_rate, pheno_emb, num_susc
@@ -334,7 +334,7 @@ class Cage:
         l4_to_l5 = dev_times(self.cfg.delta_p["L4"], self.cfg.delta_m10["L4"], self.cfg.delta_s["L4"],
                              ave_temp, stage_ages)
         num_to_move = min(self.cfg.rng.poisson(np.sum(l4_to_l5)), num_lice)
-        new_females = self.cfg.rng.choice([math.floor(num_to_move / 2.0), math.ceil(num_to_move / 2.0)])
+        new_females = int(self.cfg.rng.choice([math.floor(num_to_move / 2.0), math.ceil(num_to_move / 2.0)]))
         new_males = (num_to_move - new_females)
 
         lice_dist["L5f"] = new_females
@@ -549,10 +549,7 @@ class Cage:
     ) -> GenoDistrib:
         """
         Generate the eggs with a given genomic distribution
-        If we're in the discrete 2-gene setting, assume for now that genotypes are tuples - so in a A/a genetic system, genotypes
-        could be ('A'), ('a'), or ('A', 'a')
-        right now number of offspring with each genotype are deterministic, and might be missing one (we should update to add jitter in future,
-        but this is a reasonable approx)
+
         TODO: doesn't do anything sensible re: integer/real numbers of offspring
         :param sire the genomics of the sires
         :param dam the genomics of the dams
@@ -562,41 +559,89 @@ class Cage:
 
         number_eggs = self.get_num_eggs(num_matings)
 
-        eggs_generated = {}
         if self.genetic_mechanism == "discrete":
-
-            if len(sire) == 1 and len(dam) == 1:
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = float(number_eggs)
-            elif len(sire) == 2 and len(dam) == 1:
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 2
-                eggs_generated[tuple(sorted(tuple({sire[1], dam[0]})))] = number_eggs / 2
-            elif len(sire) == 1 and len(dam) == 2:
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 2
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[1]})))] = number_eggs / 2
-            else:
-                # drawing both from the sire in the first case ensures heterozygotes
-                # but is a bit hacky.
-                eggs_generated[tuple(sorted(tuple({sire[0], sire[1]})))] = number_eggs / 2
-                # and the below gets us our two types of homozygotes
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 4
-                eggs_generated[tuple(sorted(tuple({sire[1], dam[1]})))] = number_eggs / 4
+            sire, dam = cast(Alleles, sire), cast(Alleles, dam)
+            return self.generate_eggs_discrete(sire, dam, number_eggs)
 
         elif self.genetic_mechanism == "quantitative":
-            # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
-            # because we're only dealing with the heritable part here don't need to do any of the comparison
-            # to population mean or impact of heritability, etc - that would appear in the code dealing with treatment
-            # so we could use just the mid-parent value for this genetic recording for children
-            # as with the discrete genetic model, this will be deterministic for now
-            mid_parent = np.round((sire + dam)/2, 1)
-            eggs_generated[mid_parent] = number_eggs
+            sire, dam = cast(np.ndarray, sire), cast(np.ndarray, dam)
+            return self.generate_eggs_quantitative(sire, dam, number_eggs)
 
         elif self.genetic_mechanism == "maternal":
-            # maternal-only inheritance - all eggs have mother's genotype
-            eggs_generated[dam] = number_eggs
+            return self.generate_eggs_maternal(dam, number_eggs)
+
         else:
             raise Exception("Genetic mechanism must be 'maternal', 'quantitative' or 'discrete' - '{}' given".format(self.genetic_mechanism))
 
+    def generate_eggs_discrete(self, sire: Alleles, dam: Alleles, number_eggs: int) -> GenoDistrib:
+        """Get number of eggs based on discrete genetic mechanism.
+
+        If we're in the discrete 2-gene setting, assume for now that genotypes are tuples -
+        so in a A/a genetic system, genotypes could be ('A'), ('a'), or ('A', 'a')
+        right now number of offspring with each genotype are deterministic, and might be
+        missing one (we should update to add jitter in future, but this is a reasonable approx)
+
+        :param sire: the genomics of the sires
+        :param dam: the genomics of the dams
+        :param number_eggs: the number of eggs produced
+        :return: genomics distribution of eggs produced
+        """
+
+        eggs_generated = {}
+        if len(sire) == 1 and len(dam) == 1:
+            eggs_generated[self.get_geno_name(sire[0], dam[0])] = float(number_eggs)
+        elif len(sire) == 2 and len(dam) == 1:
+            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 2
+            eggs_generated[self.get_geno_name(sire[1], dam[0])] = number_eggs / 2
+        elif len(sire) == 1 and len(dam) == 2:
+            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 2
+            eggs_generated[self.get_geno_name(sire[0], dam[1])] = number_eggs / 2
+        else:
+            # drawing both from the sire in the first case ensures heterozygotes
+            # but is a bit hacky.
+            eggs_generated[self.get_geno_name(sire[0], sire[1])] = number_eggs / 2
+            # and the below gets us our two types of homozygotes
+            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 4
+            eggs_generated[self.get_geno_name(sire[1], dam[1])] = number_eggs / 4
+
         return eggs_generated
+
+    def get_geno_name(self, sire_geno: Allele, dam_geno: Allele) -> Alleles:
+        """Create name of the genotype based on parents alleles.
+
+        :param sire_geno: the allele of the sires
+        :param dam_geno: the allele of the sires
+        :return: the genomics of the offspring
+        """
+        return tuple(sorted({sire_geno, dam_geno}))
+
+    def generate_eggs_quantitative(self, sire: np.ndarray, dam: np.ndarray, number_eggs: int) -> GenoDistrib:
+        """Get number of eggs based on quantitative genetic mechanism.
+
+        Additive genes, assume genetic state for an individual looks like a number between 0 and 1.
+        because we're only dealing with the heritable part here don't need to do any of the comparison
+        to population mean or impact of heritability, etc - that would appear in the code dealing with treatment
+        so we could use just the mid-parent value for this genetic recording for children
+        as with the discrete genetic model, this will be deterministic for now
+
+        :param sire: the genomics of the sires
+        :param dam: the genomics of the dams
+        :param number_eggs: the number of eggs produced
+        :return: genomics distribution of eggs produced
+        """
+        mid_parent = np.round((sire + dam) / 2, 1)
+        return {mid_parent: number_eggs}
+
+    def generate_eggs_maternal(self, dam: Union[Alleles, np.ndarray], number_eggs: int) -> GenoDistrib:
+        """Get number of eggs based on maternal genetic mechanism.
+
+        Maternal-only inheritance - all eggs have mother's genotype.
+
+        :param dam: the genomics of the dams
+        :param number_eggs: the number of eggs produced
+        :return: genomics distribution of eggs produced
+        """
+        return {dam: number_eggs}
 
     def select_dams(self, distrib_dams_available: GenoDistrib, num_dams: int):
         """
@@ -688,11 +733,13 @@ class Cage:
         def _(arg: EggBatch, _cur_time: dt.datetime):
             return arg.hatch_date <= _cur_time
 
-        @access_time_lt.register
+        # have mypy ignore redefinitions of '_'
+        # see https://github.com/python/mypy/issues/2904 for details
+        @access_time_lt.register  # type: ignore[no-redef]
         def _(arg: TravellingEggBatch, _cur_time: dt.datetime):
             return arg.hatch_date <= _cur_time
 
-        @access_time_lt.register
+        @access_time_lt.register  # type: ignore[no-redef]
         def _(arg: DamAvailabilityBatch, _cur_time: dt.datetime):
             return arg.availability_date <= _cur_time
 
@@ -756,8 +803,8 @@ class Cage:
         self,
         prev_stage: Union[str, dict],
         cur_stage: str,
-        leaving_lice: np.int64,
-        entering_lice: Optional[np.int64] = None
+        leaving_lice: int,
+        entering_lice: Optional[int] = None
     ):
         """
         Promote the population by stage and respect the genotypes
@@ -768,9 +815,11 @@ class Cage:
                If prev_stage is a a string, entering_lice must be an int
         """
         if isinstance(prev_stage, str):
-            entering_lice = cast(np.int64, entering_lice)
-            prev_stage_geno = self.lice_population.geno_by_lifestage[prev_stage]
-            entering_geno_distrib = LicePopulation.multiply_distrib(prev_stage_geno, entering_lice)
+            if entering_lice is not None:
+                prev_stage_geno = self.lice_population.geno_by_lifestage[prev_stage]
+                entering_geno_distrib = LicePopulation.multiply_distrib(prev_stage_geno, entering_lice)
+            else:
+                raise ValueError("entering_lice must be an int when prev_stage is a str")
         else:
             entering_geno_distrib = prev_stage
         cur_stage_geno = self.lice_population.geno_by_lifestage[cur_stage]
@@ -791,8 +840,8 @@ class Cage:
             fish_deaths_from_lice: int,
             new_L2: int,
             new_L4: int,
-            new_females: np.int64,
-            new_males: np.int64,
+            new_females: int,
+            new_males: int,
             new_infections: int,
             lice_from_reservoir: GrossLiceDistrib,
             delta_dams_batch: OptionalDamBatch,

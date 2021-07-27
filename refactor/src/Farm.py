@@ -70,7 +70,7 @@ class Farm:
 
         return self.name == other.name
 
-    def initialize_temperatures(self, temperatures: Dict[str, LocationTemps]) -> float:
+    def initialize_temperatures(self, temperatures: Dict[str, LocationTemps]) -> List[float]:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at
         month c_month interpolating data taken from
