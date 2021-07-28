@@ -113,6 +113,9 @@ class RuntimeConfig:
         self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"]["value"]]
         self.pheno_resistance = self.parse_pheno_resistance(data["pheno_resistance"]["value"])
 
+        # TODO: take into account processing of non-discrete keys
+        self.genetic_ratios = {tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"]["value"].items()}
+
         # Farm data
         self.farm_data = data["farm_data"]["value"]
 
