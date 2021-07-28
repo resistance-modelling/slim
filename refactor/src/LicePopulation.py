@@ -7,7 +7,7 @@ from src.Config import Config
 
 LifeStage = str
 Allele = str
-Alleles = Tuple[Allele, ...]
+Alleles = Union[Tuple[Allele, ...], np.ndarray]
 GenoDistrib = Dict[Alleles, Union[int, float]]
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
 GrossLiceDistrib = Dict[LifeStage, int]

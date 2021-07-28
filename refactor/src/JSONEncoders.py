@@ -18,7 +18,7 @@ class CustomFarmEncoder(json.JSONEncoder):
         return_str = ""
         if isinstance(o, np.ndarray):
             return_str = str(o)
-        elif isinstance(o, np.int64):
+        elif isinstance(o, int):
             return_str = str(o)
         elif isinstance(o, dt.datetime):
             return_str = o.strftime("%Y-%m-%d %H:%M:%S")
