@@ -171,16 +171,15 @@ class FarmConfig:
 
 # TODO: move these somewhere else? Maybe wait for Sara's PR to be merged first
 
-class Treatment(enum.IntEnum):
+class Treatment(enum.Enum):
     """
     A stub for treatment types
+    TODO: add other treatments here
     """
     emb = 1
-    dmb = 2
-    h2o2 = 3
 
 
-class GeneticMechanism(enum.IntEnum):
+class GeneticMechanism(enum.Enum):
     """
     Genetic mechanism to be used when generating egg genotypes
     """
@@ -189,7 +188,7 @@ class GeneticMechanism(enum.IntEnum):
     quantitative = 3
 
 
-class HeterozygousResistance(enum.IntEnum):
+class HeterozygousResistance(enum.Enum):
     """
     Resistance in a monogenic, heterozygous setting.
     """

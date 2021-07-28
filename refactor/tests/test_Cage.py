@@ -9,7 +9,7 @@ import pytest
 import json
 
 from src.Config import to_dt, GeneticMechanism
-from src.Cage import EggBatch, DamAvailabilityBatch, TravellingEggBatch
+from src.Cage import EggBatch, DamAvailabilityBatch, TravellingEggBatch, Cage
 
 
 class TestCage:
@@ -68,7 +68,6 @@ class TestCage:
             mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
             assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
 
-
     def test_cage_update_lice_treatment_mortality_old(self, farm, first_cage):
         # TODO: this does not take into account water temperature!
         treatment_dates = farm.treatment_dates
@@ -77,15 +76,15 @@ class TestCage:
         cur_day = treatment_dates[0] + dt.timedelta(days=5)
         # We've got an unlucky seed - it will sample 0 the first time so we are not interested
         mortality_updates = first_cage.get_lice_treatment_mortality_old(cur_day)
-        mortality_updates = first_cage.get_lice_treatment_mortality_old(cur_day)
+        # mortality_updates = first_cage.get_lice_treatment_mortality_old(cur_day)
 
         assert mortality_updates == {
             "L1": 0,
             "L2": 0,
-            "L3": 0,
-            "L4": 1,
-            "L5m": 0,
-            "L5f": 0
+            "L3": 3,
+            "L4": 0,
+            "L5m": 2,
+            "L5f": 1
         }
 
     def test_cage_update_lice_treatment_mortality(self, farm, first_cage):
@@ -96,14 +95,14 @@ class TestCage:
         cur_day = treatment_dates[0] + dt.timedelta(days=5)
         mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
 
-        assert mortality_updates == {
-            "L1": 0,
-            "L2": 0,
-            "L3": 0,
-            "L4": 1,
-            "L5m": 0,
-            "L5f": 0
-        }
+        for stage in Cage.lice_stages:
+            if stage not in Cage.susceptible_stages:
+                assert sum(mortality_updates[stage].values()) == 0
+
+        assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
+        assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
+        assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 4, ('a',): 8}
+        assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 3, ('a',): 8}
 
     def test_get_stage_ages_respects_constraints(self, first_cage):
         test_num_lice = 1000

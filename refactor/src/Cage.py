@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 # TYPE ANNOTATIONS
 # TODO: move these annotations to another file?
+# Merge with master's branch...
 
 LifeStage = str
 Allele = str
@@ -28,13 +29,13 @@ GenoDistrib = Dict[Alleles, Union[int, float]]
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
 GrossLiceDistrib = Dict[LifeStage, int]
 
+
 class GenoTreatmentValue(NamedTuple):
     mortality_rate: float
-    pheno_emb: np.ndarray
     num_susc: int
 
-GenoTreatmentDistrib = Dict[Alleles, GenoTreatmentValue]
 
+GenoTreatmentDistrib = Dict[Alleles, GenoTreatmentValue]
 
 
 @dataclass(order=True)
@@ -54,6 +55,7 @@ class TravellingEggBatch:
 class DamAvailabilityBatch:
     availability_date: dt.datetime # expected return time
     geno_distrib: dict = field(compare=False)
+
 
 # See https://stackoverflow.com/a/7760938
 class LicePopulation(dict, MutableMapping[LifeStage, int]):
@@ -120,6 +122,7 @@ class Cage:
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
     susceptible_stages = lice_stages[2:]
+    pathogenic_stages = lice_stages[2:]
 
     generic_discrete_props = {('A',): 0.25, ('a',): 0.25, ('A', 'a'): 0.5}  # type: GenoDistrib
 
@@ -179,11 +182,13 @@ class Cage:
                 filtered_vars[k] = filtered_vars[k].strftime("%Y-%m-%d %H:%M:%S")
 
         # May want to improve these or change them if we change the representation for genotype distribs
+        # TODO: these below can be probably moved to a proper encoder
         filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
         filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in self.lice_population.geno_by_lifestage.items()}
         filtered_vars["hatching_events"] = sorted(list(self.hatching_events.queue))
         filtered_vars["busy_dams"] = sorted(list(self.busy_dams.queue))
         filtered_vars["arrival_events"] = sorted(list(self.arrival_events.queue))
+        filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
 
         return json.dumps(filtered_vars, indent=4)
 
@@ -271,49 +276,46 @@ an
         return egg_distrib, hatch_date
 
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
-        num_susc_per_geno = {}
+        num_susc_per_geno = {}  # type: GenoDistrib
 
         for stage in self.susceptible_stages:
             self.update_distrib_discrete_add(self.lice_population.geno_by_lifestage[stage], num_susc_per_geno)
 
-        geno_treatment_distrib = {geno: (0.0, np.array([]), 0) for geno in num_susc_per_geno}
+        geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
 
         treatment = self.farm.farm_cfg.treatment_type
 
-        # TODO: replace this with an enum
         if treatment == Treatment.emb:
-
             # TODO: take temperatures into account? See #22
             # NOTE: some treatments (e.g. H2O2) are temperature-independent
             if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
                 self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
                                                                                    self.id, cur_date))
 
-                # For now, assume a simple heterozygous distribution with a mere linear resistance factor
+                # For now, assume a simple heterozygous distribution with a mere geometric distribution
                 for geno, num_susc in num_susc_per_geno.items():
-                    if 'A' in geno:
-                        if 'a' in geno:
-                            trait = HeterozygousResistance.incompletely_dominant
-                        else:
-                            trait = HeterozygousResistance.dominant
-                    else:
-                        trait = HeterozygousResistance.recessive
-
+                    trait = self.get_allele_heterozygous_trait(geno)
                     susceptibility_factor = 1.0 - self.cfg.pheno_resistance[treatment][trait]
-                    # model the resistance of each lice in the susceptible stages (phenoEMB) and estimate
-                    # the mortality rate due to treatment (ETmort).
-                    f_meanEMB = self.cfg.f_meanEMB * susceptibility_factor
-                    f_sigEMB = self.cfg.f_sigEMB * susceptibility_factor
-                    pheno_emb = self.cfg.rng.normal(f_meanEMB, f_sigEMB, num_susc) \
-                                + self.cfg.rng.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
-                    pheno_emb = 1 / (1 + np.exp(pheno_emb))
-                    mortality_rate = sum(pheno_emb) * self.cfg.EMBmort
-                    geno_treatment_distrib[geno] = (mortality_rate, pheno_emb, num_susc)
+                    geno_treatment_distrib[geno] = GenoTreatmentValue(susceptibility_factor, cast(int, num_susc))
         else:
-            raise NotImplemented("Only EMB treatment is supported")
+            raise NotImplementedError("Only EMB treatment is supported")
 
         return geno_treatment_distrib
 
+    @staticmethod
+    def get_allele_heterozygous_trait(alleles: Alleles):
+        """
+        Get the allele heterozygous type
+        """
+        # should we move this?
+        if 'A' in alleles:
+            if 'a' in alleles:
+                trait = HeterozygousResistance.incompletely_dominant
+            else:
+                trait = HeterozygousResistance.dominant
+        else:
+            trait = HeterozygousResistance.recessive
+        return trait
 
     def get_lice_treatment_mortality_rate_old(self, cur_date):
         """
@@ -387,10 +389,11 @@ an
 
         dead_mortality_distrib = self.get_lice_treatment_mortality_rate(cur_date)
 
-        for geno, (mortality_rate, pheno_emb, num_susc) in dead_mortality_distrib.items():
+        for geno, (mortality_rate, num_susc) in dead_mortality_distrib.items():
             if mortality_rate > 0:
-                num_dead_lice = self.cfg.rng.poisson(mortality_rate)
+                num_dead_lice = self.cfg.rng.poisson(mortality_rate*num_susc)
                 num_dead_lice = min(num_dead_lice, num_susc)
+
 
                 # Now we need to decide how many lice from each stage die,
                 #   the algorithm is to label each louse  1...num_susc
@@ -399,9 +402,7 @@ an
                 #        now we need to find out which stages these lice are in by calculating the
                 #        cumulative sum of the lice in each stage and finding out how many of our
                 #        dead lice falls into this bin.
-                p = (pheno_emb) / np.sum(pheno_emb)
-                dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, p=p,
-                                             replace=False).tolist()
+                dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, replace=False).tolist()
                 total_so_far = 0
                 for stage in self.susceptible_stages:
                     available_in_stage = self.lice_population.geno_by_lifestage[stage][geno]
@@ -414,8 +415,7 @@ an
                 self.logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
                                   .format(self.farm_id, self.id, dead_lice_dist))
 
-            return dead_lice_dist
-
+        return dead_lice_dist
 
     def get_stage_ages_distrib(self, stage: str, size=15, stage_age_max_days=None):
         """
@@ -546,7 +546,7 @@ an
             return 0.00057  # (1000 + (days - 700)**2)/490000000
 
         # Apply a sigmoid based on the number of lice per fish
-        pathogenic_lice = sum([self.lice_population[stage] for stage in self.susceptible_stages])
+        pathogenic_lice = sum([self.lice_population[stage] for stage in self.pathogenic_stages])
         if self.num_infected_fish > 0:
             lice_per_host_mass = pathogenic_lice / (self.num_infected_fish * self.fish_growth_rate(days))
         else:
