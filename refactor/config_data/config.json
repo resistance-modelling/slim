@@ -79,6 +79,18 @@
       "description": "Ratio between durability and current sea temperature (unit: days / °C)",
       "value": 210
   },
+  "infection_delay_time_EMB": {
+      "description": "Number of days fish in a cage are protected against infection after EMB treatment",
+      "note": "TODO: assume six weeks protection, needs more data",
+      "value": 42 
+
+  },
+  "infection_delay_prob_EMB": {
+      "description": "Probability of effective protection against lice infection after EMB treatment",
+      "note": "TODO: dummy variable, needs data",
+      "value": 0.9
+
+  },
   "fish_mortality_center": {
     "description": "Fish mortality sigmoid center",
     "value": 0.63

@@ -96,6 +96,8 @@ class RuntimeConfig:
         self.EMBmort = data["EMBmort"]["value"]
         self.delay_EMB = data["delay_EMB"]["value"]
         self.delta_EMB = data["delta_EMB"]["value"]
+        self.infection_delay_time_EMB = data["infection_delay_time_EMB"]["value"]
+        self.infection_delay_prob_EMB = data["infection_delay_prob_EMB"]["value"]
 
         # Fish mortality constants
         self.fish_mortality_center = data["fish_mortality_center"]["value"]

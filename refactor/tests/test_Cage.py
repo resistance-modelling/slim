@@ -171,7 +171,7 @@ class TestCage:
 
     def test_do_infection_events(self, first_cage):
         first_cage.lice_population["L2"] = 100
-        num_infected_fish = first_cage.do_infection_events(1)
+        num_infected_fish = first_cage.do_infection_events(first_cage.start_date, 1)
 
         assert num_infected_fish > 0
         assert num_infected_fish == 17
