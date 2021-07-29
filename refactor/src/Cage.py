@@ -80,6 +80,8 @@ class Cage:
         self.busy_dams = PriorityQueue()  # type: PriorityQueue[DamAvailabilityBatch]
         self.arrival_events = PriorityQueue()  # type: PriorityQueue[TravellingEggBatch]
 
+        self.last_effective_treatment = None  # type: Optional[dt.datetime]
+
     def __str__(self):
         """
         Get a human readable string representation of the cage in json form.
@@ -160,7 +162,7 @@ class Cage:
             fish_deaths_natural, fish_deaths_from_lice = self.get_fish_growth(days_since_start, step_size)
 
             # Infection events
-            num_infection_events = self.do_infection_events(days_since_start)
+            num_infection_events = self.do_infection_events(cur_date, days_since_start)
 
             # Mating events that create eggs
             delta_avail_dams, delta_eggs = self.do_mating_events()
@@ -218,6 +220,8 @@ class Cage:
                 self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
                                                                                    self.id, cur_date))
 
+                self.last_effective_treatment = cur_date
+
                 # For now, assume a simple heterozygous distribution with a mere geometric distribution
                 for geno, num_susc in num_susc_per_geno.items():
                     trait = self.get_allele_heterozygous_trait(geno)
@@ -256,7 +260,6 @@ class Cage:
             if mortality_rate > 0:
                 num_dead_lice = self.cfg.rng.poisson(mortality_rate*num_susc)
                 num_dead_lice = min(num_dead_lice, num_susc)
-
 
                 # Now we need to decide how many lice from each stage die,
                 #   the algorithm is to label each louse  1...num_susc
@@ -435,7 +438,7 @@ class Cage:
         """
         Compute the number of lice that can infect and what their infection rate (number per fish) is
 
-        :param days the amount of time it takes
+        :param days: the amount of time it takes
         :returns a pair (Einf, num_avail_lice)
         """
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
@@ -453,19 +456,37 @@ class Cage:
 
         return 0.0, num_avail_lice
 
-    def do_infection_events(self, days) -> int:
-        """
-        Infect fish in this cage if the sea lice are in stage L2 and at least 1 day old
+    def do_infection_events(self, cur_date: dt.datetime, days: int) -> int:
+        """Infect fish in this cage if the sea lice are in stage L2 and at least 1 day old
 
-        :param days the number of days elapsed
-        :returns number of evolving lice, or equivalently the new number of infections
+        :param cur_date: current date of simulation
+        :param days: days the number of days elapsed
+        :return: number of evolving lice, or equivalently the new number of infections
         """
         Einf, num_avail_lice = self.get_infection_rates(days)
 
         if Einf == 0:
             return 0
 
-        inf_events = self.cfg.rng.poisson(Einf * num_avail_lice)
+        expected_events = Einf * num_avail_lice
+
+        # prevent infection under treatment
+        if self.last_effective_treatment:
+
+            treatment = self.farm.farm_cfg.treatment_type
+
+            if treatment == Treatment.emb:
+
+                protection_window = self.last_effective_treatment + dt.timedelta(days=self.cfg.infection_delay[treatment]["time"])
+
+                if cur_date <= protection_window:
+                    # if under protection window from treatment, decrease number of infection events
+                    expected_events *= 1 - self.cfg.infection_delay[treatment]["prob"]
+            else:
+                raise NotImplementedError("Only EMB treatment is supported")
+
+        inf_events = self.cfg.rng.poisson(expected_events)
+
         return min(inf_events, num_avail_lice)
 
     def get_infecting_population(self, *args) -> int:

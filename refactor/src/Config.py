@@ -1,12 +1,11 @@
 import datetime as dt
-import enum
 import json
 import os
 
 import numpy as np
 import pandas as pd
 
-from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, TreatmentResistance
+from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, TreatmentResistance, InfectionDelay
 
 
 def to_dt(string_date):
@@ -99,6 +98,7 @@ class RuntimeConfig:
         self.EMBmort = data["EMBmort"]["value"]
         self.delay_EMB = data["delay_EMB"]["value"]
         self.delta_EMB = data["delta_EMB"]["value"]
+        self.infection_delay = self.parse_infection_delay(data)
 
         # Fish mortality constants
         self.fish_mortality_center = data["fish_mortality_center"]["value"]
@@ -138,6 +138,15 @@ class RuntimeConfig:
                 pheno_resistance[treated_key][HeterozygousResistance[trait]] = value
 
         return pheno_resistance
+
+    @staticmethod
+    def parse_infection_delay(data: dict) -> InfectionDelay:
+        delay_time_dict = data["infection_delay"]["value"]
+        infection_delay = {}
+        for treatment_str, delay_data in delay_time_dict.items():
+            infection_delay[Treatment[treatment_str]] = {key: delay_data[key]["value"] for key in delay_data}
+
+        return infection_delay
 
 
 class FarmConfig:
