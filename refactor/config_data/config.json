@@ -136,7 +136,7 @@
     "value": "discrete"
   },
   "pheno_resistance": {
-    "description": "Lookup table to translate between genotype",
+    "description": "Lookup table to translate between genotype.",
     "value": {
       "emb": {
         "dominant": 0.95,
@@ -144,5 +144,9 @@
         "recessive": 0.05
       }
     }
+  },
+  "geno_mutation_rate": {
+    "description": "Mutation rate, as in number of individual mutation events that can happen out of the number of offsprings. For example, 1e-5 is one mutation every 10,000 extruded eggs",
+    "value": 1e-5
   }
 }
