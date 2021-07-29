@@ -473,11 +473,16 @@ class Cage:
 
         # prevent infection under treatment
         if self.last_effective_treatment:
-            protection_window = self.last_effective_treatment + dt.timedelta(days=self.cfg.infection_delay_time_EMB)
 
-            if cur_date <= protection_window:
-                # if under protection window from treatment, decrease number of infection events
-                expected_events *= 1 - self.cfg.infection_delay_prob_EMB
+            if self.farm.farm_cfg.treatment_type == Treatment.emb:
+
+                protection_window = self.last_effective_treatment + dt.timedelta(days=self.cfg.infection_delay_time_EMB)
+                    
+                if cur_date <= protection_window:
+                    # if under protection window from treatment, decrease number of infection events
+                    expected_events *= 1 - self.cfg.infection_delay_prob_EMB
+            else:
+                raise NotImplementedError("Only EMB treatment is supported")
 
         inf_events = self.cfg.rng.poisson(expected_events)
 
