@@ -590,7 +590,7 @@ class Cage:
         else:
             raise Exception("Genetic mechanism must be 'maternal', 'quantitative' or 'discrete' - '{}' given".format(self.genetic_mechanism))
 
-        if self.genetic_mechanism != GeneticMechanism.maternal:
+        if self.genetic_mechanism != GeneticMechanism.quantitative:
             self.mutate(geno_eggs, mutation_rate=self.cfg.geno_mutation_rate)
         return geno_eggs
 
@@ -600,7 +600,7 @@ class Cage:
         If we're in the discrete 2-gene setting, assume for now that genotypes are tuples -
         so in a A/a genetic system, genotypes could be ('A'), ('a'), or ('A', 'a')
         right now number of offspring with each genotype are deterministic, and might be
-        missing one (we should update to add jitter in future1, but this is a reasonable approx)
+        missing one (we should update to add jitter in future, but this is a reasonable approx)
 
         :param sire: the genomics of the sires
         :param dam: the genomics of the dams
