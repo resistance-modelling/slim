@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Dict
+from mypy_extensions import TypedDict
 
 
 class Treatment(Enum):
@@ -29,3 +30,4 @@ class HeterozygousResistance(Enum):
 
 
 TreatmentResistance = Dict[Treatment, Dict[HeterozygousResistance, float]]
+InfectionDelay = Dict[Treatment, TypedDict("infection_data", {"time": int, "prob": float})]

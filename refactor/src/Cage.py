@@ -261,7 +261,6 @@ class Cage:
                 num_dead_lice = self.cfg.rng.poisson(mortality_rate*num_susc)
                 num_dead_lice = min(num_dead_lice, num_susc)
 
-
                 # Now we need to decide how many lice from each stage die,
                 #   the algorithm is to label each louse  1...num_susc
                 #   assign each of these a probability of dying as (phenoEMB)/np.sum(phenoEMB)
@@ -474,13 +473,15 @@ class Cage:
         # prevent infection under treatment
         if self.last_effective_treatment:
 
-            if self.farm.farm_cfg.treatment_type == Treatment.emb:
+            treatment = self.farm.farm_cfg.treatment_type
 
-                protection_window = self.last_effective_treatment + dt.timedelta(days=self.cfg.infection_delay_time_EMB)
-                    
+            if treatment == Treatment.emb:
+
+                protection_window = self.last_effective_treatment + dt.timedelta(days=self.cfg.infection_delay[treatment]["time"])
+
                 if cur_date <= protection_window:
                     # if under protection window from treatment, decrease number of infection events
-                    expected_events *= 1 - self.cfg.infection_delay_prob_EMB
+                    expected_events *= 1 - self.cfg.infection_delay[treatment]["prob"]
             else:
                 raise NotImplementedError("Only EMB treatment is supported")
 
