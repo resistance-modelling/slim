@@ -48,16 +48,6 @@ class TestCage:
         assert np.alltrue(dead_lice_dist_np >= 0.0)
         assert np.alltrue(np.isclose(dead_lice_dist_np, expected_dead_lice))
 
-    def test_cage_update_lice_treatment_mortality_old_no_effect(self, farm, first_cage):
-        treatment_dates = farm.treatment_dates
-        assert(treatment_dates == sorted(treatment_dates))
-
-        # before a 14-day activation period there should be no effect
-        for i in range(-14, first_cage.cfg.delay_EMB):
-            cur_day = treatment_dates[0] + dt.timedelta(days=i)
-            mortality_updates = first_cage.get_lice_treatment_mortality_old(cur_day)
-            assert all(rate == 0 for rate in mortality_updates.values())
-
     def test_cage_update_lice_treatment_mortality_no_effect(self, farm, first_cage):
         treatment_dates = farm.treatment_dates
         assert(treatment_dates == sorted(treatment_dates))
@@ -67,25 +57,6 @@ class TestCage:
             cur_day = treatment_dates[0] + dt.timedelta(days=i)
             mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
             assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
-
-    def test_cage_update_lice_treatment_mortality_old(self, farm, first_cage):
-        # TODO: this does not take into account water temperature!
-        treatment_dates = farm.treatment_dates
-
-        # first useful day
-        cur_day = treatment_dates[0] + dt.timedelta(days=5)
-        # We've got an unlucky seed - it will sample 0 the first time so we are not interested
-        mortality_updates = first_cage.get_lice_treatment_mortality_old(cur_day)
-        # mortality_updates = first_cage.get_lice_treatment_mortality_old(cur_day)
-
-        assert mortality_updates == {
-            "L1": 0,
-            "L2": 0,
-            "L3": 3,
-            "L4": 0,
-            "L5m": 2,
-            "L5f": 1
-        }
 
     def test_cage_update_lice_treatment_mortality(self, farm, first_cage):
         # TODO: this does not take into account water temperature!

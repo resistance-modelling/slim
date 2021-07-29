@@ -243,69 +243,6 @@ an
             trait = HeterozygousResistance.recessive
         return trait
 
-    def get_lice_treatment_mortality_rate_old(self, cur_date):
-        """
-        Compute the mortality rate due to chemotherapeutic treatment. See Jensen et al. (2017)
-        """
-        num_susc = sum(self.lice_population[x] for x in self.susceptible_stages)
-
-        # TODO: take temperatures into account? See #22
-        if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
-            self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
-                                                                               self.id, cur_date))
-            # number of lice in those stages that are susceptible to Emamectin Benzoate (i.e.
-            # those L3 or above)
-            # we assume the mortality rate is the same across all stages and ages, but this may change in the future
-            # (or with different chemicals)
-
-            # model the resistance of each lice in the susceptible stages (phenoEMB) and estimate
-            # the mortality rate due to treatment (ETmort).
-            pheno_emb = (self.cfg.rng.normal(self.cfg.f_meanEMB, self.cfg.f_sigEMB, num_susc) +
-                         self.cfg.rng.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc))
-            pheno_emb = 1 / (1 + np.exp(pheno_emb))
-            mortality_rate = sum(pheno_emb) * self.cfg.EMBmort
-            return mortality_rate, pheno_emb, num_susc
-
-        else:
-            return 0, 0, num_susc
-
-    def get_lice_treatment_mortality_old(self, cur_date):
-        """
-        Calculate the number of lice in each stage killed by treatment.
-        """
-
-        dead_lice_dist = {stage: 0 for stage in self.lice_stages}
-
-        mortality_rate, pheno_emb, num_susc = self.get_lice_treatment_mortality_rate_old(cur_date)
-
-        if mortality_rate > 0:
-            num_dead_lice = self.cfg.rng.poisson(mortality_rate)
-            num_dead_lice = min(num_dead_lice, num_susc)
-
-            # Now we need to decide how many lice from each stage die,
-            #   the algorithm is to label each louse  1...num_susc
-            #   assign each of these a probability of dying as (phenoEMB)/np.sum(phenoEMB)
-            #   randomly pick lice according to this probability distribution
-            #        now we need to find out which stages these lice are in by calculating the
-            #        cumulative sum of the lice in each stage and finding out how many of our
-            #        dead lice falls into this bin.
-            p = (pheno_emb) / np.sum(pheno_emb)
-            dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, p=p,
-                                            replace=False).tolist()
-            total_so_far = 0
-            for stage in self.susceptible_stages:
-                num_dead = len([x for x in dead_lice if total_so_far <= x <
-                                (total_so_far + self.lice_population[stage])])
-                total_so_far += self.lice_population[stage]
-                if num_dead > 0:
-                    dead_lice_dist[stage] = num_dead
-
-            self.logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
-                              .format(self.farm_id, self.id, dead_lice_dist))
-
-            assert num_dead_lice == sum(list(dead_lice_dist.values()))
-        return dead_lice_dist
-
     def get_lice_treatment_mortality(self, cur_date) -> GenoLifeStageDistrib:
         """
         Calculate the number of lice in each stage killed by treatment.
