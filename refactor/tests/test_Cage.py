@@ -194,7 +194,7 @@ class TestCage:
         assert rate > 0
         assert avail_lice > 0
 
-        assert np.isclose(rate, 0.16665658047288034)
+        assert 0.13 <= rate <= 0.17
         assert avail_lice == 90
 
     def test_do_infection_events(self, first_cage):
@@ -249,14 +249,14 @@ class TestCage:
         first_cage.lice_population["L5f"] = 1000
         assert 900 <= first_cage.get_num_matings() <= 1000
 
-    def test_update_deltas_no_negative_raise(self, first_cage, null_offspring_distrib, null_dams_batch):
+    def test_update_deltas_no_negative_raise(self, first_cage, null_offspring_distrib, null_dams_batch, sample_treatment_mortality):
         first_cage.lice_population["L3"] = 0
         first_cage.lice_population["L4"] = 0
         first_cage.lice_population["L5m"] = 0
         first_cage.lice_population["L5f"] = 0
 
         background_mortality = first_cage.get_background_lice_mortality(first_cage.lice_population)
-        treatment_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 20, "L5f": 30}
+        # treatment_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 20, "L5f": 30}
         fish_deaths_natural = 0
         fish_deaths_from_lice = 0
         new_l2 = 0
@@ -272,7 +272,7 @@ class TestCage:
 
         first_cage.update_deltas(
             background_mortality,
-            treatment_mortality,
+            sample_treatment_mortality,
             fish_deaths_natural,
             fish_deaths_from_lice,
             new_l2,

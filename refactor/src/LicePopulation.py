@@ -101,6 +101,14 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
             if distrib[geno] < 0:
                 distrib[geno] = 0
 
+    def get_empty_geno_stage_distrib(self) -> GenoDistrib:
+        # A little factory method to get empty genos
+        genos = self.geno_by_lifestage["L1"].keys()
+        return {geno: 0 for geno in genos}
+
+    def get_empty_geno_distrib(self) -> GenoLifeStageDistrib:
+        return {stage: self.get_empty_geno_stage_distrib() for stage in self.keys()}
+
 
 class GenotypePopulation(dict, MutableMapping[LifeStage, GenoDistrib]):
     def __init__(self, gross_lice_population: LicePopulation, geno_data: GenoLifeStageDistrib):

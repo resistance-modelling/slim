@@ -104,11 +104,6 @@ class Cage:
 
         return json.dumps(filtered_vars, indent=4)
 
-    def get_empty_geno_distrib(self) -> GenoDistrib:
-        # A little factory method to get empty genos
-        genos = self.lice_population.geno_by_lifestage["L1"].keys()
-        return {geno: 0 for geno in genos}
-
     def update(self, cur_date: dt.datetime, step_size: int, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime]]:
         """Update the cage at the current time step.
 an
@@ -131,9 +126,6 @@ an
         # Background lice mortality events
         dead_lice_dist = self.get_background_lice_mortality(self.lice_population)
 
-        # Treatment mortality events
-        treatment_mortality = self.get_lice_treatment_mortality_old(cur_date)
-
         # Development events
         new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date.month)
 
@@ -149,7 +141,7 @@ an
 
         if cur_date < self.start_date:
             # Values that are not used before the start date
-            treatment_mortality = {}
+            treatment_mortality = self.lice_population.get_empty_geno_distrib()
             fish_deaths_natural, fish_deaths_from_lice = 0, 0
             num_infection_events = 0
             delta_avail_dams, delta_eggs = {}, {}  # type: Tuple[GenoDistrib, GenoDistrib]
@@ -163,7 +155,7 @@ an
             days_since_start = (cur_date - self.date).days
 
             # Treatment mortality events
-            treatment_mortality = self.get_lice_treatment_mortality_old(cur_date)
+            treatment_mortality = self.get_lice_treatment_mortality(cur_date)
 
             # Fish growth and death
             fish_deaths_natural, fish_deaths_from_lice = self.get_fish_growth(days_since_start, step_size)
@@ -320,7 +312,7 @@ an
         Calculate the number of lice in each stage killed by treatment.
         """
 
-        dead_lice_dist = {stage: self.get_empty_geno_distrib() for stage in self.lice_stages}
+        dead_lice_dist = self.lice_population.get_empty_geno_distrib()
 
         dead_mortality_distrib = self.get_lice_treatment_mortality_rate(cur_date)
 
@@ -926,7 +918,7 @@ an
     def update_deltas(
             self,
             dead_lice_dist: GrossLiceDistrib,
-            treatment_mortality: GrossLiceDistrib,
+            treatment_mortality: GenoLifeStageDistrib,
             fish_deaths_natural: int,
             fish_deaths_from_lice: int,
             new_L2: int,
@@ -942,7 +934,7 @@ an
     ):
         """Update the number of fish and the lice in each life stage
         :param dead_lice_dist the number of dead lice due to background death (as a distribution)
-        :param treatment_mortality the number of dead lice due to treatment (as a distribution)
+        :param treatment_mortality the distribution of genotypes being affected by treatment
         :param fish_deaths_natural the number of natural fish death events
         :param fish_deaths_from_lice the number of lice-induced fish death events
         :param new_L2 number of new L2 fish
@@ -963,9 +955,8 @@ an
             self.lice_population[stage] = max(0, bg_delta)
 
             # update population due to treatment
-            num_dead = treatment_mortality.get(stage, 0)
-            treatment_delta = self.lice_population[stage] - num_dead
-            self.lice_population[stage] = max(0, treatment_delta)
+            LicePopulation.update_distrib_discrete_subtract(treatment_mortality[stage],
+                                                            self.lice_population.geno_by_lifestage[stage])
 
         self.lice_population["L5m"] += new_males
         self.lice_population["L5f"] += new_females
