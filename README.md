@@ -111,7 +111,7 @@ haplotype, while Emabectine resistance is modelled by heterozygous monogenic all
   
 The third factor is mainly taken into account to determine the length for which the treatment has noticeable effects.
 For example, it is known that once EMB is applied the effect can range between 10 and 28 days according to the temperature
-(the higher, the shorter). These are discussed by Aldrin et al. (2017) (see §2.4.5).
+(the higher, the shorter). These are discussed by Aldrin et al. (2017) (see §2.2.3, equations 19-20).
 
 ## Farms, Sea cages & Reservoir
 Farm consists of multiple sea cages. Reservoir is the external environment that is also modelled as a constant inflow of sea lice into farms.
