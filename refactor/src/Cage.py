@@ -200,7 +200,7 @@ class Cage:
 
     def get_lice_treatment_mortality_rate(self, cur_date):
         """
-        Compute the mortality rate due to chemotherapeutic treatment (See Aldrin et al, 2017, §2.2.3)
+        Compute the mortality rate due to chemotherapeutic treatment. See Jensen et al. (2017)
         """
         num_susc = sum(self.lice_population[x] for x in self.susceptible_stages)
 

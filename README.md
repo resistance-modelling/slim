@@ -93,13 +93,32 @@ Based on Aldrin, but may change according to the assumptions below.
 Constant rates based on [Stien et al 2005](http://dx.doi.org/10.3354/meps290263).
 
 #### Treatment death
-Treatment death in a stage: ```(1 - individual resistance for individuals in appropriate stage) * treatment effect * (dose presence / decay)```.
+<!-- Treatment death in a stage: ```(1 - individual resistance for individuals in appropriate stage) * treatment effect * (dose presence / decay)```. -->
+The treatment death in a stage depends on three factors:
+
+- the type of treatment
+- the genotype distribution of the lice
+- the temperature
+
+The first and second factor are heavily intertwined: different genetic mechanisms influence resistance in different
+ways that are not fully understood to this day. For example, Deltamethrin resistance is mainly affected by mithocondrial
+haplotype, while Emabectine resistance is modelled by heterozygous monogenic allele. For more information:
+
+
+- see [this issue](https://github.com/resistance-modelling/slim/issues/36#issuecomment-883195962)
+- additionally, [Jensen et al. (2017)](https://doi.org/10.1371/journal.pone.0178068) discussed the relationship between
+  some genes and related resistance.
+  
+The third factor is mainly taken into account to determine the length for which the treatment has noticeable effects.
+For example, it is known that once EMB is applied the effect can range between 10 and 28 days according to the temperature
+(the higher, the shorter). These are discussed by Aldrin et al. (2017) (see §2.4.5).
 
 ## Farms, Sea cages & Reservoir
 Farm consists of multiple sea cages. Reservoir is the external environment that is also modelled as a constant inflow of sea lice into farms.
 
 ### Model outline
 Given sea cages populated with fish (based on farm data) at each development stage, at each considered timestep perform the following updates:
+
 - get dead sea lice from background death
 - get dead sea lice from treatment death
 - progress the development of the sea lice
@@ -122,6 +141,11 @@ Also:
 ### EMB Treatment Model
 TODO: source of data (f_meanEMB, f_sigEMB, EMBmort, env_meanEMB, env_sigEMB)
 
+We follow Jensen et al (2017) and model resistance according to genotype population. Unfortunately
+the paper does not provide "survival rates per genotype" but rather expected lifespan under treatment. We currently
+approximate with a simple geometric distribution (every day only a fixed fraction of lice belonging to a certain stage
+and genetic group can die).
+
 ## Usage
 ### Refactored
 To run the WIP refactored model, enter the ```refactor``` directory and run:
@@ -139,9 +163,19 @@ The program expects three files in the simulation parameters directory:
 See `refactor/config_data/Fyne` for examples.
 
 #### Testing
+
 To test, also from ```refactor``` directory, run:
 
 ```pytest```
+
+To enable coverage reporting, run:
+
+```pytest --cov=src/ --cov-config=.coveragerc  --cov-report html --cov-context=test```
+
+For type checking, install pytype and run (from the root folder):
+
+```pytype --config pytype.cfg refactor```
+
 
 ### Original
 To run the original code, enter ```original``` directory and run:
