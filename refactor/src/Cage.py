@@ -6,12 +6,13 @@ import json
 import math
 from functools import singledispatch
 from queue import PriorityQueue
-from typing import Union, Optional, Dict, Tuple, cast, MutableMapping, TYPE_CHECKING, NamedTuple
+from typing import Union, Optional, Tuple, cast, TYPE_CHECKING
 
 import numpy as np
 from scipy import stats
 
-from src.Config import Config, Treatment, GeneticMechanism, HeterozygousResistance
+from src.Config import Config
+from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib)
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
@@ -106,7 +107,6 @@ class Cage:
 
     def update(self, cur_date: dt.datetime, step_size: int, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime]]:
         """Update the cage at the current time step.
-an
         :param cur_date: Current date of simulation
         :param step_size: Step size
         :param pressure: External pressure, planctonic lice coming from

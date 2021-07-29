@@ -6,6 +6,8 @@ import os
 import numpy as np
 import pandas as pd
 
+from .TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, TreatmentResistance
+
 
 def to_dt(string_date):
     """Convert from string date to datetime date
@@ -67,7 +69,7 @@ class Config:
 
 
 class RuntimeConfig:
-    """@DynamicAttrs Simulation parameters and constants"""
+    """Simulation parameters and constants"""
 
     def __init__(self, hyperparam_file):
         with open(hyperparam_file) as f:
@@ -127,7 +129,7 @@ class RuntimeConfig:
         self.rng = np.random.default_rng(seed=self.seed)
 
     @staticmethod
-    def parse_pheno_resistance(pheno_resistance_dict: dict):
+    def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:
         pheno_resistance = {}
         keys_enums = [Treatment[key] for key in pheno_resistance_dict.keys()]
         for key, treated_key in zip(pheno_resistance_dict.keys(), keys_enums):
@@ -136,6 +138,7 @@ class RuntimeConfig:
                 pheno_resistance[treated_key][HeterozygousResistance[trait]] = value
 
         return pheno_resistance
+
 
 class FarmConfig:
     """Config for individual farm"""
@@ -170,31 +173,3 @@ class FarmConfig:
             to_date = to_dt(range_data["to"])
             self.treatment_dates.extend(
                 pd.date_range(from_date, to_date).to_pydatetime().tolist())
-
-
-# TODO: move these somewhere else? Maybe wait for Sara's PR to be merged first
-
-class Treatment(enum.Enum):
-    """
-    A stub for treatment types
-    TODO: add other treatments here
-    """
-    emb = 1
-
-
-class GeneticMechanism(enum.Enum):
-    """
-    Genetic mechanism to be used when generating egg genotypes
-    """
-    discrete = 1
-    maternal = 2
-    quantitative = 3
-
-
-class HeterozygousResistance(enum.Enum):
-    """
-    Resistance in a monogenic, heterozygous setting.
-    """
-    dominant = 1
-    incompletely_dominant = 2
-    recessive = 3
