@@ -295,7 +295,6 @@ class TestCage:
         _, delta_mutated_eggs = first_cage.do_mating_events()
         assert delta_mutated_eggs == target_mutated_eggs
 
-
     def test_no_available_sires_do_mating_events(self, first_cage):
         first_cage.lice_population.geno_by_lifestage["L5m"] = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
 

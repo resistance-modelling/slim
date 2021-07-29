@@ -590,7 +590,8 @@ class Cage:
         else:
             raise Exception("Genetic mechanism must be 'maternal', 'quantitative' or 'discrete' - '{}' given".format(self.genetic_mechanism))
 
-        self.mutate(geno_eggs, mutation_rate=self.cfg.geno_mutation_rate)
+        if self.genetic_mechanism != GeneticMechanism.maternal:
+            self.mutate(geno_eggs, mutation_rate=self.cfg.geno_mutation_rate)
         return geno_eggs
 
     def generate_eggs_discrete(self, sire: Alleles, dam: Alleles, number_eggs: int) -> GenoDistrib:
