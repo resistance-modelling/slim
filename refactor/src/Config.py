@@ -114,6 +114,7 @@ class RuntimeConfig:
         self.dam_unavailability = data["dam_unavailability"]["value"]
         self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"]["value"]]
         self.pheno_resistance = self.parse_pheno_resistance(data["pheno_resistance"]["value"])
+        self.geno_mutation_rate = data["geno_mutation_rate"]["value"]
 
         # TODO: take into account processing of non-discrete keys
         self.genetic_ratios = {tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"]["value"].items()}

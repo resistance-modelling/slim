@@ -287,6 +287,10 @@ class TestCage:
             first_cage.lice_population.available_dams = {('A',): 10}
 
     def test_do_mating_events(self, first_cage):
+        # Remove mutation effects...
+        old_mutation_rate = first_cage.cfg.geno_mutation_rate
+        first_cage.cfg.geno_mutation_rate = 0
+
         first_cage.lice_population.geno_by_lifestage["L5f"] = {('A',): 15, ('a',): 15, ('A', 'a'): 15}
         first_cage.lice_population.available_dams = {('A',): 15, ('a',): 15}
 
@@ -296,6 +300,14 @@ class TestCage:
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert delta_eggs == target_eggs
         assert delta_avail_dams == target_delta_dams
+
+        # Reconsider mutation effects...
+        first_cage.cfg.geno_mutation_rate = old_mutation_rate
+
+        target_mutated_eggs = {('a',): 1574.5, tuple(sorted(('a', 'A'))): 2552.5}
+
+        _, delta_mutated_eggs = first_cage.do_mating_events()
+        assert delta_mutated_eggs == target_mutated_eggs
 
     def test_no_available_sires_do_mating_events(self, first_cage):
         first_cage.lice_population.geno_by_lifestage["L5m"] = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
@@ -316,6 +328,7 @@ class TestCage:
             assert eggs[key] == target_eggs[key]
 
     def test_generate_eggs_quantitative(self, first_cage):
+        first_cage.cfg.geno_mutation_rate = 0
         first_cage.genetic_mechanism = GeneticMechanism.quantitative
         sire = 0.7
         dam = 0.0
@@ -334,6 +347,7 @@ class TestCage:
             assert eggs[key] == target_eggs[key]
 
     def test_generate_eggs_discrete(self, first_cage):
+        first_cage.cfg.geno_mutation_rate = 0
         first_cage.genetic_mechanism = GeneticMechanism.discrete
 
         sire = ('A',)
@@ -430,6 +444,14 @@ class TestCage:
     def test_get_num_eggs(self, first_cage):
         matings = 6
         assert 1500 <= first_cage.get_num_eggs(matings) <= 1600
+
+    def test_egg_mutation(self, first_cage, sample_offspring_distrib):
+        sample_offspring = copy.deepcopy(sample_offspring_distrib)
+        mutations = 0.001
+        first_cage.mutate(sample_offspring, mutations)
+
+        assert sample_offspring != sample_offspring_distrib
+        assert sample_offspring == {('a',): 199, ('A', 'a'): 301, ('A',): 100}
 
     def test_get_egg_batch_null(self, first_cage, null_offspring_distrib, cur_day):
         egg_batch = first_cage.get_egg_batch(cur_day, null_offspring_distrib)

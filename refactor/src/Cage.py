@@ -65,7 +65,6 @@ class Cage:
         # TODO/Question: what's the best way to deal with having multiple possible genetic schemes?
         # TODO/Question: I suppose some of this initial genotype information ought to come from the config file
         # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
-        # for now I've hard-coded in one mechanism in this setup, and a particular genotype starting point. Should probably be from a config file?
         self.genetic_mechanism = self.cfg.genetic_mechanism
 
         geno_by_lifestage = {stage: LicePopulation.multiply_distrib(self.cfg.genetic_ratios, lice_population[stage])
@@ -600,18 +599,21 @@ class Cage:
 
         if self.genetic_mechanism == GeneticMechanism.discrete:
             sire, dam = cast(Alleles, sire), cast(Alleles, dam)
-            return self.generate_eggs_discrete(sire, dam, number_eggs)
+            geno_eggs = self.generate_eggs_discrete(sire, dam, number_eggs)
 
-        if self.genetic_mechanism == GeneticMechanism.quantitative:
+        elif self.genetic_mechanism == GeneticMechanism.quantitative:
             sire, dam = cast(np.ndarray, sire), cast(np.ndarray, dam)
-            return self.generate_eggs_quantitative(sire, dam, number_eggs)
+            geno_eggs = self.generate_eggs_quantitative(sire, dam, number_eggs)
 
         elif self.genetic_mechanism == GeneticMechanism.maternal:
-
-            return self.generate_eggs_maternal(dam, number_eggs)
+            geno_eggs = self.generate_eggs_maternal(dam, number_eggs)
 
         else:
             raise Exception("Genetic mechanism must be 'maternal', 'quantitative' or 'discrete' - '{}' given".format(self.genetic_mechanism))
+
+        if self.genetic_mechanism != GeneticMechanism.quantitative:
+            self.mutate(geno_eggs, mutation_rate=self.cfg.geno_mutation_rate)
+        return geno_eggs
 
     def generate_eggs_discrete(self, sire: Alleles, dam: Alleles, number_eggs: int) -> GenoDistrib:
         """Get number of eggs based on discrete genetic mechanism.
@@ -672,7 +674,8 @@ class Cage:
         mid_parent = np.round((sire + dam) / 2, 1)
         return {mid_parent: number_eggs}
 
-    def generate_eggs_maternal(self, dam: Union[Alleles, np.ndarray], number_eggs: int) -> GenoDistrib:
+    @staticmethod
+    def generate_eggs_maternal(dam: Union[Alleles, np.ndarray], number_eggs: int) -> GenoDistrib:
         """Get number of eggs based on maternal genetic mechanism.
 
         Maternal-only inheritance - all eggs have mother's genotype.
@@ -682,6 +685,43 @@ class Cage:
         :return: genomics distribution of eggs produced
         """
         return {dam: number_eggs}
+
+    def mutate(self, eggs: GenoDistrib, mutation_rate: float):
+        """
+        Mutate the genotype distribution
+
+        :param eggs: the genotype distribution of the newly produced eggs
+        :param mutation_rate: the rate of mutation with respect to the number of eggs.
+        """
+        if mutation_rate == 0:
+            return
+
+        mutations = self.cfg.rng.poisson(mutation_rate * sum(eggs.values()))
+
+        # generate a "swap" matrix
+        # rationale: since ('a',) actually represents a pair of genes ('a', 'a')
+        # there are only three directions: R->ID, ID->D, ID->R, D->ID. Note that
+        # R->D or D->R are impossible via a single mutation.
+        # Self-mutations are ignored.
+        # To model this, we create a "masking" swapping matrix and force to 0 masked entries
+        # and make sure they cannot be selected.
+
+        alleles = [('a',), ('A',), ('A', 'a')]
+        n = len(alleles)
+        mask_matrix = np.array([[0, 0, 1],
+                                [0, 0, 1],
+                                [1, 1, 0]])
+
+        p = mask_matrix.flatten() / np.sum(mask_matrix)
+
+        swap_matrix = self.cfg.rng.multinomial(mutations, p).reshape(n, n)
+
+        for idx, allele in enumerate(alleles):
+            if allele not in eggs:
+                eggs[allele] = 0
+            eggs[allele] += np.sum(swap_matrix[idx, :]) - np.sum(swap_matrix[:, idx])
+            if eggs[allele] == 0:
+                del eggs[allele]
 
     def select_dams(self, distrib_dams_available: GenoDistrib, num_dams: int):
         """
