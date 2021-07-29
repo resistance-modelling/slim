@@ -144,7 +144,6 @@ an
             treatment_mortality = self.lice_population.get_empty_geno_distrib()
             fish_deaths_natural, fish_deaths_from_lice = 0, 0
             num_infection_events = 0
-            delta_avail_dams, delta_eggs = {}, {}  # type: Tuple[GenoDistrib, GenoDistrib]
             avail_dams_batch = None  # type: OptionalDamBatch
             new_egg_batch = None  # type: OptionalEggBatch
             returned_dams = {}

@@ -48,7 +48,7 @@ class Farm:
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.treatment_dates = farm_cfg.treatment_dates
-        self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]
+        self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
         self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
 
