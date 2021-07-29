@@ -1,9 +1,12 @@
 import datetime as dt
+import enum
 import json
 import os
 
 import numpy as np
 import pandas as pd
+
+from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, TreatmentResistance
 
 
 def to_dt(string_date):
@@ -66,7 +69,7 @@ class Config:
 
 
 class RuntimeConfig:
-    """@DynamicAttrs Simulation parameters and constants"""
+    """Simulation parameters and constants"""
 
     def __init__(self, hyperparam_file):
         with open(hyperparam_file) as f:
@@ -109,7 +112,8 @@ class RuntimeConfig:
         self.reproduction_age_dependence = data["reproduction_age_dependence"]["value"]
         self.reproduction_density_dependence = data["reproduction_density_dependence"]["value"]
         self.dam_unavailability = data["dam_unavailability"]["value"]
-        self.genetic_mechanism = data["genetic_mechanism"]["value"]
+        self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"]["value"]]
+        self.pheno_resistance = self.parse_pheno_resistance(data["pheno_resistance"]["value"])
 
         # TODO: take into account processing of non-discrete keys
         self.genetic_ratios = {tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"]["value"].items()}
@@ -123,6 +127,17 @@ class RuntimeConfig:
         self.seed = seed_dict["value"] if seed_dict else None
 
         self.rng = np.random.default_rng(seed=self.seed)
+
+    @staticmethod
+    def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:
+        pheno_resistance = {}
+        keys_enums = [Treatment[key] for key in pheno_resistance_dict.keys()]
+        for key, treated_key in zip(pheno_resistance_dict.keys(), keys_enums):
+            pheno_resistance[treated_key] = {}
+            for trait, value in pheno_resistance_dict[key].items():
+                pheno_resistance[treated_key][HeterozygousResistance[trait]] = value
+
+        return pheno_resistance
 
 
 class FarmConfig:
@@ -147,6 +162,9 @@ class FarmConfig:
         self.farm_start = to_dt(data["start_date"]["value"])
         self.cages_start = [to_dt(date)
                             for date in data["cages_start_dates"]["value"]]
+
+        # TODO: a farm may employ different chemicals
+        self.treatment_type = Treatment[data["treatment_type"]["value"]]
 
         # generate treatment dates from ranges
         self.treatment_dates = []

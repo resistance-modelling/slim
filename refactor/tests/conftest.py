@@ -3,10 +3,12 @@ import numpy as np
 import pytest
 import datetime
 
-from src.Config import Config
+from src.Config import Config, Treatment
 from src.Farm import Farm
+from src.Cage import Cage
 from src.QueueBatches import EggBatch, DamAvailabilityBatch
 from src.LicePopulation import LicePopulation
+from collections import Counter
 
 
 @pytest.fixture
@@ -80,6 +82,26 @@ def null_dams_batch(null_offspring_distrib, farm):
 @pytest.fixture
 def sample_eggs_by_hatch_date(sample_offspring_distrib, farm):
     return {farm.start_date: null_offspring_distrib}
+
+
+@pytest.fixture
+def sample_treatment_mortality(first_cage):
+    mortality = first_cage.lice_population.get_empty_geno_distrib()
+
+    # create a custom rng to avoid break other tests
+    rng = np.random.default_rng(0)
+
+    probs = [0.01, 0.9, 0.09]
+
+    # create n stages
+    target_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 20, "L5f": 30}
+
+    for stage, target in target_mortality.items():
+        bins = list(rng.multinomial(min(target, first_cage.lice_population[stage]), probs))
+        alleles = mortality[stage].keys()
+        mortality[stage] = dict(zip(alleles, bins))
+
+    return mortality
 
 
 @pytest.fixture
