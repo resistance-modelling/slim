@@ -6,7 +6,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from .TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, TreatmentResistance
+from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, TreatmentResistance
 
 
 def to_dt(string_date):
