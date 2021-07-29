@@ -66,7 +66,8 @@ class TestCage:
         # We've got an unlucky seed - it will sample 0 the first time so we are not interested
         mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
         mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
-
+        
+        assert first_cage.last_effective_treatment == cur_day
         assert mortality_updates == {
             "L1": 0,
             "L2": 0,
@@ -170,11 +171,24 @@ class TestCage:
         assert avail_lice == 90
 
     def test_do_infection_events(self, first_cage):
-        first_cage.lice_population["L2"] = 100
-        num_infected_fish = first_cage.do_infection_events(first_cage.start_date, 1)
 
-        assert num_infected_fish > 0
-        assert num_infected_fish == 17
+        protection_days = 10
+        date = first_cage.start_date + dt.timedelta(days=protection_days)
+
+        first_cage.lice_population["L2"] = 100
+        first_cage.last_effective_treatment = None
+        num_infections_no_protection = first_cage.do_infection_events(date, 1)
+
+        assert num_infections_no_protection > 0
+
+        first_cage.last_effective_treatment = first_cage.start_date
+        first_cage.cfg.infection_delay_time_EMB = protection_days
+        first_cage.cfg.infection_delay_prob_EMB = 0.9
+        
+        num_infections_protection = first_cage.do_infection_events(date, 1)
+
+        assert num_infections_protection >= 0
+        assert num_infections_protection < num_infections_no_protection
 
     def test_get_infected_fish_no_infection(self, first_cage):
         # TODO: maybe make a fixture of this?
