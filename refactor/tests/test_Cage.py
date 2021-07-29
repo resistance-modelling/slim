@@ -6,8 +6,10 @@ import json
 
 import numpy as np
 import pytest
-from src.Cage import Cage
+
 from src.Config import to_dt
+from src.TreatmentTypes import GeneticMechanism
+from src.Cage import Cage
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
 
 
@@ -55,7 +57,7 @@ class TestCage:
         for i in range(-14, first_cage.cfg.delay_EMB):
             cur_day = treatment_dates[0] + dt.timedelta(days=i)
             mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
-            assert all(rate == 0 for rate in mortality_updates.values())
+            assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
 
     def test_cage_update_lice_treatment_mortality(self, farm, first_cage):
         # TODO: this does not take into account water temperature!
@@ -63,19 +65,17 @@ class TestCage:
 
         # first useful day
         cur_day = treatment_dates[0] + dt.timedelta(days=5)
-        # We've got an unlucky seed - it will sample 0 the first time so we are not interested
         mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
-        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
-        
+
+        for stage in Cage.lice_stages:
+            if stage not in Cage.susceptible_stages:
+                assert sum(mortality_updates[stage].values()) == 0
+
         assert first_cage.last_effective_treatment == cur_day
-        assert mortality_updates == {
-            "L1": 0,
-            "L2": 0,
-            "L3": 0,
-            "L4": 1,
-            "L5m": 0,
-            "L5f": 0
-        }
+        assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
+        assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
+        assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 4, ('a',): 8}
+        assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 3, ('a',): 8}
 
     def test_get_stage_ages_respects_constraints(self, first_cage):
         test_num_lice = 1000
@@ -167,7 +167,7 @@ class TestCage:
         assert rate > 0
         assert avail_lice > 0
 
-        assert np.isclose(rate, 0.16665658047288034)
+        assert 0.13 <= rate <= 0.17
         assert avail_lice == 90
 
     def test_do_infection_events(self, first_cage):
@@ -235,14 +235,19 @@ class TestCage:
         first_cage.lice_population["L5f"] = 1000
         assert 900 <= first_cage.get_num_matings() <= 1000
 
-    def test_update_deltas_no_negative_raise(self, first_cage, null_offspring_distrib, null_dams_batch):
+    def test_update_deltas_no_negative_raise(
+        self,
+        first_cage,
+        null_offspring_distrib,
+        null_dams_batch,
+        sample_treatment_mortality
+    ):
         first_cage.lice_population["L3"] = 0
         first_cage.lice_population["L4"] = 0
         first_cage.lice_population["L5m"] = 0
         first_cage.lice_population["L5f"] = 0
 
         background_mortality = first_cage.get_background_lice_mortality(first_cage.lice_population)
-        treatment_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 20, "L5f": 30}
         fish_deaths_natural = 0
         fish_deaths_from_lice = 0
         new_l2 = 0
@@ -258,7 +263,7 @@ class TestCage:
 
         first_cage.update_deltas(
             background_mortality,
-            treatment_mortality,
+            sample_treatment_mortality,
             fish_deaths_natural,
             fish_deaths_from_lice,
             new_l2,
@@ -300,7 +305,7 @@ class TestCage:
         assert not bool(delta_eggs)
 
     def test_generate_eggs_maternal(self, first_cage):
-        first_cage.genetic_mechanism = "maternal"
+        first_cage.genetic_mechanism = GeneticMechanism.maternal
         sire = 'z'
         dam = 'Z'
         num_matings = 10
@@ -311,7 +316,7 @@ class TestCage:
             assert eggs[key] == target_eggs[key]
 
     def test_generate_eggs_quantitative(self, first_cage):
-        first_cage.genetic_mechanism = "quantitative"
+        first_cage.genetic_mechanism = GeneticMechanism.quantitative
         sire = 0.7
         dam = 0.0
         num_matings = 10
@@ -329,7 +334,7 @@ class TestCage:
             assert eggs[key] == target_eggs[key]
 
     def test_generate_eggs_discrete(self, first_cage):
-        first_cage.genetic_mechanism = "discrete"
+        first_cage.genetic_mechanism = GeneticMechanism.discrete
 
         sire = ('A',)
         dam = ('A',)

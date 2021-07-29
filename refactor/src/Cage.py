@@ -6,19 +6,21 @@ import json
 import math
 from functools import singledispatch
 from queue import PriorityQueue
-from typing import TYPE_CHECKING, Optional, Tuple, Union, cast
+from typing import Union, Optional, Tuple, cast, TYPE_CHECKING
 
 import numpy as np
 from scipy import stats
 
 from src.Config import Config
+from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance
+from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
+                                LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib)
+from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
+
 
 if TYPE_CHECKING:
     from src.Farm import Farm
 
-from src.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
-                                LicePopulation)
-from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
 
 OptionalDamBatch = Optional[DamAvailabilityBatch]
 OptionalEggBatch = Optional[EggBatch]
@@ -31,6 +33,7 @@ class Cage:
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
     susceptible_stages = lice_stages[2:]
+    pathogenic_stages = lice_stages[2:]
 
     def __init__(self, cage_id: int, cfg: Config, farm: Farm,
                  initial_lice_pop: Optional[GrossLiceDistrib] = None):
@@ -94,17 +97,18 @@ class Cage:
                 filtered_vars[k] = filtered_vars[k].strftime("%Y-%m-%d %H:%M:%S")
 
         # May want to improve these or change them if we change the representation for genotype distribs
+        # TODO: these below can be probably moved to a proper encoder
         filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
         filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in self.lice_population.geno_by_lifestage.items()}
         filtered_vars["hatching_events"] = sorted(list(self.hatching_events.queue))
         filtered_vars["busy_dams"] = sorted(list(self.busy_dams.queue))
         filtered_vars["arrival_events"] = sorted(list(self.arrival_events.queue))
+        filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
 
         return json.dumps(filtered_vars, indent=4)
 
     def update(self, cur_date: dt.datetime, step_size: int, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime]]:
         """Update the cage at the current time step.
-
         :param cur_date: Current date of simulation
         :param step_size: Step size
         :param pressure: External pressure, planctonic lice coming from
@@ -139,10 +143,9 @@ class Cage:
 
         if cur_date < self.start_date:
             # Values that are not used before the start date
-            treatment_mortality = {}
+            treatment_mortality = self.lice_population.get_empty_geno_distrib()
             fish_deaths_natural, fish_deaths_from_lice = 0, 0
             num_infection_events = 0
-            delta_avail_dams, delta_eggs = {}, {}  # type: Tuple[GenoDistrib, GenoDistrib]
             avail_dams_batch = None  # type: OptionalDamBatch
             new_egg_batch = None  # type: OptionalEggBatch
             returned_dams = {}
@@ -200,70 +203,85 @@ class Cage:
 
         return egg_distrib, hatch_date
 
-    def get_lice_treatment_mortality_rate(self, cur_date):
-        """
-        Compute the mortality rate due to chemotherapeutic treatment (See Aldrin et al, 2017, §2.2.3)
-        """
-        num_susc = sum(self.lice_population[x] for x in self.susceptible_stages)
+    def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
+        num_susc_per_geno = {}  # type: GenoDistrib
 
-        # TODO: take temperatures into account? See #22
-        if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
-            self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
-                                                                               self.id, cur_date))
+        for stage in self.susceptible_stages:
+            LicePopulation.update_distrib_discrete_add(self.lice_population.geno_by_lifestage[stage], num_susc_per_geno)
 
-            self.last_effective_treatment = cur_date
+        geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
 
-            # number of lice in those stages that are susceptible to Emamectin Benzoate (i.e.
-            # those L3 or above)
-            # we assume the mortality rate is the same across all stages and ages, but this may change in the future
-            # (or with different chemicals)
+        treatment = self.farm.farm_cfg.treatment_type
 
-            # model the resistence of each lice in the susceptible stages (phenoEMB) and estimate
-            # the mortality rate due to treatment (ETmort).
-            pheno_emb = self.cfg.rng.normal(self.cfg.f_meanEMB, self.cfg.f_sigEMB, num_susc) \
-                        + self.cfg.rng.normal(self.cfg.env_meanEMB, self.cfg.env_sigEMB, num_susc)
-            pheno_emb = 1 / (1 + np.exp(pheno_emb))
-            mortality_rate = sum(pheno_emb) * self.cfg.EMBmort
-            return mortality_rate, pheno_emb, num_susc
+        if treatment == Treatment.emb:
+            # TODO: take temperatures into account? See #22
+            # NOTE: some treatments (e.g. H2O2) are temperature-independent
+            if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
+                self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
+                                                                                   self.id, cur_date))
 
+                self.last_effective_treatment = cur_date
+
+                # For now, assume a simple heterozygous distribution with a mere geometric distribution
+                for geno, num_susc in num_susc_per_geno.items():
+                    trait = self.get_allele_heterozygous_trait(geno)
+                    susceptibility_factor = 1.0 - self.cfg.pheno_resistance[treatment][trait]
+                    geno_treatment_distrib[geno] = GenoTreatmentValue(susceptibility_factor, cast(int, num_susc))
         else:
-            return 0, 0, num_susc
+            raise NotImplementedError("Only EMB treatment is supported")
 
-    def get_lice_treatment_mortality(self, cur_date):
+        return geno_treatment_distrib
+
+    @staticmethod
+    def get_allele_heterozygous_trait(alleles: Alleles):
+        """
+        Get the allele heterozygous type
+        """
+        # should we move this?
+        if 'A' in alleles:
+            if 'a' in alleles:
+                trait = HeterozygousResistance.incompletely_dominant
+            else:
+                trait = HeterozygousResistance.dominant
+        else:
+            trait = HeterozygousResistance.recessive
+        return trait
+
+    def get_lice_treatment_mortality(self, cur_date) -> GenoLifeStageDistrib:
         """
         Calculate the number of lice in each stage killed by treatment.
         """
 
-        dead_lice_dist = {stage: 0 for stage in self.lice_stages}
+        dead_lice_dist = self.lice_population.get_empty_geno_distrib()
 
-        mortality_rate, pheno_emb, num_susc = self.get_lice_treatment_mortality_rate(cur_date)
+        dead_mortality_distrib = self.get_lice_treatment_mortality_rate(cur_date)
 
-        if mortality_rate > 0:
-            num_dead_lice = self.cfg.rng.poisson(mortality_rate)
-            num_dead_lice = min(num_dead_lice, num_susc)
+        for geno, (mortality_rate, num_susc) in dead_mortality_distrib.items():
+            if mortality_rate > 0:
+                num_dead_lice = self.cfg.rng.poisson(mortality_rate*num_susc)
+                num_dead_lice = min(num_dead_lice, num_susc)
 
-            # Now we need to decide how many lice from each stage die,
-            #   the algorithm is to label each louse  1...num_susc
-            #   assign each of these a probability of dying as (phenoEMB)/np.sum(phenoEMB)
-            #   randomly pick lice according to this probability distribution
-            #        now we need to find out which stages these lice are in by calculating the
-            #        cumulative sum of the lice in each stage and finding out how many of our
-            #        dead lice falls into this bin.
-            p = (pheno_emb) / np.sum(pheno_emb)
-            dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, p=p,
-                                            replace=False).tolist()
-            total_so_far = 0
-            for stage in self.susceptible_stages:
-                num_dead = len([x for x in dead_lice if total_so_far <= x <
-                                (total_so_far + self.lice_population[stage])])
-                total_so_far += self.lice_population[stage]
-                if num_dead > 0:
-                    dead_lice_dist[stage] = num_dead
 
-            self.logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
-                              .format(self.farm_id, self.id, dead_lice_dist))
+                # Now we need to decide how many lice from each stage die,
+                #   the algorithm is to label each louse  1...num_susc
+                #   assign each of these a probability of dying as (phenoEMB)/np.sum(phenoEMB)
+                #   randomly pick lice according to this probability distribution
+                #        now we need to find out which stages these lice are in by calculating the
+                #        cumulative sum of the lice in each stage and finding out how many of our
+                #        dead lice falls into this bin.
+                dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, replace=False).tolist()
+                total_so_far = 0
+                for stage in self.susceptible_stages:
+                    available_in_stage = self.lice_population.geno_by_lifestage[stage][geno]
+                    num_dead = len([x for x in dead_lice if total_so_far <= x <
+                                    (total_so_far + available_in_stage)])
+                    total_so_far += available_in_stage
+                    if num_dead > 0:
+                        dead_lice_dist[stage][geno] = num_dead
 
-            assert num_dead_lice == sum(list(dead_lice_dist.values()))
+                self.logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
+                                  .format(self.farm_id, self.id, dead_lice_dist))
+
         return dead_lice_dist
 
     def get_stage_ages_distrib(self, stage: str, size=15, stage_age_max_days=None):
@@ -338,7 +356,7 @@ class Cage:
         l4_to_l5 = dev_times(self.cfg.delta_p["L4"], self.cfg.delta_m10["L4"], self.cfg.delta_s["L4"],
                              ave_temp, stage_ages)
         num_to_move = min(self.cfg.rng.poisson(np.sum(l4_to_l5)), num_lice)
-        new_females = self.cfg.rng.choice([math.floor(num_to_move / 2.0), math.ceil(num_to_move / 2.0)])
+        new_females = int(self.cfg.rng.choice([math.floor(num_to_move / 2.0), math.ceil(num_to_move / 2.0)]))
         new_males = (num_to_move - new_females)
 
         lice_dist["L5f"] = new_females
@@ -395,7 +413,7 @@ class Cage:
             return 0.00057  # (1000 + (days - 700)**2)/490000000
 
         # Apply a sigmoid based on the number of lice per fish
-        pathogenic_lice = sum([self.lice_population[stage] for stage in self.susceptible_stages])
+        pathogenic_lice = sum([self.lice_population[stage] for stage in self.pathogenic_stages])
         if self.num_infected_fish > 0:
             lice_per_host_mass = pathogenic_lice / (self.num_infected_fish * self.fish_growth_rate(days))
         else:
@@ -564,10 +582,7 @@ class Cage:
     ) -> GenoDistrib:
         """
         Generate the eggs with a given genomic distribution
-        If we're in the discrete 2-gene setting, assume for now that genotypes are tuples - so in a A/a genetic system, genotypes
-        could be ('A'), ('a'), or ('A', 'a')
-        right now number of offspring with each genotype are deterministic, and might be missing one (we should update to add jitter in future,
-        but this is a reasonable approx)
+
         TODO: doesn't do anything sensible re: integer/real numbers of offspring
         :param sire the genomics of the sires
         :param dam the genomics of the dams
@@ -577,41 +592,90 @@ class Cage:
 
         number_eggs = self.get_num_eggs(num_matings)
 
-        eggs_generated = {}
-        if self.genetic_mechanism == "discrete":
+        if self.genetic_mechanism == GeneticMechanism.discrete:
+            sire, dam = cast(Alleles, sire), cast(Alleles, dam)
+            return self.generate_eggs_discrete(sire, dam, number_eggs)
 
-            if len(sire) == 1 and len(dam) == 1:
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = float(number_eggs)
-            elif len(sire) == 2 and len(dam) == 1:
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 2
-                eggs_generated[tuple(sorted(tuple({sire[1], dam[0]})))] = number_eggs / 2
-            elif len(sire) == 1 and len(dam) == 2:
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 2
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[1]})))] = number_eggs / 2
-            else:
-                # drawing both from the sire in the first case ensures heterozygotes
-                # but is a bit hacky.
-                eggs_generated[tuple(sorted(tuple({sire[0], sire[1]})))] = number_eggs / 2
-                # and the below gets us our two types of homozygotes
-                eggs_generated[tuple(sorted(tuple({sire[0], dam[0]})))] = number_eggs / 4
-                eggs_generated[tuple(sorted(tuple({sire[1], dam[1]})))] = number_eggs / 4
+        if self.genetic_mechanism == GeneticMechanism.quantitative:
+            sire, dam = cast(np.ndarray, sire), cast(np.ndarray, dam)
+            return self.generate_eggs_quantitative(sire, dam, number_eggs)
 
-        elif self.genetic_mechanism == "quantitative":
-            # additive genes, assume genetic state for an individual looks like a number between 0 and 1.
-            # because we're only dealing with the heritable part here don't need to do any of the comparison
-            # to population mean or impact of heritability, etc - that would appear in the code dealing with treatment
-            # so we could use just the mid-parent value for this genetic recording for children
-            # as with the discrete genetic model, this will be deterministic for now
-            mid_parent = np.round((sire + dam)/2, 1)
-            eggs_generated[mid_parent] = number_eggs
+        elif self.genetic_mechanism == GeneticMechanism.maternal:
 
-        elif self.genetic_mechanism == "maternal":
-            # maternal-only inheritance - all eggs have mother's genotype
-            eggs_generated[dam] = number_eggs
+            return self.generate_eggs_maternal(dam, number_eggs)
+
         else:
             raise Exception("Genetic mechanism must be 'maternal', 'quantitative' or 'discrete' - '{}' given".format(self.genetic_mechanism))
 
+    def generate_eggs_discrete(self, sire: Alleles, dam: Alleles, number_eggs: int) -> GenoDistrib:
+        """Get number of eggs based on discrete genetic mechanism.
+
+        If we're in the discrete 2-gene setting, assume for now that genotypes are tuples -
+        so in a A/a genetic system, genotypes could be ('A'), ('a'), or ('A', 'a')
+        right now number of offspring with each genotype are deterministic, and might be
+        missing one (we should update to add jitter in future, but this is a reasonable approx)
+
+        :param sire: the genomics of the sires
+        :param dam: the genomics of the dams
+        :param number_eggs: the number of eggs produced
+        :return: genomics distribution of eggs produced
+        """
+
+        eggs_generated = {}
+        if len(sire) == 1 and len(dam) == 1:
+            eggs_generated[self.get_geno_name(sire[0], dam[0])] = float(number_eggs)
+        elif len(sire) == 2 and len(dam) == 1:
+            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 2
+            eggs_generated[self.get_geno_name(sire[1], dam[0])] = number_eggs / 2
+        elif len(sire) == 1 and len(dam) == 2:
+            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 2
+            eggs_generated[self.get_geno_name(sire[0], dam[1])] = number_eggs / 2
+        else:
+            # drawing both from the sire in the first case ensures heterozygotes
+            # but is a bit hacky.
+            eggs_generated[self.get_geno_name(sire[0], sire[1])] = number_eggs / 2
+            # and the below gets us our two types of homozygotes
+            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 4
+            eggs_generated[self.get_geno_name(sire[1], dam[1])] = number_eggs / 4
+
         return eggs_generated
+
+    def get_geno_name(self, sire_geno: Allele, dam_geno: Allele) -> Alleles:
+        """Create name of the genotype based on parents alleles.
+
+        :param sire_geno: the allele of the sires
+        :param dam_geno: the allele of the sires
+        :return: the genomics of the offspring
+        """
+        return tuple(sorted({sire_geno, dam_geno}))
+
+    def generate_eggs_quantitative(self, sire: np.ndarray, dam: np.ndarray, number_eggs: int) -> GenoDistrib:
+        """Get number of eggs based on quantitative genetic mechanism.
+
+        Additive genes, assume genetic state for an individual looks like a number between 0 and 1.
+        because we're only dealing with the heritable part here don't need to do any of the comparison
+        to population mean or impact of heritability, etc - that would appear in the code dealing with treatment
+        so we could use just the mid-parent value for this genetic recording for children
+        as with the discrete genetic model, this will be deterministic for now
+
+        :param sire: the genomics of the sires
+        :param dam: the genomics of the dams
+        :param number_eggs: the number of eggs produced
+        :return: genomics distribution of eggs produced
+        """
+        mid_parent = np.round((sire + dam) / 2, 1)
+        return {mid_parent: number_eggs}
+
+    def generate_eggs_maternal(self, dam: Union[Alleles, np.ndarray], number_eggs: int) -> GenoDistrib:
+        """Get number of eggs based on maternal genetic mechanism.
+
+        Maternal-only inheritance - all eggs have mother's genotype.
+
+        :param dam: the genomics of the dams
+        :param number_eggs: the number of eggs produced
+        :return: genomics distribution of eggs produced
+        """
+        return {dam: number_eggs}
 
     def select_dams(self, distrib_dams_available: GenoDistrib, num_dams: int):
         """
@@ -703,11 +767,13 @@ class Cage:
         def _(arg: EggBatch, _cur_time: dt.datetime):
             return arg.hatch_date <= _cur_time
 
-        @access_time_lt.register
+        # have mypy ignore redefinitions of '_'
+        # see https://github.com/python/mypy/issues/2904 for details
+        @access_time_lt.register  # type: ignore[no-redef]
         def _(arg: TravellingEggBatch, _cur_time: dt.datetime):
             return arg.hatch_date <= _cur_time
 
-        @access_time_lt.register
+        @access_time_lt.register  # type: ignore[no-redef]
         def _(arg: DamAvailabilityBatch, _cur_time: dt.datetime):
             return arg.availability_date <= _cur_time
 
@@ -771,8 +837,8 @@ class Cage:
         self,
         prev_stage: Union[str, dict],
         cur_stage: str,
-        leaving_lice: np.int64,
-        entering_lice: Optional[np.int64] = None
+        leaving_lice: int,
+        entering_lice: Optional[int] = None
     ):
         """
         Promote the population by stage and respect the genotypes
@@ -783,9 +849,11 @@ class Cage:
                If prev_stage is a a string, entering_lice must be an int
         """
         if isinstance(prev_stage, str):
-            entering_lice = cast(np.int64, entering_lice)
-            prev_stage_geno = self.lice_population.geno_by_lifestage[prev_stage]
-            entering_geno_distrib = LicePopulation.multiply_distrib(prev_stage_geno, entering_lice)
+            if entering_lice is not None:
+                prev_stage_geno = self.lice_population.geno_by_lifestage[prev_stage]
+                entering_geno_distrib = LicePopulation.multiply_distrib(prev_stage_geno, entering_lice)
+            else:
+                raise ValueError("entering_lice must be an int when prev_stage is a str")
         else:
             entering_geno_distrib = prev_stage
         cur_stage_geno = self.lice_population.geno_by_lifestage[cur_stage]
@@ -801,13 +869,13 @@ class Cage:
     def update_deltas(
             self,
             dead_lice_dist: GrossLiceDistrib,
-            treatment_mortality: GrossLiceDistrib,
+            treatment_mortality: GenoLifeStageDistrib,
             fish_deaths_natural: int,
             fish_deaths_from_lice: int,
             new_L2: int,
             new_L4: int,
-            new_females: np.int64,
-            new_males: np.int64,
+            new_females: int,
+            new_males: int,
             new_infections: int,
             lice_from_reservoir: GrossLiceDistrib,
             delta_dams_batch: OptionalDamBatch,
@@ -817,7 +885,7 @@ class Cage:
     ):
         """Update the number of fish and the lice in each life stage
         :param dead_lice_dist the number of dead lice due to background death (as a distribution)
-        :param treatment_mortality the number of dead lice due to treatment (as a distribution)
+        :param treatment_mortality the distribution of genotypes being affected by treatment
         :param fish_deaths_natural the number of natural fish death events
         :param fish_deaths_from_lice the number of lice-induced fish death events
         :param new_L2 number of new L2 fish
@@ -838,9 +906,8 @@ class Cage:
             self.lice_population[stage] = max(0, bg_delta)
 
             # update population due to treatment
-            num_dead = treatment_mortality.get(stage, 0)
-            treatment_delta = self.lice_population[stage] - num_dead
-            self.lice_population[stage] = max(0, treatment_delta)
+            LicePopulation.update_distrib_discrete_subtract(treatment_mortality[stage],
+                                                            self.lice_population.geno_by_lifestage[stage])
 
         self.lice_population["L5m"] += new_males
         self.lice_population["L5f"] += new_females

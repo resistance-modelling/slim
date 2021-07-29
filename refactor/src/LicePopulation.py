@@ -1,5 +1,5 @@
 import copy
-from typing import Dict, MutableMapping, Tuple, Union
+from typing import Dict, MutableMapping, Tuple, Union, NamedTuple
 
 import numpy as np
 
@@ -7,10 +7,18 @@ from src.Config import Config
 
 LifeStage = str
 Allele = str
-Alleles = Tuple[Allele, ...]
+Alleles = Union[Tuple[Allele, ...], np.ndarray]
 GenoDistrib = Dict[Alleles, Union[int, float]]
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
 GrossLiceDistrib = Dict[LifeStage, int]
+
+
+class GenoTreatmentValue(NamedTuple):
+    mortality_rate: float
+    num_susc: int
+
+
+GenoTreatmentDistrib = Dict[Alleles, GenoTreatmentValue]
 
 
 # See https://stackoverflow.com/a/7760938
@@ -92,6 +100,14 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
                 distrib[geno] -= distrib_delta[geno]
             if distrib[geno] < 0:
                 distrib[geno] = 0
+
+    def get_empty_geno_stage_distrib(self) -> GenoDistrib:
+        # A little factory method to get empty genos
+        genos = self.geno_by_lifestage["L1"].keys()
+        return {geno: 0 for geno in genos}
+
+    def get_empty_geno_distrib(self) -> GenoLifeStageDistrib:
+        return {stage: self.get_empty_geno_stage_distrib() for stage in self.keys()}
 
 
 class GenotypePopulation(dict, MutableMapping[LifeStage, GenoDistrib]):
