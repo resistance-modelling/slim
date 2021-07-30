@@ -215,7 +215,7 @@ class Cage:
         if treatment == Treatment.emb:
             # TODO: take temperatures into account? See #22
             # NOTE: some treatments (e.g. H2O2) are temperature-independent
-            if cur_date - dt.timedelta(days=self.cfg.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
+            if cur_date - dt.timedelta(days=self.cfg.emb.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
                 self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
                                                                                    self.id, cur_date))
 
@@ -224,7 +224,7 @@ class Cage:
                 # For now, assume a simple heterozygous distribution with a mere geometric distribution
                 for geno, num_susc in num_susc_per_geno.items():
                     trait = self.get_allele_heterozygous_trait(geno)
-                    susceptibility_factor = 1.0 - self.cfg.pheno_resistance[treatment][trait]
+                    susceptibility_factor = 1.0 - self.cfg.emb.pheno_resistance[trait]
                     geno_treatment_distrib[geno] = GenoTreatmentValue(susceptibility_factor, cast(int, num_susc))
         else:
             raise NotImplementedError("Only EMB treatment is supported")
@@ -476,11 +476,11 @@ class Cage:
 
             if treatment == Treatment.emb:
 
-                protection_window = self.last_effective_treatment + dt.timedelta(days=self.cfg.infection_delay[treatment]["time"])
+                protection_window = self.last_effective_treatment + dt.timedelta(days=self.cfg.emb.infection_delay_time)
 
                 if cur_date <= protection_window:
                     # if under protection window from treatment, decrease number of infection events
-                    expected_events *= 1 - self.cfg.infection_delay[treatment]["prob"]
+                    expected_events *= 1 - self.cfg.emb.infection_delay_prob
             else:
                 raise NotImplementedError("Only EMB treatment is supported")
 
