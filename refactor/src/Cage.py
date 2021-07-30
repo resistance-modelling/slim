@@ -148,6 +148,7 @@ class Cage:
             avail_dams_batch = None  # type: OptionalDamBatch
             new_egg_batch = None  # type: OptionalEggBatch
             returned_dams = {}
+            delta_avail_dams, delta_eggs = {}, {}  # type: Tuple[GenoDistrib, GenoDistrib]
 
         else:
             # Events that happen when cage is populated with fish
