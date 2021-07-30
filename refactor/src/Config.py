@@ -103,7 +103,6 @@ class RuntimeConfig:
         # Reproduction and recruitment constants
         self.reproduction_eggs_first_extruded = data["reproduction_eggs_first_extruded"]["value"]
         self.reproduction_age_dependence = data["reproduction_age_dependence"]["value"]
-        self.reproduction_density_dependence = data["reproduction_density_dependence"]["value"]
         self.dam_unavailability = data["dam_unavailability"]["value"]
         self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"]["value"]]
         self.geno_mutation_rate = data["geno_mutation_rate"]["value"]

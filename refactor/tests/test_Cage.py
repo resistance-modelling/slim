@@ -53,7 +53,7 @@ class TestCage:
         assert(treatment_dates == sorted(treatment_dates))
 
         # before a 14-day activation period there should be no effect
-        for i in range(-14, first_cage.cfg.emb.delay_EMB):
+        for i in range(-14, first_cage.cfg.emb.effect_delay):
             cur_day = treatment_dates[0] + dt.timedelta(days=i)
             mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
             assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
