@@ -19,7 +19,6 @@ class TestCage:
         assert first_cage.start_date == to_dt("2017-10-01 00:00:00")
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == first_cage.get_mean_infected_fish()
-        # this will likely break
         assert first_cage.lice_population == {
             "L1": 150,
             "L2": 0,
