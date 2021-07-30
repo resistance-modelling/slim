@@ -30,9 +30,11 @@ jobs:
 
     - name: Type-check
       shell: bash -l {0}
-      # note: for some reason conda does not install all the dependencies of pytype...
+      # NOTE: the conda package for PyType has a few issues. 1: apparently it tries to pull an
+      # old version of ninja with breaking changes; 2: there are a few undetected errors in the 2020 version
+      # compared to the 2021 one. Unfortunately there is no clear changelog across versions :(
       run: |
-        pip install pytype
+        pytype --version
         pytype --config pytype.cfg refactor
     - name: Install git
       shell: bash -l {0}

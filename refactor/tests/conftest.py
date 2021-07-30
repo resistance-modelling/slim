@@ -5,10 +5,8 @@ import datetime
 
 from src.Config import Config, Treatment
 from src.Farm import Farm
-from src.Cage import Cage
 from src.QueueBatches import EggBatch, DamAvailabilityBatch
 from src.LicePopulation import LicePopulation
-from collections import Counter
 
 
 @pytest.fixture
