@@ -10,3 +10,5 @@ dependencies:
   - pytest-cov=2.12.1
   - mypy=0.910
   - data-science-types=0.2.23
+  - pip:
+      - pytype==2021.07.19

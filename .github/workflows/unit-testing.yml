@@ -32,9 +32,8 @@ jobs:
       shell: bash -l {0}
       # NOTE: the conda package for PyType has a few issues. 1: apparently it tries to pull an
       # old version of ninja with breaking changes; 2: there are a few undetected errors in the 2020 version
-      # compared to the 2021 one.
+      # compared to the 2021 one. Unfortunately there is no clear changelog across versions :(
       run: |
-        pip install pytype==2021.07.19
         pytype --version
         pytype --config pytype.cfg refactor
     - name: Install git
