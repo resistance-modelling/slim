@@ -1,6 +1,5 @@
 from enum import Enum
 from typing import Dict
-from mypy_extensions import TypedDict
 
 
 class Treatment(Enum):
@@ -29,5 +28,26 @@ class HeterozygousResistance(Enum):
     recessive = 3
 
 
-TreatmentResistance = Dict[Treatment, Dict[HeterozygousResistance, float]]
-InfectionDelay = Dict[Treatment, TypedDict("infection_data", {"time": int, "prob": float})]
+TreatmentResistance = Dict[HeterozygousResistance, float]
+
+
+class TreatmentParams:
+
+    name = ""
+
+    def __init__(self, data):
+        self.data = data
+        self.pheno_resistance = self.parse_pheno_resistance(data["pheno_resistance"]["value"])
+
+    def __getattr__(self, name):
+        if name in self.data:
+            return self.data[name]["value"]
+        else:
+            raise AttributeError("{} not found in {} parameters".format(name, self.name))
+
+    def parse_pheno_resistance(self, pheno_resistance_dict: dict) -> TreatmentResistance:
+        return {HeterozygousResistance[key]: val for key, val in pheno_resistance_dict.items()}
+
+
+class EMB(TreatmentParams):
+    name = "EMB"

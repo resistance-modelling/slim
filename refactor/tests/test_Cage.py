@@ -6,11 +6,10 @@ import json
 
 import numpy as np
 import pytest
-
-from src.Config import to_dt
-from src.TreatmentTypes import GeneticMechanism
 from src.Cage import Cage
+from src.Config import to_dt
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
+from src.TreatmentTypes import GeneticMechanism
 
 
 class TestCage:
@@ -54,7 +53,7 @@ class TestCage:
         assert(treatment_dates == sorted(treatment_dates))
 
         # before a 14-day activation period there should be no effect
-        for i in range(-14, first_cage.cfg.delay_EMB):
+        for i in range(-14, first_cage.cfg.emb.effect_delay):
             cur_day = treatment_dates[0] + dt.timedelta(days=i)
             mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
             assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
@@ -184,7 +183,7 @@ class TestCage:
         first_cage.last_effective_treatment = first_cage.start_date
         first_cage.cfg.infection_delay_time_EMB = protection_days
         first_cage.cfg.infection_delay_prob_EMB = 0.9
-        
+
         num_infections_protection = first_cage.do_infection_events(date, 1)
 
         assert num_infections_protection >= 0

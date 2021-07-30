@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, TreatmentResistance, InfectionDelay
+from src.TreatmentTypes import Treatment, GeneticMechanism, EMB
 
 
 def to_dt(string_date):
@@ -91,14 +91,7 @@ class RuntimeConfig:
         self.delta_expectation_weight_log = data["delta_expectation_weight_log"]["value"]
 
         # Treatment constants
-        self.f_meanEMB = data["f_meanEMB"]["value"]
-        self.f_sigEMB = data["f_sigEMB"]["value"]
-        self.env_meanEMB = data["env_meanEMB"]["value"]
-        self.env_sigEMB = data["env_sigEMB"]["value"]
-        self.EMBmort = data["EMBmort"]["value"]
-        self.delay_EMB = data["delay_EMB"]["value"]
-        self.delta_EMB = data["delta_EMB"]["value"]
-        self.infection_delay = self.parse_infection_delay(data)
+        self.emb = EMB(data["treatments"]["value"]["emb"]["value"])
 
         # Fish mortality constants
         self.fish_mortality_center = data["fish_mortality_center"]["value"]
@@ -110,10 +103,8 @@ class RuntimeConfig:
         # Reproduction and recruitment constants
         self.reproduction_eggs_first_extruded = data["reproduction_eggs_first_extruded"]["value"]
         self.reproduction_age_dependence = data["reproduction_age_dependence"]["value"]
-        self.reproduction_density_dependence = data["reproduction_density_dependence"]["value"]
         self.dam_unavailability = data["dam_unavailability"]["value"]
         self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"]["value"]]
-        self.pheno_resistance = self.parse_pheno_resistance(data["pheno_resistance"]["value"])
         self.geno_mutation_rate = data["geno_mutation_rate"]["value"]
 
         # TODO: take into account processing of non-discrete keys
@@ -128,26 +119,6 @@ class RuntimeConfig:
         self.seed = seed_dict["value"] if seed_dict else None
 
         self.rng = np.random.default_rng(seed=self.seed)
-
-    @staticmethod
-    def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:
-        pheno_resistance = {}
-        keys_enums = [Treatment[key] for key in pheno_resistance_dict.keys()]
-        for key, treated_key in zip(pheno_resistance_dict.keys(), keys_enums):
-            pheno_resistance[treated_key] = {}
-            for trait, value in pheno_resistance_dict[key].items():
-                pheno_resistance[treated_key][HeterozygousResistance[trait]] = value
-
-        return pheno_resistance
-
-    @staticmethod
-    def parse_infection_delay(data: dict) -> InfectionDelay:
-        delay_time_dict = data["infection_delay"]["value"]
-        infection_delay = {}
-        for treatment_str, delay_data in delay_time_dict.items():
-            infection_delay[Treatment[treatment_str]] = {key: delay_data[key]["value"] for key in delay_data}
-
-        return infection_delay
 
 
 class FarmConfig:
