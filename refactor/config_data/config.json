@@ -85,10 +85,6 @@
     "description": "Exponential coefficient on viable eggs depending on age",
     "value": 0.2
   },
-  "reproduction_density_dependence": {
-    "description": "Female adults-to-salmon density dependence",
-    "value": 493
-  },
   "dam_unavailability": {
     "description": "Female unavailability time after mating (in days)",
     "value": 3
@@ -125,31 +121,11 @@
       "emb": {
         "description": "Emamectin Benzoate",
         "value": {
-          "f_meanEMB": {
-            "description": "Mean of Emamectin Benzoate",
-            "value": 3.5
-          },
-          "f_sigEMB": {
-            "description": "Standard deviation of Emamectin Benzoate",
-            "value": 0.7
-          },
-          "env_meanEMB": {
-            "description": "Mean Emamectin Benzoate in the environment",
-            "value": 0.0
-          },
-          "env_sigEMB": {
-            "description": "Standard deviation of Emamectin Benzoate in the environment",
-            "value": 1.0
-          },
-          "EMBmort": {
-            "description": "Probability of mortality due to Emamectin Benzoate",
-            "value": 0.9
-          },
-          "delay_EMB": {
+          "effect_delay": {
               "description": "Delay between application and observation of noticeable effects of the Emamectin Benzoate (in days)",
               "value": 5
           },
-          "delta_EMB": {
+          "durability_temp_ratio": {
               "description": "Ratio between durability and current sea temperature (unit: days / °C)",
               "value": 210
           },

@@ -215,7 +215,7 @@ class Cage:
         if treatment == Treatment.emb:
             # TODO: take temperatures into account? See #22
             # NOTE: some treatments (e.g. H2O2) are temperature-independent
-            if cur_date - dt.timedelta(days=self.cfg.emb.delay_EMB) in self.cfg.farms[self.farm_id].treatment_dates:
+            if cur_date - dt.timedelta(days=self.cfg.emb.effect_delay) in self.cfg.farms[self.farm_id].treatment_dates:
                 self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
                                                                                    self.id, cur_date))
 
