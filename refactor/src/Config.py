@@ -148,9 +148,12 @@ class FarmConfig:
         self.treatment_type = Treatment[data["treatment_type"]["value"]]
 
         # generate treatment dates from ranges
+        # TODO: deprecate this
         self.treatment_dates = []
         for range_data in data["treatment_dates"]["value"]:
             from_date = to_dt(range_data["from"])
             to_date = to_dt(range_data["to"])
             self.treatment_dates.extend(
                 pd.date_range(from_date, to_date).to_pydatetime().tolist())
+
+        self.treatment_starts = [to_dt(range_data["from"]) for range_data in data["treatment_dates"]["value"]]

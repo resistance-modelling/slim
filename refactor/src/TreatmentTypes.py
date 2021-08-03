@@ -1,3 +1,4 @@
+from abc import abstractmethod, ABC
 from enum import Enum
 from typing import Dict
 
@@ -31,7 +32,7 @@ class HeterozygousResistance(Enum):
 TreatmentResistance = Dict[HeterozygousResistance, float]
 
 
-class TreatmentParams:
+class TreatmentParams(ABC):
 
     name = ""
 
@@ -48,6 +49,15 @@ class TreatmentParams:
     def parse_pheno_resistance(self, pheno_resistance_dict: dict) -> TreatmentResistance:
         return {HeterozygousResistance[key]: val for key, val in pheno_resistance_dict.items()}
 
+    @abstractmethod
+    def delay(self, average_temperature: float):
+        pass
+
 
 class EMB(TreatmentParams):
     name = "EMB"
+
+    def delay(self, average_temperature: float):
+        return self.durability_temp_ratio / average_temperature
+
+

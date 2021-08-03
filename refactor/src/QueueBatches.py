@@ -30,15 +30,16 @@ class DamAvailabilityBatch:
     geno_distrib: dict = field(compare=False)
 
 
-@dataclass
+@dataclass(repr=True)
 class TreatmentEvent:
-    scheduled_date: dt.datetime
+    # date at which the effects are noticeable = application date + delay
+    affecting_date: dt.datetime
     treatment_type: Treatment
     effectiveness_duration_days: int
 
     def __lt__(self, other: TreatmentEvent):
         # in the rare case two treatments are applied in a row it would be better to prefer longer treatments.
         # Apparently there is no way to force a reverse lexicographical order for some fields with a @dataclass
-        return self.scheduled_date < other.scheduled_date or \
-               (self.scheduled_date == other.scheduled_date and
+        return self.affecting_date < other.affecting_date or \
+               (self.affecting_date == other.affecting_date and
                 self.effectiveness_duration_days > other.effectiveness_duration_days)

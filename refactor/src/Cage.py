@@ -15,7 +15,7 @@ from src.Config import Config
 from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib)
-from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
+from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
 
 
 if TYPE_CHECKING:
@@ -78,9 +78,9 @@ class Cage:
         self.hatching_events = PriorityQueue()  # type: PriorityQueue[EggBatch]
         self.busy_dams = PriorityQueue()  # type: PriorityQueue[DamAvailabilityBatch]
         self.arrival_events = PriorityQueue()  # type: PriorityQueue[TravellingEggBatch]
-        self.treatment_events = PriorityQueue()
+        self.treatment_events = PriorityQueue()  # type: PriorityQueue[TreatmentEvent]
 
-        self.last_effective_treatment = None  # type: Optional[dt.datetime]
+        self.last_effective_treatment = None  # type: Optional[TreatmentEvent]
 
     def __str__(self):
         """
@@ -213,22 +213,28 @@ class Cage:
 
         geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
 
-        treatment = self.farm.farm_cfg.treatment_type
+        # if no treatment has been applied check if the previous treatment is still effective
+        if self.treatment_events.qsize() == 0 or cur_date <= self.treatment_events.queue[0].affecting_date:
+            if self.last_effective_treatment is None:
+                return geno_treatment_distrib
+            treatment_window = self.last_effective_treatment.affecting_date + \
+                               dt.timedelta(days=self.last_effective_treatment.effectiveness_duration_days)
+            if cur_date > treatment_window:
+                # We are outside of the treatment window
+                return geno_treatment_distrib
+        else:
+            self.last_effective_treatment = self.treatment_events.get()
+        treatment_type = self.last_effective_treatment.treatment_type
 
-        if treatment == Treatment.emb:
-            # TODO: take temperatures into account? See #22
-            # NOTE: some treatments (e.g. H2O2) are temperature-independent
-            if cur_date - dt.timedelta(days=self.cfg.emb.effect_delay) in self.cfg.farms[self.farm_id].treatment_dates:
-                self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
-                                                                                   self.id, cur_date))
+        self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
+                                                                           self.id, cur_date))
 
-                self.last_effective_treatment = cur_date
-
-                # For now, assume a simple heterozygous distribution with a mere geometric distribution
-                for geno, num_susc in num_susc_per_geno.items():
-                    trait = self.get_allele_heterozygous_trait(geno)
-                    susceptibility_factor = 1.0 - self.cfg.emb.pheno_resistance[trait]
-                    geno_treatment_distrib[geno] = GenoTreatmentValue(susceptibility_factor, cast(int, num_susc))
+        if treatment_type == Treatment.emb:
+            # For now, assume a simple heterozygous distribution with a mere geometric distribution
+            for geno, num_susc in num_susc_per_geno.items():
+                trait = self.get_allele_heterozygous_trait(geno)
+                susceptibility_factor = 1.0 - self.cfg.emb.pheno_resistance[trait]
+                geno_treatment_distrib[geno] = GenoTreatmentValue(susceptibility_factor, cast(int, num_susc))
         else:
             raise NotImplementedError("Only EMB treatment is supported")
 
@@ -479,7 +485,9 @@ class Cage:
 
             if treatment == Treatment.emb:
 
-                protection_window = self.last_effective_treatment + dt.timedelta(days=self.cfg.emb.infection_delay_time)
+                protection_window = self.last_effective_treatment.affecting_date + \
+                    self.last_effective_treatment.effectiveness_duration_days + \
+                                    dt.timedelta(days=self.cfg.emb.infection_delay_time)
 
                 if cur_date <= protection_window:
                     # if under protection window from treatment, decrease number of infection events

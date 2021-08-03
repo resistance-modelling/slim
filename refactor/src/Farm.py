@@ -9,6 +9,8 @@ import json
 from collections import Counter
 from typing import Counter as CounterType
 from typing import Dict, List, Optional, Tuple
+
+import pandas as pd
 from mypy_extensions import TypedDict
 
 import numpy as np
@@ -17,6 +19,8 @@ from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 from src.LicePopulation import Alleles, GrossLiceDistrib
+from src.TreatmentTypes import Treatment
+from src.QueueBatches import TreatmentEvent
 
 GenoDistribByHatchDate = Dict[dt.datetime, CounterType[Alleles]]
 CageAllocation = List[GenoDistribByHatchDate]
@@ -46,10 +50,13 @@ class Farm:
         self.loc_x = farm_cfg.farm_location[0]
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
+        # TODO: deprecate this
         self.treatment_dates = farm_cfg.treatment_dates
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
         self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
+
+        self.preemptively_assign_treatments(self.farm_cfg.treatment_starts)
 
     def __str__(self):
         """
@@ -86,6 +93,25 @@ class Farm:
 
         Ndiff = self.loc_y - tarbert_northing
         return np.round(tarbert_temps - Ndiff * degs, 1)
+
+    def generate_treatment_event(self, treatment_type: Treatment, cur_date: dt.datetime) -> TreatmentEvent:
+        cur_month = cur_date.month
+        ave_temp = self.year_temperatures[cur_month - 1]
+
+        # TODO: automatically convert between enum and data
+        if treatment_type == Treatment.emb:
+            delay = self.cfg.emb.effect_delay
+            efficacy = self.cfg.emb.delay(ave_temp)
+
+        return TreatmentEvent(cur_date + dt.timedelta(days=delay), treatment_type, efficacy)
+
+    def preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
+        for treatment in self.farm_cfg.treatment_starts:
+            event = self.generate_treatment_event(self.farm_cfg.treatment_type, treatment)
+            for cage in self.cages:
+                if cage.start_date <= event.affecting_date:
+                    cage.treatment_events.put(event)
+
 
     def update(self, cur_date: dt.datetime, step_size: int) -> GenoDistribByHatchDate:
         """Update the status of the farm given the growth of fish and change
