@@ -13,8 +13,7 @@ from mypy_extensions import TypedDict
 
 import numpy as np
 
-# TODO: deal with the pytype dependency error
-from src.Cage import Cage  # pytype: disable=pyi-error
+from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 from src.LicePopulation import Alleles, GrossLiceDistrib
@@ -70,13 +69,14 @@ class Farm:
 
         return self.name == other.name
 
-    def initialize_temperatures(self, temperatures: Dict[str, LocationTemps]) -> List[float]:
+    def initialize_temperatures(self, temperatures: Dict[str, LocationTemps]) -> np.ndarray:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at
         month c_month interpolating data taken from
         www.seatemperature.org
         """
 
+        # TODO: move this in a separate file, e.g. Lake? See #96
         ardrishaig_data = temperatures["ardrishaig"]
         ardrishaig_temps, ardrishaig_northing = np.array(ardrishaig_data["temperatures"]), ardrishaig_data["northing"]
         tarbert_data = temperatures["tarbert"]

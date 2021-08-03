@@ -78,6 +78,7 @@ class Cage:
         self.hatching_events = PriorityQueue()  # type: PriorityQueue[EggBatch]
         self.busy_dams = PriorityQueue()  # type: PriorityQueue[DamAvailabilityBatch]
         self.arrival_events = PriorityQueue()  # type: PriorityQueue[TravellingEggBatch]
+        self.treatment_events = PriorityQueue()
 
         self.last_effective_treatment = None  # type: Optional[dt.datetime]
 
@@ -100,9 +101,11 @@ class Cage:
         filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
         filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in self.lice_population.geno_by_lifestage.items()}
         filtered_vars["hatching_events"] = sorted(list(self.hatching_events.queue))
+        filtered_vars["treatment_events"] = sorted(list(self.treatment_events.queue))
         filtered_vars["busy_dams"] = sorted(list(self.busy_dams.queue))
         filtered_vars["arrival_events"] = sorted(list(self.arrival_events.queue))
         filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
+
 
         return json.dumps(filtered_vars, indent=4)
 
