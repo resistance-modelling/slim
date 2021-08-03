@@ -16,6 +16,7 @@ from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistan
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib)
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
+from src.JSONEncoders import CustomCageEncoder
 
 
 if TYPE_CHECKING:
@@ -100,14 +101,10 @@ class Cage:
         # TODO: these below can be probably moved to a proper encoder
         filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
         filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in self.lice_population.geno_by_lifestage.items()}
-        filtered_vars["hatching_events"] = sorted(list(self.hatching_events.queue))
-        filtered_vars["treatment_events"] = sorted(list(self.treatment_events.queue))
         filtered_vars["busy_dams"] = sorted(list(self.busy_dams.queue))
-        filtered_vars["arrival_events"] = sorted(list(self.arrival_events.queue))
         filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
 
-
-        return json.dumps(filtered_vars, indent=4)
+        return json.dumps(filtered_vars, cls=CustomCageEncoder, indent=4)
 
     def update(self, cur_date: dt.datetime, step_size: int, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime]]:
         """Update the cage at the current time step.
@@ -214,7 +211,7 @@ class Cage:
         geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
 
         # if no treatment has been applied check if the previous treatment is still effective
-        if self.treatment_events.qsize() == 0 or cur_date <= self.treatment_events.queue[0].affecting_date:
+        if self.treatment_events.qsize() == 0 or cur_date < self.treatment_events.queue[0].affecting_date:
             if self.last_effective_treatment is None:
                 return geno_treatment_distrib
             treatment_window = self.last_effective_treatment.affecting_date + \
@@ -486,8 +483,8 @@ class Cage:
             if treatment == Treatment.emb:
 
                 protection_window = self.last_effective_treatment.affecting_date + \
-                    self.last_effective_treatment.effectiveness_duration_days + \
-                                    dt.timedelta(days=self.cfg.emb.infection_delay_time)
+                                        dt.timedelta(days=self.cfg.emb.infection_delay_time +
+                                                          self.last_effective_treatment.effectiveness_duration_days)
 
                 if cur_date <= protection_window:
                     # if under protection window from treatment, decrease number of infection events

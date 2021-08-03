@@ -1,8 +1,10 @@
 import datetime as dt
 import json
+from queue import PriorityQueue
 
 import numpy as np
 
+from src.QueueBatches import TreatmentEvent, Treatment
 
 class CustomFarmEncoder(json.JSONEncoder):
     """
@@ -26,3 +28,19 @@ class CustomFarmEncoder(json.JSONEncoder):
             return_str = {"__{}__".format(o.__class__.__name__): o.__dict__}
 
         return return_str
+
+class CustomCageEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, dt.datetime):
+            return o.strftime("%Y-%m-%d %H:%M:%S")
+
+        elif isinstance(o, Treatment):
+            return str(o)
+
+        elif isinstance(o, TreatmentEvent):
+            return vars(o)
+
+        elif isinstance(o, PriorityQueue):
+            return sorted(list(o.queue))
+
+        return o

@@ -6,6 +6,7 @@ import json
 
 import numpy as np
 import pytest
+
 from src.Cage import Cage
 from src.Config import to_dt
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
@@ -56,20 +57,27 @@ class TestCage:
             cur_day = treatment_dates[0] + dt.timedelta(days=i)
             mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
             assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
+            assert first_cage.last_effective_treatment is None
+
+        # Even 5 days after, no effect can occur if the cage has not started yet.
+        cur_day = treatment_dates[0] + dt.timedelta(days=5)
+        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+        assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
+        assert first_cage.last_effective_treatment is None
+
 
     def test_cage_update_lice_treatment_mortality(self, farm, first_cage):
-        # TODO: this does not take into account water temperature!
-        treatment_dates = farm.treatment_dates
+        treatment_dates = farm.farm_cfg.treatment_starts
 
         # first useful day
-        cur_day = treatment_dates[0] + dt.timedelta(days=5)
+        cur_day = treatment_dates[1] + dt.timedelta(days=5)
         mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
 
         for stage in Cage.lice_stages:
             if stage not in Cage.susceptible_stages:
                 assert sum(mortality_updates[stage].values()) == 0
 
-        assert first_cage.last_effective_treatment == cur_day
+        assert first_cage.last_effective_treatment.affecting_date == cur_day
         assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
         assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
         assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 4, ('a',): 8}
@@ -179,7 +187,7 @@ class TestCage:
 
         assert num_infections_no_protection > 0
 
-        first_cage.last_effective_treatment = first_cage.start_date
+        first_cage.last_effective_treatment = first_cage.treatment_events.get()
         first_cage.cfg.infection_delay_time_EMB = protection_days
         first_cage.cfg.infection_delay_prob_EMB = 0.9
 
