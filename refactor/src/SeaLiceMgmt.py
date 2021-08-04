@@ -112,12 +112,15 @@ def run_model(path, sim_id, cfg, farms):
             farms[farm_ix].disperse_offspring(offspring, farms, cur_date)
 
         # Save the data
+        # TODO: see #100
+        """
         data_str = str(cur_date) + ", " + str(days)
         for farm in farms:
             data_str = data_str + ", "
             data_str = data_str + farm.to_csv()
         cfg.logger.info(data_str)
         data_file.write(data_str + "\n")
+        """
     data_file.close()
 
 
