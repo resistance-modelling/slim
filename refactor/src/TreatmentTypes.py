@@ -43,14 +43,15 @@ class TreatmentParams(ABC):
     def __getattr__(self, name):
         if name in self.data:
             return self.data[name]["value"]
-        else:
+        else: # pragma: no cover
             raise AttributeError("{} not found in {} parameters".format(name, self.name))
 
-    def parse_pheno_resistance(self, pheno_resistance_dict: dict) -> TreatmentResistance:
+    @staticmethod
+    def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:
         return {HeterozygousResistance[key]: val for key, val in pheno_resistance_dict.items()}
 
     @abstractmethod
-    def delay(self, average_temperature: float):
+    def delay(self, average_temperature: float):  # pragma: no cover
         pass
 
 

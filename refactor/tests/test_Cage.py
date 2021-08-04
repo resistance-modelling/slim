@@ -65,7 +65,6 @@ class TestCage:
         assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
         assert first_cage.last_effective_treatment is None
 
-
     def test_cage_update_lice_treatment_mortality(self, farm, first_cage):
         treatment_dates = farm.farm_cfg.treatment_starts
 
@@ -411,26 +410,6 @@ class TestCage:
 
     def test_update_step(self, first_cage, cur_day):
         first_cage.update(cur_day, 1, 0)
-
-    def test_to_csv(self, first_cage):
-        first_cage.lice_population = {"L1": 1,
-                                      "L2": 2,
-                                      "L3": 3,
-                                      "L4": 4,
-                                      "L5f": 5,
-                                      "L5m": 6}
-        first_cage.num_fish = 7
-        first_cage.id = 0
-
-        csv_str = first_cage.to_csv()
-        csv_list = csv_str.split(", ")
-        print(csv_list)
-
-        assert csv_list[0] == "0"
-        assert csv_list[1] == "7"
-        for i in range(2, 7):
-            assert csv_list[i] == str(i - 1)
-        assert csv_list[8] == "21"
 
     def test_get_stage_ages_distrib(self, first_cage):
         size = 5

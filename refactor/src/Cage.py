@@ -16,10 +16,10 @@ from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistan
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib)
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
-from src.JSONEncoders import CustomCageEncoder
+from src.JSONEncoders import CustomFarmEncoder
 
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from src.Farm import Farm
 
 
@@ -83,13 +83,12 @@ class Cage:
 
         self.last_effective_treatment = None  # type: Optional[TreatmentEvent]
 
-    def __str__(self):
+    def to_json_dict(self):
         """
-        Get a human readable string representation of the cage in json form.
-        :return: a description of the cage
+        Create a JSON-serialisable dictionary version of a cage.
         """
-
         filtered_vars = vars(self).copy()
+
         del filtered_vars["farm"]
         del filtered_vars["logger"]
         del filtered_vars["cfg"]
@@ -100,11 +99,20 @@ class Cage:
         # May want to improve these or change them if we change the representation for genotype distribs
         # TODO: these below can be probably moved to a proper encoder
         filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
-        filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in self.lice_population.geno_by_lifestage.items()}
+        filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in
+                                              self.lice_population.geno_by_lifestage.items()}
         filtered_vars["busy_dams"] = sorted(list(self.busy_dams.queue))
         filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
 
-        return json.dumps(filtered_vars, cls=CustomCageEncoder, indent=4)
+        return filtered_vars
+
+    def __str__(self):
+        """
+        Get a human readable string representation of the cage in json form.
+        :return: a description of the cage
+        """
+
+        return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
     def update(self, cur_date: dt.datetime, step_size: int, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime]]:
         """Update the cage at the current time step.
@@ -1032,18 +1040,6 @@ class Cage:
     @staticmethod
     def fish_growth_rate(days):
         return 10000/(1 + math.exp(-0.01*(days-475)))
-
-    def to_csv(self):
-        """
-        Save the contents of this cage as a CSV string
-        for writing to a file later.
-        """
-
-        data = [str(self.id), str(self.num_fish)]
-        data.extend([str(val) for val in self.lice_population.values()])
-        data.append(str(sum(self.lice_population.values())))
-
-        return ", ".join(data)
 
     def get_reservoir_lice(self, pressure: int) -> GrossLiceDistrib:
         """Get distribution of lice coming from the reservoir

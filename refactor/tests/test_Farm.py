@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 
 import numpy as np
 import pytest
@@ -12,6 +13,17 @@ class TestFarm:
         assert len(farm.cages) == 6
         assert farm.loc_x == 190300
         assert farm.loc_y == 665300
+
+    def test_farm_str(self, farm):
+        farm_str = str(farm)
+        assert isinstance(farm_str, str)
+        assert len(farm_str) > 0
+        assert "id: 0" in farm_str
+
+    def test_farm_repr(self, farm):
+        farm_repr = repr(farm)
+        loaded_farm_data = json.loads(farm_repr)
+        assert isinstance(loaded_farm_data, dict)
 
     def test_year_temperatures(self, farm):
         tarbert = farm.cfg.farm_data["tarbert"]["temperatures"]

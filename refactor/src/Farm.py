@@ -67,7 +67,11 @@ class Farm:
         return f"id: {self.name}, Cages: {cages}"
 
     def __repr__(self):
-        return json.dumps(self, cls=CustomFarmEncoder, indent=4)
+        filtered_vars = vars(self)
+        del filtered_vars["logger"]
+        del filtered_vars["farm_cfg"]
+        del filtered_vars["cfg"]
+        return json.dumps(filtered_vars, cls=CustomFarmEncoder, indent=4)
 
     def __eq__(self, other):
         if not isinstance(other, Farm):
@@ -287,18 +291,6 @@ class Farm:
             by_cage.append(cage_total)
 
         return sum(by_cage), by_cage
-
-    def to_csv(self) -> str:
-        """
-        Save the contents of this cage as a CSV string for writing to a file later.
-        """
-        farm_data = "farm, " + str(self.name) + ", " + str(self.loc_x) + ", " + str(self.loc_y)
-        cages_data = ""
-        for i in range(len(self.cages)):
-            # I want to keep a consistent order, hence the loop in this way
-            cages_data = cages_data + ", " + self.cages[i].to_csv()
-        return farm_data + cages_data
-
 
 # def d_hatching(c_temp):
 #    """
