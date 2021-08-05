@@ -3,6 +3,7 @@ import datetime
 import datetime as dt
 import itertools
 import json
+from queue import PriorityQueue
 
 import numpy as np
 import pytest
@@ -10,7 +11,7 @@ import pytest
 from src.Cage import Cage
 from src.Config import to_dt
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
-from src.TreatmentTypes import GeneticMechanism
+from src.TreatmentTypes import GeneticMechanism, Treatment
 
 
 class TestCage:
@@ -81,6 +82,33 @@ class TestCage:
         assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
         assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 4, ('a',): 8}
         assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 3, ('a',): 8}
+
+    def test_cage_update_lice_treatment_mortality_close_days(self, farm, first_cage):
+        treatment_dates = farm.farm_cfg.treatment_starts
+        treatment_event = farm.generate_treatment_event(Treatment.emb, treatment_dates[1])
+
+        first_cage.treatment_events = PriorityQueue()
+        first_cage.treatment_events.put(treatment_event)
+
+        # first useful day
+        cur_day = treatment_dates[1] + dt.timedelta(days=5)
+        first_cage.get_lice_treatment_mortality(cur_day)
+
+        # after 10 days there should be noticeable effects
+        cur_day = treatment_dates[1] + dt.timedelta(days=10)
+        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+
+        assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 1, ('a',): 8}
+        assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 2, ('a',): 8}
+        assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 2, ('a',): 2}
+        assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 2, ('a',): 2}
+
+        # After a long time, the previous treatment has no longer effect
+        cur_day = treatment_dates[1] + dt.timedelta(days=40)
+        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+
+        assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
+
 
     def test_get_stage_ages_respects_constraints(self, first_cage):
         test_num_lice = 1000
