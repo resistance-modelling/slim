@@ -10,7 +10,6 @@ from collections import Counter
 from typing import Counter as CounterType
 from typing import Dict, List, Optional, Tuple
 
-import pandas as pd
 from mypy_extensions import TypedDict
 
 import numpy as np
@@ -51,7 +50,6 @@ class Farm:
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         # TODO: deprecate this
-        self.treatment_dates = farm_cfg.treatment_dates
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
         self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
@@ -66,11 +64,17 @@ class Farm:
         cages = ", ".join(str(a) for a in self.cages)
         return f"id: {self.name}, Cages: {cages}"
 
-    def __repr__(self):
-        filtered_vars = vars(self)
+    def to_json_dict(self, **kwargs):
+        filtered_vars = vars(self).copy()
         del filtered_vars["logger"]
         del filtered_vars["farm_cfg"]
         del filtered_vars["cfg"]
+        filtered_vars.update(kwargs)
+
+        return filtered_vars
+
+    def __repr__(self):
+        filtered_vars = self.to_json_dict()
         return json.dumps(filtered_vars, cls=CustomFarmEncoder, indent=4)
 
     def __eq__(self, other):
@@ -110,7 +114,7 @@ class Farm:
         return TreatmentEvent(cur_date + dt.timedelta(days=delay), treatment_type, efficacy)
 
     def preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
-        for treatment in self.farm_cfg.treatment_starts:
+        for treatment in treatment_dates:
             event = self.generate_treatment_event(self.farm_cfg.treatment_type, treatment)
             for cage in self.cages:
                 if cage.start_date <= event.affecting_date:

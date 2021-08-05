@@ -1,5 +1,9 @@
 [run]
-omit = tests/*
+omit =
+    tests/*
+    src/SeaLiceMgmt.py
+    src/__init__.py
+
 branch=True
 dynamic_context = test_function
 

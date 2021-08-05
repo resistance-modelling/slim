@@ -1,4 +1,5 @@
-
+from dataclasses import is_dataclass, asdict
+from enum import Enum
 import datetime as dt
 import json
 from queue import PriorityQueue
@@ -25,11 +26,11 @@ class CustomFarmEncoder(json.JSONEncoder):
         elif isinstance(o, dt.datetime):
             return o.strftime("%Y-%m-%d %H:%M:%S")
 
-        elif isinstance(o, Treatment):
+        elif isinstance(o, Enum):
             return str(o)
 
-        elif isinstance(o, TreatmentEvent):
-            return vars(o)
+        elif is_dataclass(o):
+            return asdict(o)
 
         elif isinstance(o, PriorityQueue):
             return sorted(list(o.queue))
@@ -37,5 +38,8 @@ class CustomFarmEncoder(json.JSONEncoder):
         # Python's circular dependencies are annoying
         elif type(o).__name__ == "Cage":
             return o.to_json_dict()
+
+        elif isinstance(o, np.number):
+            return o.item()
 
         return o

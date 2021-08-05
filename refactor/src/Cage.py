@@ -92,16 +92,12 @@ class Cage:
         del filtered_vars["farm"]
         del filtered_vars["logger"]
         del filtered_vars["cfg"]
-        for k in filtered_vars:
-            if isinstance(filtered_vars[k], dt.datetime):
-                filtered_vars[k] = filtered_vars[k].strftime("%Y-%m-%d %H:%M:%S")
 
         # May want to improve these or change them if we change the representation for genotype distribs
         # TODO: these below can be probably moved to a proper encoder
         filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
         filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in
                                               self.lice_population.geno_by_lifestage.items()}
-        filtered_vars["busy_dams"] = sorted(list(self.busy_dams.queue))
         filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
 
         return filtered_vars

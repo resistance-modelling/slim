@@ -49,7 +49,7 @@ class TestCage:
         assert np.alltrue(np.isclose(dead_lice_dist_np, expected_dead_lice))
 
     def test_cage_update_lice_treatment_mortality_no_effect(self, farm, first_cage):
-        treatment_dates = farm.treatment_dates
+        treatment_dates = farm.farm_cfg.treatment_starts
         assert(treatment_dates == sorted(treatment_dates))
 
         # before a 14-day activation period there should be no effect
