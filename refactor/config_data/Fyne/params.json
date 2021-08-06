@@ -1,4 +1,7 @@
 {
+    "name": {
+        "value": "Loch Fyne ACME Ltd."
+    },
     "start_date": {
         "description": "Simulation start date",
         "value": "2017-10-01 00:00:00"
@@ -10,6 +13,10 @@
     "ext_pressure": {
         "description": "Sealice per day per cage/farm arriving from wildlife. Note that this value has been determined experimentally in the original code.",
         "value": 150
+    },
+    "start_capital": {
+        "description": "Organisation capital (in GBP), with string decimals",
+        "value": "100000.00"
     },
     "farms": [
         {

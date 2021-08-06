@@ -1,14 +1,15 @@
 import datetime as dt
+from decimal import Decimal
 import json
 import os
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
 
 from src.TreatmentTypes import Treatment, GeneticMechanism, EMB
 
-
-def to_dt(string_date):
+def to_dt(string_date) -> dt.datetime:
     """Convert from string date to datetime date
 
     :param string_date: Date as string timestamp
@@ -49,6 +50,10 @@ class Config:
 
         # general parameters
         self.ext_pressure = data["ext_pressure"]["value"]
+
+        # Organisation-specific information
+        self.start_capital = Decimal(data["start_capital"]["value"])
+        self.name = data["name"]
 
         # farms
         self.farms = [FarmConfig(farm_data["value"], self.logger)
@@ -136,9 +141,9 @@ class FarmConfig:
         self.logger = logger
 
         # set params
-        self.num_fish = data["num_fish"]["value"]
-        self.n_cages = data["ncages"]["value"]
-        self.farm_location = data["location"]["value"]
+        self.num_fish = data["num_fish"]["value"]  # type: int
+        self.n_cages = data["ncages"]["value"]  # type: int
+        self.farm_location = data["location"]["value"]  # type: Tuple[int, int]
         self.farm_start = to_dt(data["start_date"]["value"])
         self.cages_start = [to_dt(date)
                             for date in data["cages_start_dates"]["value"]]

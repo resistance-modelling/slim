@@ -1,4 +1,5 @@
 from dataclasses import is_dataclass, asdict
+from decimal import Decimal
 from enum import Enum
 import datetime as dt
 import json
@@ -41,5 +42,8 @@ class CustomFarmEncoder(json.JSONEncoder):
 
         elif isinstance(o, np.number):
             return o.item()
+
+        elif isinstance(o, Decimal):
+            return str(o)
 
         return o
