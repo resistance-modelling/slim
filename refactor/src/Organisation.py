@@ -5,11 +5,12 @@ farms at the same time.
 TODO: treatments should be decided rather than preemptively scheduled
 """
 
+import datetime as dt
+import json
 from src.Config import Config
 from src.Farm import Farm
 from src.JSONEncoders import CustomFarmEncoder
 from src.TreatmentTypes import Treatment
-import json
 
 class Organisation:
     def __init__(self, cfg: Config):
@@ -53,7 +54,7 @@ class Organisation:
     def __repr__(self):
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
-    def schedule_treatment(self, treatment: Treatment, day: datetime, farm: Farm):
+    def schedule_treatment(self, treatment: Treatment, day: dt.datetime, farm: Farm):
         """
         Schedule a treatment, and calculate its cost.
         """
@@ -70,7 +71,7 @@ class Organisation:
         application_period = treatment_cfg.application_period
 
         for farm in self.farms:
-            cost = farm.estimate_treatment_cost(treatment, farm) * application_period
+            cost = farm.estimate_treatment_cost(treatment, day) * application_period
             farm.add_treatment(treatment, day)
             # Note: debts are allowed.
             self.current_capital -= cost

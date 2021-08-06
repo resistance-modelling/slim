@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+from decimal import Decimal
 import json
 from collections import Counter
 from typing import Counter as CounterType
@@ -312,5 +313,5 @@ class Farm:
         if treatment == Treatment.EMB:
             cost_per_kg = self.cfg.emb.cost_per_kg
         days_since_start = ((cur_day - cage.start_date).days() for cage in self.cages)
-        return sum(cost_per_kg * Cage.get_fish_growth(days)
+        return sum(cost_per_kg * Cage.fish_growth_rate(cage_days)
                    for cage_days in days_since_start)
