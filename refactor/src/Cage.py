@@ -110,10 +110,9 @@ class Cage:
 
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
-    def update(self, cur_date: dt.datetime, step_size: int, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime]]:
+    def update(self, cur_date: dt.datetime, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime]]:
         """Update the cage at the current time step.
         :param cur_date: Current date of simulation
-        :param step_size: Step size
         :param pressure: External pressure, planctonic lice coming from
         the reservoir
         :return: Tuple consisting of egg genotype distribution and hatching
@@ -162,7 +161,7 @@ class Cage:
             treatment_mortality = self.get_lice_treatment_mortality(cur_date)
 
             # Fish growth and death
-            fish_deaths_natural, fish_deaths_from_lice = self.get_fish_growth(days_since_start, step_size)
+            fish_deaths_natural, fish_deaths_from_lice = self.get_fish_growth(days_since_start)
 
             # Infection events
             num_infection_events = self.do_infection_events(cur_date, days_since_start)
@@ -398,7 +397,7 @@ class Cage:
 
         return new_L2, new_L4, new_females, new_males
 
-    def get_fish_growth(self, days, step_size):
+    def get_fish_growth(self, days):
         """
         Get the new number of fish after a step size.
         """
@@ -429,8 +428,8 @@ class Cage:
         prob_lice_death = 1 / (1 + math.exp(-self.cfg.fish_mortality_k *
                                             (lice_per_host_mass - self.cfg.fish_mortality_center)))
 
-        ebf_death = fb_mort(days) * step_size * self.num_fish
-        elf_death = self.num_infected_fish * step_size * prob_lice_death
+        ebf_death = fb_mort(days) * self.num_fish
+        elf_death = self.num_infected_fish * prob_lice_death
         fish_deaths_natural = self.cfg.rng.poisson(ebf_death)
         fish_deaths_from_lice = self.cfg.rng.poisson(elf_death)
 
@@ -1026,7 +1025,7 @@ class Cage:
 
         dead_lice_dist = {}
         for stage in lice_population:
-            mortality_rate = lice_population[stage] * lice_mortality_rates[stage] * self.cfg.tau
+            mortality_rate = lice_population[stage] * lice_mortality_rates[stage]
             mortality = min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
             dead_lice_dist[stage] = mortality
 

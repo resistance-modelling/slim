@@ -121,12 +121,11 @@ class Farm:
                     cage.treatment_events.put(event)
 
 
-    def update(self, cur_date: dt.datetime, step_size: int) -> GenoDistribByHatchDate:
+    def update(self, cur_date: dt.datetime) -> GenoDistribByHatchDate:
         """Update the status of the farm given the growth of fish and change
         in population of parasites.
 
         :param cur_date: Current date
-        :param step_size: Step size for tau-leaping
         :return: Dictionary of genotype distributions based on hatch date
         """
 
@@ -144,7 +143,6 @@ class Farm:
 
             # update the cage and collect the offspring info
             egg_distrib, hatch_date = cage.update(cur_date,
-                                                  step_size,
                                                   pressures_per_cage[cage.id])
 
             if hatch_date:

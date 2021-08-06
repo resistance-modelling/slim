@@ -42,7 +42,6 @@ class TestCage:
     def test_cage_lice_background_mortality_one_day(self, first_cage):
         # NOTE: this currently relies on Stien's approach.
         # Changing this approach will break things
-        first_cage.cfg.tau = 1
         dead_lice_dist = first_cage.get_background_lice_mortality(first_cage.lice_population)
         dead_lice_dist_np = np.array(list(dead_lice_dist.values()))
         expected_dead_lice = np.array([28, 0, 0, 0, 0, 2])
@@ -175,7 +174,7 @@ class TestCage:
     def test_get_fish_growth(self, first_cage):
         first_cage.num_fish *= 300
         first_cage.num_infected_fish = first_cage.num_fish // 2
-        natural_death, lice_death = first_cage.get_fish_growth(1, 1)
+        natural_death, lice_death = first_cage.get_fish_growth(1)
 
         # basic invariants
         assert natural_death >= 0
@@ -190,7 +189,7 @@ class TestCage:
         for k in first_cage.lice_population:
             first_cage.lice_population[k] = 0
 
-        _, lice_death = first_cage.get_fish_growth(1, 1)
+        _, lice_death = first_cage.get_fish_growth(1)
 
         assert lice_death == 0
 
@@ -437,7 +436,7 @@ class TestCage:
             assert distrib_dams_available[key] == delta_dams[key]
 
     def test_update_step(self, first_cage, cur_day):
-        first_cage.update(cur_day, 1, 0)
+        first_cage.update(cur_day, 0)
 
     def test_get_stage_ages_distrib(self, first_cage):
         size = 5
@@ -693,7 +692,7 @@ class TestCage:
 
         pressure = 10
 
-        offspring, hatch_date = first_cage.update(cur_date, 1, pressure)
+        offspring, hatch_date = first_cage.update(cur_date, pressure)
 
         assert offspring == {}
         assert hatch_date is None
@@ -704,7 +703,7 @@ class TestCage:
         assert first_cage.hatching_events.qsize() == 1
 
         cur_date += dt.timedelta(1)
-        offspring, hatch_date = first_cage.update(cur_date, 1, pressure)
+        offspring, hatch_date = first_cage.update(cur_date, pressure)
 
         assert offspring == {}
         assert hatch_date is None
@@ -729,7 +728,7 @@ class TestCage:
         # set mortality to 0
         first_cage.cfg.background_lice_mortality_rates = {key: 0 for key in first_cage.lice_population}
 
-        offspring, hatch_date = first_cage.update(cur_date, 1, pressure)
+        offspring, hatch_date = first_cage.update(cur_date, pressure)
 
         assert offspring == {}
         assert hatch_date is None
@@ -750,7 +749,7 @@ class TestCage:
         first_cage.cfg.background_lice_mortality_rates = {key: 1 for key in first_cage.lice_population}
         pressure = 0
 
-        offspring, hatch_date = first_cage.update(cur_date, 1, pressure)
+        offspring, hatch_date = first_cage.update(cur_date, pressure)
 
         assert offspring == {}
         assert hatch_date is None

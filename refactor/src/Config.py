@@ -46,7 +46,6 @@ class Config:
         # time and dates
         self.start_date = to_dt(data["start_date"]["value"])
         self.end_date = to_dt(data["end_date"]["value"])
-        self.tau = data["tau"]["value"]
 
         # general parameters
         self.ext_pressure = data["ext_pressure"]["value"]

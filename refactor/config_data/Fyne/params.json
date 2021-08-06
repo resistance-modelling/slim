@@ -7,10 +7,6 @@
         "description": "Simulation end date",
         "value": "2017-10-02 00:00:00"
     },
-    "tau": {
-        "description": "Tau value for tau-leaping",
-        "value": 1
-    },
     "ext_pressure": {
         "description": "Sealice per day per cage/farm arriving from wildlife. Note that this value has been determined experimentally in the original code.",
         "value": 150

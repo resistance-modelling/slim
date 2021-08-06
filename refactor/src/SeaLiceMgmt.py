@@ -94,7 +94,7 @@ def run_model(path, sim_id, cfg, farms):
     while cur_date <= cfg.end_date:
         cfg.logger.debug("Current date = %s", cur_date)
 
-        cur_date += dt.timedelta(days=cfg.tau)
+        cur_date += dt.timedelta(days=1)
         days = (cur_date - cfg.start_date).days
 
         # update the farms and get the offspring
@@ -104,7 +104,7 @@ def run_model(path, sim_id, cfg, farms):
             # if days == 1:
             #    resistance_bv.write_text(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext)
 
-            offspring = farm.update(cur_date, cfg.tau)
+            offspring = farm.update(cur_date)
             offspring_dict[farm.name] = offspring
 
         # once all of the offspring is collected

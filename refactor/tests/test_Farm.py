@@ -191,7 +191,7 @@ class TestFarm:
 
     def test_farm_update_before_start(self, farm):
         cur_date = farm.start_date - dt.timedelta(1)
-        offspring = farm.update(cur_date, 1)
+        offspring = farm.update(cur_date)
 
         assert offspring == {}
 
@@ -204,7 +204,7 @@ class TestFarm:
         farm.cfg.farms[farm.name].cages_start = [farm.start_date for i in range(10)]
         farm.cages = [Cage(i, farm.cfg, farm, initial_lice_pop) for i in range(10)]
 
-        eggs_by_hatch_date = farm.update(farm.start_date, 1)
+        eggs_by_hatch_date = farm.update(farm.start_date)
 
         for hatch_date in eggs_by_hatch_date:
             assert hatch_date > farm.start_date
