@@ -7,7 +7,7 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 
-from src.TreatmentTypes import Treatment, GeneticMechanism, EMB
+from src.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB
 
 def to_dt(string_date) -> dt.datetime:
     """Convert from string date to datetime date
@@ -53,6 +53,7 @@ class Config:
 
         # Organisation-specific information
         self.start_capital = Decimal(data["start_capital"]["value"])
+        self.monthly_cost = Decimal(data["monthly_cost"]["value"])
         self.name = data["name"]
 
         # farms
@@ -62,6 +63,9 @@ class Config:
 
         self.interfarm_times = np.loadtxt(os.path.join(simulation_dir, "interfarm_time.csv"), delimiter=",")
         self.interfarm_probs = np.loadtxt(os.path.join(simulation_dir, "interfarm_prob.csv"), delimiter=",")
+
+    def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
+        return [self.cfg.emb][treatment_type.value]
 
     def __getattr__(self, name):
         # obscure marshalling trick.

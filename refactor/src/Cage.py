@@ -397,9 +397,11 @@ class Cage:
 
         return new_L2, new_L4, new_females, new_males
 
-    def get_fish_growth(self, days):
+    def get_fish_growth(self, days_since_start) -> Tuple[int, int]:
         """
-        Get the new number of fish after a step size.
+        Get the number of fish that get killed either naturally or by lice
+        :param days_since_start: the number of days since the beginning.
+        :returns a tuple (natural_deaths, lice_deaths)
         """
 
         self.logger.debug("\t\tupdating fish population")
@@ -422,13 +424,13 @@ class Cage:
         # Apply a sigmoid based on the number of lice per fish
         pathogenic_lice = sum([self.lice_population[stage] for stage in self.pathogenic_stages])
         if self.num_infected_fish > 0:
-            lice_per_host_mass = pathogenic_lice / (self.num_infected_fish * self.fish_growth_rate(days))
+            lice_per_host_mass = pathogenic_lice / (self.num_infected_fish * self.fish_growth_rate(days_since_start))
         else:
             lice_per_host_mass = 0.0
         prob_lice_death = 1 / (1 + math.exp(-self.cfg.fish_mortality_k *
                                             (lice_per_host_mass - self.cfg.fish_mortality_center)))
 
-        ebf_death = fb_mort(days) * self.num_fish
+        ebf_death = fb_mort(days_since_start) * self.num_fish
         elf_death = self.num_infected_fish * prob_lice_death
         fish_deaths_natural = self.cfg.rng.poisson(ebf_death)
         fish_deaths_from_lice = self.cfg.rng.poisson(elf_death)
@@ -1000,7 +1002,7 @@ class Cage:
     # TODO: update arrivals dict type
     def update_arrivals(self, arrivals_dict: dict, arrival_date: dt.datetime):
         """Update the arrivals queue
-
+f
         :param arrivals_dict: List of dictionaries of genotype distributions based on hatch date
         :param arrival_date: Arrival date at this cage
         """
@@ -1050,3 +1052,19 @@ class Cage:
         new_lice_dist = {"L1": num_L1, "L2": pressure - num_L1}
         self.logger.debug("\t\tdistribution of new lice from reservoir = {}".format(new_lice_dist))
         return new_lice_dist
+
+    def fallow(self):
+        """Put the cage in a fallowing state.
+
+        Implications:
+        1. All the fish would be removed.
+        2. L3/L4/L5 would therefore disappear as they are attached to fish.
+        3. Dam waiting and treatment queues will be flushed.
+        """
+
+        for stage in self.pathogenic_stages:
+            self.lice_population[stage] = 0
+
+        self.num_infected_fish = self.num_fish = 0
+        self.busy_dams = PriorityQueue()
+        self.treatment_events = PriorityQueue()

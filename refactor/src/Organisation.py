@@ -8,6 +8,7 @@ TODO: treatments should be decided rather than preemptively scheduled
 from src.Config import Config
 from src.Farm import Farm
 from src.JSONEncoders import CustomFarmEncoder
+from src.TreatmentTypes import Treatment
 import json
 
 class Organisation:
@@ -51,3 +52,25 @@ class Organisation:
 
     def __repr__(self):
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
+
+    def schedule_treatment(self, treatment: Treatment, day: datetime, farm: Farm):
+        """
+        Schedule a treatment, and calculate its cost.
+        """
+
+        # Cost depends on a number of factors
+        # 1. Treatment type (obviously)
+        # 2. Dosage
+        # For EMB, the recommended dosage is 50g for each kg of fish mass
+        # for a period of time of 7 days, but I am not sure if farmers are aware of
+        # the current fishmass
+        # TODO: is fishing to be taken into account?
+
+        treatment_cfg = self.cfg.get_treatment(treatment)
+        application_period = treatment_cfg.application_period
+
+        for farm in self.farms:
+            cost = farm.estimate_treatment_cost(treatment, farm) * application_period
+            farm.add_treatment(treatment, day)
+            # Note: debts are allowed.
+            self.current_capital -= cost

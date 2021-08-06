@@ -1,4 +1,5 @@
 from abc import abstractmethod, ABC
+from decimal import Decimal
 from enum import Enum
 from typing import Dict
 
@@ -39,6 +40,7 @@ class TreatmentParams(ABC):
     def __init__(self, data):
         self.data = data
         self.pheno_resistance = self.parse_pheno_resistance(data["pheno_resistance"]["value"])
+        self.price_per_kg = Decimal(data["price_per_kg"]["value"])
 
     def __getattr__(self, name):
         if name in self.data:
@@ -60,5 +62,4 @@ class EMB(TreatmentParams):
 
     def delay(self, average_temperature: float):
         return self.durability_temp_ratio / average_temperature
-
 

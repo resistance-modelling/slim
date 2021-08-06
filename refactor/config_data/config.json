@@ -139,6 +139,15 @@
             "note": "TODO: dummy variable, needs data",
             "value": 0.9
           },
+          "price_per_kg": {
+            "description": "Cost per kg when applying treatment",
+            "note": "Values taken from www.sigmaaldrich.com , rescaled to have a 1kg denominator",
+            "value": "341.20"
+          },
+          "application_period": {
+            "description": "For how long to apply the treatment (in days)",
+            "value": 7
+          },
           "pheno_resistance": {
             "description": "Lookup table to translate between genotype.",
             "value": {

@@ -102,7 +102,8 @@ class Farm:
         Ndiff = self.loc_y - tarbert_northing
         return np.round(tarbert_temps - Ndiff * degs, 1)
 
-    def generate_treatment_event(self, treatment_type: Treatment, cur_date: dt.datetime) -> TreatmentEvent:
+    def generate_treatment_event(self, treatment_type: Treatment, cur_date: dt.datetime
+                                 ) -> TreatmentEvent:
         cur_month = cur_date.month
         ave_temp = self.year_temperatures[cur_month - 1]
 
@@ -114,12 +115,20 @@ class Farm:
         return TreatmentEvent(cur_date + dt.timedelta(days=delay), treatment_type, efficacy)
 
     def preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
-        for treatment in treatment_dates:
-            event = self.generate_treatment_event(self.farm_cfg.treatment_type, treatment)
-            for cage in self.cages:
-                if cage.start_date <= event.affecting_date:
-                    cage.treatment_events.put(event)
+        """
+        Assign a few treatment dates to cages.
+        NOTE: Mainly used for testing. May be deprecated when a proper strategy mechanism is in place
 
+        :param treatment_dates: the dates when to apply treatment
+        """
+        for treatment_date in treatment_dates:
+            self.add_treatment(self.farm_cfg.treatment_type, treatment_date)
+
+    def add_treatment(self, treatment_type: Treatment, day: dt.datetime):
+        event = self.generate_treatment_event(self.farm_cfg.treatment_type, day)
+        for cage in self.cages:
+            if cage.start_date <= event.affecting_date:
+                cage.treatment_events.put(event)
 
     def update(self, cur_date: dt.datetime) -> GenoDistribByHatchDate:
         """Update the status of the farm given the growth of fish and change
@@ -294,55 +303,14 @@ class Farm:
 
         return sum(by_cage), by_cage
 
-# def d_hatching(c_temp):
-#    """
-#    TODO: ???
-#    """
-#    return 3*(3.3 - 0.93*np.log(c_temp/3) -0.16*np.log(c_temp/3)**2) #for 3 broods
-#
-# def ave_dev_days(del_p, del_m10, del_s, temp_c):
-#    """
-#    Average dev days using dev_time method, not used in model but handy to have
-#        # 5deg: 5.2,-,67.5,2
-#        # 10deg: 3.9,-,24,5.3
-#        # 15deg: 3.3,-,13.1,9.4
-#    :param del_p:
-#    :param del_m10:
-#    :param del_s:
-#    :param temp_c:
-#    :return:
-#    """
-#    return 100 * dev_time(del_p, del_m10, del_s, temp_c, 100) \
-#                   - 0.001 * sum([dev_time(del_p, del_m10, del_s, temp_c, i)
-#                          for i in np.arange(0, 100.001, 0.001)])
-#
-# def eudist(point_a, point_b):
-#    """
-#    Obtain the [Euclidean] distance between two points.
-#    :param point_a: the first point (location of farm 1)
-#    :param point_b: the second point (location of farm 2)
-#    :return: the Euclidean distance between point_a and point_b
-#    """
-#    return distance.euclidean(point_a, point_b)
-#
-# def egg_gen(farm, sig, eggs_plus, data):
-#    """
-#    TODO ???
-#    :param farm:
-#    :param sig:
-#    :param eggs_plus:
-#    :param data:
-#    :return:
-#    """
-#    if farm == 0:
-#        if np.random.uniform(0, 1, 1) > cfg.prop_influx:
-#            bvs = 0.5 * data['resistanceT1'].values + 0.5 * data['mate_resistanceT1'].values + \
-#                          np.random.normal(0, sig, eggs_plus) / np.sqrt(2)
-#        else:
-#            bvs = np.random.normal(cfg.f_muEMB, cfg.f_sigEMB, eggs_plus)
-#    else:
-#        bvs = 0.5 * data['resistanceT1'].values + 0.5 * data['mate_resistanceT1'].values + \
-#              np.random.normal(0, sig, eggs_plus) / np.sqrt(2)
-#    return bvs
-#
-#
+    def estimate_treatment_cost(self, treatment: Treatment, cur_day: dt.datetime) -> Decimal:
+        """
+        Estimate the cost of treatment
+        """
+
+        # TODO: convert treatment type into the right cfg
+        if treatment == Treatment.EMB:
+            cost_per_kg = self.cfg.emb.cost_per_kg
+        days_since_start = ((cur_day - cage.start_date).days() for cage in self.cages)
+        return sum(cost_per_kg * Cage.get_fish_growth(days)
+                   for cage_days in days_since_start)

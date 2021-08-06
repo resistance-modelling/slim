@@ -18,6 +18,17 @@
         "description": "Organisation capital (in GBP), with string decimals",
         "value": "100000.00"
     },
+    "monthly_cost": {
+        "description": "Fixed infrastructure cost (per 28 activity day)",
+        "note": "TODO: dummy value",
+        "value": "5000"
+    },
+    "gain_per_kg": {
+        "description": "Earned money per kg of sold fish (in GBP).",
+        "note": "TODO: dummy value. This is independent from the infection rate. Only adult (3-4 kg) salmons are considered",
+        "value": "4.39",
+        "source": "NASDAQ Salmon Index, last updated 6/08/21, with a corresponding NOK-GBP currency conversion"
+    },
     "farms": [
         {
             "description": "Test farm",
