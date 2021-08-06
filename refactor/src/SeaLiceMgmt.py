@@ -5,12 +5,15 @@ See README.md for details.
 """
 import argparse
 import datetime as dt
+import json
 import logging
 import sys
+
 from pathlib import Path
 
 from src.Config import Config
 from src.Farm import Farm
+from src.JSONEncoders import CustomFarmEncoder
 
 
 def setup(data_folder, sim_id):
@@ -84,7 +87,7 @@ def run_model(path, sim_id, cfg, farms):
     cur_date = cfg.start_date
 
     # create a file to store the population data from our simulation
-    data_file = path / "simulation_data_{}.txt".format(sim_id)
+    data_file = path / "simulation_data_{}.json".format(sim_id)
     data_file.unlink(missing_ok=True)
     data_file = (data_file).open(mode="a")
 
@@ -112,12 +115,13 @@ def run_model(path, sim_id, cfg, farms):
             farms[farm_ix].disperse_offspring(offspring, farms, cur_date)
 
         # Save the data
-        data_str = str(cur_date) + ", " + str(days)
-        for farm in farms:
-            data_str = data_str + ", "
-            data_str = data_str + farm.to_csv()
-        cfg.logger.info(data_str)
-        data_file.write(data_str + "\n")
+        # TODO: see #100.
+        # TODO: add organisation here, remove serialisation logic
+
+        farms_dict = {"time": cur_date, "farms": [farm.to_json_dict() for farm in farms]}
+        json.dump(farms_dict, data_file, cls=CustomFarmEncoder)
+        data_file.write("\n")
+        cfg.logger.info(json.dumps(farms_dict, cls=CustomFarmEncoder, indent=4))
     data_file.close()
 
 

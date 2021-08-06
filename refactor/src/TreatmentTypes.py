@@ -1,3 +1,4 @@
+from abc import abstractmethod, ABC
 from enum import Enum
 from typing import Dict
 
@@ -31,7 +32,7 @@ class HeterozygousResistance(Enum):
 TreatmentResistance = Dict[HeterozygousResistance, float]
 
 
-class TreatmentParams:
+class TreatmentParams(ABC):
 
     name = ""
 
@@ -42,12 +43,22 @@ class TreatmentParams:
     def __getattr__(self, name):
         if name in self.data:
             return self.data[name]["value"]
-        else:
+        else: # pragma: no cover
             raise AttributeError("{} not found in {} parameters".format(name, self.name))
 
-    def parse_pheno_resistance(self, pheno_resistance_dict: dict) -> TreatmentResistance:
+    @staticmethod
+    def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:
         return {HeterozygousResistance[key]: val for key, val in pheno_resistance_dict.items()}
+
+    @abstractmethod
+    def delay(self, average_temperature: float):  # pragma: no cover
+        pass
 
 
 class EMB(TreatmentParams):
     name = "EMB"
+
+    def delay(self, average_temperature: float):
+        return self.durability_temp_ratio / average_temperature
+
+

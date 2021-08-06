@@ -15,10 +15,11 @@ from src.Config import Config
 from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib)
-from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
+from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
+from src.JSONEncoders import CustomFarmEncoder
 
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from src.Farm import Farm
 
 
@@ -78,8 +79,28 @@ class Cage:
         self.hatching_events = PriorityQueue()  # type: PriorityQueue[EggBatch]
         self.busy_dams = PriorityQueue()  # type: PriorityQueue[DamAvailabilityBatch]
         self.arrival_events = PriorityQueue()  # type: PriorityQueue[TravellingEggBatch]
+        self.treatment_events = PriorityQueue()  # type: PriorityQueue[TreatmentEvent]
 
-        self.last_effective_treatment = None  # type: Optional[dt.datetime]
+        self.last_effective_treatment = None  # type: Optional[TreatmentEvent]
+
+    def to_json_dict(self):
+        """
+        Create a JSON-serialisable dictionary version of a cage.
+        """
+        filtered_vars = vars(self).copy()
+
+        del filtered_vars["farm"]
+        del filtered_vars["logger"]
+        del filtered_vars["cfg"]
+
+        # May want to improve these or change them if we change the representation for genotype distribs
+        # TODO: these below can be probably moved to a proper encoder
+        filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
+        filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in
+                                              self.lice_population.geno_by_lifestage.items()}
+        filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
+
+        return filtered_vars
 
     def __str__(self):
         """
@@ -87,24 +108,7 @@ class Cage:
         :return: a description of the cage
         """
 
-        filtered_vars = vars(self).copy()
-        del filtered_vars["farm"]
-        del filtered_vars["logger"]
-        del filtered_vars["cfg"]
-        for k in filtered_vars:
-            if isinstance(filtered_vars[k], dt.datetime):
-                filtered_vars[k] = filtered_vars[k].strftime("%Y-%m-%d %H:%M:%S")
-
-        # May want to improve these or change them if we change the representation for genotype distribs
-        # TODO: these below can be probably moved to a proper encoder
-        filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
-        filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in self.lice_population.geno_by_lifestage.items()}
-        filtered_vars["hatching_events"] = sorted(list(self.hatching_events.queue))
-        filtered_vars["busy_dams"] = sorted(list(self.busy_dams.queue))
-        filtered_vars["arrival_events"] = sorted(list(self.arrival_events.queue))
-        filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
-
-        return json.dumps(filtered_vars, indent=4)
+        return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
     def update(self, cur_date: dt.datetime, step_size: int, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime]]:
         """Update the cage at the current time step.
@@ -210,22 +214,28 @@ class Cage:
 
         geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
 
-        treatment = self.farm.farm_cfg.treatment_type
+        # if no treatment has been applied check if the previous treatment is still effective
+        if self.treatment_events.qsize() == 0 or cur_date < self.treatment_events.queue[0].affecting_date:
+            if self.last_effective_treatment is None:
+                return geno_treatment_distrib
+            treatment_window = self.last_effective_treatment.affecting_date + \
+                               dt.timedelta(days=self.last_effective_treatment.effectiveness_duration_days)
+            if cur_date > treatment_window:
+                # We are outside of the treatment window
+                return geno_treatment_distrib
+        else:
+            self.last_effective_treatment = self.treatment_events.get()
+        treatment_type = self.last_effective_treatment.treatment_type
 
-        if treatment == Treatment.emb:
-            # TODO: take temperatures into account? See #22
-            # NOTE: some treatments (e.g. H2O2) are temperature-independent
-            if cur_date - dt.timedelta(days=self.cfg.emb.effect_delay) in self.cfg.farms[self.farm_id].treatment_dates:
-                self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
-                                                                                   self.id, cur_date))
+        self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
+                                                                           self.id, cur_date))
 
-                self.last_effective_treatment = cur_date
-
-                # For now, assume a simple heterozygous distribution with a mere geometric distribution
-                for geno, num_susc in num_susc_per_geno.items():
-                    trait = self.get_allele_heterozygous_trait(geno)
-                    susceptibility_factor = 1.0 - self.cfg.emb.pheno_resistance[trait]
-                    geno_treatment_distrib[geno] = GenoTreatmentValue(susceptibility_factor, cast(int, num_susc))
+        if treatment_type == Treatment.emb:
+            # For now, assume a simple heterozygous distribution with a mere geometric distribution
+            for geno, num_susc in num_susc_per_geno.items():
+                trait = self.get_allele_heterozygous_trait(geno)
+                susceptibility_factor = 1.0 - self.cfg.emb.pheno_resistance[trait]
+                geno_treatment_distrib[geno] = GenoTreatmentValue(susceptibility_factor, cast(int, num_susc))
         else:
             raise NotImplementedError("Only EMB treatment is supported")
 
@@ -476,7 +486,9 @@ class Cage:
 
             if treatment == Treatment.emb:
 
-                protection_window = self.last_effective_treatment + dt.timedelta(days=self.cfg.emb.infection_delay_time)
+                protection_window = self.last_effective_treatment.affecting_date + \
+                                        dt.timedelta(days=self.cfg.emb.infection_delay_time +
+                                                          self.last_effective_treatment.effectiveness_duration_days)
 
                 if cur_date <= protection_window:
                     # if under protection window from treatment, decrease number of infection events
@@ -1024,18 +1036,6 @@ class Cage:
     @staticmethod
     def fish_growth_rate(days):
         return 10000/(1 + math.exp(-0.01*(days-475)))
-
-    def to_csv(self):
-        """
-        Save the contents of this cage as a CSV string
-        for writing to a file later.
-        """
-
-        data = [str(self.id), str(self.num_fish)]
-        data.extend([str(val) for val in self.lice_population.values()])
-        data.append(str(sum(self.lice_population.values())))
-
-        return ", ".join(data)
 
     def get_reservoir_lice(self, pressure: int) -> GrossLiceDistrib:
         """Get distribution of lice coming from the reservoir

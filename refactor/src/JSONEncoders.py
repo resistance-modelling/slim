@@ -1,7 +1,12 @@
+from dataclasses import is_dataclass, asdict
+from enum import Enum
 import datetime as dt
 import json
+from queue import PriorityQueue
 
 import numpy as np
+
+from src.QueueBatches import TreatmentEvent, Treatment
 
 
 class CustomFarmEncoder(json.JSONEncoder):
@@ -15,14 +20,26 @@ class CustomFarmEncoder(json.JSONEncoder):
         :param o: The object to be encoded as a json string.
         :return: the json representation of o.
         """
-        return_str = ""
         if isinstance(o, np.ndarray):
-            return_str = str(o)
-        elif isinstance(o, int):
-            return_str = str(o)
-        elif isinstance(o, dt.datetime):
-            return_str = o.strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            return_str = {"__{}__".format(o.__class__.__name__): o.__dict__}
+            return o.tolist()
 
-        return return_str
+        elif isinstance(o, dt.datetime):
+            return o.strftime("%Y-%m-%d %H:%M:%S")
+
+        elif isinstance(o, Enum):
+            return str(o)
+
+        elif is_dataclass(o):
+            return asdict(o)
+
+        elif isinstance(o, PriorityQueue):
+            return sorted(list(o.queue))
+
+        # Python's circular dependencies are annoying
+        elif type(o).__name__ == "Cage":
+            return o.to_json_dict()
+
+        elif isinstance(o, np.number):
+            return o.item()
+
+        return o

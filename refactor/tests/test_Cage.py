@@ -3,13 +3,15 @@ import datetime
 import datetime as dt
 import itertools
 import json
+from queue import PriorityQueue
 
 import numpy as np
 import pytest
+
 from src.Cage import Cage
 from src.Config import to_dt
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
-from src.TreatmentTypes import GeneticMechanism
+from src.TreatmentTypes import GeneticMechanism, Treatment
 
 
 class TestCage:
@@ -48,7 +50,7 @@ class TestCage:
         assert np.alltrue(np.isclose(dead_lice_dist_np, expected_dead_lice))
 
     def test_cage_update_lice_treatment_mortality_no_effect(self, farm, first_cage):
-        treatment_dates = farm.treatment_dates
+        treatment_dates = farm.farm_cfg.treatment_starts
         assert(treatment_dates == sorted(treatment_dates))
 
         # before a 14-day activation period there should be no effect
@@ -56,24 +58,57 @@ class TestCage:
             cur_day = treatment_dates[0] + dt.timedelta(days=i)
             mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
             assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
+            assert first_cage.last_effective_treatment is None
+
+        # Even 5 days after, no effect can occur if the cage has not started yet.
+        cur_day = treatment_dates[0] + dt.timedelta(days=5)
+        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+        assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
+        assert first_cage.last_effective_treatment is None
 
     def test_cage_update_lice_treatment_mortality(self, farm, first_cage):
-        # TODO: this does not take into account water temperature!
-        treatment_dates = farm.treatment_dates
+        treatment_dates = farm.farm_cfg.treatment_starts
 
         # first useful day
-        cur_day = treatment_dates[0] + dt.timedelta(days=5)
+        cur_day = treatment_dates[1] + dt.timedelta(days=5)
         mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
 
         for stage in Cage.lice_stages:
             if stage not in Cage.susceptible_stages:
                 assert sum(mortality_updates[stage].values()) == 0
 
-        assert first_cage.last_effective_treatment == cur_day
+        assert first_cage.last_effective_treatment.affecting_date == cur_day
         assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
         assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
         assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 4, ('a',): 8}
         assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 3, ('a',): 8}
+
+    def test_cage_update_lice_treatment_mortality_close_days(self, farm, first_cage):
+        treatment_dates = farm.farm_cfg.treatment_starts
+        treatment_event = farm.generate_treatment_event(Treatment.emb, treatment_dates[1])
+
+        first_cage.treatment_events = PriorityQueue()
+        first_cage.treatment_events.put(treatment_event)
+
+        # first useful day
+        cur_day = treatment_dates[1] + dt.timedelta(days=5)
+        first_cage.get_lice_treatment_mortality(cur_day)
+
+        # after 10 days there should be noticeable effects
+        cur_day = treatment_dates[1] + dt.timedelta(days=10)
+        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+
+        assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 1, ('a',): 8}
+        assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 2, ('a',): 8}
+        assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 2, ('a',): 2}
+        assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 2, ('a',): 2}
+
+        # After a long time, the previous treatment has no longer effect
+        cur_day = treatment_dates[1] + dt.timedelta(days=40)
+        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+
+        assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
+
 
     def test_get_stage_ages_respects_constraints(self, first_cage):
         test_num_lice = 1000
@@ -179,7 +214,7 @@ class TestCage:
 
         assert num_infections_no_protection > 0
 
-        first_cage.last_effective_treatment = first_cage.start_date
+        first_cage.last_effective_treatment = first_cage.treatment_events.get()
         first_cage.cfg.infection_delay_time_EMB = protection_days
         first_cage.cfg.infection_delay_prob_EMB = 0.9
 
@@ -403,26 +438,6 @@ class TestCage:
 
     def test_update_step(self, first_cage, cur_day):
         first_cage.update(cur_day, 1, 0)
-
-    def test_to_csv(self, first_cage):
-        first_cage.lice_population = {"L1": 1,
-                                      "L2": 2,
-                                      "L3": 3,
-                                      "L4": 4,
-                                      "L5f": 5,
-                                      "L5m": 6}
-        first_cage.num_fish = 7
-        first_cage.id = 0
-
-        csv_str = first_cage.to_csv()
-        csv_list = csv_str.split(", ")
-        print(csv_list)
-
-        assert csv_list[0] == "0"
-        assert csv_list[1] == "7"
-        for i in range(2, 7):
-            assert csv_list[i] == str(i - 1)
-        assert csv_list[8] == "21"
 
     def test_get_stage_ages_distrib(self, first_cage):
         size = 5

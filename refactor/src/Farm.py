@@ -9,15 +9,17 @@ import json
 from collections import Counter
 from typing import Counter as CounterType
 from typing import Dict, List, Optional, Tuple
+
 from mypy_extensions import TypedDict
 
 import numpy as np
 
-# TODO: deal with the pytype dependency error
-from src.Cage import Cage  # pytype: disable=pyi-error
+from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 from src.LicePopulation import Alleles, GrossLiceDistrib
+from src.TreatmentTypes import Treatment
+from src.QueueBatches import TreatmentEvent
 
 GenoDistribByHatchDate = Dict[dt.datetime, CounterType[Alleles]]
 CageAllocation = List[GenoDistribByHatchDate]
@@ -47,10 +49,12 @@ class Farm:
         self.loc_x = farm_cfg.farm_location[0]
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
-        self.treatment_dates = farm_cfg.treatment_dates
+        # TODO: deprecate this
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
         self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
+
+        self.preemptively_assign_treatments(self.farm_cfg.treatment_starts)
 
     def __str__(self):
         """
@@ -60,8 +64,18 @@ class Farm:
         cages = ", ".join(str(a) for a in self.cages)
         return f"id: {self.name}, Cages: {cages}"
 
+    def to_json_dict(self, **kwargs):
+        filtered_vars = vars(self).copy()
+        del filtered_vars["logger"]
+        del filtered_vars["farm_cfg"]
+        del filtered_vars["cfg"]
+        filtered_vars.update(kwargs)
+
+        return filtered_vars
+
     def __repr__(self):
-        return json.dumps(self, cls=CustomFarmEncoder, indent=4)
+        filtered_vars = self.to_json_dict()
+        return json.dumps(filtered_vars, cls=CustomFarmEncoder, indent=4)
 
     def __eq__(self, other):
         if not isinstance(other, Farm):
@@ -70,13 +84,14 @@ class Farm:
 
         return self.name == other.name
 
-    def initialize_temperatures(self, temperatures: Dict[str, LocationTemps]) -> List[float]:
+    def initialize_temperatures(self, temperatures: Dict[str, LocationTemps]) -> np.ndarray:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at
         month c_month interpolating data taken from
         www.seatemperature.org
         """
 
+        # TODO: move this in a separate file, e.g. Lake? See #96
         ardrishaig_data = temperatures["ardrishaig"]
         ardrishaig_temps, ardrishaig_northing = np.array(ardrishaig_data["temperatures"]), ardrishaig_data["northing"]
         tarbert_data = temperatures["tarbert"]
@@ -86,6 +101,25 @@ class Farm:
 
         Ndiff = self.loc_y - tarbert_northing
         return np.round(tarbert_temps - Ndiff * degs, 1)
+
+    def generate_treatment_event(self, treatment_type: Treatment, cur_date: dt.datetime) -> TreatmentEvent:
+        cur_month = cur_date.month
+        ave_temp = self.year_temperatures[cur_month - 1]
+
+        # TODO: automatically convert between enum and data
+        if treatment_type == Treatment.emb:
+            delay = self.cfg.emb.effect_delay
+            efficacy = self.cfg.emb.delay(ave_temp)
+
+        return TreatmentEvent(cur_date + dt.timedelta(days=delay), treatment_type, efficacy)
+
+    def preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
+        for treatment in treatment_dates:
+            event = self.generate_treatment_event(self.farm_cfg.treatment_type, treatment)
+            for cage in self.cages:
+                if cage.start_date <= event.affecting_date:
+                    cage.treatment_events.put(event)
+
 
     def update(self, cur_date: dt.datetime, step_size: int) -> GenoDistribByHatchDate:
         """Update the status of the farm given the growth of fish and change
@@ -261,18 +295,6 @@ class Farm:
             by_cage.append(cage_total)
 
         return sum(by_cage), by_cage
-
-    def to_csv(self) -> str:
-        """
-        Save the contents of this cage as a CSV string for writing to a file later.
-        """
-        farm_data = "farm, " + str(self.name) + ", " + str(self.loc_x) + ", " + str(self.loc_y)
-        cages_data = ""
-        for i in range(len(self.cages)):
-            # I want to keep a consistent order, hence the loop in this way
-            cages_data = cages_data + ", " + self.cages[i].to_csv()
-        return farm_data + cages_data
-
 
 # def d_hatching(c_temp):
 #    """
