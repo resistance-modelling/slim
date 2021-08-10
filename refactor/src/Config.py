@@ -1,13 +1,12 @@
 import datetime as dt
-from decimal import Decimal
 import json
 import os
 from typing import Tuple
 
 import numpy as np
-import pandas as pd
 
-from src.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB
+from src.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB, Money
+
 
 def to_dt(string_date) -> dt.datetime:
     """Convert from string date to datetime date
@@ -51,10 +50,8 @@ class Config:
         # general parameters
         self.ext_pressure = data["ext_pressure"]["value"]
 
-        # Organisation-specific information
-        self.start_capital = Decimal(data["start_capital"]["value"])
-        self.monthly_cost = Decimal(data["monthly_cost"]["value"])
-        self.name = data["name"]
+        self.monthly_cost = Money(data["monthly_cost"]["value"])
+        self.name = data["name"]["value"]
 
         # farms
         self.farms = [FarmConfig(farm_data["value"], self.logger)
@@ -65,7 +62,7 @@ class Config:
         self.interfarm_probs = np.loadtxt(os.path.join(simulation_dir, "interfarm_prob.csv"), delimiter=",")
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
-        return [self.cfg.emb][treatment_type.value]
+        return [self.emb][treatment_type.value]
 
     def __getattr__(self, name):
         # obscure marshalling trick.
@@ -151,9 +148,13 @@ class FarmConfig:
         self.farm_start = to_dt(data["start_date"]["value"])
         self.cages_start = [to_dt(date)
                             for date in data["cages_start_dates"]["value"]]
+        self.max_num_treatments = data["max_num_treatments"]["value"]  # type: int
 
         # TODO: a farm may employ different chemicals
         self.treatment_type = Treatment[data["treatment_type"]["value"]]
 
+        # Farm-specific capital
+        self.start_capital = Money(data["start_capital"]["value"])
+
         # fixed treatment schedules
-        self.treatment_starts = [to_dt(range_data["from"]) for range_data in data["treatment_dates"]["value"]]
+        self.treatment_starts = [to_dt(date) for date in data["treatment_dates"]["value"]]

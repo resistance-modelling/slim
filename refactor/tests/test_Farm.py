@@ -191,9 +191,10 @@ class TestFarm:
 
     def test_farm_update_before_start(self, farm):
         cur_date = farm.start_date - dt.timedelta(1)
-        offspring = farm.update(cur_date)
+        offspring, cost = farm.update(cur_date)
 
         assert offspring == {}
+        assert cost > 0 # fallowing
 
     def test_update(self, farm, sample_offspring_distrib):
 
@@ -204,13 +205,16 @@ class TestFarm:
         farm.cfg.farms[farm.name].cages_start = [farm.start_date for i in range(10)]
         farm.cages = [Cage(i, farm.cfg, farm, initial_lice_pop) for i in range(10)]
 
-        eggs_by_hatch_date = farm.update(farm.start_date)
+        eggs_by_hatch_date, cost = farm.update(farm.start_date)
 
         for hatch_date in eggs_by_hatch_date:
             assert hatch_date > farm.start_date
 
             for geno in eggs_by_hatch_date[hatch_date]:
                 assert eggs_by_hatch_date[hatch_date][geno] > 0
+
+        # TODO: need to check that the second farm has a positive infrastructure cost
+        assert cost == 0
 
     def test_eq(self, farm, farm_two):
         assert farm == farm

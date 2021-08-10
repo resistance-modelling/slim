@@ -1,7 +1,13 @@
+from __future__ import annotations
+
 from abc import abstractmethod, ABC
 from decimal import Decimal
 from enum import Enum
 from typing import Dict
+
+
+# A few extra general types
+Money = Decimal
 
 
 class Treatment(Enum):
@@ -9,7 +15,7 @@ class Treatment(Enum):
     A stub for treatment types
     TODO: add other treatments here
     """
-    emb = 1
+    emb = 0
 
 
 class GeneticMechanism(Enum):
@@ -34,18 +40,20 @@ TreatmentResistance = Dict[HeterozygousResistance, float]
 
 
 class TreatmentParams(ABC):
-
+    """
+    Abstract class for all the treatments
+    """
     name = ""
 
     def __init__(self, data):
         self.data = data
         self.pheno_resistance = self.parse_pheno_resistance(data["pheno_resistance"]["value"])
-        self.price_per_kg = Decimal(data["price_per_kg"]["value"])
+        self.price_per_kg = Money(data["price_per_kg"]["value"])
 
     def __getattr__(self, name):
         if name in self.data:
             return self.data[name]["value"]
-        else: # pragma: no cover
+        else:  # pragma: no cover
             raise AttributeError("{} not found in {} parameters".format(name, self.name))
 
     @staticmethod
@@ -62,4 +70,5 @@ class EMB(TreatmentParams):
 
     def delay(self, average_temperature: float):
         return self.durability_temp_ratio / average_temperature
+
 

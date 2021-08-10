@@ -12,7 +12,7 @@ import numpy as np
 from scipy import stats
 
 from src.Config import Config
-from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance
+from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib)
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
@@ -110,13 +110,11 @@ class Cage:
 
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
-    def update(self, cur_date: dt.datetime, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime]]:
+    def update(self, cur_date: dt.datetime, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime], Money]:
         """Update the cage at the current time step.
         :param cur_date: Current date of simulation
-        :param pressure: External pressure, planctonic lice coming from
-        the reservoir
-        :return: Tuple consisting of egg genotype distribution and hatching
-        date
+        :param pressure: External pressure, planctonic lice coming from the reservoir
+        :return: Tuple (egg genotype distribution, hatching date, cost)
         """
 
         if cur_date >= self.start_date:
@@ -143,7 +141,7 @@ class Cage:
         # Lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure)
 
-        if cur_date < self.start_date:
+        if cur_date < self.start_date or self.is_fallowing:
             # Values that are not used before the start date
             treatment_mortality = self.lice_population.get_empty_geno_distrib()
             fish_deaths_natural, fish_deaths_from_lice = 0, 0
@@ -151,6 +149,7 @@ class Cage:
             avail_dams_batch = None  # type: OptionalDamBatch
             new_egg_batch = None  # type: OptionalEggBatch
             returned_dams = {}
+            cost = self.cfg.monthly_cost / 28
 
         else:
             # Events that happen when cage is populated with fish
@@ -158,7 +157,7 @@ class Cage:
             days_since_start = (cur_date - self.date).days
 
             # Treatment mortality events
-            treatment_mortality = self.get_lice_treatment_mortality(cur_date)
+            treatment_mortality, cost = self.get_lice_treatment_mortality(cur_date)
 
             # Fish growth and death
             fish_deaths_natural, fish_deaths_from_lice = self.get_fish_growth(days_since_start)
@@ -203,7 +202,7 @@ class Cage:
             hatch_date = new_egg_batch.hatch_date
             self.logger.debug("\t\tlice offspring = {}".format(sum(egg_distrib.values())))
 
-        return egg_distrib, hatch_date
+        return egg_distrib, hatch_date, cost
 
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
         num_susc_per_geno = {}  # type: GenoDistrib
@@ -255,7 +254,7 @@ class Cage:
             trait = HeterozygousResistance.recessive
         return trait
 
-    def get_lice_treatment_mortality(self, cur_date) -> GenoLifeStageDistrib:
+    def get_lice_treatment_mortality(self, cur_date) -> Tuple[GenoLifeStageDistrib, Money]:
         """
         Calculate the number of lice in each stage killed by treatment.
         """
@@ -263,6 +262,8 @@ class Cage:
         dead_lice_dist = self.lice_population.get_empty_geno_distrib()
 
         dead_mortality_distrib = self.get_lice_treatment_mortality_rate(cur_date)
+
+        cost = Money("0.00")
 
         for geno, (mortality_rate, num_susc) in dead_mortality_distrib.items():
             if mortality_rate > 0:
@@ -289,7 +290,14 @@ class Cage:
                 self.logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
                                   .format(self.farm_id, self.id, dead_lice_dist))
 
-        return dead_lice_dist
+        # Compute cost
+        if self.last_effective_treatment is not None and self.last_effective_treatment.end_application_date > cur_date:
+            treatment_type = self.last_effective_treatment.treatment_type
+            treatment_cfg = self.cfg.get_treatment(treatment_type)
+            cage_days = (cur_date - self.start_date).days
+            cost = treatment_cfg.price_per_kg * int(Cage.fish_growth_rate(cage_days))
+
+        return dead_lice_dist, cost
 
     def get_stage_ages_distrib(self, stage: str, size=15, stage_age_max_days=None):
         """
@@ -1068,3 +1076,7 @@ f
         self.num_infected_fish = self.num_fish = 0
         self.busy_dams = PriorityQueue()
         self.treatment_events = PriorityQueue()
+
+    @property
+    def is_fallowing(self):
+        return self.num_fish == 0

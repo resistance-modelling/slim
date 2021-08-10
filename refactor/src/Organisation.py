@@ -11,16 +11,21 @@ from src.Config import Config
 from src.Farm import Farm
 from src.JSONEncoders import CustomFarmEncoder
 from src.TreatmentTypes import Treatment
+from queue import Queue
+
 
 class Organisation:
     def __init__(self, cfg: Config):
         self.name = cfg.name  # type: str
-        self.current_capital = cfg.start_capital
         self.cfg = cfg
         self.farms = [Farm(i, cfg) for i in range(cfg.nfarms)]
 
+    @property
+    def capital(self):
+        return sum(farm.current_capital for farm in self.farms)
+
     def step(self, cur_date):
-        days = (cur_date - self.cfg.start_date).days
+        # days = (cur_date - self.cfg.start_date).days
 
         # update the farms and get the offspring
         offspring_dict = {}
@@ -29,13 +34,13 @@ class Organisation:
             # if days == 1:
             #    resistance_bv.write_text(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext)
 
-            offspring = farm.update(cur_date)
+            offspring, cost = farm.update(cur_date)
             offspring_dict[farm.name] = offspring
 
         # once all of the offspring is collected
         # it can be dispersed (interfarm and intercage movement)
         # note: this is done on organisation level because it requires access to
-        # other farms - and will allow muliprocessing of the main update
+        # other farms - and will allow multiprocessing of the main update
         for farm_ix, offspring in offspring_dict.items():
             self.farms[farm_ix].disperse_offspring(offspring, self.farms, cur_date)
 
@@ -47,7 +52,6 @@ class Organisation:
     def to_json_dict(self):
         return {
             "name": self.name,
-            "capital": self.current_capital,
             "farms": [farm.to_json_dict() for farm in self.farms]
         }
 
@@ -69,9 +73,3 @@ class Organisation:
 
         treatment_cfg = self.cfg.get_treatment(treatment)
         application_period = treatment_cfg.application_period
-
-        for farm in self.farms:
-            cost = farm.estimate_treatment_cost(treatment, day) * application_period
-            farm.add_treatment(treatment, day)
-            # Note: debts are allowed.
-            self.current_capital -= cost

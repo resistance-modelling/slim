@@ -3,8 +3,9 @@ import numpy as np
 import pytest
 import datetime
 
-from src.Config import Config, Treatment
+from src.Config import Config
 from src.Farm import Farm
+from src.Organisation import Organisation
 from src.QueueBatches import EggBatch, DamAvailabilityBatch
 from src.LicePopulation import LicePopulation
 
@@ -32,6 +33,11 @@ def farm_two(farm_config, initial_lice_population):
     farm = Farm(0, farm_config, initial_lice_population)
     farm.name = 1
     return farm
+
+
+@pytest.fixture
+def organisation(farm_config):
+    return Organisation(farm_config)
 
 
 @pytest.fixture

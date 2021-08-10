@@ -11,7 +11,7 @@ import pytest
 from src.Cage import Cage
 from src.Config import to_dt
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
-from src.TreatmentTypes import GeneticMechanism, Treatment
+from src.TreatmentTypes import GeneticMechanism, Treatment, Money
 
 
 class TestCage:
@@ -55,22 +55,24 @@ class TestCage:
         # before a 14-day activation period there should be no effect
         for i in range(-14, first_cage.cfg.emb.effect_delay):
             cur_day = treatment_dates[0] + dt.timedelta(days=i)
-            mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+            mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
             assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
             assert first_cage.last_effective_treatment is None
+            assert cost == Money("0.00")
 
         # Even 5 days after, no effect can occur if the cage has not started yet.
         cur_day = treatment_dates[0] + dt.timedelta(days=5)
-        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+        mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
         assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
         assert first_cage.last_effective_treatment is None
+        assert cost == Money("0.00")
 
     def test_cage_update_lice_treatment_mortality(self, farm, first_cage):
         treatment_dates = farm.farm_cfg.treatment_starts
 
         # first useful day
         cur_day = treatment_dates[1] + dt.timedelta(days=5)
-        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+        mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
 
         for stage in Cage.lice_stages:
             if stage not in Cage.susceptible_stages:
@@ -81,6 +83,8 @@ class TestCage:
         assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
         assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 4, ('a',): 8}
         assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 3, ('a',): 8}
+
+        assert 55000 <= cost <= 60000
 
     def test_cage_update_lice_treatment_mortality_close_days(self, farm, first_cage):
         treatment_dates = farm.farm_cfg.treatment_starts
@@ -95,19 +99,21 @@ class TestCage:
 
         # after 10 days there should be noticeable effects
         cur_day = treatment_dates[1] + dt.timedelta(days=10)
-        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+        mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
 
         assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 1, ('a',): 8}
         assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 2, ('a',): 8}
         assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 2, ('a',): 2}
         assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 2, ('a',): 2}
 
+        assert cost == 0
+
         # After a long time, the previous treatment has no longer effect
         cur_day = treatment_dates[1] + dt.timedelta(days=40)
-        mortality_updates = first_cage.get_lice_treatment_mortality(cur_day)
+        mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
 
         assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
-
+        assert cost == 0
 
     def test_get_stage_ages_respects_constraints(self, first_cage):
         test_num_lice = 1000
@@ -692,7 +698,7 @@ class TestCage:
 
         pressure = 10
 
-        offspring, hatch_date = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
 
         assert offspring == {}
         assert hatch_date is None
@@ -702,8 +708,10 @@ class TestCage:
         assert first_cage.arrival_events.qsize() == 0
         assert first_cage.hatching_events.qsize() == 1
 
+        assert 150 <= cost <= 200
+
         cur_date += dt.timedelta(1)
-        offspring, hatch_date = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
 
         assert offspring == {}
         assert hatch_date is None
@@ -712,6 +720,7 @@ class TestCage:
         assert first_cage.num_infected_fish == 0
         assert first_cage.arrival_events.qsize() == 0
         assert first_cage.hatching_events.qsize() == 0
+        assert 150 <= cost <= 200
 
     def test_update_step_before_start_date_no_deaths(self, first_cage, planctonic_only_population):
         cur_date = first_cage.start_date - dt.timedelta(5)
@@ -728,7 +737,7 @@ class TestCage:
         # set mortality to 0
         first_cage.cfg.background_lice_mortality_rates = {key: 0 for key in first_cage.lice_population}
 
-        offspring, hatch_date = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
 
         assert offspring == {}
         assert hatch_date is None
@@ -738,6 +747,7 @@ class TestCage:
 
         current_population = sum(first_cage.lice_population.values())
         assert current_population == population_before + inflow
+        assert cost > 0
 
     def test_update_step_before_start_date_only_deaths(self, first_cage, planctonic_only_population):
         cur_date = first_cage.start_date - dt.timedelta(5)
@@ -749,7 +759,7 @@ class TestCage:
         first_cage.cfg.background_lice_mortality_rates = {key: 1 for key in first_cage.lice_population}
         pressure = 0
 
-        offspring, hatch_date = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
 
         assert offspring == {}
         assert hatch_date is None
@@ -759,3 +769,11 @@ class TestCage:
 
         current_population = sum(first_cage.lice_population.values())
         assert current_population < population_before
+        assert cost > 0
+
+    def test_fallowing(self, first_cage):
+        assert not first_cage.is_fallowing
+        first_cage.fallow()
+        assert first_cage.num_fish == 0
+        assert first_cage.num_infected_fish == 0
+        assert first_cage.is_fallowing

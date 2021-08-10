@@ -1,5 +1,4 @@
 from dataclasses import is_dataclass, asdict
-from decimal import Decimal
 from enum import Enum
 import datetime as dt
 import json
@@ -7,7 +6,7 @@ from queue import PriorityQueue
 
 import numpy as np
 
-from src.QueueBatches import TreatmentEvent, Treatment
+from src.TreatmentTypes import Money
 
 
 class CustomFarmEncoder(json.JSONEncoder):
@@ -43,7 +42,7 @@ class CustomFarmEncoder(json.JSONEncoder):
         elif isinstance(o, np.number):
             return o.item()
 
-        elif isinstance(o, Decimal):
+        elif isinstance(o, Money):
             return str(o)
 
         return o

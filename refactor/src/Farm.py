@@ -1,11 +1,16 @@
 """
-Defines a Farm class that encapsulates a salmon farm containing several cages.
+A Farm is a fundamental agent in this simulation. It has a number of functions:
+
+- controlling individual cages
+- managing its own finances
+- choose whether to cooperate with other farms belonging to the same organisation
+
 """
+
 from __future__ import annotations
 
 import copy
 import datetime as dt
-from decimal import Decimal
 import json
 from collections import Counter
 from typing import Counter as CounterType
@@ -19,7 +24,7 @@ from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 from src.LicePopulation import Alleles, GrossLiceDistrib
-from src.TreatmentTypes import Treatment
+from src.TreatmentTypes import Treatment, TreatmentParams, Money
 from src.QueueBatches import TreatmentEvent
 
 GenoDistribByHatchDate = Dict[dt.datetime, CounterType[Alleles]]
@@ -50,12 +55,15 @@ class Farm:
         self.loc_x = farm_cfg.farm_location[0]
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
-        # TODO: deprecate this
+        self.available_treatments = farm_cfg.max_num_treatments
+        self.current_capital = self.farm_cfg.start_capital
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
         self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
 
+        # TODO: only for testing purposes
         self.preemptively_assign_treatments(self.farm_cfg.treatment_starts)
+
 
     def __str__(self):
         """
@@ -108,12 +116,17 @@ class Farm:
         cur_month = cur_date.month
         ave_temp = self.year_temperatures[cur_month - 1]
 
-        # TODO: automatically convert between enum and data
-        if treatment_type == Treatment.emb:
-            delay = self.cfg.emb.effect_delay
-            efficacy = self.cfg.emb.delay(ave_temp)
+        treatment_cfg = self.cfg.get_treatment(treatment_type)
+        delay = treatment_cfg.effect_delay
+        efficacy = treatment_cfg.delay(ave_temp)
+        application_period = treatment_cfg.application_period
 
-        return TreatmentEvent(cur_date + dt.timedelta(days=delay), treatment_type, efficacy)
+        return TreatmentEvent(
+            cur_date + dt.timedelta(days=delay),
+            treatment_type, efficacy,
+            cur_date,
+            cur_date + dt.timedelta(days=application_period)
+        )
 
     def preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
         """
@@ -126,17 +139,21 @@ class Farm:
             self.add_treatment(self.farm_cfg.treatment_type, treatment_date)
 
     def add_treatment(self, treatment_type: Treatment, day: dt.datetime):
-        event = self.generate_treatment_event(self.farm_cfg.treatment_type, day)
+        if self.available_treatments <= 0:
+            return
+
+        event = self.generate_treatment_event(treatment_type, day)
         for cage in self.cages:
             if cage.start_date <= event.affecting_date:
                 cage.treatment_events.put(event)
+                self.available_treatments -= 1
 
-    def update(self, cur_date: dt.datetime) -> GenoDistribByHatchDate:
+    def update(self, cur_date: dt.datetime) -> Tuple[GenoDistribByHatchDate, Money]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites.
 
         :param cur_date: Current date
-        :return: Dictionary of genotype distributions based on hatch date
+        :return: pair of Dictionary of genotype distributions based on hatch date, and cost of the update
         """
 
         if cur_date >= self.start_date:
@@ -147,13 +164,15 @@ class Farm:
         # get number of lice from reservoir to be put in each cage
         pressures_per_cage = self.get_cage_pressures()
 
+        total_cost = Money("0.00")
+
         # collate egg batches by hatch time
         eggs_by_hatch_date = {}  # type: GenoDistribByHatchDate
         for cage in self.cages:
 
             # update the cage and collect the offspring info
-            egg_distrib, hatch_date = cage.update(cur_date,
-                                                  pressures_per_cage[cage.id])
+            egg_distrib, hatch_date, cost = cage.update(cur_date,
+                                                        pressures_per_cage[cage.id])
 
             if hatch_date:
                 # update the total offspring info
@@ -162,7 +181,11 @@ class Farm:
                 else:
                     eggs_by_hatch_date[hatch_date] = Counter(egg_distrib)
 
-        return eggs_by_hatch_date
+            total_cost += cost
+
+        self.current_capital -= total_cost
+
+        return eggs_by_hatch_date, total_cost
 
     def get_cage_pressures(self) -> List[int]:
         """Get external pressure divided into cages
@@ -304,14 +327,13 @@ class Farm:
 
         return sum(by_cage), by_cage
 
-    def estimate_treatment_cost(self, treatment: Treatment, cur_day: dt.datetime) -> Decimal:
+    def estimate_treatment_cost(self, treatment_data: TreatmentParams, cur_day: dt.datetime) -> Money:
         """
         Estimate the cost of treatment
         """
 
-        # TODO: convert treatment type into the right cfg
-        if treatment == Treatment.EMB:
-            cost_per_kg = self.cfg.emb.cost_per_kg
-        days_since_start = ((cur_day - cage.start_date).days() for cage in self.cages)
+        cost_per_kg = treatment_data.cost_per_kg
+
+        days_since_start = ((cur_day - cage.start_date).days for cage in self.cages)
         return sum(cost_per_kg * Cage.fish_growth_rate(cage_days)
                    for cage_days in days_since_start)

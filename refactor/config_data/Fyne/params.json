@@ -14,20 +14,10 @@
         "description": "Sealice per day per cage/farm arriving from wildlife. Note that this value has been determined experimentally in the original code.",
         "value": 150
     },
-    "start_capital": {
-        "description": "Organisation capital (in GBP), with string decimals",
-        "value": "100000.00"
-    },
     "monthly_cost": {
         "description": "Fixed infrastructure cost (per 28 activity day)",
         "note": "TODO: dummy value",
         "value": "5000"
-    },
-    "gain_per_kg": {
-        "description": "Earned money per kg of sold fish (in GBP).",
-        "note": "TODO: dummy value. This is independent from the infection rate. Only adult (3-4 kg) salmons are considered",
-        "value": "4.39",
-        "source": "NASDAQ Salmon Index, last updated 6/08/21, with a corresponding NOK-GBP currency conversion"
     },
     "farms": [
         {
@@ -67,11 +57,19 @@
                 "treatment_dates": {
                     "description": "Treatment dates for each cage",
                     "value": [
-                        {"from": "2017-09-15 00:00:00", "to": "2017-09-22 00:00:00"},
-                        {"from": "2017-12-01 00:00:00", "to": "2018-01-01 00:00:00"},
-                        {"from": "2018-02-01 00:00:00", "to": "2018-03-01 00:00:00"},
-                        {"from": "2018-05-01 00:00:00", "to": "2018-06-01 00:00:00"}
+                        "2017-09-15 00:00:00",
+                        "2017-12-01 00:00:00",
+                        "2018-02-01 00:00:00",
+                        "2018-05-01 00:00:00"
                     ]
+                },
+                "start_capital": {
+                    "description": "Organisation capital (in GBP)",
+                    "value": "100000.00"
+                },
+                "max_num_treatments": {
+                    "description": "Maximum number of treatments allowed within one year",
+                    "value": 10
                 }
             }
         },
@@ -107,13 +105,21 @@
                     "value": "emb"
                 },
                 "treatment_dates": {
-                    "description": "Treatment dates for each cage",
+                    "description": "Prescheduled treatment dates for each cage",
                     "value": [
-                        {"from": "2017-09-16 00:00:00", "to": "2017-09-23 00:00:00"},
-                        {"from": "2017-12-02 00:00:00", "to": "2018-01-02 00:00:00"},
-                        {"from": "2018-02-02 00:00:00", "to": "2018-03-02 00:00:00"},
-                        {"from": "2018-05-02 00:00:00", "to": "2018-06-02 00:00:00"}
+                        "2017-09-16 00:00:00",
+                        "2017-12-02 00:00:00",
+                        "2018-02-02 00:00:00",
+                        "2018-05-02 00:00:00"
                     ]
+                },
+                "start_capital": {
+                    "description": "Organisation capital (in GBP)",
+                    "value": "80000.00"
+                },
+                "max_num_treatments": {
+                    "description": "Maximum number of treatments allowed within one year",
+                    "value": 8
                 }
             }
         }
