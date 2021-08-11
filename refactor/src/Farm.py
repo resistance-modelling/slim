@@ -326,14 +326,3 @@ class Farm:
             by_cage.append(cage_total)
 
         return sum(by_cage), by_cage
-
-    def estimate_treatment_cost(self, treatment_data: TreatmentParams, cur_day: dt.datetime) -> Money:
-        """
-        Estimate the cost of treatment
-        """
-
-        cost_per_kg = treatment_data.cost_per_kg
-
-        days_since_start = ((cur_day - cage.start_date).days for cage in self.cages)
-        return sum(cost_per_kg * Cage.fish_growth_rate(cage_days)
-                   for cage_days in days_since_start)

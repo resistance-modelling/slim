@@ -48,8 +48,8 @@ class TestCage:
         assert np.alltrue(dead_lice_dist_np >= 0.0)
         assert np.alltrue(np.isclose(dead_lice_dist_np, expected_dead_lice))
 
-    def test_cage_update_lice_treatment_mortality_no_effect(self, farm, first_cage):
-        treatment_dates = farm.farm_cfg.treatment_starts
+    def test_cage_update_lice_treatment_mortality_no_effect(self, first_farm, first_cage):
+        treatment_dates = first_farm.farm_cfg.treatment_starts
         assert(treatment_dates == sorted(treatment_dates))
 
         # before a 14-day activation period there should be no effect
@@ -67,8 +67,8 @@ class TestCage:
         assert first_cage.last_effective_treatment is None
         assert cost == Money("0.00")
 
-    def test_cage_update_lice_treatment_mortality(self, farm, first_cage):
-        treatment_dates = farm.farm_cfg.treatment_starts
+    def test_cage_update_lice_treatment_mortality(self, first_farm, first_cage):
+        treatment_dates = first_farm.farm_cfg.treatment_starts
 
         # first useful day
         cur_day = treatment_dates[1] + dt.timedelta(days=5)
@@ -86,9 +86,9 @@ class TestCage:
 
         assert 55000 <= cost <= 60000
 
-    def test_cage_update_lice_treatment_mortality_close_days(self, farm, first_cage):
-        treatment_dates = farm.farm_cfg.treatment_starts
-        treatment_event = farm.generate_treatment_event(Treatment.emb, treatment_dates[1])
+    def test_cage_update_lice_treatment_mortality_close_days(self, first_farm, first_cage):
+        treatment_dates = first_farm.farm_cfg.treatment_starts
+        treatment_event = first_farm.generate_treatment_event(Treatment.emb, treatment_dates[1])
 
         first_cage.treatment_events = PriorityQueue()
         first_cage.treatment_events.put(treatment_event)
