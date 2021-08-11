@@ -220,8 +220,8 @@ class TestCage:
         assert num_infections_no_protection > 0
 
         first_cage.last_effective_treatment = first_cage.treatment_events.get()
-        first_cage.cfg.infection_delay_time_EMB = protection_days
-        first_cage.cfg.infection_delay_prob_EMB = 0.9
+        first_cage.cfg.emb.infection_delay_time = protection_days
+        first_cage.cfg.emb.infection_delay_prob = 0.9
 
         num_infections_protection = first_cage.do_infection_events(date, 1)
 

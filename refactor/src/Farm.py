@@ -138,15 +138,39 @@ class Farm:
         for treatment_date in treatment_dates:
             self.add_treatment(self.farm_cfg.treatment_type, treatment_date)
 
-    def add_treatment(self, treatment_type: Treatment, day: dt.datetime):
+    def add_treatment(self, treatment_type: Treatment, day: dt.datetime) -> bool:
+        """
+        Ask to add a treatment. If a treatment was applied too early or if too many treatments
+        have been applied so far the request is rejected.
+
+        Note that if **at least** one cage is eligible for treatment and the conditions above
+        are still respected this method will still return True. Eligibility depends
+        on whether the cage has started already or is fallowing - but that may depend on the type
+        of chemical treatment applied. If no cages are available no treatment
+        can be applied and the function returns False.
+
+        TODO: rejection by close treatments has not been implemented yet.
+
+        :param treatment_type: the treatment type to apply
+        :param day: the day when to start applying the treatment
+        :returns: whether the treatment has been added to at least one cage or not.
+        """
         if self.available_treatments <= 0:
-            return
+            return False
+
+        # Python really needs lenses...
+        eligible_cages = [cage for cage in self.cages if not (cage.start_date > day or cage.is_fallowing)]
+
+        if len(eligible_cages) == 0:
+            return False
 
         event = self.generate_treatment_event(treatment_type, day)
-        for cage in self.cages:
-            if cage.start_date <= event.affecting_date:
-                cage.treatment_events.put(event)
-                self.available_treatments -= 1
+
+        for cage in eligible_cages:
+            cage.treatment_events.put(event)
+        self.available_treatments -= 1
+
+        return True
 
     def update(self, cur_date: dt.datetime) -> Tuple[GenoDistribByHatchDate, Money]:
         """Update the status of the farm given the growth of fish and change
