@@ -31,9 +31,6 @@ class Organisation:
         offspring_dict = {}
         for farm in self.farms:
 
-            # if days == 1:
-            #    resistance_bv.write_text(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext)
-
             offspring, cost = farm.update(cur_date)
             offspring_dict[farm.name] = offspring
 
