@@ -23,13 +23,6 @@ def setup(data_folder, sim_id):
     :return: None
     """
     lice_counts = data_folder / "lice_counts_{}.txt".format(sim_id)
-    resistance_bv = data_folder / "resistanceBVs_{}.txt".format(sim_id)
-
-    # delete the files if they already exist
-    # lice_counts.unlink(missing_ok=True)
-    # resistance_bv.unlink(missing_ok=False)
-
-    resistance_bv.write_text("cur_date, muEMB, sigEMB, prop_ext")
 
 
 def create_logger():
@@ -60,10 +53,7 @@ def initialise(data_folder, sim_id, cfg):
 
     # set up the data files, deleting them if they already exist
     lice_counts = data_folder / "lice_counts_{}.txt".format(sim_id)
-    resistance_bv = data_folder / "resistanceBVs_{}.txt".format(sim_id)
     lice_counts.unlink(missing_ok=True)
-    resistance_bv.unlink(missing_ok=True)
-    resistance_bv.write_text("cur_date, muEMB, sigEMB, prop_ext")
 
     return Organisation(cfg)
 
@@ -90,9 +80,7 @@ def run_model(path: Path, sim_id: str, cfg: Config, org: Organisation):
         org.step(cur_date)
 
         # Save the data
-        # TODO: see #100.
-        # TODO: add organisation here, remove serialisation logic
-
+        # TODO: log as json, serialise as pickle
         data_file.write(org.to_json())
         data_file.write("\n")
         cfg.logger.info(repr(org))
