@@ -10,7 +10,7 @@ import pytest
 
 from src.Cage import Cage
 from src.Config import to_dt
-from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch
+from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
 from src.TreatmentTypes import GeneticMechanism, Treatment, Money
 
 
@@ -209,7 +209,6 @@ class TestCage:
         assert avail_lice == 90
 
     def test_do_infection_events(self, first_cage):
-
         protection_days = 10
         date = first_cage.start_date + dt.timedelta(days=protection_days)
 
@@ -219,14 +218,24 @@ class TestCage:
 
         assert num_infections_no_protection > 0
 
-        first_cage.last_effective_treatment = first_cage.treatment_events.get()
+        first_treatment = first_cage.treatment_events.queue[0]  # type: TreatmentEvent
+        first_cage.get_lice_treatment_mortality(first_treatment.affecting_date)
+
+        trial_protection_date = first_treatment.affecting_date
         first_cage.cfg.emb.infection_delay_time = protection_days
         first_cage.cfg.emb.infection_delay_prob = 0.9
 
-        num_infections_protection = first_cage.do_infection_events(date, 1)
+        num_infections_protection = first_cage.do_infection_events(
+            trial_protection_date, (trial_protection_date - date).days)
 
         assert num_infections_protection >= 0
         assert num_infections_protection < num_infections_no_protection
+
+        outside_protection_date = trial_protection_date + dt.timedelta(days=50)
+        num_infections_after_protection = first_cage.do_infection_events(outside_protection_date, 1)
+
+        assert num_infections_after_protection > 0
+        assert num_infections_after_protection > num_infections_protection
 
     def test_get_infected_fish_no_infection(self, first_cage):
         # TODO: maybe make a fixture of this?
@@ -575,6 +584,10 @@ class TestCage:
         for i in range(3):
             first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams))
         assert first_cage.free_dams(cur_day + dt.timedelta(days=3)) == target_dams
+
+    def test_promote_population_invalid(self, first_cage):
+        with pytest.raises(ValueError):
+            first_cage.promote_population("L3", "L4", 100)
 
     def test_promote_population(self, first_cage):
         first_cage.lice_population.geno_by_lifestage["L3"] = {('A',): 1000, ('a',): 1000, ('A', 'a'): 1000}
