@@ -3,8 +3,9 @@ import numpy as np
 import pytest
 import datetime
 
-from src.Config import Config, Treatment
+from src.Config import Config
 from src.Farm import Farm
+from src.Organisation import Organisation
 from src.QueueBatches import EggBatch, DamAvailabilityBatch
 from src.LicePopulation import LicePopulation
 
@@ -22,12 +23,12 @@ def farm_config():
 
 
 @pytest.fixture
-def farm(farm_config, initial_lice_population):
+def first_farm(farm_config, initial_lice_population):
     return Farm(0, farm_config, initial_lice_population)
 
 
 @pytest.fixture
-def farm_two(farm_config, initial_lice_population):
+def second_farm(farm_config, initial_lice_population):
     # use config of farm 1 but change the name
     farm = Farm(0, farm_config, initial_lice_population)
     farm.name = 1
@@ -35,8 +36,13 @@ def farm_two(farm_config, initial_lice_population):
 
 
 @pytest.fixture
-def first_cage(farm):
-    return farm.cages[0]
+def organisation(farm_config):
+    return Organisation(farm_config)
+
+
+@pytest.fixture
+def first_cage(first_farm):
+    return first_farm.cages[0]
 
 
 @pytest.fixture
@@ -63,23 +69,23 @@ def sample_offspring_distrib():
 
 
 @pytest.fixture
-def null_hatched_arrivals(null_offspring_distrib, farm):
-    return {farm.start_date: null_offspring_distrib}
+def null_hatched_arrivals(null_offspring_distrib, first_farm):
+    return {first_farm.start_date: null_offspring_distrib}
 
 
 @pytest.fixture
-def null_egg_batch(null_offspring_distrib, farm):
-    return EggBatch(farm.start_date, null_offspring_distrib)
+def null_egg_batch(null_offspring_distrib, first_farm):
+    return EggBatch(first_farm.start_date, null_offspring_distrib)
 
 
 @pytest.fixture
-def null_dams_batch(null_offspring_distrib, farm):
-    return DamAvailabilityBatch(farm.start_date, null_offspring_distrib)
+def null_dams_batch(null_offspring_distrib, first_farm):
+    return DamAvailabilityBatch(first_farm.start_date, null_offspring_distrib)
 
 
 @pytest.fixture
-def sample_eggs_by_hatch_date(sample_offspring_distrib, farm):
-    return {farm.start_date: null_offspring_distrib}
+def sample_eggs_by_hatch_date(sample_offspring_distrib, first_farm):
+    return {first_farm.start_date: null_offspring_distrib}
 
 
 @pytest.fixture

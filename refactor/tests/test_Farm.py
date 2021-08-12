@@ -5,76 +5,79 @@ import numpy as np
 import pytest
 from src.Cage import Cage
 from src.Config import to_dt
+from src.TreatmentTypes import Treatment
 
 
 class TestFarm:
-    def test_farm_loads_params(self, farm):
-        assert farm.name == 0
-        assert len(farm.cages) == 6
-        assert farm.loc_x == 190300
-        assert farm.loc_y == 665300
+    def test_farm_loads_params(self, first_farm):
+        assert first_farm.name == 0
+        assert len(first_farm.cages) == 6
+        assert first_farm.loc_x == 190300
+        assert first_farm.loc_y == 665300
+        # accounts for pre-sceduled treaments, but only when applicable
+        assert first_farm.available_treatments == 7
 
-    def test_farm_str(self, farm):
-        farm_str = str(farm)
+    def test_farm_str(self, first_farm):
+        farm_str = str(first_farm)
         assert isinstance(farm_str, str)
         assert len(farm_str) > 0
         assert "id: 0" in farm_str
 
-    def test_farm_repr(self, farm):
-        farm_repr = repr(farm)
+    def test_farm_repr(self, first_farm):
+        farm_repr = repr(first_farm)
         loaded_farm_data = json.loads(farm_repr)
         assert isinstance(loaded_farm_data, dict)
 
-    def test_year_temperatures(self, farm):
-        tarbert = farm.cfg.farm_data["tarbert"]["temperatures"]
-        ardrishaig = farm.cfg.farm_data["ardrishaig"]["temperatures"]
+    def test_year_temperatures(self, first_farm):
+        tarbert = first_farm.cfg.farm_data["tarbert"]["temperatures"]
+        ardrishaig = first_farm.cfg.farm_data["ardrishaig"]["temperatures"]
         temps = np.stack([tarbert, ardrishaig])
         min_temps = np.round(np.min(temps, axis=0), 1)
         max_temps = np.round(np.max(temps, axis=0), 1)
-        assert all(min_temps <= farm.year_temperatures)
-        assert all(farm.year_temperatures <= max_temps)
+        assert all(min_temps <= first_farm.year_temperatures)
+        assert all(first_farm.year_temperatures <= max_temps)
 
-    def test_farm_update(self, farm):
+    def test_farm_update(self, first_farm):
         # TODO: test integration across **all** cages. Requires further refactoring.
         pass
 
-    def test_get_cage_pressures(self, farm):
+    def test_get_cage_pressures(self, first_farm):
 
-        farm.cfg.ext_pressure = 100
-        farm.cages = [0] * 10
+        first_farm.cfg.ext_pressure = 100
+        first_farm.cages = [0] * 10
 
-        pressures = farm.get_cage_pressures()
+        pressures = first_farm.get_cage_pressures()
 
-        assert len(pressures) == len(farm.cages)
-        assert sum(pressures) == farm.cfg.ext_pressure
+        assert len(pressures) == len(first_farm.cages)
+        assert sum(pressures) == first_farm.cfg.ext_pressure
 
         for pressure in pressures:
             assert pressure >= 0
 
-    def test_get_cage_pressures_negative_pressure(self, farm):
+    def test_get_cage_pressures_negative_pressure(self, first_farm):
 
-        farm.cfg.ext_pressure = -100
-        farm.cages = [0] * 10
-
-        with pytest.raises(Exception):
-            farm.get_cage_pressures()
-
-    def test_get_cage_pressures_zero_pressure(self, farm):
-        farm.cfg.ext_pressure = 0
-        farm.cages = [0] * 10
-
-        pressures = farm.get_cage_pressures()
-
-        assert len(pressures) == len(farm.cages)
-        assert sum(pressures) == farm.cfg.ext_pressure
-
-    def test_get_cage_pressures_no_cages(self, farm):
-
-        farm.cfg.ext_pressure = 100
-        farm.cages = []
+        first_farm.cfg.ext_pressure = -100
+        first_farm.cages = [0] * 10
 
         with pytest.raises(Exception):
-            farm.get_cage_pressures()
+            first_farm.get_cage_pressures()
+
+    def test_get_cage_pressures_zero_pressure(self, first_farm):
+        first_farm.cfg.ext_pressure = 0
+        first_farm.cages = [0] * 10
+
+        pressures = first_farm.get_cage_pressures()
+
+        assert len(pressures) == len(first_farm.cages)
+        assert sum(pressures) == first_farm.cfg.ext_pressure
+
+    def test_get_cage_pressures_no_cages(self, first_farm):
+
+        first_farm.cfg.ext_pressure = 100
+        first_farm.cages = []
+
+        with pytest.raises(Exception):
+            first_farm.get_cage_pressures()
 
     @pytest.mark.parametrize(
         "eggs_by_hatch_date,nbins", [
@@ -96,9 +99,9 @@ class TestFarm:
                 10
             ),
         ])
-    def test_get_cage_allocation(self, farm, eggs_by_hatch_date, nbins):
+    def test_get_cage_allocation(self, first_farm, eggs_by_hatch_date, nbins):
 
-        allocation = farm.get_cage_allocation(nbins, eggs_by_hatch_date)
+        allocation = first_farm.get_cage_allocation(nbins, eggs_by_hatch_date)
 
         allocation_list = [n for bin_dict in allocation for hatch_dict in bin_dict.values() for n in hatch_dict.values()]
         sum_eggs_by_hatch_date = sum([n for hatch_dict in eggs_by_hatch_date.values() for n in hatch_dict.values()])
@@ -115,27 +118,27 @@ class TestFarm:
             assert allocation_keys == hatch_keys
 
     @pytest.mark.parametrize("nbins", [(0), (-10)])
-    def test_get_cage_allocation_nonpositive_bins(self, farm, nbins):
+    def test_get_cage_allocation_nonpositive_bins(self, first_farm, nbins):
         with pytest.raises(Exception):
-            farm.get_cage_allocation(nbins, {})
+            first_farm.get_cage_allocation(nbins, {})
 
-    def test_get_farm_allocation(self, farm, farm_two, sample_offspring_distrib):
-        farm.cfg.interfarm_probs[farm.name][farm_two.name] = 0.1
+    def test_get_farm_allocation(self, first_farm, second_farm, sample_offspring_distrib):
+        first_farm.cfg.interfarm_probs[first_farm.name][second_farm.name] = 0.1
 
-        total_eggs_by_date = {farm.start_date: sample_offspring_distrib}
-        farm_eggs_by_date = farm.get_farm_allocation(farm_two, total_eggs_by_date)
+        total_eggs_by_date = {first_farm.start_date: sample_offspring_distrib}
+        farm_eggs_by_date = first_farm.get_farm_allocation(second_farm, total_eggs_by_date)
 
         assert len(farm_eggs_by_date) == len(total_eggs_by_date)
-        assert farm_eggs_by_date[farm.start_date].keys() == total_eggs_by_date[farm.start_date].keys()
-        for geno in total_eggs_by_date[farm.start_date]:
-            assert farm_eggs_by_date[farm.start_date][geno] <= total_eggs_by_date[farm.start_date][geno]
+        assert farm_eggs_by_date[first_farm.start_date].keys() == total_eggs_by_date[first_farm.start_date].keys()
+        for geno in total_eggs_by_date[first_farm.start_date]:
+            assert farm_eggs_by_date[first_farm.start_date][geno] <= total_eggs_by_date[first_farm.start_date][geno]
 
-    def test_get_farm_allocation_empty(self, farm, farm_two):
-        farm_eggs_by_date = farm.get_farm_allocation(farm_two, {})
+    def test_get_farm_allocation_empty(self, first_farm, second_farm):
+        farm_eggs_by_date = first_farm.get_farm_allocation(second_farm, {})
         assert farm_eggs_by_date == {}
 
-    def test_disperse_offspring(self, farm, farm_two):
-        farms = [farm, farm_two]
+    def test_disperse_offspring(self, first_farm, second_farm):
+        farms = [first_farm, second_farm]
         eggs_by_hatch_date = {to_dt("2017-01-05 00:00:00"): {
                                                 ('A',): 100,
                                                 ('a',): 100,
@@ -154,7 +157,7 @@ class TestFarm:
             for cage in farm.cages:
                 assert cage.arrival_events.qsize() == 1
 
-    def test_get_cage_arrivals_stats(self, farm, cur_day):
+    def test_get_cage_arrivals_stats(self, first_farm, cur_day):
 
         next_day = cur_day + dt.timedelta(1)
 
@@ -184,36 +187,58 @@ class TestFarm:
 
         arrivals = [cage_1, cage_2]
 
-        total, by_cage = farm.get_cage_arrivals_stats(arrivals)
+        total, by_cage = first_farm.get_cage_arrivals_stats(arrivals)
 
         assert total == 105
         assert by_cage == [70, 35]
 
-    def test_farm_update_before_start(self, farm):
-        cur_date = farm.start_date - dt.timedelta(1)
-        offspring = farm.update(cur_date, 1)
+    def test_farm_update_before_start(self, first_farm):
+        cur_date = first_farm.start_date - dt.timedelta(1)
+        offspring, cost = first_farm.update(cur_date)
 
         assert offspring == {}
+        assert cost > 0 # fallowing
 
-    def test_update(self, farm, sample_offspring_distrib):
+    # Currently fixtures are not automatically loaded in the parametrisation, so they need to be manually invoked
+    # See https://github.com/pytest-dev/pytest/issues/349
+    @pytest.mark.parametrize("test_farm, expected_cost", [('first_farm', 0), ('second_farm', 0)])
+    def test_update(self, sample_offspring_distrib, test_farm, expected_cost, request):
 
         # ensure number of matings
         initial_lice_pop = {stage: 100 for stage in Cage.lice_stages}
 
-        # ensure number of different hatching dates through a number of cages
-        farm.cfg.farms[farm.name].cages_start = [farm.start_date for i in range(10)]
-        farm.cages = [Cage(i, farm.cfg, farm, initial_lice_pop) for i in range(10)]
+        test_farm = request.getfixturevalue(test_farm)
 
-        eggs_by_hatch_date = farm.update(farm.start_date, 1)
+        # ensure number of different hatching dates through a number of cages
+        test_farm.cfg.farms[test_farm.name].cages_start = [test_farm.start_date for i in range(10)]
+        test_farm.cages = [Cage(i, test_farm.cfg, test_farm, initial_lice_pop) for i in range(10)]
+
+        eggs_by_hatch_date, cost = test_farm.update(test_farm.start_date)
 
         for hatch_date in eggs_by_hatch_date:
-            assert hatch_date > farm.start_date
+            assert hatch_date > test_farm.start_date
 
             for geno in eggs_by_hatch_date[hatch_date]:
                 assert eggs_by_hatch_date[hatch_date][geno] > 0
 
-    def test_eq(self, farm, farm_two):
-        assert farm == farm
-        assert farm != farm_two
-        assert farm != 0
-        assert farm != "dummy"
+        # TODO: need to check that the second farm has a positive infrastructure cost
+        assert cost == expected_cost
+
+    def test_eq(self, first_farm, second_farm):
+        assert first_farm == first_farm
+        assert first_farm != second_farm
+        assert first_farm != 0
+        assert first_farm != "dummy"
+
+    def test_treatment_limit(self, first_farm, first_cage):
+        treatment_step_size = dt.timedelta(days=50)
+        cur_day = first_farm.farm_cfg.treatment_starts[-1] + treatment_step_size
+
+        for i in range(7):
+            assert first_farm.add_treatment(Treatment.emb, cur_day)
+            assert first_cage.treatment_events.qsize() == 3 + i + 1  # the first treatment cannot be applied
+            assert first_farm.available_treatments == 7 - i - 1
+            cur_day += treatment_step_size
+
+        assert not first_farm.add_treatment(Treatment.emb, cur_day)
+        assert first_farm.available_treatments == 0

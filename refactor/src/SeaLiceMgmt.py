@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from src.Config import Config
-from src.Farm import Farm
+from src.Organisation import Organisation
 from src.JSONEncoders import CustomFarmEncoder
 
 
@@ -23,13 +23,6 @@ def setup(data_folder, sim_id):
     :return: None
     """
     lice_counts = data_folder / "lice_counts_{}.txt".format(sim_id)
-    resistance_bv = data_folder / "resistanceBVs_{}.txt".format(sim_id)
-
-    # delete the files if they already exist
-    # lice_counts.unlink(missing_ok=True)
-    # resistance_bv.unlink(missing_ok=False)
-
-    resistance_bv.write_text("cur_date, muEMB, sigEMB, prop_ext")
 
 
 def create_logger():
@@ -53,35 +46,25 @@ def create_logger():
 
 def initialise(data_folder, sim_id, cfg):
     """
-    Create the farms, cages and data files that we will need.
-    :return:
+    Create the Organisation(s) data files that we will need.
+    For now only one organisation can run at any time.
+    :return: Organisation
     """
 
     # set up the data files, deleting them if they already exist
     lice_counts = data_folder / "lice_counts_{}.txt".format(sim_id)
-    resistance_bv = data_folder / "resistanceBVs_{}.txt".format(sim_id)
     lice_counts.unlink(missing_ok=True)
-    resistance_bv.unlink(missing_ok=True)
-    resistance_bv.write_text("cur_date, muEMB, sigEMB, prop_ext")
 
-    farms = [Farm(i, cfg) for i in range(cfg.nfarms)]
-
-    # print(cfg.prop_arrive)
-    # print(cfg.hrs_travel)
-    return farms
+    return Organisation(cfg)
 
 
-def run_model(path, sim_id, cfg, farms):
+def run_model(path: Path, sim_id: str, cfg: Config, org: Organisation):
     """Perform the simulation by running the model.
 
     :param path: Path to store the results in
-    :type path: pathlib.PosixPath
     :param sim_id: Simulation name
-    :type sim_id: str
     :param cfg: Configuration object holding parameter information.
-    :type cfg: src.Config
-    :param farms: List of Farm objects.
-    :type farms: list
+    :param Organisation: the organisation to work on.
     """
     cfg.logger.info("running simulation, saving to %s", path)
     cur_date = cfg.start_date
@@ -93,35 +76,14 @@ def run_model(path, sim_id, cfg, farms):
 
     while cur_date <= cfg.end_date:
         cfg.logger.debug("Current date = %s", cur_date)
-
-        cur_date += dt.timedelta(days=cfg.tau)
-        days = (cur_date - cfg.start_date).days
-
-        # update the farms and get the offspring
-        offspring_dict = {}
-        for farm in farms:
-
-            # if days == 1:
-            #    resistance_bv.write_text(cur_date, prev_muEMB[farm], prev_sigEMB[farm], prop_ext)
-
-            offspring = farm.update(cur_date, cfg.tau)
-            offspring_dict[farm.name] = offspring
-
-        # once all of the offspring is collected
-        # it can be dispersed (interfarm and intercage movement)
-        # note: this is done on driver level because it requires access to
-        # other farms - and will allow muliprocessing of the main update
-        for farm_ix, offspring in offspring_dict.items():
-            farms[farm_ix].disperse_offspring(offspring, farms, cur_date)
+        cur_date += dt.timedelta(days=1)
+        org.step(cur_date)
 
         # Save the data
-        # TODO: see #100.
-        # TODO: add organisation here, remove serialisation logic
-
-        farms_dict = {"time": cur_date, "farms": [farm.to_json_dict() for farm in farms]}
-        json.dump(farms_dict, data_file, cls=CustomFarmEncoder)
+        # TODO: log as json, serialise as pickle
+        data_file.write(org.to_json())
         data_file.write("\n")
-        cfg.logger.info(json.dumps(farms_dict, cls=CustomFarmEncoder, indent=4))
+        cfg.logger.info(repr(org))
     data_file.close()
 
 
@@ -174,5 +136,5 @@ if __name__ == "__main__":
         cfg.params.seed = args.seed
 
     # run the simulation
-    FARMS = initialise(output_folder, args.id, cfg)
-    run_model(output_folder, args.id, cfg, FARMS)
+    org = initialise(output_folder, args.id, cfg)
+    run_model(output_folder, args.id, cfg, org)

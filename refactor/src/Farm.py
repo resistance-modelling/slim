@@ -1,6 +1,12 @@
 """
-Defines a Farm class that encapsulates a salmon farm containing several cages.
+A Farm is a fundamental agent in this simulation. It has a number of functions:
+
+- controlling individual cages
+- managing its own finances
+- choose whether to cooperate with other farms belonging to the same organisation
+
 """
+
 from __future__ import annotations
 
 import copy
@@ -18,7 +24,7 @@ from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 from src.LicePopulation import Alleles, GrossLiceDistrib
-from src.TreatmentTypes import Treatment
+from src.TreatmentTypes import Treatment, TreatmentParams, Money
 from src.QueueBatches import TreatmentEvent
 
 GenoDistribByHatchDate = Dict[dt.datetime, CounterType[Alleles]]
@@ -49,12 +55,15 @@ class Farm:
         self.loc_x = farm_cfg.farm_location[0]
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
-        # TODO: deprecate this
+        self.available_treatments = farm_cfg.max_num_treatments
+        self.current_capital = self.farm_cfg.start_capital
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
         self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
 
+        # TODO: only for testing purposes
         self.preemptively_assign_treatments(self.farm_cfg.treatment_starts)
+
 
     def __str__(self):
         """
@@ -102,32 +111,73 @@ class Farm:
         Ndiff = self.loc_y - tarbert_northing
         return np.round(tarbert_temps - Ndiff * degs, 1)
 
-    def generate_treatment_event(self, treatment_type: Treatment, cur_date: dt.datetime) -> TreatmentEvent:
+    def generate_treatment_event(self, treatment_type: Treatment, cur_date: dt.datetime
+                                 ) -> TreatmentEvent:
         cur_month = cur_date.month
         ave_temp = self.year_temperatures[cur_month - 1]
 
-        # TODO: automatically convert between enum and data
-        if treatment_type == Treatment.emb:
-            delay = self.cfg.emb.effect_delay
-            efficacy = self.cfg.emb.delay(ave_temp)
+        treatment_cfg = self.cfg.get_treatment(treatment_type)
+        delay = treatment_cfg.effect_delay
+        efficacy = treatment_cfg.delay(ave_temp)
+        application_period = treatment_cfg.application_period
 
-        return TreatmentEvent(cur_date + dt.timedelta(days=delay), treatment_type, efficacy)
+        return TreatmentEvent(
+            cur_date + dt.timedelta(days=delay),
+            treatment_type, efficacy,
+            cur_date,
+            cur_date + dt.timedelta(days=application_period)
+        )
 
     def preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
-        for treatment in treatment_dates:
-            event = self.generate_treatment_event(self.farm_cfg.treatment_type, treatment)
-            for cage in self.cages:
-                if cage.start_date <= event.affecting_date:
-                    cage.treatment_events.put(event)
+        """
+        Assign a few treatment dates to cages.
+        NOTE: Mainly used for testing. May be deprecated when a proper strategy mechanism is in place
 
+        :param treatment_dates: the dates when to apply treatment
+        """
+        for treatment_date in treatment_dates:
+            self.add_treatment(self.farm_cfg.treatment_type, treatment_date)
 
-    def update(self, cur_date: dt.datetime, step_size: int) -> GenoDistribByHatchDate:
+    def add_treatment(self, treatment_type: Treatment, day: dt.datetime) -> bool:
+        """
+        Ask to add a treatment. If a treatment was applied too early or if too many treatments
+        have been applied so far the request is rejected.
+
+        Note that if **at least** one cage is eligible for treatment and the conditions above
+        are still respected this method will still return True. Eligibility depends
+        on whether the cage has started already or is fallowing - but that may depend on the type
+        of chemical treatment applied. If no cages are available no treatment
+        can be applied and the function returns False.
+
+        TODO: rejection by close treatments has not been implemented yet.
+
+        :param treatment_type: the treatment type to apply
+        :param day: the day when to start applying the treatment
+        :returns: whether the treatment has been added to at least one cage or not.
+        """
+        if self.available_treatments <= 0:
+            return False
+
+        # Python really needs lenses...
+        eligible_cages = [cage for cage in self.cages if not (cage.start_date > day or cage.is_fallowing)]
+
+        if len(eligible_cages) == 0:
+            return False
+
+        event = self.generate_treatment_event(treatment_type, day)
+
+        for cage in eligible_cages:
+            cage.treatment_events.put(event)
+        self.available_treatments -= 1
+
+        return True
+
+    def update(self, cur_date: dt.datetime) -> Tuple[GenoDistribByHatchDate, Money]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites.
 
         :param cur_date: Current date
-        :param step_size: Step size for tau-leaping
-        :return: Dictionary of genotype distributions based on hatch date
+        :return: pair of Dictionary of genotype distributions based on hatch date, and cost of the update
         """
 
         if cur_date >= self.start_date:
@@ -138,14 +188,15 @@ class Farm:
         # get number of lice from reservoir to be put in each cage
         pressures_per_cage = self.get_cage_pressures()
 
+        total_cost = Money("0.00")
+
         # collate egg batches by hatch time
         eggs_by_hatch_date = {}  # type: GenoDistribByHatchDate
         for cage in self.cages:
 
             # update the cage and collect the offspring info
-            egg_distrib, hatch_date = cage.update(cur_date,
-                                                  step_size,
-                                                  pressures_per_cage[cage.id])
+            egg_distrib, hatch_date, cost = cage.update(cur_date,
+                                                        pressures_per_cage[cage.id])
 
             if hatch_date:
                 # update the total offspring info
@@ -154,7 +205,11 @@ class Farm:
                 else:
                     eggs_by_hatch_date[hatch_date] = Counter(egg_distrib)
 
-        return eggs_by_hatch_date
+            total_cost += cost
+
+        self.current_capital -= total_cost
+
+        return eggs_by_hatch_date, total_cost
 
     def get_cage_pressures(self) -> List[int]:
         """Get external pressure divided into cages
@@ -295,56 +350,3 @@ class Farm:
             by_cage.append(cage_total)
 
         return sum(by_cage), by_cage
-
-# def d_hatching(c_temp):
-#    """
-#    TODO: ???
-#    """
-#    return 3*(3.3 - 0.93*np.log(c_temp/3) -0.16*np.log(c_temp/3)**2) #for 3 broods
-#
-# def ave_dev_days(del_p, del_m10, del_s, temp_c):
-#    """
-#    Average dev days using dev_time method, not used in model but handy to have
-#        # 5deg: 5.2,-,67.5,2
-#        # 10deg: 3.9,-,24,5.3
-#        # 15deg: 3.3,-,13.1,9.4
-#    :param del_p:
-#    :param del_m10:
-#    :param del_s:
-#    :param temp_c:
-#    :return:
-#    """
-#    return 100 * dev_time(del_p, del_m10, del_s, temp_c, 100) \
-#                   - 0.001 * sum([dev_time(del_p, del_m10, del_s, temp_c, i)
-#                          for i in np.arange(0, 100.001, 0.001)])
-#
-# def eudist(point_a, point_b):
-#    """
-#    Obtain the [Euclidean] distance between two points.
-#    :param point_a: the first point (location of farm 1)
-#    :param point_b: the second point (location of farm 2)
-#    :return: the Euclidean distance between point_a and point_b
-#    """
-#    return distance.euclidean(point_a, point_b)
-#
-# def egg_gen(farm, sig, eggs_plus, data):
-#    """
-#    TODO ???
-#    :param farm:
-#    :param sig:
-#    :param eggs_plus:
-#    :param data:
-#    :return:
-#    """
-#    if farm == 0:
-#        if np.random.uniform(0, 1, 1) > cfg.prop_influx:
-#            bvs = 0.5 * data['resistanceT1'].values + 0.5 * data['mate_resistanceT1'].values + \
-#                          np.random.normal(0, sig, eggs_plus) / np.sqrt(2)
-#        else:
-#            bvs = np.random.normal(cfg.f_muEMB, cfg.f_sigEMB, eggs_plus)
-#    else:
-#        bvs = 0.5 * data['resistanceT1'].values + 0.5 * data['mate_resistanceT1'].values + \
-#              np.random.normal(0, sig, eggs_plus) / np.sqrt(2)
-#    return bvs
-#
-#

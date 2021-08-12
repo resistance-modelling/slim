@@ -6,7 +6,7 @@ from queue import PriorityQueue
 
 import numpy as np
 
-from src.QueueBatches import TreatmentEvent, Treatment
+from src.TreatmentTypes import Money
 
 
 class CustomFarmEncoder(json.JSONEncoder):
@@ -41,5 +41,8 @@ class CustomFarmEncoder(json.JSONEncoder):
 
         elif isinstance(o, np.number):
             return o.item()
+
+        elif isinstance(o, Money):
+            return str(o)
 
         return o
