@@ -115,6 +115,11 @@
     "description": "Mutation rate, as in number of individual mutation events that can happen out of the number of offsprings. For example, 1e-5 is one mutation every 10,000 extruded eggs",
     "value": 1e-5
   },
+  "male_detachment_rate": {
+    "description": "Rate at which an adult male detaches from a dying fish and survives",
+    "note": "TODO: dummy value.",
+    "value": 0.7
+  },
   "treatments": {
     "description": "Parameters related to specific treatments",
     "value": {

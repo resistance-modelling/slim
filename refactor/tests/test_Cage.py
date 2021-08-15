@@ -701,6 +701,53 @@ class TestCage:
     def test_get_reservoir_lice_no_pressure(self, first_cage):
         assert first_cage.get_reservoir_lice(0) == {"L1": 0, "L2": 0}
 
+    def test_dying_lice_from_dead_no_dead_fish(self, first_cage):
+        assert first_cage.get_dying_lice_from_dead_fish(0) == {}
+
+    def test_dying_lice_from_dead_no_lice(self, first_cage):
+        for stage in Cage.susceptible_stages:
+            first_cage.lice_population[stage] = 0
+
+        for fish in [0, 1, 10, 1000]:
+            assert first_cage.get_dying_lice_from_dead_fish(fish) == {}
+
+    def test_dying_lice_from_dead_fish(self, first_cage):
+        dead_fish = 5
+        dead_lice_target = {
+            'L3': 2,
+            'L4': 1,
+            'L5m': 1,
+        }
+
+        dead_lice = first_cage.get_dying_lice_from_dead_fish(dead_fish)
+        assert dead_lice == dead_lice_target
+
+        # An increase in population should cause a proportional number of deaths
+        for stage in Cage.susceptible_stages:
+            first_cage.lice_population[stage] *= 100
+
+        rate = first_cage.get_mean_infected_fish() / first_cage.get_infecting_population()
+        dead_lice_target = {
+            'L3': 190,
+            'L4': 123,
+            'L5m': 19,
+            'L5f': 63
+        }
+
+        dead_lice = first_cage.get_dying_lice_from_dead_fish(dead_fish)
+        assert dead_lice == dead_lice_target
+
+        # Similarly, an increase in dead_fish should cause the same effect
+
+        for stage in Cage.susceptible_stages:
+            first_cage.lice_population[stage] //= 100
+
+        dead_fish *= 100
+
+        dead_lice = first_cage.get_dying_lice_from_dead_fish(dead_fish)
+        assert dead_lice == dead_lice_target
+
+
     def test_update_step_before_start_date_two_days(self, first_cage, planctonic_only_population):
         cur_date = first_cage.start_date - dt.timedelta(5)
         first_cage.lice_population = planctonic_only_population

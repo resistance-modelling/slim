@@ -101,6 +101,7 @@ class RuntimeConfig:
         # Fish mortality constants
         self.fish_mortality_center = data["fish_mortality_center"]["value"]
         self.fish_mortality_k = data["fish_mortality_k"]["value"]
+        self.male_detachment_rate = data["male_detachment_rate"]["value"]
 
         # Background lice mortality constants
         self.background_lice_mortality_rates = data["background_lice_mortality_rates"]["value"]
