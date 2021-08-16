@@ -830,7 +830,7 @@ class Cage:
 
         @singledispatch
         def access_time_lt(_peek_element, _cur_time: dt.datetime):
-            pass
+            pass  # pragma: no cover
 
         @access_time_lt.register
         def _(arg: EggBatch, _cur_time: dt.datetime):
@@ -840,7 +840,7 @@ class Cage:
         # see https://github.com/python/mypy/issues/2904 for details
         @access_time_lt.register  # type: ignore[no-redef]
         def _(arg: TravellingEggBatch, _cur_time: dt.datetime):
-            return arg.hatch_date <= _cur_time
+            return arg.hatch_date <= _cur_time  # pragma: no cover
 
         @access_time_lt.register  # type: ignore[no-redef]
         def _(arg: DamAvailabilityBatch, _cur_time: dt.datetime):
@@ -933,7 +933,7 @@ class Cage:
                   affected_lice_gross * self.cfg.male_detachment_rate,
             'L5m': self.lice_population['L5m'] / infecting_lice *
                    affected_lice_gross * self.cfg.male_detachment_rate,
-        }, 0))
+        }, 0))  # type: Counter[str]
 
         dying_lice = affected_lice - surviving_lice
 

@@ -65,11 +65,6 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
 
         self._available_dams = new_value
 
-    @property
-    def gross(self):
-        """Gross population number"""
-        return sum(self.values())
-
     @staticmethod
     def multiply_distrib(distrib: dict, population: int):
         keys = distrib.keys()
