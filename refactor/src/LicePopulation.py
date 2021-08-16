@@ -44,6 +44,7 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
                 self.logger.warning(f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
             self.geno_by_lifestage.raw_update_value(stage, self.multiply_distrib(self.genetic_ratios, value))
         else:
+            value = max(value, 0)
             self.geno_by_lifestage.raw_update_value(stage, self.multiply_distrib(self.geno_by_lifestage[stage], value))
         if stage == "L5f":
             self._available_dams = self.multiply_distrib(self._available_dams, value)

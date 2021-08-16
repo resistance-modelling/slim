@@ -18,5 +18,5 @@ class TestOrganisation:
         limit = 10
         for i in range(limit):
             organisation.step(day)
-            day += dt.timedelta(days=i)
+            day += dt.timedelta(days=1)
 
