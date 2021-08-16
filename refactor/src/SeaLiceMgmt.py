@@ -96,14 +96,9 @@ if __name__ == "__main__":
 
     # set up and read the command line arguments
     parser = argparse.ArgumentParser(description="Sea lice simulation")
-    parser.add_argument("path",
-                        type=str, help="Output directory path")
-    parser.add_argument("id",
+    parser.add_argument("simulation_path",
                         type=str,
-                        help="Experiment name")
-    parser.add_argument("cfg_path",
-                        type=str,
-                        help="Path to simulation config JSON file")
+                        help="Output directory path. The base directory will be used for logging")
     parser.add_argument("param_dir",
                         type=str,
                         help="Directory of simulation parameters files.")
@@ -118,8 +113,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # set up the data folders
-    output_folder = Path.cwd() / "outputs" / args.path
+
+    output_path = Path(args.simulation_path)
+    simulation_id = output_path.name
+    output_basename = output_path.parent
+
+    # TODO: do we want to keep an output directory like this?
+    output_folder = Path.cwd() / "outputs" / output_basename
     output_folder.mkdir(parents=True, exist_ok=True)
+
+    cfg_basename = Path(args.param_dir).parent
+    cfg_path = str(cfg_basename / "config.json")
 
     # set up config class and logger (logging to file and screen.)
     logger = create_logger()
@@ -129,12 +133,12 @@ if __name__ == "__main__":
         logger.addFilter(lambda record: False)
 
     # create the config object
-    cfg = Config(args.cfg_path, args.param_dir, logger)
+    cfg = Config(cfg_path, args.param_dir, logger)
 
     # set the seed
     if "seed" in args:
         cfg.params.seed = args.seed
 
     # run the simulation
-    org = initialise(output_folder, args.id, cfg)
-    run_model(output_folder, args.id, cfg, org)
+    org = initialise(output_folder, simulation_id, cfg)
+    run_model(output_folder, simulation_id, cfg, org)
