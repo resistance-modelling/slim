@@ -1,7 +1,8 @@
+import argparse
 import datetime as dt
 import json
 import os
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 
@@ -23,7 +24,7 @@ def to_dt(string_date) -> dt.datetime:
 class Config:
     """Simulation configuration and parameters"""
 
-    def __init__(self, config_file, simulation_dir, logger):
+    def __init__(self, config_file, simulation_dir, logger, override_params={}):
         """@DynamicAttrs Read the configuration from files
 
         :param config_file: Path to the environment JSON file
@@ -31,6 +32,7 @@ class Config:
         :param simulation_dir: path to the simulator parameters JSON file
         :param logger: Logger to be used
         :type logger: logging.Logger
+        :param override_params: options that override the config
         """
 
         # set logger
@@ -40,7 +42,7 @@ class Config:
         with open(os.path.join(simulation_dir, "params.json")) as f:
             data = json.load(f)
 
-        self.params = RuntimeConfig(config_file)
+        self.params = RuntimeConfig(config_file, override_params)
 
         # time and dates
         self.start_date = to_dt(data["start_date"]["value"])
@@ -70,14 +72,11 @@ class Config:
 class RuntimeConfig:
     """Simulation parameters and constants"""
 
-    def __init__(self, hyperparam_file):
+    def __init__(self, hyperparam_file, _override_options):
         with open(hyperparam_file) as f:
             data = json.load(f)
 
-        # TODO: make pycharm/mypy perform detection of these vars
-        # Or alternatively manually set the vars
-        # for k, v in data.items():
-        #    setattr(self, k, v["value"])
+        self.__override(data, _override_options)
 
         # Evolution constants
         self.stage_age_evolutions = data["stage_age_evolutions"]["value"]
@@ -120,6 +119,12 @@ class RuntimeConfig:
         self.seed = seed_dict["value"] if seed_dict else None
 
         self.rng = np.random.default_rng(seed=self.seed)
+
+    @staticmethod
+    def __override(data, override_options: dict):
+        for k, v in override_options.items():
+            if k in data:
+                data[k]["value"] = v
 
 
 class FarmConfig:

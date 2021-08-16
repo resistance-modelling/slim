@@ -86,6 +86,27 @@ def run_model(path: Path, sim_id: str, cfg: Config, org: Organisation):
         cfg.logger.info(repr(org))
     data_file.close()
 
+def generate_argparse_from_config(cfg_path: str):
+    parser = argparse.ArgumentParser(description="Sea lice simulation")
+
+    # TODO: we are parsing the config twice.
+    with open(cfg_path) as fp:
+        cfg_struct = json.load(fp)  # type: dict
+
+    group = parser.add_argument_group('Runtime parameters')
+
+    for k, v in cfg_struct.items():
+        value = v["value"]
+        description = v["description"]
+        value_type = type(value)
+
+        if isinstance(value, list) or isinstance(value, dict):
+            continue # TODO: deal with them later, e.g. prop_a.prop_b for dicts?
+
+        group.add_argument(f"--{k.replace('_', '-')}", type=value_type, help=description, default=value)
+
+    return parser
+
 
 if __name__ == "__main__":
     # NOTE: missing_ok argument of unlink is only supported from Python 3.8
@@ -106,11 +127,7 @@ if __name__ == "__main__":
                         help="Don't log to console or file.",
                         default=False,
                         action="store_true")
-    parser.add_argument("--seed",
-                        type=int,
-                        help="Provide a seed for random generation.",
-                        required=False)
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
     # set up the data folders
 
@@ -131,6 +148,9 @@ if __name__ == "__main__":
     # silence if needed
     if args.quiet:
         logger.addFilter(lambda record: False)
+
+    config_parser = generate_argparse_from_config(cfg_path)
+    config_parser.parse_args(unknown)
 
     # create the config object
     cfg = Config(cfg_path, args.param_dir, logger)
