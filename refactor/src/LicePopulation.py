@@ -44,6 +44,8 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
                 self.logger.warning(f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
             self.geno_by_lifestage.raw_update_value(stage, self.multiply_distrib(self.genetic_ratios, value))
         else:
+            if value < 0:
+                self.logger.warning(f"Trying to assign population stage {stage} a negative value. It will be truncated to zero, but this probably means an invariant was broken.")
             value = max(value, 0)
             self.geno_by_lifestage.raw_update_value(stage, self.multiply_distrib(self.geno_by_lifestage[stage], value))
         if stage == "L5f":
@@ -95,11 +97,11 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
             distrib[geno] += distrib_delta[geno]
 
     @staticmethod
-    def update_distrib_discrete_subtract(distrib_delta, distrib):
+    def update_distrib_discrete_subtract(distrib_delta, distrib, truncation=True):
         for geno in distrib:
             if geno in distrib_delta:
                 distrib[geno] -= distrib_delta[geno]
-            if distrib[geno] < 0:
+            if distrib[geno] < 0 and truncation:
                 distrib[geno] = 0
 
     def get_empty_geno_stage_distrib(self) -> GenoDistrib:

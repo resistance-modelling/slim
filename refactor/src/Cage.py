@@ -335,10 +335,13 @@ class Cage:
         p = p / np.sum(p)  # probs need to add up to one
         return self.cfg.rng.choice(range(max_quantile), size, p=p) + minimum_age
 
-    def get_lice_lifestage(self, cur_month):
+    def get_lice_lifestage(self, cur_month) -> Tuple[int, int, int, int]:
         """
         Move lice between lifecycle stages.
         See Section 2.1 of Aldrin et al. (2017)
+
+        :param cur_month: the current month
+        :returns a tuple (new_l2, new_l4, new_l5f, new_l5m)
         """
         self.logger.debug("\t\tupdating lice lifecycle stages")
 
@@ -1007,6 +1010,15 @@ class Cage:
         :param hatched_arrivals_dist: new offspring obtained from arrivals
         """
 
+        old_gross_population = self.lice_population.copy()
+
+        # Update dead_lice_dist to include fish-caused death as well
+        dead_lice_by_fish_death = self.get_dying_lice_from_dead_fish(
+            fish_deaths_natural + fish_deaths_from_lice)
+        for affected_stage, reduction in dead_lice_by_fish_death.items():
+            dead_lice_dist[affected_stage] += reduction
+
+
         for stage in self.lice_population:
             # update background mortality
             bg_delta = self.lice_population[stage] - dead_lice_dist[stage]
@@ -1017,13 +1029,10 @@ class Cage:
                 treatment_mortality[stage],
                 self.lice_population.geno_by_lifestage[stage])
 
-        self.lice_population["L5m"] += new_males
-        self.lice_population["L5f"] += new_females
-
+        self.promote_population("L4", "L5m", 0, new_males)
+        self.promote_population("L4", "L5f", 0, new_females)
         self.promote_population("L3", "L4", new_males + new_females, new_L4)
-
         self.promote_population("L2", "L3", new_L4, new_infections)
-
         self.promote_population("L1", "L2", new_infections, new_L2 + lice_from_reservoir["L2"])
 
         self.promote_population(new_offspring_distrib, "L1", new_L2, None)
@@ -1033,25 +1042,46 @@ class Cage:
         # TODO: switch to generic genotype distribs?
         self.lice_population["L1"] += lice_from_reservoir["L1"]
 
-        # Remove dead lice caused by dead fish
-        dead_lice_by_fish_death = self.get_dying_lice_from_dead_fish(
-            fish_deaths_natural + fish_deaths_from_lice)
-        for affected_stage, reduction in dead_lice_by_fish_death.items():
-            self.lice_population[affected_stage] -= reduction
-
         delta_avail_dams = delta_dams_batch.geno_distrib if delta_dams_batch is not None else {}
-        LicePopulation.update_distrib_discrete_subtract(
-            delta_avail_dams, self.lice_population.available_dams)
-        LicePopulation.update_distrib_discrete_add(
-            returned_dams, self.lice_population.available_dams)
+
+        # Gross L5f calculation is fine, but we need to determine how many of these are available now.
+        # In principle, once some of the lice are popped from the queue these may die. Therefore,
+        # we need to compute the fraction of the new-available ones that have died.
+        # Step 1: compute the correct ratios...
+        # TODO: operator overloading MUST be implemented as this is terrible code
+
+        if old_gross_population['L5f'] > 0:
+            num_available = sum(self.lice_population.available_dams.values())
+            l5_availability_ratio = num_available / old_gross_population['L5f']
+            assert l5_availability_ratio <= 1.0
+            # Step 2: compute the right genetics affected by treatment
+            available_dams = self.lice_population.available_dams.copy()
+            treated_dams_dist = treatment_mortality['L5f'].copy()
+            treatment_mortality_l5_gross = sum(treated_dams_dist.values())
+
+            delta_busy_dist = LicePopulation.multiply_distrib(
+                treated_dams_dist, round(treatment_mortality_l5_gross * l5_availability_ratio))
+            LicePopulation.update_distrib_discrete_subtract(delta_busy_dist, returned_dams)
+
+            LicePopulation.update_distrib_discrete_add(
+                returned_dams, self.lice_population.available_dams)
+
+            # Step 3: remaining gross calculations
+            delta_busy = round(l5_availability_ratio * dead_lice_dist['L5f'])
+
+            # Step 4: actual update
+            self.lice_population.available_dams = LicePopulation.multiply_distrib(
+                self.lice_population.available_dams, num_available + delta_busy)
+            LicePopulation.update_distrib_discrete_add(
+                delta_busy_dist, self.lice_population.available_dams
+            )
 
         if delta_dams_batch:
+            for k, v in delta_dams_batch.geno_distrib.items():
+                assert v <= self.lice_population.geno_by_lifestage['L5f'][k]
             self.busy_dams.put(delta_dams_batch)
 
-        #  TODO: remove females that leave L5f by dying from available_dams
-
-        self.num_fish -= fish_deaths_natural
-        self.num_fish -= fish_deaths_from_lice
+        self.num_fish -= (fish_deaths_natural + fish_deaths_from_lice)
 
         # treatment may kill some lice attached to the fish, thus update at the very end
         self.num_infected_fish = self.get_mean_infected_fish()
