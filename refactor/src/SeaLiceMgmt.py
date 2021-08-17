@@ -86,6 +86,33 @@ def run_model(path: Path, sim_id: str, cfg: Config, org: Organisation):
         cfg.logger.info(repr(org))
     data_file.close()
 
+def generate_argparse_from_config(cfg_path: str, simulation_path: str):
+    parser = argparse.ArgumentParser(description="Sea lice simulation")
+
+    # TODO: we are parsing the config twice.
+    with open(cfg_path) as fp:
+        cfg_dict = json.load(fp)  # type: dict
+
+    with open(simulation_path) as fp:
+        simulation_dict = json.load(fp)  # type: dict
+
+    def add_to_group(group_name, data):
+        group = parser.add_argument_group(group_name)
+        for k, v in data.items():
+            if isinstance(v, list) or isinstance(v["value"], list) or isinstance(v["value"], dict):
+                continue # TODO: deal with them later, e.g. prop_a.prop_b for dicts?
+            value = v["value"]
+            description = v["description"]
+            value_type = type(value)
+
+
+            group.add_argument(f"--{k.replace('_', '-')}", type=value_type, help=description, default=value)
+
+    add_to_group("Organisation parameters", simulation_dict)
+    add_to_group("Runtime parameters", cfg_dict)
+
+    return parser
+
 
 if __name__ == "__main__":
     # NOTE: missing_ok argument of unlink is only supported from Python 3.8
@@ -96,14 +123,9 @@ if __name__ == "__main__":
 
     # set up and read the command line arguments
     parser = argparse.ArgumentParser(description="Sea lice simulation")
-    parser.add_argument("path",
-                        type=str, help="Output directory path")
-    parser.add_argument("id",
+    parser.add_argument("simulation_path",
                         type=str,
-                        help="Experiment name")
-    parser.add_argument("cfg_path",
-                        type=str,
-                        help="Path to simulation config JSON file")
+                        help="Output directory path. The base directory will be used for logging")
     parser.add_argument("param_dir",
                         type=str,
                         help="Directory of simulation parameters files.")
@@ -111,15 +133,19 @@ if __name__ == "__main__":
                         help="Don't log to console or file.",
                         default=False,
                         action="store_true")
-    parser.add_argument("--seed",
-                        type=int,
-                        help="Provide a seed for random generation.",
-                        required=False)
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
     # set up the data folders
-    output_folder = Path.cwd() / "outputs" / args.path
+
+    output_path = Path(args.simulation_path)
+    simulation_id = output_path.name
+    output_basename = output_path.parent
+
+    output_folder = Path.cwd() / output_basename
     output_folder.mkdir(parents=True, exist_ok=True)
+
+    cfg_basename = Path(args.param_dir).parent
+    cfg_path = str(cfg_basename / "config.json")
 
     # set up config class and logger (logging to file and screen.)
     logger = create_logger()
@@ -128,13 +154,12 @@ if __name__ == "__main__":
     if args.quiet:
         logger.addFilter(lambda record: False)
 
-    # create the config object
-    cfg = Config(args.cfg_path, args.param_dir, logger)
+    config_parser = generate_argparse_from_config(cfg_path, args.param_dir + "/params.json")
+    config_args = config_parser.parse_args(unknown)
 
-    # set the seed
-    if "seed" in args:
-        cfg.params.seed = args.seed
+    # create the config object
+    cfg = Config(cfg_path, args.param_dir, logger, vars(config_args))
 
     # run the simulation
-    org = initialise(output_folder, args.id, cfg)
-    run_model(output_folder, args.id, cfg, org)
+    org = initialise(output_folder, simulation_id, cfg)
+    run_model(output_folder, simulation_id, cfg, org)
