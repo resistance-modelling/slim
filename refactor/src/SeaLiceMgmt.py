@@ -141,8 +141,7 @@ if __name__ == "__main__":
     simulation_id = output_path.name
     output_basename = output_path.parent
 
-    # TODO: do we want to keep an output directory like this?
-    output_folder = Path.cwd() / "outputs" / output_basename
+    output_folder = Path.cwd() / output_basename
     output_folder.mkdir(parents=True, exist_ok=True)
 
     cfg_basename = Path(args.param_dir).parent
