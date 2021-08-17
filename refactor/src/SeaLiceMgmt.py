@@ -86,24 +86,30 @@ def run_model(path: Path, sim_id: str, cfg: Config, org: Organisation):
         cfg.logger.info(repr(org))
     data_file.close()
 
-def generate_argparse_from_config(cfg_path: str):
+def generate_argparse_from_config(cfg_path: str, simulation_path: str):
     parser = argparse.ArgumentParser(description="Sea lice simulation")
 
     # TODO: we are parsing the config twice.
     with open(cfg_path) as fp:
-        cfg_struct = json.load(fp)  # type: dict
+        cfg_dict = json.load(fp)  # type: dict
 
-    group = parser.add_argument_group('Runtime parameters')
+    with open(simulation_path) as fp:
+        simulation_dict = json.load(fp)  # type: dict
 
-    for k, v in cfg_struct.items():
-        value = v["value"]
-        description = v["description"]
-        value_type = type(value)
+    def add_to_group(group_name, data):
+        group = parser.add_argument_group(group_name)
+        for k, v in data.items():
+            if isinstance(v, list) or isinstance(v["value"], list) or isinstance(v["value"], dict):
+                continue # TODO: deal with them later, e.g. prop_a.prop_b for dicts?
+            value = v["value"]
+            description = v["description"]
+            value_type = type(value)
 
-        if isinstance(value, list) or isinstance(value, dict):
-            continue # TODO: deal with them later, e.g. prop_a.prop_b for dicts?
 
-        group.add_argument(f"--{k.replace('_', '-')}", type=value_type, help=description, default=value)
+            group.add_argument(f"--{k.replace('_', '-')}", type=value_type, help=description, default=value)
+
+    add_to_group("Organisation parameters", simulation_dict)
+    add_to_group("Runtime parameters", cfg_dict)
 
     return parser
 
@@ -149,15 +155,11 @@ if __name__ == "__main__":
     if args.quiet:
         logger.addFilter(lambda record: False)
 
-    config_parser = generate_argparse_from_config(cfg_path)
-    config_parser.parse_args(unknown)
+    config_parser = generate_argparse_from_config(cfg_path, args.param_dir + "/params.json")
+    config_args = config_parser.parse_args(unknown)
 
     # create the config object
-    cfg = Config(cfg_path, args.param_dir, logger)
-
-    # set the seed
-    if "seed" in args:
-        cfg.params.seed = args.seed
+    cfg = Config(cfg_path, args.param_dir, logger, vars(config_args))
 
     # run the simulation
     org = initialise(output_folder, simulation_id, cfg)

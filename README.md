@@ -150,17 +150,30 @@ and genetic group can die).
 ### Refactored
 To run the WIP refactored model, enter the ```refactor``` directory and run:
 
-```python -m src.SeaLiceMgmt output_folder simulation_name config_json_path simulation_params_directory```
+```python -m src.SeaLiceMgmt output_folder/simulation_name simulation_params_directory```
+
 
 For example:
-```python -m src.SeaLiceMgmt out 0 config_data/config.json config_data/Fyne```
+```python -m src.SeaLiceMgmt out/0 config_data/Fyne```
+
 
 #### Simulation parameters directory
 The program expects three files in the simulation parameters directory:
+
 - `params.json` with simulation parameters
 - `interfarm_time.csv` with travel time of sealice between two given farms
 - `interfarm_prob.csv` with probability of sealice travel between two given farms
+
 See `refactor/config_data/Fyne` for examples.
+
+#### CLI options
+
+If one wishes to modify a runtime option an extra CLI parameter can be passed to the command. In general, for
+each key in the format `a_b_c` an automatic parameter in the format "--a-b-c" will be generated. For example:
+
+```python -m src.SeaLiceMgmt out/0 config_data/Fyne --seed=0 --genetic-mechanism=discrete```
+
+For now, nested and list properties are not yet supported.
 
 #### Testing
 

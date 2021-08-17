@@ -21,6 +21,13 @@ def to_dt(string_date) -> dt.datetime:
     return dt.datetime.strptime(string_date, dt_format)
 
 
+def override(data, override_options: dict):
+    print(override_options)
+    for k, v in override_options.items():
+        if k in data:
+            data[k]["value"] = v
+
+
 class Config:
     """Simulation configuration and parameters"""
 
@@ -43,6 +50,7 @@ class Config:
             data = json.load(f)
 
         self.params = RuntimeConfig(config_file, override_params)
+        override(data, override_params)
 
         # time and dates
         self.start_date = to_dt(data["start_date"]["value"])
@@ -76,7 +84,7 @@ class RuntimeConfig:
         with open(hyperparam_file) as f:
             data = json.load(f)
 
-        self.__override(data, _override_options)
+        override(data, _override_options)
 
         # Evolution constants
         self.stage_age_evolutions = data["stage_age_evolutions"]["value"]
@@ -119,12 +127,6 @@ class RuntimeConfig:
         self.seed = seed_dict["value"] if seed_dict else None
 
         self.rng = np.random.default_rng(seed=self.seed)
-
-    @staticmethod
-    def __override(data, override_options: dict):
-        for k, v in override_options.items():
-            if k in data:
-                data[k]["value"] = v
 
 
 class FarmConfig:
