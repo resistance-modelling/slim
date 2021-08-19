@@ -16,12 +16,13 @@ from scipy import stats
 from src.Config import Config
 from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
-                                LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib)
+                                LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib,
+                                QuantitativeGenoDistrib, GenericGenoDistrib)
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
 from src.JSONEncoders import CustomFarmEncoder
 
 if TYPE_CHECKING:  # pragma: no cover
-    from src.Farm import Farm
+    from src.Farm import Farm, GenoDistribByHatchDate
 
 OptionalDamBatch = Optional[DamAvailabilityBatch]
 OptionalEggBatch = Optional[EggBatch]
@@ -57,19 +58,19 @@ class Cage:
         # TODO: update with calculations
         if initial_lice_pop is None:
             lice_population = {"L1": cfg.ext_pressure, "L2": 0, "L3": 0, "L4": 0, "L5f": 0,
-                               "L5m": 0}  # type: GrossLiceDistrib
+                               "L5m": 0}
         else:
             lice_population = initial_lice_pop
 
         self.farm = farm
 
-        self.egg_genotypes = {}  # type: GenoDistrib
+        self.egg_genotypes = GenoDistrib()
         # TODO/Question: what's the best way to deal with having multiple possible genetic schemes?
         # TODO/Question: I suppose some of this initial genotype information ought to come from the config file
         # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
         self.genetic_mechanism = self.cfg.genetic_mechanism
 
-        geno_by_lifestage = {stage: LicePopulation.multiply_distrib(self.cfg.genetic_ratios, lice_population[stage])
+        geno_by_lifestage = {stage: GenoDistrib(self.cfg.genetic_ratios).normalise_to(lice_population[stage])
                              for stage in lice_population}
 
         self.lice_population = LicePopulation(lice_population, geno_by_lifestage, self.cfg)
@@ -127,7 +128,7 @@ class Cage:
         self.logger.debug("\t\tinitial lice population = {}".format(self.lice_population))
 
         # Background lice mortality events
-        dead_lice_dist = self.get_background_lice_mortality(self.lice_population)
+        dead_lice_dist = self.get_background_lice_mortality()
 
         # Development events
         new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date.month)
@@ -195,7 +196,7 @@ class Cage:
 
         self.logger.debug("\t\tfinal lice population= {}".format(self.lice_population))
 
-        egg_distrib = {}  # type: GenoDistrib
+        egg_distrib = GenoDistrib()
         hatch_date = None  # type: Optional[dt.datetime]
         if cur_date >= self.start_date and new_egg_batch:
             self.logger.debug("\t\tfinal fish population = {}".format(self.num_fish))
@@ -206,10 +207,7 @@ class Cage:
         return egg_distrib, hatch_date, cost
 
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
-        num_susc_per_geno = {}  # type: GenoDistrib
-
-        for stage in self.susceptible_stages:
-            LicePopulation.update_distrib_discrete_add(self.lice_population.geno_by_lifestage[stage], num_susc_per_geno)
+        num_susc_per_geno = sum(self.lice_population.geno_by_lifestage.values(), GenericGenoDistrib())
 
         geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
 
@@ -572,7 +570,7 @@ class Cage:
         # TODO: using a poisson distribution can lead to a high std for high prob*females
         return int(np.clip(self.cfg.rng.poisson(prob_matching * females), np.int32(0), np.int32(min(males, females))))
 
-    def do_mating_events(self) -> Tuple[GenoDistrib, GenoDistrib]:
+    def do_mating_events(self) -> Tuple[GenericGenoDistrib, GenericGenoDistrib]:
         """
         will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
         assume males don't become unavailable? in this case we don't need a delta for sires
@@ -583,7 +581,7 @@ class Cage:
         TODO: current date is required by get_num_eggs as of now, but the relationship between extrusion and temperature is not clear
         """
 
-        delta_eggs = {}  # type: GenoDistrib
+        delta_eggs = GenericGenoDistrib()
         num_matings = self.get_num_matings()
 
         distrib_sire_available = self.lice_population.geno_by_lifestage["L5m"]
@@ -592,7 +590,7 @@ class Cage:
         delta_dams = self.select_dams(distrib_dam_available, num_matings)
 
         if sum(distrib_sire_available.values()) == 0 or sum(distrib_dam_available.values()) == 0:
-            return {}, {}
+            return GenericGenoDistrib(), GenericGenoDistrib()
 
         # TODO - need to add dealing with fewer males/females than the number of matings
 
@@ -600,7 +598,7 @@ class Cage:
             for _ in range(int(delta_dams[dam_geno])):
                 sire_geno = self.choose_from_distrib(distrib_sire_available)
                 new_eggs = self.generate_eggs(sire_geno, dam_geno, num_matings)
-                LicePopulation.update_distrib_discrete_add(new_eggs, delta_eggs)
+                delta_eggs += new_eggs
 
         return delta_dams, delta_eggs
 
@@ -609,11 +607,12 @@ class Cage:
             sire: Union[Alleles, np.ndarray],
             dam: Union[Alleles, np.ndarray],
             num_matings: int
-    ) -> GenoDistrib:
+    ) -> GenericGenoDistrib:
         """
         Generate the eggs with a given genomic distribution
 
         TODO: doesn't do anything sensible re: integer/real numbers of offspring
+        TODO: do we still want to keep the mechanism?
         :param sire the genomics of the sires
         :param dam the genomics of the dams
         :param num_matings the number of matings
@@ -621,6 +620,8 @@ class Cage:
         """
 
         number_eggs = self.get_num_eggs(num_matings)
+
+        # TODO: since the genetic mechanism cannot change one could try to cache this
 
         if self.genetic_mechanism == GeneticMechanism.discrete:
             sire, dam = cast(Alleles, sire), cast(Alleles, dam)
@@ -655,7 +656,7 @@ class Cage:
         :return: genomics distribution of eggs produced
         """
 
-        eggs_generated = {}
+        eggs_generated = GenoDistrib()
         if len(sire) == 1 and len(dam) == 1:
             eggs_generated[self.get_geno_name(sire[0], dam[0])] = float(number_eggs)
         elif len(sire) == 2 and len(dam) == 1:
@@ -683,7 +684,7 @@ class Cage:
         """
         return tuple(sorted({sire_geno, dam_geno}))
 
-    def generate_eggs_quantitative(self, sire: np.ndarray, dam: np.ndarray, number_eggs: int) -> GenoDistrib:
+    def generate_eggs_quantitative(self, sire: np.ndarray, dam: np.ndarray, number_eggs: int) -> QuantitativeGenoDistrib:
         """Get number of eggs based on quantitative genetic mechanism.
 
         Additive genes, assume genetic state for an individual looks like a number between 0 and 1.
@@ -697,8 +698,8 @@ class Cage:
         :param number_eggs: the number of eggs produced
         :return: genomics distribution of eggs produced
         """
-        mid_parent = np.round((sire + dam) / 2, 1)
-        return {mid_parent: number_eggs}
+        mid_parent = float(np.round((sire + dam) / 2, 1).item())
+        return QuantitativeGenoDistrib({mid_parent: number_eggs})
 
     @staticmethod
     def generate_eggs_maternal(dam: Union[Alleles, np.ndarray], number_eggs: int) -> GenoDistrib:
@@ -710,7 +711,7 @@ class Cage:
         :param number_eggs: the number of eggs produced
         :return: genomics distribution of eggs produced
         """
-        return {dam: number_eggs}
+        return GenoDistrib({dam: number_eggs})
 
     def mutate(self, eggs: GenoDistrib, mutation_rate: float):
         """
@@ -749,19 +750,21 @@ class Cage:
             if eggs[allele] == 0:
                 del eggs[allele]
 
-    def select_dams(self, distrib_dams_available: GenoDistrib, num_dams: int):
+    def select_dams(self, distrib_dams_available: GenoDistrib, num_dams: int) -> GenoDistrib:
         """
-        Assumes the usual dictionary representation of number
-        of dams - genotype:number_available
-        function separated from other breeding processes to make it easier to come back and optimise
-        TODO: there must be a faster way to do this.
-        returns a dictionary in the same format giving genotype:number_selected
-        if the num_dams exceeds number available, gives back all the dams
+        From a geno distribution of eligible dams sample a given number of dams.
+
+        :param distrib_dams_available: the starting dam genomic distribution
+        :param num_dams: the wished number of dams to sample
         """
-        delta_dams_selected = {}
+        # TODO: this function is flexible enough to be renamed and used elsewhere
+        delta_dams_selected = GenoDistrib()
         copy_dams_avail = copy.deepcopy(distrib_dams_available)
         if sum(distrib_dams_available.values()) <= num_dams:
             return copy_dams_avail
+
+        # TODO: make choose_from_distrib sample N elements without replacement at once rather than looping
+        # Use the same trick used in treatment mortality, or otherwise use a hypergeometric distrib?
 
         for _ in range(num_dams):
             this_dam = self.choose_from_distrib(copy_dams_avail)
@@ -861,7 +864,7 @@ class Cage:
         :returns a delta egg genomics
         """
 
-        delta_egg_offspring = {geno: 0 for geno in self.cfg.genetic_ratios}  # type: GenoDistrib
+        delta_egg_offspring = GenoDistrib({geno: 0 for geno in self.cfg.genetic_ratios})
         self.pop_from_queue(self.hatching_events, cur_time, delta_egg_offspring)
 
         return delta_egg_offspring
@@ -872,7 +875,7 @@ class Cage:
         :return: Genotype distribution of eggs hatched in travel
         """
 
-        hatched_dist = {}
+        hatched_dist = GenoDistrib()
 
         # check queue for arrivals at current date
         while not self.arrival_events.empty() and self.arrival_events.queue[0].arrival_date <= cur_date:
@@ -891,14 +894,14 @@ class Cage:
 
         return hatched_dist
 
-    def free_dams(self, cur_time):
+    def free_dams(self, cur_time) -> GenericGenoDistrib:
         """
         Return the number of available dams
 
         :param cur_time the current time
         :returns the genotype population of dams that return available today
         """
-        delta_avail_dams = {}
+        delta_avail_dams = GenericGenoDistrib()
         for geno in self.lice_population.geno_by_lifestage['L5f']:
             delta_avail_dams[geno] = 0
 
@@ -925,7 +928,6 @@ class Cage:
                                     num_dead_fish / self.num_infected_fish)
         infecting_lice = self.get_infecting_population()
 
-        # TODO: Why can't we make a custom Counter subclass with custom ops?
         affected_lice = {stage: self.lice_population[stage] / infecting_lice * affected_lice_gross
                          for stage in self.susceptible_stages}
 
@@ -960,18 +962,15 @@ class Cage:
         if isinstance(prev_stage, str):
             if entering_lice is not None:
                 prev_stage_geno = self.lice_population.geno_by_lifestage[prev_stage]
-                entering_geno_distrib = LicePopulation.multiply_distrib(
-                    prev_stage_geno, entering_lice)
+                entering_geno_distrib = prev_stage_geno.normalise_to(entering_lice)
             else:
                 raise ValueError("entering_lice must be an int when prev_stage is a str")
         else:
             entering_geno_distrib = prev_stage
         cur_stage_geno = self.lice_population.geno_by_lifestage[cur_stage]
 
-        leaving_geno_distrib = LicePopulation.multiply_distrib(cur_stage_geno, leaving_lice)
-
-        LicePopulation.update_distrib_discrete_add(entering_geno_distrib, cur_stage_geno)
-        LicePopulation.update_distrib_discrete_subtract(leaving_geno_distrib, cur_stage_geno)
+        leaving_geno_distrib = cur_stage_geno.normalise_to(leaving_lice)
+        cur_stage_geno = cur_stage_geno + entering_geno_distrib - leaving_geno_distrib
 
         # update gross population. This is a bit hairy but I cannot think of anything simpler.
         self.lice_population.geno_by_lifestage[cur_stage] = cur_stage_geno
@@ -1025,9 +1024,7 @@ class Cage:
             self.lice_population[stage] = max(0, bg_delta)
 
             # update population due to treatment
-            LicePopulation.update_distrib_discrete_subtract(
-                treatment_mortality[stage],
-                self.lice_population.geno_by_lifestage[stage])
+            self.lice_population.geno_by_lifestage[stage] -= treatment_mortality[stage]
 
         self.promote_population("L4", "L5m", 0, new_males)
         self.promote_population("L4", "L5f", 0, new_females)
@@ -1059,22 +1056,19 @@ class Cage:
             treated_dams_dist = treatment_mortality['L5f'].copy()
             treatment_mortality_l5_gross = sum(treated_dams_dist.values())
 
-            delta_busy_dist = LicePopulation.multiply_distrib(
-                treated_dams_dist, round(treatment_mortality_l5_gross * l5_availability_ratio))
-            LicePopulation.update_distrib_discrete_subtract(delta_busy_dist, returned_dams)
+            delta_busy_dist = treated_dams_dist.normalise_to(round(treatment_mortality_l5_gross * l5_availability_ratio))
+            returned_dams -= delta_busy_dist
 
-            LicePopulation.update_distrib_discrete_add(
-                returned_dams, self.lice_population.available_dams)
+            self.lice_population.available_dams += returned_dams
 
             # Step 3: remaining gross calculations
             delta_busy = round(l5_availability_ratio * dead_lice_dist['L5f'])
 
             # Step 4: actual update
-            self.lice_population.available_dams = LicePopulation.multiply_distrib(
-                self.lice_population.available_dams, num_available + delta_busy)
-            LicePopulation.update_distrib_discrete_add(
-                delta_busy_dist, self.lice_population.available_dams
-            )
+
+            self.lice_population.available_dams.set(num_available + delta_busy)
+            self.lice_population.available_dams += delta_busy_dist
+
 
         if delta_dams_batch:
             for k, v in delta_dams_batch.geno_distrib.items():
@@ -1087,9 +1081,9 @@ class Cage:
         self.num_infected_fish = self.get_mean_infected_fish()
 
     # TODO: update arrivals dict type
-    def update_arrivals(self, arrivals_dict: dict, arrival_date: dt.datetime):
+    def update_arrivals(self, arrivals_dict: GenoDistribByHatchDate, arrival_date: dt.datetime):
         """Update the arrivals queue
-f
+
         :param arrivals_dict: List of dictionaries of genotype distributions based on hatch date
         :param arrival_date: Arrival date at this cage
         """
@@ -1104,18 +1098,21 @@ f
             batch = TravellingEggBatch(arrival_date, hatch_date, arrivals_dict[hatch_date])
             self.arrival_events.put(batch)
 
-    def get_background_lice_mortality(self, lice_population):
+    def get_background_lice_mortality(self) -> GrossLiceDistrib:
         """
         Background death in a stage (remove entry) -> rate = number of
         individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,
         pre-adult female 0.05, pre-adult male ... Stien et al 2005)
+
+        :returns the current background mortality. The return value is genotype-agnostic
         """
         lice_mortality_rates = self.cfg.background_lice_mortality_rates
+        lice_population = self.lice_population
 
         dead_lice_dist = {}
         for stage in lice_population:
             mortality_rate = lice_population[stage] * lice_mortality_rates[stage]
-            mortality = min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
+            mortality = min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])  # type: int
             dead_lice_dist[stage] = mortality
 
         self.logger.debug("\t\tbackground mortality distribution of dead lice = {}".format(dead_lice_dist))

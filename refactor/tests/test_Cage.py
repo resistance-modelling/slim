@@ -42,7 +42,7 @@ class TestCage:
     def test_cage_lice_background_mortality_one_day(self, first_cage):
         # NOTE: this currently relies on Stien's approach.
         # Changing this approach will break things
-        dead_lice_dist = first_cage.get_background_lice_mortality(first_cage.lice_population)
+        dead_lice_dist = first_cage.get_background_lice_mortality()
         dead_lice_dist_np = np.array(list(dead_lice_dist.values()))
         expected_dead_lice = np.array([28, 0, 0, 0, 0, 2])
         assert np.alltrue(dead_lice_dist_np >= 0.0)
@@ -81,8 +81,8 @@ class TestCage:
         assert first_cage.last_effective_treatment.affecting_date == cur_day
         assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
         assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
-        assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 4, ('a',): 8}
-        assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 3, ('a',): 8}
+        assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 3, ('a',): 8}
+        assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 4, ('a',): 8}
 
         assert 55000 <= cost <= 60000
 
@@ -294,7 +294,7 @@ class TestCage:
         first_cage.lice_population["L5m"] = 0
         first_cage.lice_population["L5f"] = 0
 
-        background_mortality = first_cage.get_background_lice_mortality(first_cage.lice_population)
+        background_mortality = first_cage.get_background_lice_mortality()
         fish_deaths_natural = 0
         fish_deaths_from_lice = 0
         new_l2 = 0
@@ -341,7 +341,7 @@ class TestCage:
         first_cage.lice_population.geno_by_lifestage["L5f"] = {('A',): 15, ('a',): 15, ('A', 'a'): 15}
         first_cage.lice_population.available_dams = {('A',): 15, ('a',): 15}
 
-        target_eggs = {('a',): 3062.5, ('A',): 1509.5, tuple(sorted(('a', 'A'))): 4579.0}
+        target_eggs = {('a',): 1545.5, ('A',): 763.0, tuple(sorted(('a', 'A'))): 6842.5}
         target_delta_dams = {('A',): 2, ('a',): 4}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
@@ -351,7 +351,7 @@ class TestCage:
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('a',): 1574.5, tuple(sorted(('a', 'A'))): 2552.5}
+        target_mutated_eggs = {('a',): 1574.5, tuple(sorted(('a', 'A'))): 1537.5, ('A',): 1015.0}
 
         _, delta_mutated_eggs = first_cage.do_mating_events()
         assert delta_mutated_eggs == target_mutated_eggs
@@ -566,9 +566,9 @@ class TestCage:
         first_cage.lice_population["L5m"] = 1000
         first_cage.lice_population["L5f"] = 1000
         dams, _ = first_cage.do_mating_events()
-        target_dams = {('A',): 188,
-                       ('a',): 181,
-                       ('A', 'a'): 557}
+        target_dams = {('A',): 278,
+                       ('a',): 179,
+                       ('A', 'a'): 469}
 
         first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
         assert first_cage.free_dams(cur_day + dt.timedelta(days=1)) == target_dams
@@ -577,9 +577,9 @@ class TestCage:
         first_cage.lice_population["L5m"] = 1000
         first_cage.lice_population["L5f"] = 1000
         dams, _ = first_cage.do_mating_events()
-        target_dams = {('A',): 564,
-                       ('a',): 543,
-                       ('A', 'a'): 1671}
+        target_dams = {('A',): 834,
+                       ('a',): 537,
+                       ('A', 'a'): 1407}
 
         for i in range(3):
             first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams))
@@ -604,7 +604,7 @@ class TestCage:
         new_L4 = first_cage.lice_population.geno_by_lifestage["L4"]
 
         target_population = sum(old_L4.values()) + entering_lice - leaving_lice
-        target_geno = {('A',): 534, ('a',): 534, ('A', 'a'): 532}
+        target_geno = {('A',): 532, ('a',): 534, ('A', 'a'): 534}
 
         assert new_L4 == target_geno
         assert sum(new_L4.values()) == sum(old_L4.values()) + entering_lice - leaving_lice

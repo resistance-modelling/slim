@@ -1,15 +1,54 @@
-import copy
-from typing import Dict, MutableMapping, Tuple, Union, NamedTuple
+from __future__ import annotations
 
+import copy
+from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, TypeVar, Generic, cast, Counter
+
+import iteround
 import numpy as np
 
 from src.Config import Config
 
+# Basic type aliases
 LifeStage = str
 Allele = str
-Alleles = Union[Tuple[Allele, ...], np.ndarray]
-GenoDistrib = Dict[Alleles, Union[int, float]]
-GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
+Alleles = Union[Tuple[Allele, ...]]
+
+GenoKey = TypeVar('GenoKey', Alleles, float)
+
+class GenericGenoDistrib(Counter[GenoKey], Generic[GenoKey]):
+    """
+    A GenoDistrib is a distribution of genotypes.
+
+    Each GenoDistrib provides custom operator overloading operations and suitable
+    rescaling operations.
+    """
+    def normalise_to(self, population: int) -> GenericGenoDistrib[GenoKey]:
+        keys = self.keys()
+        values = list(self.values())
+        np_values = np.array(values)
+        if np.isclose(np.sum(np_values), 0.0) or population == 0:
+            return GenericGenoDistrib({k: 0 for k in keys})
+
+        np_values = np_values * population / np.sum(np_values)
+
+        rounded_values = iteround.saferound(np_values.tolist(), 0)
+        return GenericGenoDistrib(dict(zip(keys, map(int, rounded_values))))
+
+    def set(self, other: int):
+        result = self.normalise_to(other)
+        self.clear()
+        self.update(result)
+
+    def gross(self) -> int:
+        return sum(self.values())
+
+    def copy(self: GenericGenoDistrib[GenoKey]) -> GenericGenoDistrib[GenoKey]:
+        return GenericGenoDistrib(super(Counter[GenoKey], self).copy())
+
+GenoDistrib = GenericGenoDistrib[Alleles]
+QuantitativeGenoDistrib = GenericGenoDistrib[float]
+
+GenoLifeStageDistrib = Dict[LifeStage, GenericGenoDistrib]
 GrossLiceDistrib = Dict[LifeStage, int]
 
 
@@ -17,8 +56,7 @@ class GenoTreatmentValue(NamedTuple):
     mortality_rate: float
     num_susc: int
 
-
-GenoTreatmentDistrib = Dict[Alleles, GenoTreatmentValue]
+GenoTreatmentDistrib = Dict[GenoKey, GenoTreatmentValue]
 
 
 # See https://stackoverflow.com/a/7760938
@@ -30,7 +68,7 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
     def __init__(self, initial_population: GrossLiceDistrib, geno_data: GenoLifeStageDistrib, cfg: Config):
         super().__init__()
         self.geno_by_lifestage = GenotypePopulation(self, geno_data)
-        self._available_dams = copy.deepcopy(self.geno_by_lifestage["L5f"])
+        self._available_dams = copy.deepcopy(self.geno_by_lifestage["L5f"])  # type: GenoDistrib
         self.genetic_ratios = cfg.genetic_ratios
         self.logger = cfg.logger
         for k, v in initial_population.items():
@@ -42,14 +80,14 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         if sum(self.geno_by_lifestage[stage].values()) == 0:
             if value > 0:
                 self.logger.warning(f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
-            self.geno_by_lifestage.raw_update_value(stage, self.multiply_distrib(self.genetic_ratios, value))
+            self.geno_by_lifestage[stage].set(value)
         else:
             if value < 0:
                 self.logger.warning(f"Trying to assign population stage {stage} a negative value. It will be truncated to zero, but this probably means an invariant was broken.")
             value = max(value, 0)
-            self.geno_by_lifestage.raw_update_value(stage, self.multiply_distrib(self.geno_by_lifestage[stage], value))
+            self.geno_by_lifestage[stage].set(value)
         if stage == "L5f":
-            self._available_dams = self.multiply_distrib(self._available_dams, value)
+            self._available_dams.set(value)
         super().__setitem__(stage, value)
 
     def raw_update_value(self, stage: LifeStage, value: int):
@@ -67,53 +105,16 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
 
         self._available_dams = new_value
 
-    @staticmethod
-    def multiply_distrib(distrib: dict, population: int):
-        keys = distrib.keys()
-        values = list(distrib.values())
-        np_values = np.array(values)
-        if np.isclose(np.sum(np_values), 0.0) or population == 0:
-            return dict(zip(keys, map(int, np.zeros_like(np_values))))
-        np_values = np_values * population / np.sum(np_values)
-        np_values = np_values.round().astype('int32')
-        # correct casting errors
-        np_values[-1] += population - np.sum(np_values)
-
-        return dict(zip(keys, map(int, np_values)))
-
-    @staticmethod
-    def update_distrib_discrete_add(distrib_delta, distrib):
-        """
-        I've assumed that both distrib and delta are dictionaries
-        and are *not* normalised (that is, they are effectively counts)
-        I've also assumed that we never want a count below zero
-        Code is naive - interpret as algorithm spec
-        combine these two functions with a negation of a dict?
-        """
-
-        for geno in distrib_delta:
-            if geno not in distrib:
-                distrib[geno] = 0
-            distrib[geno] += distrib_delta[geno]
-
-    @staticmethod
-    def update_distrib_discrete_subtract(distrib_delta, distrib, truncation=True):
-        for geno in distrib:
-            if geno in distrib_delta:
-                distrib[geno] -= distrib_delta[geno]
-            if distrib[geno] < 0 and truncation:
-                distrib[geno] = 0
-
     def get_empty_geno_stage_distrib(self) -> GenoDistrib:
         # A little factory method to get empty genos
         genos = self.geno_by_lifestage["L1"].keys()
-        return {geno: 0 for geno in genos}
+        return GenoDistrib({geno: 0 for geno in genos})
 
     def get_empty_geno_distrib(self) -> GenoLifeStageDistrib:
         return {stage: self.get_empty_geno_stage_distrib() for stage in self.keys()}
 
 
-class GenotypePopulation(dict, MutableMapping[LifeStage, GenoDistrib]):
+class GenotypePopulation(Dict[Alleles, GenericGenoDistrib]):
     def __init__(self, gross_lice_population: LicePopulation, geno_data: GenoLifeStageDistrib):
         super().__init__()
         self._lice_population = gross_lice_population
@@ -127,3 +128,5 @@ class GenotypePopulation(dict, MutableMapping[LifeStage, GenoDistrib]):
 
     def raw_update_value(self, stage: LifeStage, value: GenoDistrib):
         super().__setitem__(stage, value)
+
+

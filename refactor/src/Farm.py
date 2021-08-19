@@ -23,11 +23,11 @@ import numpy as np
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
-from src.LicePopulation import Alleles, GrossLiceDistrib
+from src.LicePopulation import Alleles, GrossLiceDistrib, GenericGenoDistrib
 from src.TreatmentTypes import Treatment, TreatmentParams, Money
 from src.QueueBatches import TreatmentEvent
 
-GenoDistribByHatchDate = Dict[dt.datetime, CounterType[Alleles]]
+GenoDistribByHatchDate = Dict[dt.datetime, GenericGenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
 LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
 
