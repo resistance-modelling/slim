@@ -12,6 +12,7 @@ from src.Cage import Cage
 from src.Config import to_dt
 from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
 from src.TreatmentTypes import GeneticMechanism, Treatment, Money
+from src.LicePopulation import GenoDistrib
 
 
 class TestCage:
@@ -79,10 +80,10 @@ class TestCage:
                 assert sum(mortality_updates[stage].values()) == 0
 
         assert first_cage.last_effective_treatment.affecting_date == cur_day
-        assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
+        assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 0, ('a',): 2}
         assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
-        assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 3, ('a',): 8}
-        assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 4, ('a',): 8}
+        assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 1, ('a',): 8}
+        assert mortality_updates['L3'] == {('A',): 2, ('A', 'a'): 2, ('a',): 8}
 
         assert 55000 <= cost <= 60000
 
@@ -101,10 +102,10 @@ class TestCage:
         cur_day = treatment_dates[1] + dt.timedelta(days=10)
         mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
 
-        assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 1, ('a',): 8}
-        assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 2, ('a',): 8}
-        assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 2, ('a',): 2}
-        assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 2, ('a',): 2}
+        assert mortality_updates['L3'] == {('A',): 0, ('A', 'a'): 2, ('a',): 8}
+        assert mortality_updates['L4'] == {('A',): 1, ('A', 'a'): 1, ('a',): 8}
+        assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 0, ('a',): 2}
+        assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 0, ('a',): 2}
 
         assert cost == 0
 
@@ -492,7 +493,7 @@ class TestCage:
 
     def test_get_egg_batch(self, first_cage, cur_day):
         _, new_eggs = first_cage.do_mating_events()
-        target_egg_distrib = {('A', 'a'): 4644.5, ('A',): 2698.25, ('a',): 1927.25}
+        target_egg_distrib = GenoDistrib({('A', 'a'): 4644.5, ('A',): 2698.25, ('a',): 1927.25})
 
         new_egg_batch = first_cage.get_egg_batch(cur_day, new_eggs)
         assert new_egg_batch == EggBatch(
@@ -543,11 +544,11 @@ class TestCage:
         assert first_cage.create_offspring(cur_day) == null_offspring_distrib
 
     def test_create_offspring_same_day(self, first_cage, cur_day):
-        egg_offspring = {
+        egg_offspring = GenoDistrib({
             ('A',): 10,
             ('a',): 10,
             ('A', 'a'): 10,
-        }
+        })
 
         for i in range(3):
             first_cage.hatching_events.put(EggBatch(cur_day+dt.timedelta(days=i), egg_offspring))
@@ -590,8 +591,8 @@ class TestCage:
             first_cage.promote_population("L3", "L4", 100)
 
     def test_promote_population(self, first_cage):
-        first_cage.lice_population.geno_by_lifestage["L3"] = {('A',): 1000, ('a',): 1000, ('A', 'a'): 1000}
-        first_cage.lice_population.geno_by_lifestage["L4"] = {('A',): 500, ('a',): 500, ('A', 'a'): 500}
+        first_cage.lice_population.geno_by_lifestage["L3"] = GenoDistrib({('A',): 1000, ('a',): 1000, ('A', 'a'): 1000})
+        first_cage.lice_population.geno_by_lifestage["L4"] = GenoDistrib({('A',): 500, ('a',): 500, ('A', 'a'): 500})
 
         old_L3 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L3"])
         old_L4 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L4"])
@@ -633,11 +634,11 @@ class TestCage:
         unhatched_batch = TravellingEggBatch(cur_day, hatch_date_unhatched, sample_offspring_distrib)
         first_cage.arrival_events.put(unhatched_batch)
 
-        hatched_at_travel_dist = {
+        hatched_at_travel_dist = GenoDistrib({
                                     ('A',): 10,
                                     ('a',): 10,
                                     ('A', 'a'): 10,
-                                }
+                                })
         hatch_date_hatched = cur_day - dt.timedelta(1)
         hatched_batch = TravellingEggBatch(cur_day, hatch_date_hatched, hatched_at_travel_dist)
         first_cage.arrival_events.put(hatched_batch)
@@ -753,7 +754,7 @@ class TestCage:
         first_cage.lice_population = planctonic_only_population
 
         hatch_date = cur_date + dt.timedelta(1)
-        geno_hatch = {("a",): 10, ("A", "a"): 0, ("A",): 0}
+        geno_hatch = GenoDistrib({("a",): 10, ("A", "a"): 0, ("A",): 0})
         first_cage.arrival_events.put(TravellingEggBatch(cur_date, hatch_date, geno_hatch))
 
         pressure = 10
@@ -787,7 +788,7 @@ class TestCage:
         first_cage.lice_population = planctonic_only_population
 
         hatch_date = cur_date
-        geno_hatch = {("a",): 10, ("A", "a"): 0, ("A",): 0}
+        geno_hatch = GenoDistrib({("a",): 10, ("A", "a"): 0, ("A",): 0})
         first_cage.hatching_events.put(EggBatch(hatch_date, geno_hatch))
         pressure = 10
 

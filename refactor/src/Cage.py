@@ -150,7 +150,7 @@ class Cage:
             num_infection_events = 0
             avail_dams_batch = None  # type: OptionalDamBatch
             new_egg_batch = None  # type: OptionalEggBatch
-            returned_dams = {}
+            returned_dams = GenericGenoDistrib()
             cost = self.cfg.monthly_cost / 28
 
         else:
@@ -988,9 +988,9 @@ class Cage:
             new_infections: int,
             lice_from_reservoir: GrossLiceDistrib,
             delta_dams_batch: OptionalDamBatch,
-            new_offspring_distrib: GenoDistrib,
-            returned_dams: GenoDistrib,
-            hatched_arrivals_dist: GenoDistrib
+            new_offspring_distrib: GenericGenoDistrib,
+            returned_dams: GenericGenoDistrib,
+            hatched_arrivals_dist: GenericGenoDistrib
     ):
         """Update the number of fish and the lice in each life stage
         :param dead_lice_dist the number of dead lice due to background death (as a distribution)

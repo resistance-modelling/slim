@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections import Counter
 import copy
-from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, TypeVar, Generic, cast, Counter
+from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, TypeVar, Generic, cast, Counter as CounterType
 
 import iteround
 import numpy as np
@@ -15,12 +16,14 @@ Alleles = Union[Tuple[Allele, ...]]
 
 GenoKey = TypeVar('GenoKey', Alleles, float)
 
-class GenericGenoDistrib(Counter[GenoKey], Generic[GenoKey]):
+
+class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
     """
     A GenoDistrib is a distribution of genotypes.
 
     Each GenoDistrib provides custom operator overloading operations and suitable
     rescaling operations.
+    Internally, this is built on top of a Counter.
     """
     def normalise_to(self, population: int) -> GenericGenoDistrib[GenoKey]:
         keys = self.keys()
@@ -43,7 +46,28 @@ class GenericGenoDistrib(Counter[GenoKey], Generic[GenoKey]):
         return sum(self.values())
 
     def copy(self: GenericGenoDistrib[GenoKey]) -> GenericGenoDistrib[GenoKey]:
-        return GenericGenoDistrib(super(Counter[GenoKey], self).copy())
+        return GenericGenoDistrib(super().copy())
+
+    def __add__(self, other: GenericGenoDistrib[GenoKey]) -> GenericGenoDistrib[GenoKey]:
+        """Overload add operation"""
+        res = self.copy()
+        for k, v in other.items():
+            res[k] += v
+        return res
+
+    def __sub__(self, other: GenericGenoDistrib[GenoKey]) -> GenericGenoDistrib[GenoKey]:
+        """Overload sub operation"""
+        res = self.copy()
+        for k, v in other.items():
+            res[k] -= v
+        return res
+
+    def __eq__(self, other: Union[GenericGenoDistrib[GenoKey], Dict[GenoKey, int]]) -> bool:
+        # Make equality checks a bit more flexible
+        if isinstance(other, dict):
+            other = GenericGenoDistrib(other)
+        return super().__eq__(other)
+
 
 GenoDistrib = GenericGenoDistrib[Alleles]
 QuantitativeGenoDistrib = GenericGenoDistrib[float]
@@ -80,7 +104,7 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         if sum(self.geno_by_lifestage[stage].values()) == 0:
             if value > 0:
                 self.logger.warning(f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
-            self.geno_by_lifestage[stage].set(value)
+            self.geno_by_lifestage[stage] = GenericGenoDistrib(self.genetic_ratios).normalise_to(value)
         else:
             if value < 0:
                 self.logger.warning(f"Trying to assign population stage {stage} a negative value. It will be truncated to zero, but this probably means an invariant was broken.")
@@ -128,5 +152,4 @@ class GenotypePopulation(Dict[Alleles, GenericGenoDistrib]):
 
     def raw_update_value(self, stage: LifeStage, value: GenoDistrib):
         super().__setitem__(stage, value)
-
 

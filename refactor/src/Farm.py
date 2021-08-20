@@ -201,9 +201,9 @@ class Farm:
             if hatch_date:
                 # update the total offspring info
                 if hatch_date in eggs_by_hatch_date:
-                    eggs_by_hatch_date[hatch_date] += Counter(egg_distrib)
+                    eggs_by_hatch_date[hatch_date] += egg_distrib
                 else:
-                    eggs_by_hatch_date[hatch_date] = Counter(egg_distrib)
+                    eggs_by_hatch_date[hatch_date] = egg_distrib
 
             total_cost += cost
 
