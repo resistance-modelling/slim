@@ -748,7 +748,6 @@ class TestCage:
         dead_lice = first_cage.get_dying_lice_from_dead_fish(dead_fish)
         assert dead_lice == dead_lice_target
 
-
     def test_update_step_before_start_date_two_days(self, first_cage, planctonic_only_population):
         cur_date = first_cage.start_date - dt.timedelta(5)
         first_cage.lice_population = planctonic_only_population
@@ -838,3 +837,52 @@ class TestCage:
         assert first_cage.num_fish == 0
         assert first_cage.num_infected_fish == 0
         assert first_cage.is_fallowing
+
+    def test_update_dying_busy_dams(self,
+        first_cage,
+        null_offspring_distrib,
+        null_dams_batch,
+        sample_treatment_mortality,
+        sample_offspring_distrib,
+    ):
+        first_cage.lice_population["L3"] = 0
+        first_cage.lice_population["L4"] = 0
+        first_cage.lice_population["L5m"] = 0
+        first_cage.lice_population.geno_by_lifestage["L5f"] = sample_offspring_distrib
+
+        background_mortality = first_cage.get_background_lice_mortality()
+        fish_deaths_natural = 0
+        fish_deaths_from_lice = 0
+        new_l2 = 0
+        new_l4 = 0
+        new_females = 10
+        new_males = 0
+        new_infections = 0
+
+        reservoir_lice = {"L1": 0, "L2": 0}
+
+        null_hatched_arrivals = null_offspring_distrib
+        null_returned_dams = null_offspring_distrib
+
+        first_cage.update_deltas(
+            background_mortality,
+            sample_treatment_mortality,
+            fish_deaths_natural,
+            fish_deaths_from_lice,
+            new_l2,
+            new_l4,
+            new_females,
+            new_males,
+            new_infections,
+            reservoir_lice,
+            null_dams_batch,
+            null_offspring_distrib,
+            null_returned_dams,
+            null_hatched_arrivals
+        )
+
+        # TODO: This is still broken
+        assert first_cage.lice_population["L5f"] == 587
+        assert sum(first_cage.lice_population.available_dams.values()) == 587
+        for event in first_cage.busy_dams.queue:
+            assert event.geno_distrib == GenoDistrib({})

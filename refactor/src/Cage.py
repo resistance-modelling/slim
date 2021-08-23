@@ -1044,12 +1044,26 @@ class Cage:
         # Gross L5f calculation is fine, but we need to determine how many of these are available now.
         # In principle, once some of the lice are popped from the queue these may die. Therefore,
         # we need to compute the fraction of the new-available ones that have died.
-        # Step 1: compute the correct ratios...
-        # TODO: operator overloading MUST be implemented as this is terrible code
-
         if old_gross_population['L5f'] > 0:
             num_available = sum(self.lice_population.available_dams.values())
             l5_availability_ratio = num_available / old_gross_population['L5f']
+            l5_busy_ratio = 1 - l5_availability_ratio
+            busy_dams_global = sum(map(lambda x: x.geno_distrib, self.busy_dams.queue), GenericGenoDistrib())
+
+            treated_dams_dist = treatment_mortality['L5f'] * l5_busy_ratio
+            background_dead_dams_dist = treated_dams_dist * (dead_lice_dist['L5f'] * l5_busy_ratio)
+
+            # note: new l5f lice by default are free.
+            busy_dams_delta = busy_dams_global - treated_dams_dist - background_dead_dams_dist
+
+            for busy_dam_event in self.busy_dams.queue:
+                busy_dam_geno = busy_dam_event.geno_distrib  # type: GenericGenoDistrib
+                delta_per_event = (busy_dam_geno / busy_dams_global) * busy_dams_delta
+                delta_per_event = round(delta_per_event)
+                busy_dam_event.geno_distrib -= delta_per_event
+
+
+            """
             assert l5_availability_ratio <= 1.0
             # Step 2: compute the right genetics affected by treatment
             available_dams = self.lice_population.available_dams.copy()
@@ -1068,7 +1082,7 @@ class Cage:
 
             self.lice_population.available_dams.set(num_available + delta_busy)
             self.lice_population.available_dams += delta_busy_dist
-
+            """
 
         if delta_dams_batch:
             for k, v in delta_dams_batch.geno_distrib.items():

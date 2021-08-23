@@ -67,7 +67,6 @@ def sample_offspring_distrib():
         ('A', 'a'): 300,
     })
 
-
 @pytest.fixture
 def null_hatched_arrivals(null_offspring_distrib, first_farm):
     return {first_farm.start_date: null_offspring_distrib}
@@ -103,7 +102,7 @@ def sample_treatment_mortality(first_cage):
     for stage, target in target_mortality.items():
         bins = list(rng.multinomial(min(target, first_cage.lice_population[stage]), probs))
         alleles = mortality[stage].keys()
-        mortality[stage] = dict(zip(alleles, bins))
+        mortality[stage] = GenoDistrib(dict(zip(alleles, bins)))
 
     return mortality
 

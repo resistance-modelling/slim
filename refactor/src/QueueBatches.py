@@ -8,9 +8,9 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass, field
 
-from src.Config import Config
 from src.LicePopulation import GenoDistrib
 from src.TreatmentTypes import Treatment
+
 
 @dataclass(order=True)
 class EggBatch:
