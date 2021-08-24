@@ -1018,7 +1018,8 @@ class Cage:
             self.lice_population[stage] = max(0, bg_delta)
 
             # update population due to treatment
-            self.lice_population.geno_by_lifestage[stage] -= treatment_mortality[stage]
+            # TODO: __isub__ here is broken
+            self.lice_population.geno_by_lifestage[stage] = self.lice_population.geno_by_lifestage[stage] - treatment_mortality[stage]
 
         self.promote_population("L4", "L5m", 0, new_males)
         self.promote_population("L4", "L5f", 0, new_females)

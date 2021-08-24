@@ -68,6 +68,17 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
             res[k] -= v
         return res
 
+    def __isub__(self, other: GenericGenoDistrib[GenoKey]):
+        for k, v in other.items():
+            self[k] -= v
+        return self
+
+    def __iadd__(self, other: GenericGenoDistrib[GenoKey]):
+        for k, v in other.items():
+            self[k] += v
+        return self
+
+
     def __mul__(self, other: Union[float, GenericGenoDistrib[GenoKey]]) -> GenericGenoDistrib[GenoKey]:
         """Multiply a distribution."""
         if isinstance(other, float) or isinstance(other, int):
@@ -152,12 +163,12 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
             if value < 0:
                 self.logger.warning(
                     f"Trying to assign population stage {stage} a negative value. It will be truncated to zero, but this probably means an invariant was broken.")
+            elif value == old_value:
+                return
             value = max(value, 0)
-            self.geno_by_lifestage[stage].set(value)
+            self.geno_by_lifestage[stage] = self.geno_by_lifestage[stage].normalise_to(value)
         if stage == "L5f":
-            self.rescale_busy_dams(round(self.busy_dams_gross * value / old_value) if old_value > 0 else 0)
-
-        super().__setitem__(stage, value)
+            self.rescale_busy_dams(round(self.busy_dams.gross() * value / old_value) if old_value > 0 else 0)
 
     def raw_update_value(self, stage: LifeStage, value: int):
         super().__setitem__(stage, value)
@@ -170,16 +181,8 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         return self.geno_by_lifestage["L5f"] - self.busy_dams
 
     @property
-    def available_dams_gross(self):
-        return sum(self.available_dams.values())
-
-    @property
     def busy_dams(self):
         return sum(map(lambda x: x.geno_distrib, self._busy_dams.queue), GenericGenoDistrib())
-
-    @property
-    def busy_dams_gross(self):
-        return self.busy_dams.gross()
 
     def free_dams(self, cur_time) -> GenericGenoDistrib:
         """
@@ -206,7 +209,7 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         if num == 0:
             self.clear_busy_dams()
 
-        elif self._busy_dams.qsize() == 0 or self.busy_dams_gross == 0:
+        elif self._busy_dams.qsize() == 0 or self.busy_dams.gross() == 0:
             raise ValueError("Busy dam queue is empty")
 
         else:
@@ -232,26 +235,31 @@ class GenotypePopulation(Dict[LifeStage, GenericGenoDistrib]):
         super().__init__()
         self._lice_population = gross_lice_population
         for k, v in geno_data.items():
-            super().__setitem__(k, v)
+            super().__setitem__(k, v.copy())
 
     def __setitem__(self, stage: LifeStage, value: GenoDistrib):
         # update the value and the gross population accordingly
-        old_value = self[stage]
-        super().__setitem__(stage, value)
+        old_value = self[stage].copy()
         old_value_sum = self._lice_population[stage]
-        value_sum = sum(value.values())
-        self._lice_population.raw_update_value(stage, sum(value.values()))
+        old_value_sum_2 = old_value.gross()
+        assert old_value_sum == old_value_sum_2
+        super().__setitem__(stage, value.copy())
+        value_sum = value.gross()
+        self._lice_population.raw_update_value(stage, value_sum)
 
         # if L5f increases all the new lice are by default free
         # if it decreases we subtract the delta from each dam event
         if stage == "L5f" and value_sum < old_value_sum:
             # calculate the deltas and
             delta = value - old_value
-            all_lice_population = self._lice_population.busy_dams_gross
-            for event in self._lice_population._busy_dams.queue:
-                geno_distrib = event.geno_distrib
-                delta_geno = delta * (geno_distrib.gross() / all_lice_population)
-                geno_distrib += delta_geno
+            busy_dams_denom = self._lice_population.busy_dams.gross()
+            if busy_dams_denom == 0:
+                self._lice_population.clear_busy_dams()
+            else:
+                for event in self._lice_population._busy_dams.queue:
+                    geno_distrib = event.geno_distrib
+                    delta_geno = delta * (geno_distrib.gross() / busy_dams_denom)
+                    geno_distrib += delta_geno
 
     def raw_update_value(self, stage: LifeStage, value: GenoDistrib):
         super().__setitem__(stage, value)

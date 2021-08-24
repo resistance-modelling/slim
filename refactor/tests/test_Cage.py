@@ -354,7 +354,7 @@ class TestCage:
         assert delta_mutated_eggs == target_mutated_eggs
 
     def test_no_available_sires_do_mating_events(self, first_cage):
-        first_cage.lice_population.geno_by_lifestage["L5m"] = {('A',): 0, ('a',): 0, ('A', 'a'): 0}
+        first_cage.lice_population.geno_by_lifestage["L5m"] = GenoDistrib({('A',): 0, ('a',): 0, ('A', 'a'): 0})
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert not bool(delta_avail_dams)
@@ -807,15 +807,15 @@ class TestCage:
 
     def test_update_dying_busy_dams(self,
         first_cage,
+        first_cage_population,
         null_offspring_distrib,
         null_dams_batch,
         sample_treatment_mortality,
         sample_offspring_distrib,
+        cur_day
     ):
-        first_cage.lice_population["L3"] = 0
-        first_cage.lice_population["L4"] = 0
-        first_cage.lice_population["L5m"] = 0
-        first_cage.lice_population.geno_by_lifestage["L5f"] = sample_offspring_distrib
+        dams, _ = first_cage.do_mating_events()
+        first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
 
         background_mortality = first_cage.get_background_lice_mortality()
         fish_deaths_natural = 0
@@ -850,5 +850,5 @@ class TestCage:
 
         # TODO: This is still broken
         assert first_cage.lice_population["L5f"] == 587
-        assert sum(first_cage.lice_population.available_dams.values()) == 587
-        # ...
+        assert first_cage.lice_population.available_dams.gross() == 587
+        assert first_cage.lice_population.busy_dams.gross() == 0
