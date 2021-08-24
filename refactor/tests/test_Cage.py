@@ -80,9 +80,9 @@ class TestCage:
                 assert sum(mortality_updates[stage].values()) == 0
 
         assert first_cage.last_effective_treatment.affecting_date == cur_day
-        assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 0, ('a',): 2}
-        assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 1, ('a',): 2}
-        assert mortality_updates['L4'] == {('A',): 0, ('A', 'a'): 1, ('a',): 8}
+        assert mortality_updates['L5f'] == {('a',): 2}
+        assert mortality_updates['L5m'] == {('A', 'a'): 1, ('a',): 2}
+        assert mortality_updates['L4'] == {('A', 'a'): 1, ('a',): 8}
         assert mortality_updates['L3'] == {('A',): 2, ('A', 'a'): 2, ('a',): 8}
 
         assert 55000 <= cost <= 60000
@@ -102,10 +102,10 @@ class TestCage:
         cur_day = treatment_dates[1] + dt.timedelta(days=10)
         mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
 
-        assert mortality_updates['L3'] == {('A',): 0, ('A', 'a'): 2, ('a',): 8}
+        assert mortality_updates['L3'] == {('A', 'a'): 2, ('a',): 8}
         assert mortality_updates['L4'] == {('A',): 1, ('A', 'a'): 1, ('a',): 8}
-        assert mortality_updates['L5m'] == {('A',): 0, ('A', 'a'): 0, ('a',): 2}
-        assert mortality_updates['L5f'] == {('A',): 0, ('A', 'a'): 0, ('a',): 2}
+        assert mortality_updates['L5m'] == {('a',): 2}
+        assert mortality_updates['L5f'] == {('a',): 2}
 
         assert cost == 0
 
