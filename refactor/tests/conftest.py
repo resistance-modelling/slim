@@ -46,6 +46,11 @@ def first_cage(first_farm):
 
 
 @pytest.fixture
+def first_cage_population(first_cage):
+    return first_cage.lice_population
+
+
+@pytest.fixture
 def cur_day(first_cage):
     return first_cage.date + datetime.timedelta(days=1)
 

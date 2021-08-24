@@ -79,7 +79,6 @@ class Cage:
         self.num_infected_fish = self.get_mean_infected_fish()
 
         self.hatching_events = PriorityQueue()  # type: PriorityQueue[EggBatch]
-        self.busy_dams = PriorityQueue()  # type: PriorityQueue[DamAvailabilityBatch]
         self.arrival_events = PriorityQueue()  # type: PriorityQueue[TravellingEggBatch]
         self.treatment_events = PriorityQueue()  # type: PriorityQueue[TreatmentEvent]
 
@@ -175,7 +174,7 @@ class Cage:
             new_egg_batch = self.get_egg_batch(cur_date, delta_eggs)
 
             # Restore lice availability
-            returned_dams = self.free_dams(cur_date)
+            returned_dams = self.lice_population.free_dams(cur_date)
 
         self.update_deltas(
             dead_lice_dist,
@@ -848,10 +847,6 @@ class Cage:
         def _(arg: TravellingEggBatch, _cur_time: dt.datetime):
             return arg.hatch_date <= _cur_time  # pragma: no cover
 
-        @access_time_lt.register  # type: ignore[no-redef]
-        def _(arg: DamAvailabilityBatch, _cur_time: dt.datetime):
-            return arg.availability_date <= _cur_time
-
         while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
             event = queue.get()
             for geno, value in event.geno_distrib.items():
@@ -1017,7 +1012,6 @@ class Cage:
         for affected_stage, reduction in dead_lice_by_fish_death.items():
             dead_lice_dist[affected_stage] += reduction
 
-
         for stage in self.lice_population:
             # update background mortality
             bg_delta = self.lice_population[stage] - dead_lice_dist[stage]
@@ -1039,55 +1033,8 @@ class Cage:
         # TODO: switch to generic genotype distribs?
         self.lice_population["L1"] += lice_from_reservoir["L1"]
 
-        delta_avail_dams = delta_dams_batch.geno_distrib if delta_dams_batch is not None else {}
-
-        # Gross L5f calculation is fine, but we need to determine how many of these are available now.
-        # In principle, once some of the lice are popped from the queue these may die. Therefore,
-        # we need to compute the fraction of the new-available ones that have died.
-        if old_gross_population['L5f'] > 0:
-            num_available = sum(self.lice_population.available_dams.values())
-            l5_availability_ratio = num_available / old_gross_population['L5f']
-            l5_busy_ratio = 1 - l5_availability_ratio
-            busy_dams_global = sum(map(lambda x: x.geno_distrib, self.busy_dams.queue), GenericGenoDistrib())
-
-            treated_dams_dist = treatment_mortality['L5f'] * l5_busy_ratio
-            background_dead_dams_dist = treated_dams_dist * (dead_lice_dist['L5f'] * l5_busy_ratio)
-
-            # note: new l5f lice by default are free.
-            busy_dams_delta = busy_dams_global - treated_dams_dist - background_dead_dams_dist
-
-            for busy_dam_event in self.busy_dams.queue:
-                busy_dam_geno = busy_dam_event.geno_distrib  # type: GenericGenoDistrib
-                delta_per_event = (busy_dam_geno / busy_dams_global) * busy_dams_delta
-                delta_per_event = round(delta_per_event)
-                busy_dam_event.geno_distrib -= delta_per_event
-
-
-            """
-            assert l5_availability_ratio <= 1.0
-            # Step 2: compute the right genetics affected by treatment
-            available_dams = self.lice_population.available_dams.copy()
-            treated_dams_dist = treatment_mortality['L5f'].copy()
-            treatment_mortality_l5_gross = sum(treated_dams_dist.values())
-
-            delta_busy_dist = treated_dams_dist.normalise_to(round(treatment_mortality_l5_gross * l5_availability_ratio))
-            returned_dams -= delta_busy_dist
-
-            self.lice_population.available_dams += returned_dams
-
-            # Step 3: remaining gross calculations
-            delta_busy = round(l5_availability_ratio * dead_lice_dist['L5f'])
-
-            # Step 4: actual update
-
-            self.lice_population.available_dams.set(num_available + delta_busy)
-            self.lice_population.available_dams += delta_busy_dist
-            """
-
         if delta_dams_batch:
-            for k, v in delta_dams_batch.geno_distrib.items():
-                assert v <= self.lice_population.geno_by_lifestage['L5f'][k]
-            self.busy_dams.put(delta_dams_batch)
+            self.lice_population.add_busy_dams_batch(delta_dams_batch)
 
         self.num_fish -= (fish_deaths_natural + fish_deaths_from_lice)
 
@@ -1164,7 +1111,6 @@ class Cage:
             self.lice_population[stage] = 0
 
         self.num_infected_fish = self.num_fish = 0
-        self.busy_dams = PriorityQueue()
         self.treatment_events = PriorityQueue()
 
     @property

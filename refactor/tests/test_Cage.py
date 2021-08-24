@@ -329,18 +329,14 @@ class TestCage:
         for population in first_cage.lice_population.values():
             assert population >= 0
 
-    def test_invalid_update_raises(self, first_cage):
-        first_cage.lice_population.geno_by_lifestage["L5m"] = {('A',): 5, ('a',): 5, ('A', 'a'): 5}
-        with pytest.raises(AssertionError):
-            first_cage.lice_population.available_dams = {('A',): 10}
-
-    def test_do_mating_events(self, first_cage):
+    def test_do_mating_events(self, first_cage, first_cage_population, cur_day):
         # Remove mutation effects...
         old_mutation_rate = first_cage.cfg.geno_mutation_rate
         first_cage.cfg.geno_mutation_rate = 0
 
-        first_cage.lice_population.geno_by_lifestage["L5f"] = {('A',): 15, ('a',): 15, ('A', 'a'): 15}
-        first_cage.lice_population.available_dams = {('A',): 15, ('a',): 15}
+        first_cage.lice_population.geno_by_lifestage["L5f"] = GenoDistrib({('A',): 15, ('a',): 15, ('A', 'a'): 15})
+        first_cage_population.clear_busy_dams()
+        first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day, GenoDistrib({('A', 'a'): 15})))
 
         target_eggs = {('a',): 1545.5, ('A',): 763.0, tuple(sorted(('a', 'A'))): 6842.5}
         target_delta_dams = {('A',): 2, ('a',): 4}
@@ -556,35 +552,6 @@ class TestCage:
         offspring = first_cage.create_offspring(cur_day + dt.timedelta(days=3))
         for val in offspring.values():
             assert val == 30
-
-    def test_avail_dams_freed_early(self, first_cage, cur_day):
-        dams, _ = first_cage.do_mating_events()
-
-        first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
-        assert all(x == 0 for x in first_cage.free_dams(cur_day).values())
-
-    def test_avail_dams_freed_same_day_once(self, first_cage, cur_day):
-        first_cage.lice_population["L5m"] = 1000
-        first_cage.lice_population["L5f"] = 1000
-        dams, _ = first_cage.do_mating_events()
-        target_dams = {('A',): 278,
-                       ('a',): 179,
-                       ('A', 'a'): 469}
-
-        first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
-        assert first_cage.free_dams(cur_day + dt.timedelta(days=1)) == target_dams
-
-    def test_avail_dams_freed_same_day_thrice(self, first_cage, cur_day):
-        first_cage.lice_population["L5m"] = 1000
-        first_cage.lice_population["L5f"] = 1000
-        dams, _ = first_cage.do_mating_events()
-        target_dams = {('A',): 834,
-                       ('a',): 537,
-                       ('A', 'a'): 1407}
-
-        for i in range(3):
-            first_cage.busy_dams.put(DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams))
-        assert first_cage.free_dams(cur_day + dt.timedelta(days=3)) == target_dams
 
     def test_promote_population_invalid(self, first_cage):
         with pytest.raises(ValueError):
@@ -884,5 +851,4 @@ class TestCage:
         # TODO: This is still broken
         assert first_cage.lice_population["L5f"] == 587
         assert sum(first_cage.lice_population.available_dams.values()) == 587
-        for event in first_cage.busy_dams.queue:
-            assert event.geno_distrib == GenoDistrib({})
+        # ...

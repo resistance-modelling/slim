@@ -133,7 +133,6 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
     def __init__(self, initial_population: GrossLiceDistrib, geno_data: GenoLifeStageDistrib, cfg: Config):
         super().__init__()
         self.geno_by_lifestage = GenotypePopulation(self, geno_data)
-        self._available_dams = copy.deepcopy(self.geno_by_lifestage["L5f"])  # type: GenoDistrib
         self.genetic_ratios = cfg.genetic_ratios
         self.logger = cfg.logger
         self._busy_dams = PriorityQueue()  # type: PriorityQueue[DamAvailabilityBatch]
@@ -143,7 +142,8 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
     def __setitem__(self, stage: LifeStage, value: int):
         # If one attempts to make gross modifications to the population these will be repartitioned according to the
         # current genotype information.
-        if sum(self.geno_by_lifestage[stage].values()) == 0:
+        old_value = self[stage]
+        if old_value == 0:
             if value > 0:
                 self.logger.warning(
                     f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
@@ -155,7 +155,8 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
             value = max(value, 0)
             self.geno_by_lifestage[stage].set(value)
         if stage == "L5f":
-            self._available_dams.set(value)
+            self.rescale_busy_dams(round(self.busy_dams_gross * value / old_value) if old_value > 0 else 0)
+
         super().__setitem__(stage, value)
 
     def raw_update_value(self, stage: LifeStage, value: int):
@@ -166,16 +167,7 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
 
     @property
     def available_dams(self):
-        return self._available_dams
-        #return self.geno_by_lifestage["L5f"] - self.busy_dams
-
-    @available_dams.setter
-    def available_dams(self, new_value: GenoDistrib):
-        for geno in new_value:
-            assert self.geno_by_lifestage["L5f"][geno] >= new_value[geno], \
-                f"current population geno {geno}:{self.geno_by_lifestage['L5f'][geno]} is smaller than new value geno {new_value[geno]}"
-
-        self._available_dams = new_value
+        return self.geno_by_lifestage["L5f"] - self.busy_dams
 
     @property
     def available_dams_gross(self):
@@ -183,30 +175,48 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
 
     @property
     def busy_dams(self):
-        return sum(self.busy_dams.queue, GenericGenoDistrib())
+        return sum(map(lambda x: x.geno_distrib, self._busy_dams.queue), GenericGenoDistrib())
 
     @property
     def busy_dams_gross(self):
-        return sum(self.busy_dams_gross)
+        return self.busy_dams.gross()
 
-    def __rescale_busy_dams(self, num: int):
+    def free_dams(self, cur_time) -> GenericGenoDistrib:
+        """
+        Return the number of available dams
+
+        :param cur_time the current time
+        :returns the genotype population of dams that return available today
+        """
+        delta_avail_dams = GenericGenoDistrib()
+
+        while not self._busy_dams.empty() and self._busy_dams.queue[0].availability_date <= cur_time:
+            event = self._busy_dams.get()
+            delta_avail_dams += event.geno_distrib
+
+        return delta_avail_dams
+
+    def add_busy_dams_batch(self, delta_dams_batch: DamAvailabilityBatch):
+        for k, v in delta_dams_batch.geno_distrib.items():
+            assert v <= self.geno_by_lifestage['L5f'][k]
+        self._busy_dams.put(delta_dams_batch)
+
+    def rescale_busy_dams(self, num: int):
         # rescale the number of busy dams to the given number.
-        # If
         if num == 0:
             self.clear_busy_dams()
 
         elif self._busy_dams.qsize() == 0 or self.busy_dams_gross == 0:
             raise ValueError("Busy dam queue is empty")
 
+        else:
+            partitions = np.array([sum(event.geno_distrib.values()) for event in self._busy_dams.queue])
+            total_busy = np.sum(partitions)
+            ratios = total_busy / partitions
 
-    """
-    def available_dams(self, new_value: GenoDistrib):
-        for geno in new_value:
-            assert self.geno_by_lifestage["L5f"][geno] >= new_value[geno], \
-                f"current population geno {geno}:{self.geno_by_lifestage['L5f'][geno]} is smaller than new value geno {new_value[geno]}"
-
-        self._available_dams = new_value
-    """
+            # TODO: rounding this with iteround isn't easy...
+            for event, ratio in zip(self._busy_dams.queue, ratios):
+                event.geno_distrib *= num * ratio
 
     def get_empty_geno_stage_distrib(self) -> GenoDistrib:
         # A little factory method to get empty genos
@@ -217,7 +227,7 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         return {stage: self.get_empty_geno_stage_distrib() for stage in self.keys()}
 
 
-class GenotypePopulation(Dict[Alleles, GenericGenoDistrib]):
+class GenotypePopulation(Dict[LifeStage, GenericGenoDistrib]):
     def __init__(self, gross_lice_population: LicePopulation, geno_data: GenoLifeStageDistrib):
         super().__init__()
         self._lice_population = gross_lice_population
@@ -226,8 +236,22 @@ class GenotypePopulation(Dict[Alleles, GenericGenoDistrib]):
 
     def __setitem__(self, stage: LifeStage, value: GenoDistrib):
         # update the value and the gross population accordingly
+        old_value = self[stage]
         super().__setitem__(stage, value)
+        old_value_sum = self._lice_population[stage]
+        value_sum = sum(value.values())
         self._lice_population.raw_update_value(stage, sum(value.values()))
+
+        # if L5f increases all the new lice are by default free
+        # if it decreases we subtract the delta from each dam event
+        if stage == "L5f" and value_sum < old_value_sum:
+            # calculate the deltas and
+            delta = value - old_value
+            all_lice_population = self._lice_population.busy_dams_gross
+            for event in self._lice_population._busy_dams.queue:
+                geno_distrib = event.geno_distrib
+                delta_geno = delta * (geno_distrib.gross() / all_lice_population)
+                geno_distrib += delta_geno
 
     def raw_update_value(self, stage: LifeStage, value: GenoDistrib):
         super().__setitem__(stage, value)
