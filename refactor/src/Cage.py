@@ -889,20 +889,6 @@ class Cage:
 
         return hatched_dist
 
-    def free_dams(self, cur_time) -> GenericGenoDistrib:
-        """
-        Return the number of available dams
-
-        :param cur_time the current time
-        :returns the genotype population of dams that return available today
-        """
-        delta_avail_dams = GenericGenoDistrib()
-        for geno in self.lice_population.geno_by_lifestage['L5f']:
-            delta_avail_dams[geno] = 0
-
-        self.pop_from_queue(self.busy_dams, cur_time, delta_avail_dams)
-        return delta_avail_dams
-
     def get_dying_lice_from_dead_fish(self, num_dead_fish: int) -> GrossLiceDistrib:
         """
         Get the number of lice that die when fish die.

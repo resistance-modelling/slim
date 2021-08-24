@@ -10,7 +10,7 @@ import numpy as np
 
 from src.Config import Config
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from src.QueueBatches import DamAvailabilityBatch
 
 ################ Basic type aliases #####################
@@ -68,16 +68,6 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
             res[k] -= v
         return res
 
-    def __isub__(self, other: GenericGenoDistrib[GenoKey]):
-        for k, v in other.items():
-            self[k] -= v
-        return self
-
-    def __iadd__(self, other: GenericGenoDistrib[GenoKey]):
-        for k, v in other.items():
-            self[k] += v
-        return self
-
     def __mul__(self, other: Union[float, GenericGenoDistrib[GenoKey]]) -> GenericGenoDistrib[GenoKey]:
         """Multiply a distribution."""
         if isinstance(other, float) or isinstance(other, int):
@@ -90,19 +80,6 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
             # Sometimes it may be helpful to not round
             keys = set(list(self.keys()) + list(other.keys()))
             values = [self[k] * other[k] for k in keys]
-        return GenericGenoDistrib(dict(zip(keys, values)))
-
-    def __truediv__(self, other: GenericGenoDistrib[GenoKey]) -> GenericGenoDistrib[GenoKey]:
-        """Perform a division between two distributions. The result distribution is not rounded to integers."""
-        keys = [k for k, v in other.items() if v != 0]
-        values = [self[k] / other[k] for k in keys]
-        return GenericGenoDistrib(dict(zip(keys, values)))
-
-    def __floordiv__(self, other: GenericGenoDistrib) -> GenericGenoDistrib[GenoKey]:
-        """Perform a division between two distributions.
-        Despite the 'floor' nature of //, actually we preserve rounding."""
-        keys = [k for k, v in other.items() if v != 0]
-        values = iteround.saferound([self[k] / other[k] for k in keys], 0)
         return GenericGenoDistrib(dict(zip(keys, values)))
 
     def __eq__(self, other: Union[GenericGenoDistrib[GenoKey], Dict[GenoKey, int]]) -> bool:
