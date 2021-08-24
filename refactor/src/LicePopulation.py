@@ -78,12 +78,13 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
             self[k] += v
         return self
 
-
     def __mul__(self, other: Union[float, GenericGenoDistrib[GenoKey]]) -> GenericGenoDistrib[GenoKey]:
         """Multiply a distribution."""
         if isinstance(other, float) or isinstance(other, int):
             keys = self.keys()
-            values = iteround.saferound([v * other for v in self.values()], 0)
+            values = [v * other for v in self.values()]
+            if isinstance(other, float):
+                values = iteround.saferound(values, 0)
         else:
             # pairwise product
             # Sometimes it may be helpful to not round
@@ -140,6 +141,8 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
     Wrapper to keep the global population and genotype information updated
     This is definitely a convoluted way to do this, but I wanted to memoise as much as possible.
     """
+
+    lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
 
     def __init__(self, initial_population: GrossLiceDistrib, geno_data: GenoLifeStageDistrib, cfg: Config):
         super().__init__()
@@ -204,9 +207,16 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
             assert v <= self.geno_by_lifestage['L5f'][k]
         self._busy_dams.put(delta_dams_batch)
 
+    def remove_negatives(self):
+        for stage, distrib in self.geno_by_lifestage.items():
+            keys = distrib.keys()
+            values = distrib.values()
+            distrib_purged = GenoDistrib(dict(zip(keys, [max(v, 0) for v in values])))
+            self.geno_by_lifestage[stage] = distrib_purged
+
     def rescale_busy_dams(self, num: int):
         # rescale the number of busy dams to the given number.
-        if num == 0:
+        if num <= 0:
             self.clear_busy_dams()
 
         elif self._busy_dams.qsize() == 0 or self.busy_dams.gross() == 0:
@@ -219,15 +229,11 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
 
             # TODO: rounding this with iteround isn't easy...
             for event, ratio in zip(self._busy_dams.queue, ratios):
-                event.geno_distrib *= num * ratio
+                event.geno_distrib.set(num * ratio)
 
-    def get_empty_geno_stage_distrib(self) -> GenoDistrib:
-        # A little factory method to get empty genos
-        genos = self.geno_by_lifestage["L1"].keys()
-        return GenoDistrib({geno: 0 for geno in genos})
-
-    def get_empty_geno_distrib(self) -> GenoLifeStageDistrib:
-        return {stage: self.get_empty_geno_stage_distrib() for stage in self.keys()}
+    @staticmethod
+    def get_empty_geno_distrib() -> GenoLifeStageDistrib:
+        return {stage: GenoDistrib() for stage in LicePopulation.lice_stages}
 
 
 class GenotypePopulation(Dict[LifeStage, GenericGenoDistrib]):

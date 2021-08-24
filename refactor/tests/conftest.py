@@ -93,7 +93,12 @@ def sample_eggs_by_hatch_date(sample_offspring_distrib, first_farm):
 
 
 @pytest.fixture
-def sample_treatment_mortality(first_cage, first_cage_population):
+def null_treatment_mortality():
+    return LicePopulation.get_empty_geno_distrib()
+
+
+@pytest.fixture
+def sample_treatment_mortality(first_cage, first_cage_population, null_offspring_distrib):
     mortality = first_cage_population.get_empty_geno_distrib()
 
     # create a custom rng to avoid breaking other tests
@@ -105,8 +110,8 @@ def sample_treatment_mortality(first_cage, first_cage_population):
     target_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 5, "L5f": 5}
 
     for stage, target in target_mortality.items():
-        bins = rng.multinomial(min(target, first_cage_population[stage]), probs)
-        alleles = mortality[stage].keys()
+        bins = rng.multinomial(min(target, first_cage_population[stage]), probs).tolist()
+        alleles = null_offspring_distrib.keys()
         mortality[stage] = GenoDistrib(dict(zip(alleles, bins)))
 
     return mortality

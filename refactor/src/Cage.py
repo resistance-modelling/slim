@@ -1004,8 +1004,6 @@ class Cage:
         :param hatched_arrivals_dist: new offspring obtained from arrivals
         """
 
-        old_gross_population = self.lice_population.copy()
-
         # Update dead_lice_dist to include fish-caused death as well
         dead_lice_by_fish_death = self.get_dying_lice_from_dead_fish(
             fish_deaths_natural + fish_deaths_from_lice)
@@ -1021,6 +1019,8 @@ class Cage:
             # TODO: __isub__ here is broken
             self.lice_population.geno_by_lifestage[stage] = self.lice_population.geno_by_lifestage[stage] - treatment_mortality[stage]
 
+        self.lice_population.remove_negatives()
+
         self.promote_population("L4", "L5m", 0, new_males)
         self.promote_population("L4", "L5f", 0, new_females)
         self.promote_population("L3", "L4", new_males + new_females, new_L4)
@@ -1029,6 +1029,8 @@ class Cage:
 
         self.promote_population(new_offspring_distrib, "L1", new_L2, None)
         self.promote_population(hatched_arrivals_dist, "L1", 0, None)
+
+        self.lice_population.remove_negatives()
 
         # in absence of wildlife genotype, simply upgrade accordingly
         # TODO: switch to generic genotype distribs?
