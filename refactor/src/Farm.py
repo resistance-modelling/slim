@@ -23,11 +23,11 @@ import numpy as np
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
-from src.LicePopulation import Alleles, GrossLiceDistrib
+from src.LicePopulation import Alleles, GrossLiceDistrib, GenericGenoDistrib
 from src.TreatmentTypes import Treatment, TreatmentParams, Money
 from src.QueueBatches import TreatmentEvent
 
-GenoDistribByHatchDate = Dict[dt.datetime, CounterType[Alleles]]
+GenoDistribByHatchDate = Dict[dt.datetime, GenericGenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
 LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
 
@@ -201,9 +201,9 @@ class Farm:
             if hatch_date:
                 # update the total offspring info
                 if hatch_date in eggs_by_hatch_date:
-                    eggs_by_hatch_date[hatch_date] += Counter(egg_distrib)
+                    eggs_by_hatch_date[hatch_date] += egg_distrib
                 else:
-                    eggs_by_hatch_date[hatch_date] = Counter(egg_distrib)
+                    eggs_by_hatch_date[hatch_date] = egg_distrib
 
             total_cost += cost
 

@@ -197,7 +197,7 @@ class TestFarm:
         offspring, cost = first_farm.update(cur_date)
 
         assert offspring == {}
-        assert cost > 0 # fallowing
+        assert cost > 0  # fallowing
 
     # Currently fixtures are not automatically loaded in the parametrisation, so they need to be manually invoked
     # See https://github.com/pytest-dev/pytest/issues/349
