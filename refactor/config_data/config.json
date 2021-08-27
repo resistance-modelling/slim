@@ -134,16 +134,6 @@
               "description": "Ratio between durability and current sea temperature (unit: days / °C)",
               "value": 210
           },
-          "infection_delay_time": {
-            "description": "Number of days fish in a cage are protected against infection after treatment",
-            "note": "TODO: assume six weeks protection, needs more data",
-            "value": 42   
-          },
-          "infection_delay_prob": {
-            "description": "Probability of effective protection against lice infection after treatment",
-            "note": "TODO: dummy variable, needs data",
-            "value": 0.9
-          },
           "price_per_kg": {
             "description": "Cost per kg when applying treatment",
             "note": "Values taken from www.sigmaaldrich.com , rescaled to have a 1kg denominator",
