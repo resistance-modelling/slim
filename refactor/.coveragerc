@@ -3,6 +3,7 @@ omit =
     tests/*
     src/SeaLiceMgmt.py
     src/__init__.py
+    src/surveys/*
 
 branch=True
 dynamic_context = test_function
