@@ -406,6 +406,38 @@ class Cage:
 
         return new_L2, new_L4, new_females, new_males
 
+    def get_fish_treatment_mortality(self, days_since_start: dt.timedelta, mortality_events: int) -> int:
+        """
+        Get fish mortality due to treatment. Mortality due to treatment is defined in terms of
+        point percentage increases, thus we can only account for "excess deaths".
+
+        :param cur_date: the current date
+        :param mortality_events: the number of deaths events, or equivalently a "stress" indicator
+        """
+
+        # See surveys/overton_treatment_mortalities.py for an explanation on what is going on
+        # TODO: move them somewhere? Generate them?
+        coeffs = np.array([0., 0.09524604, -0.16264929, - 0.00731587,  0.08306807 - 0.16264929])
+
+        cur_date = self.start_date + days_since_start
+        temperature = self.farm.year_temperatures[cur_date.month-1]
+        mortality_events_pp = 100 * mortality_events / self.num_fish
+        fish_mass = self.fish_growth_rate(days_since_start) / self.num_fish
+        fish_mass_indicator = 1 if fish_mass > 2 else 0
+
+        input = np.array([1, temperature, fish_mass_indicator, temperature**2, temperature*fish_mass_indicator, fish_mass_indicator**2])
+        predicted_pp_increase = coeffs @ input
+        predicted_deaths = (predicted_pp_increase + mortality_events_pp) * self.num_fish / 100 - mortality_events
+
+        treatment_mortalities_occurrences = self.cfg.rng.poisson(predicted_deaths)
+
+        return treatment_mortalities_occurrences
+
+
+
+
+
+
     def get_fish_growth(self, days_since_start) -> Tuple[int, int]:
         """
         Get the number of fish that get killed either naturally or by lice.
