@@ -137,12 +137,12 @@
         "description": "Emamectin Benzoate",
         "value": {
           "effect_delay": {
-              "description": "Delay between application and observation of noticeable effects of the Emamectin Benzoate (in days)",
-              "value": 5
+            "description": "Delay between application and observation of noticeable effects of the Emamectin Benzoate (in days)",
+            "value": 5
           },
           "durability_temp_ratio": {
-              "description": "Ratio between durability and current sea temperature (unit: days / °C)",
-              "value": 210
+            "description": "Ratio between durability and current sea temperature (unit: days / °C)",
+            "value": 210
           },
           "price_per_kg": {
             "description": "Cost per kg when applying treatment",
@@ -156,10 +156,15 @@
           "pheno_resistance": {
             "description": "Lookup table to translate between genotype.",
             "value": {
-                "dominant": 0.95,
-                "incompletely_dominant": 0.85,
-                "recessive": 0.05
+              "dominant": 0.95,
+              "incompletely_dominant": 0.85,
+              "recessive": 0.05
             }
+          },
+          "quadratic_fish_mortality_coeffs": {
+            "description": "Fitted quadratic regression coefficients from Overton et al.",
+            "note": "The values were found by the overton_treatment_mortalities.py script.",
+            "value": [0.0, 0.72140707, -3.57850456, -0.02576944, 1.40270749, -3.57850456]
           }
         }
       }

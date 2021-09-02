@@ -178,19 +178,24 @@ class TestCage:
         assert new_females == 0
         assert new_males == 0
 
-    def test_get_fish_death_by_treatment(self, first_cage):
-        days_eloped = 10
+    def test_get_fish_death_by_treatment(self, first_cage, cur_day):
+        first_affecting_date = first_cage.treatment_events.queue[0].affecting_date
+        days_eloped = (first_affecting_date - cur_day).days
 
         assert first_cage.get_fish_treatment_mortality(days_eloped, 0, 0) == 0
+        assert first_cage.get_fish_treatment_mortality(days_eloped, 100, 30) == 0
+
+        first_cage.get_lice_treatment_mortality(cur_day + dt.timedelta(days_eloped))
+        assert first_cage.last_effective_treatment is not None
 
         num_deaths = first_cage.get_fish_treatment_mortality(days_eloped, 100, 30)
 
-        assert 100 <= num_deaths <= 200
+        assert 10 <= num_deaths <= 20
 
         # A change in lice infestation should not cause much of a concern
         # TODO: the paper says otherwise. Investigate whether this matters in our model
         num_deaths = first_cage.get_fish_treatment_mortality(days_eloped, 500, 30)
-        assert 100 <= num_deaths <= 200
+        assert 10 <= num_deaths <= 20
 
         # exactly one year after, the temperature is the same (~13 degrees) but the mass increased to 4.5kg.
         days_eloped = 365
@@ -200,10 +205,10 @@ class TestCage:
         num_deaths = first_cage.get_fish_treatment_mortality(days_eloped, 100, 30)
 
         # We expect a surge in mortality now
-        assert 500 <= num_deaths <= 700
+        assert 30 <= num_deaths <= 50
 
         num_deaths = first_cage.get_fish_treatment_mortality(days_eloped, 500, 30)
-        assert 500 <= num_deaths <= 700
+        assert 30 <= num_deaths <= 50
 
     def test_get_fish_growth(self, first_cage):
         first_cage.num_fish *= 300
