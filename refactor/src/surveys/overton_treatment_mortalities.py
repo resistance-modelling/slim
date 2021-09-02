@@ -21,6 +21,8 @@ from sklearn.linear_model import Ridge
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import Pipeline
 
+x = "a" + 4
+
 pp_bins = np.array([1, 2.5, 5, 10, 25])
 temperatures = np.array([0, 4, 7, 10, 13])
 

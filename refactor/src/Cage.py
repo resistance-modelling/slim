@@ -419,11 +419,14 @@ class Cage:
         # TODO: move them somewhere? Generate them?
         coeffs = np.array([0., 0.09524604, -0.16264929, - 0.00731587,  0.08306807 - 0.16264929])
 
+        if mortality_events == 0:
+            return 0
+
         cur_date = self.start_date + dt.timedelta(days=days_since_start)
         temperature = self.farm.year_temperatures[cur_date.month-1]
         mortality_events_pp = 100 * mortality_events / self.num_fish
-        fish_mass = self.average_fish_mass(days_since_start) / self.num_fish
-        fish_mass_indicator = 1 if fish_mass > 2 else 0
+        fish_mass = self.average_fish_mass(days_since_start)
+        fish_mass_indicator = 1 if fish_mass > 2000 else 0
 
         input = np.array([1, temperature, fish_mass_indicator, temperature**2, temperature*fish_mass_indicator, fish_mass_indicator**2])
         predicted_pp_increase = coeffs @ input

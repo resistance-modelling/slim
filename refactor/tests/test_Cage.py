@@ -178,6 +178,15 @@ class TestCage:
         assert new_females == 0
         assert new_males == 0
 
+    def test_get_fish_death_by_treatment(self, first_cage):
+        days_since_start = 10
+
+        assert first_cage.get_fish_treatment_mortality(days_since_start, 0) == 0
+
+        #num_deaths = first_cage.get_fish_treatment_mortality(days_since_start, 100)
+
+        #assert num_deaths > 0
+
     def test_get_fish_growth(self, first_cage):
         first_cage.num_fish *= 300
         first_cage.num_infected_fish = first_cage.num_fish // 2
