@@ -103,6 +103,16 @@
       }
     }
   },
+  "smolt_mass_params": {
+    "description": "Sigmoid parameters that pilot the average smolt-to-adult average weight development",
+    "source": "FAO - http://www.fao.org/fishery/affris/species-profiles/atlantic-salmon/growth/en/ . See figure 5",
+    "note": "These constants were manually fitted on the given figure.",
+    "value": {
+      "max_mass": 10000,
+      "skewness": -0.01,
+      "x_shift": 475
+    }
+  },
   "genetic_ratios": {
     "description": "Genetic ratios of lice population",
     "value": {"A": 0.25, "a": 0.25, "A,a": 0.5}
@@ -133,16 +143,6 @@
           "durability_temp_ratio": {
               "description": "Ratio between durability and current sea temperature (unit: days / °C)",
               "value": 210
-          },
-          "infection_delay_time": {
-            "description": "Number of days fish in a cage are protected against infection after treatment",
-            "note": "TODO: assume six weeks protection, needs more data",
-            "value": 42   
-          },
-          "infection_delay_prob": {
-            "description": "Probability of effective protection against lice infection after treatment",
-            "note": "TODO: dummy variable, needs data",
-            "value": 0.9
           },
           "price_per_kg": {
             "description": "Cost per kg when applying treatment",

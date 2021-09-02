@@ -178,6 +178,15 @@ class TestCage:
         assert new_females == 0
         assert new_males == 0
 
+    def test_get_fish_death_by_treatment(self, first_cage):
+        days_since_start = 10
+
+        assert first_cage.get_fish_treatment_mortality(days_since_start, 0) == 0
+
+        #num_deaths = first_cage.get_fish_treatment_mortality(days_since_start, 100)
+
+        #assert num_deaths > 0
+
     def test_get_fish_growth(self, first_cage):
         first_cage.num_fish *= 300
         first_cage.num_infected_fish = first_cage.num_fish // 2
@@ -208,35 +217,6 @@ class TestCage:
 
         assert 0.13 <= rate <= 0.17
         assert avail_lice == 90
-
-    def test_do_infection_events(self, first_cage):
-        protection_days = 10
-        date = first_cage.start_date + dt.timedelta(days=protection_days)
-
-        first_cage.lice_population["L2"] = 100
-        first_cage.last_effective_treatment = None
-        num_infections_no_protection = first_cage.do_infection_events(date, 1)
-
-        assert num_infections_no_protection > 0
-
-        first_treatment = first_cage.treatment_events.queue[0]  # type: TreatmentEvent
-        first_cage.get_lice_treatment_mortality(first_treatment.affecting_date)
-
-        trial_protection_date = first_treatment.affecting_date
-        first_cage.cfg.emb.infection_delay_time = protection_days
-        first_cage.cfg.emb.infection_delay_prob = 0.9
-
-        num_infections_protection = first_cage.do_infection_events(
-            trial_protection_date, (trial_protection_date - date).days)
-
-        assert num_infections_protection >= 0
-        assert num_infections_protection < num_infections_no_protection
-
-        outside_protection_date = trial_protection_date + dt.timedelta(days=50)
-        num_infections_after_protection = first_cage.do_infection_events(outside_protection_date, 1)
-
-        assert num_infections_after_protection > 0
-        assert num_infections_after_protection > num_infections_protection
 
     def test_get_infected_fish_no_infection(self, first_cage):
         # TODO: maybe make a fixture of this?

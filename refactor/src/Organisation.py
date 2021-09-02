@@ -5,13 +5,11 @@ farms at the same time.
 TODO: treatments should be decided rather than preemptively scheduled
 """
 
-import datetime as dt
 import json
 from src.Config import Config
 from src.Farm import Farm
 from src.JSONEncoders import CustomFarmEncoder
-from src.TreatmentTypes import Treatment
-from queue import Queue
+from src.TreatmentTypes import Money
 
 
 class Organisation:
@@ -22,7 +20,7 @@ class Organisation:
 
     @property
     def capital(self):
-        return sum(farm.current_capital for farm in self.farms)
+        return sum((farm.current_capital for farm in self.farms), Money())
 
     def step(self, cur_date):
         # days = (cur_date - self.cfg.start_date).days
