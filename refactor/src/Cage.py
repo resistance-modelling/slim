@@ -149,7 +149,6 @@ class Cage:
             num_infection_events = 0
             avail_dams_batch = None  # type: OptionalDamBatch
             new_egg_batch = None  # type: OptionalEggBatch
-            returned_dams = GenericGenoDistrib()
             cost = self.cfg.monthly_cost / 28
 
         else:
@@ -173,14 +172,18 @@ class Cage:
 
             new_egg_batch = self.get_egg_batch(cur_date, delta_eggs)
 
-            # Restore lice availability
-            returned_dams = self.lice_population.free_dams(cur_date)
+        fish_deaths_from_treatment = self.get_fish_treatment_mortality(
+            (cur_date - self.start_date).days,
+            fish_deaths_from_lice,
+            fish_deaths_natural
+        )
 
         self.update_deltas(
             dead_lice_dist,
             treatment_mortality,
             fish_deaths_natural,
             fish_deaths_from_lice,
+            fish_deaths_from_treatment,
             new_L2,
             new_L4,
             new_females,
@@ -189,7 +192,6 @@ class Cage:
             lice_from_reservoir,
             avail_dams_batch,
             new_offspring_distrib,
-            returned_dams,
             hatched_arrivals_dist
         )
 
@@ -406,31 +408,38 @@ class Cage:
 
         return new_L2, new_L4, new_females, new_males
 
-    def get_fish_treatment_mortality(self, days_since_start: int, mortality_events: int) -> int:
+    def get_fish_treatment_mortality(
+            self,
+            days_since_start: int,
+            fish_lice_deaths: int,
+            fish_backgroud_deaths: int) -> int:
         """
         Get fish mortality due to treatment. Mortality due to treatment is defined in terms of
         point percentage increases, thus we can only account for "excess deaths".
 
-        :param cur_date: the current date
-        :param mortality_events: the number of deaths events, or equivalently a "stress" indicator
+        :param days_since_start the number of days since the beginning of the simulation
+        :param fish_lice_deaths the number
         """
-
         # See surveys/overton_treatment_mortalities.py for an explanation on what is going on
-        # TODO: move them somewhere? Generate them?
-        coeffs = np.array([0., 0.09524604, -0.16264929, - 0.00731587,  0.08306807 - 0.16264929])
+        mortality_events = fish_lice_deaths + fish_backgroud_deaths
 
         if mortality_events == 0:
             return 0
+        if self.last_effective_treatment is None:
+            return 0
+
+        efficacy_window = self.last_effective_treatment.effectiveness_duration_days
 
         cur_date = self.start_date + dt.timedelta(days=days_since_start)
         temperature = self.farm.year_temperatures[cur_date.month-1]
         mortality_events_pp = 100 * mortality_events / self.num_fish
         fish_mass = self.average_fish_mass(days_since_start)
-        fish_mass_indicator = 1 if fish_mass > 2000 else 0
 
-        input = np.array([1, temperature, fish_mass_indicator, temperature**2, temperature*fish_mass_indicator, fish_mass_indicator**2])
-        predicted_pp_increase = coeffs @ input
+        last_treatment_params = self.cfg.get_treatment(self.last_effective_treatment.treatment_type)
+        predicted_pp_increase = last_treatment_params.get_mortality_pp_increase(temperature, fish_mass)
+
         predicted_deaths = (predicted_pp_increase + mortality_events_pp) * self.num_fish / 100 - mortality_events
+        predicted_deaths /= efficacy_window
 
         treatment_mortalities_occurrences = self.cfg.rng.poisson(predicted_deaths)
 
@@ -975,6 +984,7 @@ class Cage:
             treatment_mortality: GenoLifeStageDistrib,
             fish_deaths_natural: int,
             fish_deaths_from_lice: int,
+            fish_deaths_from_treatment: int,
             new_L2: int,
             new_L4: int,
             new_females: int,
@@ -983,7 +993,6 @@ class Cage:
             lice_from_reservoir: GrossLiceDistrib,
             delta_dams_batch: OptionalDamBatch,
             new_offspring_distrib: GenericGenoDistrib,
-            returned_dams: GenericGenoDistrib,
             hatched_arrivals_dist: GenericGenoDistrib
     ):
         """Update the number of fish and the lice in each life stage
@@ -991,6 +1000,7 @@ class Cage:
         :param treatment_mortality the distribution of genotypes being affected by treatment
         :param fish_deaths_natural the number of natural fish death events
         :param fish_deaths_from_lice the number of lice-induced fish death events
+        :param fish_deaths_from_treatment the number of treatment-induced fish death events
         :param new_L2 number of new L2 fish
         :param new_L4 number of new L4 fish
         :param new_females number of new adult females
@@ -999,7 +1009,6 @@ class Cage:
         :param lice_from_reservoir the number of lice taken from the reservoir
         :param delta_dams_batch the genotypes of now-unavailable females in batch events
         :param new_offspring_distrib the new offspring obtained from hatching and migrations
-        :param returned_dams the genotypes of returned dams
         :param hatched_arrivals_dist: new offspring obtained from arrivals
         """
 
@@ -1038,7 +1047,9 @@ class Cage:
         if delta_dams_batch:
             self.lice_population.add_busy_dams_batch(delta_dams_batch)
 
-        self.num_fish -= (fish_deaths_natural + fish_deaths_from_lice)
+        self.num_fish -= (fish_deaths_natural + fish_deaths_from_lice + fish_deaths_from_treatment)
+        if self.num_fish < 0:
+            self.num_fish = 0
 
         # treatment may kill some lice attached to the fish, thus update at the very end
         self.num_infected_fish = self.get_mean_infected_fish()

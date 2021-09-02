@@ -5,6 +5,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Dict
 
+import numpy as np
 
 # A few extra general types
 Money = Decimal
@@ -49,6 +50,7 @@ class TreatmentParams(ABC):
         self.data = data
         self.pheno_resistance = self.parse_pheno_resistance(data["pheno_resistance"]["value"])
         self.price_per_kg = Money(data["price_per_kg"]["value"])
+        self.quadratic_fish_mortality_coeffs = np.array(data["quadratic_fish_mortality_coeffs"]["value"])
 
     def __getattr__(self, name):
         if name in self.data:
@@ -60,6 +62,13 @@ class TreatmentParams(ABC):
     def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:
         return {HeterozygousResistance[key]: val for key, val in pheno_resistance_dict.items()}
 
+    def get_mortality_pp_increase(self, temperature: float, fish_mass: float):
+        """Get the mortality percentage point difference increase."""
+        fish_mass_indicator = 1 if fish_mass > 2000 else 0
+
+        input = np.array([1, temperature, fish_mass_indicator, temperature**2, temperature*fish_mass_indicator, fish_mass_indicator**2])
+        return max(self.quadratic_fish_mortality_coeffs.dot(input), 0)
+
     @abstractmethod
     def delay(self, average_temperature: float):  # pragma: no cover
         pass
@@ -70,5 +79,4 @@ class EMB(TreatmentParams):
 
     def delay(self, average_temperature: float):
         return self.durability_temp_ratio / average_temperature
-
 

@@ -178,14 +178,37 @@ class TestCage:
         assert new_females == 0
         assert new_males == 0
 
-    def test_get_fish_death_by_treatment(self, first_cage):
-        days_since_start = 10
+    def test_get_fish_death_by_treatment(self, first_cage, cur_day):
+        first_affecting_date = first_cage.treatment_events.queue[0].affecting_date
+        days_eloped = (first_affecting_date - cur_day).days
 
-        assert first_cage.get_fish_treatment_mortality(days_since_start, 0) == 0
+        assert first_cage.get_fish_treatment_mortality(days_eloped, 0, 0) == 0
+        assert first_cage.get_fish_treatment_mortality(days_eloped, 100, 30) == 0
 
-        #num_deaths = first_cage.get_fish_treatment_mortality(days_since_start, 100)
+        first_cage.get_lice_treatment_mortality(cur_day + dt.timedelta(days_eloped))
+        assert first_cage.last_effective_treatment is not None
 
-        #assert num_deaths > 0
+        num_deaths = first_cage.get_fish_treatment_mortality(days_eloped, 100, 30)
+
+        assert 10 <= num_deaths <= 20
+
+        # A change in lice infestation should not cause much of a concern
+        # TODO: the paper says otherwise. Investigate whether this matters in our model
+        num_deaths = first_cage.get_fish_treatment_mortality(days_eloped, 500, 30)
+        assert 10 <= num_deaths <= 20
+
+        # exactly one year after, the temperature is the same (~13 degrees) but the mass increased to 4.5kg.
+        days_eloped = 365
+
+        assert first_cage.get_fish_treatment_mortality(days_eloped, 0, 0) == 0
+
+        num_deaths = first_cage.get_fish_treatment_mortality(days_eloped, 100, 30)
+
+        # We expect a surge in mortality now
+        assert 30 <= num_deaths <= 50
+
+        num_deaths = first_cage.get_fish_treatment_mortality(days_eloped, 500, 30)
+        assert 30 <= num_deaths <= 50
 
     def test_get_fish_growth(self, first_cage):
         first_cage.num_fish *= 300
@@ -279,6 +302,7 @@ class TestCage:
         background_mortality = first_cage.get_background_lice_mortality()
         fish_deaths_natural = 0
         fish_deaths_from_lice = 0
+        fish_deaths_from_treatment = 0
         new_l2 = 0
         new_l4 = 0
         new_females = 0
@@ -288,24 +312,11 @@ class TestCage:
         reservoir_lice = {"L1": 0, "L2": 0}
 
         null_hatched_arrivals = null_offspring_distrib
-        null_returned_dams = null_offspring_distrib
 
-        first_cage.update_deltas(
-            background_mortality,
-            null_treatment_mortality,
-            fish_deaths_natural,
-            fish_deaths_from_lice,
-            new_l2,
-            new_l4,
-            new_females,
-            new_males,
-            new_infections,
-            reservoir_lice,
-            null_dams_batch,
-            null_offspring_distrib,
-            null_returned_dams,
-            null_hatched_arrivals
-        )
+        first_cage.update_deltas(background_mortality, null_treatment_mortality, fish_deaths_natural,
+                                 fish_deaths_from_lice, fish_deaths_from_treatment, new_l2, new_l4, new_females,
+                                 new_males, new_infections, reservoir_lice, null_dams_batch, null_offspring_distrib,
+                                 null_hatched_arrivals)
 
         for population in first_cage.lice_population.values():
             assert population >= 0
@@ -805,6 +816,7 @@ class TestCage:
         background_mortality = first_cage.get_background_lice_mortality()
         fish_deaths_natural = 0
         fish_deaths_from_lice = 0
+        fish_deaths_from_treatment = 0
         new_l2 = 0
         new_l4 = 0
         new_females = 20
@@ -818,22 +830,10 @@ class TestCage:
 
         old_busy_dams = first_cage_population.busy_dams.copy()
 
-        first_cage.update_deltas(
-            background_mortality,
-            sample_treatment_mortality,
-            fish_deaths_natural,
-            fish_deaths_from_lice,
-            new_l2,
-            new_l4,
-            new_females,
-            new_males,
-            new_infections,
-            reservoir_lice,
-            null_dams_batch,
-            null_offspring_distrib,
-            null_returned_dams,
-            null_hatched_arrivals
-        )
+        first_cage.update_deltas(background_mortality, sample_treatment_mortality, fish_deaths_natural,
+                                 fish_deaths_from_lice, fish_deaths_from_treatment, new_l2, new_l4, new_females,
+                                 new_males, new_infections, reservoir_lice, null_dams_batch, null_offspring_distrib,
+                                 null_hatched_arrivals)
 
         # TODO: This is still broken
         #assert first_cage.lice_population["L5f"] == 13

@@ -21,8 +21,6 @@ from sklearn.linear_model import Ridge
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import Pipeline
 
-x = "a" + 4
-
 pp_bins = np.array([1, 2.5, 5, 10, 25])
 temperatures = np.array([0, 4, 7, 10, 13])
 
@@ -40,7 +38,7 @@ data = np.array([[[3, 3.5, 4, 0, 0],
                   [5, 2.5, 2, 2, 0],
                   [7.5, 4.5, 1, 0.5, 0]]])
 
-normalised_pp_increase = (np.sum(data * pp_bins, axis=2) / np.sum(data, axis=2)).flatten()
+normalised_pp_increase = np.sum(data * pp_bins, axis=2).flatten()
 mass_indicator = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
 
 X = np.c_[np.tile(temperatures, 2), mass_indicator]
@@ -49,4 +47,4 @@ pipeline = Pipeline([("poly", PolynomialFeatures(degree=2)),
                      ("ridge", Ridge())])
 
 trained_model = pipeline.fit(X, normalised_pp_increase)
-print(trained_model.steps[1][1].coef_)
+print(repr(trained_model.steps[1][1].coef_))
