@@ -417,7 +417,8 @@ class Cage:
 
         # See surveys/overton_treatment_mortalities.py for an explanation on what is going on
         # TODO: move them somewhere? Generate them?
-        coeffs = np.array([0., 0.09524604, -0.16264929, - 0.00731587,  0.08306807 - 0.16264929])
+        coeffs = np.array([0., 0.72140707, -3.57850456, -0.02576944, 1.40270749,
+               -3.57850456])
 
         if mortality_events == 0:
             return 0
@@ -429,7 +430,7 @@ class Cage:
         fish_mass_indicator = 1 if fish_mass > 2000 else 0
 
         input = np.array([1, temperature, fish_mass_indicator, temperature**2, temperature*fish_mass_indicator, fish_mass_indicator**2])
-        predicted_pp_increase = coeffs @ input
+        predicted_pp_increase = max(coeffs.dot(input), 0)
         predicted_deaths = (predicted_pp_increase + mortality_events_pp) * self.num_fish / 100 - mortality_events
 
         treatment_mortalities_occurrences = self.cfg.rng.poisson(predicted_deaths)
