@@ -1,13 +1,16 @@
-import argparse
+from dataclasses import dataclass
 import datetime as dt
 import json
 import os
-from typing import Tuple, Union
+from typing import Tuple, Dict, TYPE_CHECKING
+
 
 import numpy as np
 
 from src.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB, Money
 
+if TYPE_CHECKING:
+    from src.LicePopulation import LifeStage
 
 def to_dt(string_date) -> dt.datetime:
     """Convert from string date to datetime date
@@ -22,16 +25,68 @@ def to_dt(string_date) -> dt.datetime:
 
 
 def override(data, override_options: dict):
-    print(override_options)
     for k, v in override_options.items():
         if k in data:
             data[k]["value"] = v
 
 
-class Config:
-    """Simulation configuration and parameters"""
+class RuntimeConfig:
+    """Simulation parameters and constants"""
 
-    def __init__(self, config_file, simulation_dir, logger, override_params={}):
+    def __init__(self, hyperparam_file, _override_options):
+        with open(hyperparam_file) as f:
+            data = json.load(f)
+
+        override(data, _override_options)
+
+        # Evolution constants
+        self.stage_age_evolutions = data["stage_age_evolutions"]["value"]  # type: Dict[LifeStage, float]
+        self.delta_p = data["delta_p"]["value"]  # type: Dict[LifeStage, float]
+        self.delta_s = data["delta_s"]["value"]  # type: Dict[LifeStage, float]
+        self.delta_m10 = data["delta_m10"]["value"]  # type: Dict[LifeStage, float]
+        self.smolt_mass_params = SmoltParams(**data["smolt_mass_params"]["value"])
+
+        # Infection constants
+        self.infection_main_delta = data["infection_main_delta"]["value"]  # type: float
+        self.infection_weight_delta = data["infection_weight_delta"]["value"]  # type: float
+        self.delta_expectation_weight_log = data["delta_expectation_weight_log"]["value"]  # type: float
+
+        # Treatment constants
+        self.emb = EMB(data["treatments"]["value"]["emb"]["value"])
+
+        # Fish mortality constants
+        self.fish_mortality_center = data["fish_mortality_center"]["value"]  # type: float
+        self.fish_mortality_k = data["fish_mortality_k"]["value"]  # type: float
+        self.male_detachment_rate = data["male_detachment_rate"]["value"]  # type: float
+
+        # Background lice mortality constants
+        self.background_lice_mortality_rates = data["background_lice_mortality_rates"]["value"]  # type: Dict[LifeStage, float]
+
+        # Reproduction and recruitment constants
+        self.reproduction_eggs_first_extruded = data["reproduction_eggs_first_extruded"]["value"]
+        self.reproduction_age_dependence = data["reproduction_age_dependence"]["value"]
+        self.dam_unavailability = data["dam_unavailability"]["value"]
+        self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"]["value"]]
+        self.geno_mutation_rate = data["geno_mutation_rate"]["value"]
+
+        # TODO: take into account processing of non-discrete keys
+        self.genetic_ratios = {tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"]["value"].items()}
+
+        # Farm data
+        self.farm_data = data["farm_data"]["value"]
+
+        # load in the seed if provided
+        # otherwise don't use a seed
+        seed_dict = data.get("seed", 0)
+        self.seed = seed_dict["value"] if seed_dict else None
+
+        self.rng = np.random.default_rng(seed=self.seed)
+
+
+class Config(RuntimeConfig):
+    """One-stop class to hold constants, farm setup and other settings."""
+
+    def __init__(self, config_file, simulation_dir, logger, override_params=None):
         """@DynamicAttrs Read the configuration from files
 
         :param config_file: Path to the environment JSON file
@@ -42,14 +97,15 @@ class Config:
         :param override_params: options that override the config
         """
 
-        # set logger
+        if override_params is None:
+            override_params = dict()
+        super().__init__(config_file, override_params)
         self.logger = logger
 
         # read and set the params
         with open(os.path.join(simulation_dir, "params.json")) as f:
             data = json.load(f)
 
-        self.params = RuntimeConfig(config_file, override_params)
         override(data, override_params)
 
         # time and dates
@@ -72,61 +128,6 @@ class Config:
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
         return [self.emb][treatment_type.value]
-
-    def __getattr__(self, name):
-        return self.params.__getattribute__(name)
-
-
-class RuntimeConfig:
-    """Simulation parameters and constants"""
-
-    def __init__(self, hyperparam_file, _override_options):
-        with open(hyperparam_file) as f:
-            data = json.load(f)
-
-        override(data, _override_options)
-
-        # Evolution constants
-        self.stage_age_evolutions = data["stage_age_evolutions"]["value"]
-        self.delta_p = data["delta_p"]["value"]
-        self.delta_s = data["delta_s"]["value"]
-        self.delta_m10 = data["delta_m10"]["value"]
-
-        # Infection constants
-        self.infection_main_delta = data["infection_main_delta"]["value"]
-        self.infection_weight_delta = data["infection_weight_delta"]["value"]
-        self.delta_expectation_weight_log = data["delta_expectation_weight_log"]["value"]
-
-        # Treatment constants
-        self.emb = EMB(data["treatments"]["value"]["emb"]["value"])
-
-        # Fish mortality constants
-        self.fish_mortality_center = data["fish_mortality_center"]["value"]
-        self.fish_mortality_k = data["fish_mortality_k"]["value"]
-        self.male_detachment_rate = data["male_detachment_rate"]["value"]
-
-        # Background lice mortality constants
-        self.background_lice_mortality_rates = data["background_lice_mortality_rates"]["value"]
-
-        # Reproduction and recruitment constants
-        self.reproduction_eggs_first_extruded = data["reproduction_eggs_first_extruded"]["value"]
-        self.reproduction_age_dependence = data["reproduction_age_dependence"]["value"]
-        self.dam_unavailability = data["dam_unavailability"]["value"]
-        self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"]["value"]]
-        self.geno_mutation_rate = data["geno_mutation_rate"]["value"]
-
-        # TODO: take into account processing of non-discrete keys
-        self.genetic_ratios = {tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"]["value"].items()}
-
-        # Farm data
-        self.farm_data = data["farm_data"]["value"]
-
-        # load in the seed if provided
-        # otherwise don't use a seed
-        seed_dict = data.get("seed", 0)
-        self.seed = seed_dict["value"] if seed_dict else None
-
-        self.rng = np.random.default_rng(seed=self.seed)
 
 
 class FarmConfig:
@@ -161,3 +162,9 @@ class FarmConfig:
 
         # fixed treatment schedules
         self.treatment_starts = [to_dt(date) for date in data["treatment_dates"]["value"]]
+
+@dataclass
+class SmoltParams:
+    max_mass: float
+    skewness: float
+    x_shift: float

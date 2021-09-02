@@ -293,7 +293,7 @@ class Cage:
             treatment_type = self.last_effective_treatment.treatment_type
             treatment_cfg = self.cfg.get_treatment(treatment_type)
             cage_days = (cur_date - self.start_date).days
-            cost = treatment_cfg.price_per_kg * int(Cage.fish_growth_rate(cage_days))
+            cost = treatment_cfg.price_per_kg * int(self.average_fish_mass(cage_days))
 
         return dead_lice_dist, cost
 
@@ -422,7 +422,7 @@ class Cage:
         cur_date = self.start_date + dt.timedelta(days=days_since_start)
         temperature = self.farm.year_temperatures[cur_date.month-1]
         mortality_events_pp = 100 * mortality_events / self.num_fish
-        fish_mass = self.fish_growth_rate(days_since_start) / self.num_fish
+        fish_mass = self.average_fish_mass(days_since_start) / self.num_fish
         fish_mass_indicator = 1 if fish_mass > 2 else 0
 
         input = np.array([1, temperature, fish_mass_indicator, temperature**2, temperature*fish_mass_indicator, fish_mass_indicator**2])
@@ -460,7 +460,7 @@ class Cage:
         # Apply a sigmoid based on the number of lice per fish
         pathogenic_lice = sum([self.lice_population[stage] for stage in self.pathogenic_stages])
         if self.num_infected_fish > 0:
-            lice_per_host_mass = pathogenic_lice / (self.num_infected_fish * self.fish_growth_rate(days_since_start))
+            lice_per_host_mass = pathogenic_lice / (self.num_infected_fish * self.average_fish_mass(days_since_start))
         else:
             lice_per_host_mass = 0.0
         prob_lice_death = 1 / (1 + math.exp(-self.cfg.fish_mortality_k *
@@ -478,7 +478,7 @@ class Cage:
 
     def compute_eta_aldrin(self, num_fish_in_farm, days):
         return self.cfg.infection_main_delta + math.log(num_fish_in_farm) + self.cfg.infection_weight_delta * \
-               (math.log(self.fish_growth_rate(days)) - self.cfg.delta_expectation_weight_log)
+               (math.log(self.average_fish_mass(days)) - self.cfg.delta_expectation_weight_log)
 
     def get_infection_rates(self, days) -> Tuple[float, int]:
         """
@@ -1078,9 +1078,12 @@ class Cage:
         self.logger.debug("\t\tbackground mortality distribution of dead lice = {}".format(dead_lice_dist))
         return dead_lice_dist
 
-    @staticmethod
-    def fish_growth_rate(days):
-        return 10000 / (1 + math.exp(-0.01 * (days - 475)))
+    def average_fish_mass(self, days):
+        """
+        Average fish mass.
+        """
+        smolt_params = self.cfg.smolt_mass_params
+        return smolt_params.max_mass / (1 + math.exp(smolt_params.skewness * (days - smolt_params.x_shift)))
 
     def get_reservoir_lice(self, pressure: int) -> GrossLiceDistrib:
         """Get distribution of lice coming from the reservoir

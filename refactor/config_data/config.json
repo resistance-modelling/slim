@@ -103,6 +103,16 @@
       }
     }
   },
+  "smolt_mass_params": {
+    "description": "Sigmoid parameters that pilot the average smolt-to-adult average weight development",
+    "source": "FAO - http://www.fao.org/fishery/affris/species-profiles/atlantic-salmon/growth/en/ . See figure 5",
+    "note": "These constants were manually fitted on the given figure.",
+    "value": {
+      "max_mass": 10000,
+      "skewness": -0.01,
+      "x_shift": 475
+    }
+  },
   "genetic_ratios": {
     "description": "Genetic ratios of lice population",
     "value": {"A": 0.25, "a": 0.25, "A,a": 0.5}
