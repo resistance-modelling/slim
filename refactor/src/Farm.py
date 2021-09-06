@@ -32,6 +32,8 @@ CageAllocation = List[GenoDistribByHatchDate]
 LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
 
 
+
+
 class Farm:
     """
     Define a salmon farm containing salmon cages. Over time the salmon in the cages grow and are
@@ -64,7 +66,6 @@ class Farm:
         # TODO: only for testing purposes
         self.preemptively_assign_treatments(self.farm_cfg.treatment_starts)
 
-
     def __str__(self):
         """
         Get a human readable string representation of the farm.
@@ -92,6 +93,10 @@ class Farm:
             return NotImplemented
 
         return self.name == other.name
+
+    @property
+    def num_fish(self):
+        return sum(cage.num_fish for cage in self.cages)
 
     def initialize_temperatures(self, temperatures: Dict[str, LocationTemps]) -> np.ndarray:
         """
@@ -335,7 +340,8 @@ class Farm:
             for cage in farm.cages:
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
-    def get_cage_arrivals_stats(self, cage_arrivals: CageAllocation) -> Tuple[int, List[int]]:
+    @staticmethod
+    def get_cage_arrivals_stats(cage_arrivals: CageAllocation) -> Tuple[int, List[int]]:
         """Get stats about the cage arrivals for logging
 
         :param cage_arrivals: Dictionary of genotype distributions based
@@ -350,3 +356,10 @@ class Farm:
             by_cage.append(cage_total)
 
         return sum(by_cage), by_cage
+
+    def get_profit(self, cur_date: dt.datetime):
+        """
+        Get the current mass of fish that can be resold.
+        """
+        mass_per_cage = [cage.average_fish_mass((cur_date - cage.start_date).days) for cage in self.cages]
+        return self.cfg.gain_per_kg * Money(sum(mass_per_cage))

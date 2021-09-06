@@ -75,6 +75,9 @@ class RuntimeConfig:
         # Farm data
         self.farm_data = data["farm_data"]["value"]
 
+        # Other reward/payoff constants
+        self.gain_per_kg = Money(data["gain_per_kg"]["value"])
+
         # load in the seed if provided
         # otherwise don't use a seed
         seed_dict = data.get("seed", 0)

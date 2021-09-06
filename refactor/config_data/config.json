@@ -113,6 +113,11 @@
       "x_shift": 475
     }
   },
+  "gain_per_kg": {
+    "description": "Selling rate for fish kg (in GBP)",
+    "value": "4.39",
+    "source": "NASDAQ Salmon Index, last updated 6/08/21, with a corresponding NOK-GBP currency conversion"
+  },
   "genetic_ratios": {
     "description": "Genetic ratios of lice population",
     "value": {"A": 0.25, "a": 0.25, "A,a": 0.5}
