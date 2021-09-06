@@ -1,6 +1,6 @@
 import datetime as dt
 
-from src.QueueBatches import DamAvailabilityBatch
+from src.QueueTypes import DamAvailabilityBatch
 
 
 class TestLicePopulation:

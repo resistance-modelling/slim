@@ -11,7 +11,7 @@ import numpy as np
 from src.Config import Config
 
 if TYPE_CHECKING:  # pragma: no cover
-    from src.QueueBatches import DamAvailabilityBatch
+    from src.QueueTypes import DamAvailabilityBatch
 
 ################ Basic type aliases #####################
 LifeStage = str

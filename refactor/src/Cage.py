@@ -18,7 +18,7 @@ from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistan
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib,
                                 QuantitativeGenoDistrib, GenericGenoDistrib)
-from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
+from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
 from src.JSONEncoders import CustomFarmEncoder
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -216,9 +216,8 @@ class Cage:
         if self.treatment_events.qsize() == 0 or cur_date < self.treatment_events.queue[0].affecting_date:
             if self.last_effective_treatment is None:
                 return geno_treatment_distrib
-            treatment_window = self.last_effective_treatment.affecting_date + \
-                               dt.timedelta(days=self.last_effective_treatment.effectiveness_duration_days)
-            if cur_date > treatment_window:
+
+            if cur_date > self.last_effective_treatment.treatment_window:
                 # We are outside of the treatment window
                 return geno_treatment_distrib
         else:
@@ -1132,3 +1131,19 @@ class Cage:
     @property
     def is_fallowing(self):
         return self.num_fish == 0
+
+    def is_treated(self, cur_date):
+        if self.last_effective_treatment is not None:
+            treatment = self.last_effective_treatment
+            if cur_date <= treatment.treatment_window:
+                return True
+
+        return False
+
+    @property
+    def aggregation_rate(self):
+        """The aggregation rate is the number of lice over the total number of fish.
+        Elsewhere it is referred to as infection rate, but here "infection rate" only refers to host fish.
+
+        :returns the aggregation rate"""
+        return sum(self.lice_population.values())/self.num_fish if self.num_fish > 0 else 0.0

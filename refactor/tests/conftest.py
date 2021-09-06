@@ -6,7 +6,7 @@ import datetime
 from src.Config import Config
 from src.Farm import Farm
 from src.Organisation import Organisation
-from src.QueueBatches import EggBatch, DamAvailabilityBatch
+from src.QueueTypes import EggBatch, DamAvailabilityBatch
 from src.LicePopulation import LicePopulation, GenoDistrib
 
 

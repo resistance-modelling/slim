@@ -5,10 +5,12 @@ farms at the same time.
 TODO: treatments should be decided rather than preemptively scheduled
 """
 
+import datetime as dt
 import json
 from src.Config import Config
 from src.Farm import Farm
 from src.JSONEncoders import CustomFarmEncoder
+from src.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
 from src.TreatmentTypes import Money
 
 
@@ -26,6 +28,9 @@ class Organisation:
         # days = (cur_date - self.cfg.start_date).days
 
         # update the farms and get the offspring
+        for farm in self.farms:
+            self.handle_farm_messages(cur_date, farm)
+
         offspring_dict = {}
         payoff = Money()
         for farm in self.farms:
@@ -58,3 +63,13 @@ class Organisation:
 
     def __repr__(self):
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
+
+    def handle_farm_messages(self, cur_date: dt.datetime, farm: Farm):
+        def cts(farm_response: FarmResponse):
+            if isinstance(farm_response, SamplingResponse) and \
+                    farm_response.detected_rate >= self.cfg.aggregation_rate_threshold:
+                # send a treatment command to everyone
+                for other_farm in self.farms:
+                    other_farm.ask_for_treatment(cur_date, can_defect=other_farm != farm)
+
+        pop_from_queue(farm.farm_to_org, cur_date, cts)

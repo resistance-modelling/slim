@@ -20,6 +20,10 @@
         "note": "TODO: dummy value",
         "value": "5000"
     },
+    "defection_proba": {
+        "description": "Probability to defect and not apply treatment contemporarily with the other farms",
+        "value": 0.2
+    },
     "farms": [
         {
             "description": "Test farm",
@@ -71,6 +75,10 @@
                 "max_num_treatments": {
                     "description": "Maximum number of treatments allowed within one year",
                     "value": 10
+                },
+                "sampling_spacing": {
+                    "description": "Time distance (in days) between fish samplings",
+                    "value": 14
                 }
             }
         },
@@ -121,6 +129,10 @@
                 "max_num_treatments": {
                     "description": "Maximum number of treatments allowed within one year",
                     "value": 8
+                },
+                "sampling_spacing": {
+                    "description": "Time distance (in days) between fish samplings",
+                    "value": 7
                 }
             }
         }
