@@ -9,7 +9,7 @@
     },
     "end_date": {
         "description": "Simulation end date",
-        "value": "2017-10-02 00:00:00"
+        "value": "2018-10-01 00:00:00"
     },
     "ext_pressure": {
         "description": "Sealice per day per cage/farm arriving from wildlife. Note that this value has been determined experimentally in the original code.",
@@ -37,7 +37,7 @@
                     "value": [190300, 665300]
                 },
                 "num_fish": {
-                    "description": "Starting number of fish",
+                    "description": "Starting number of fish. We assume this to be constant across all cages",
                     "value": 4000
                 },
                 "start_date": {

@@ -69,6 +69,8 @@ class Farm:
         self.farm_to_org = PriorityQueue()  # type: PriorityQueue[FarmResponse]
         self.__sampling_events = PriorityQueue()  # type: PriorityQueue[SamplingEvent]
 
+        self.generate_sampling_events()
+
     def __str__(self):
         """
         Get a human readable string representation of the farm.

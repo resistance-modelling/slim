@@ -242,3 +242,24 @@ class TestFarm:
 
         assert not first_farm.add_treatment(Treatment.emb, cur_day)
         assert first_farm.available_treatments == 0
+
+    def test_prescheduled_sampling_events(self, first_farm, cur_day):
+        assert first_farm.farm_to_org.qsize() == 0
+        first_farm.report_sample(cur_day)
+        assert first_farm.farm_to_org.qsize() == 1
+        assert first_farm.farm_to_org.queue[0].detected_rate <= 0.1
+
+        first_farm.farm_to_org.get()
+
+        # One test today, one test in 14 days, another test in 28 days
+        # The first has already been consumed
+        first_farm.report_sample(cur_day + dt.timedelta(days=21))
+        assert first_farm.farm_to_org.qsize() == 1
+        first_farm.farm_to_org.get()
+
+        # The second too
+        first_farm.report_sample(cur_day + dt.timedelta(days=28))
+        assert first_farm.farm_to_org.qsize() == 1
+
+    #def test_ask_for_treatment(self, first_farm, cur_date):
+        # first_farm.ask_for_treatment(cur_date)

@@ -506,7 +506,7 @@ class Cage:
         age_distrib = self.get_stage_ages_distrib("L2")
         num_avail_lice = round(self.lice_population["L2"] * np.sum(age_distrib[1:]))
         if num_avail_lice > 0:
-            num_fish_in_farm = sum([c.num_fish for c in self.farm.cages])
+            num_fish_in_farm = self.farm.num_fish
 
             # TODO: this has O(c^2) complexity
             etas = np.array([c.compute_eta_aldrin(num_fish_in_farm, days) for c in self.farm.cages])
