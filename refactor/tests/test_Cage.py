@@ -71,6 +71,11 @@ class TestCage:
     def test_cage_update_lice_treatment_mortality(self, first_farm, first_cage):
         treatment_dates = first_farm.farm_cfg.treatment_starts
 
+        # before the first useful day, make sure the cage is aware of being under treatment
+        cur_day = treatment_dates[1] + dt.timedelta(days=1)
+        first_cage.get_lice_treatment_mortality(cur_day)
+        assert first_cage.is_treated(cur_day)
+
         # first useful day
         cur_day = treatment_dates[1] + dt.timedelta(days=5)
         mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
@@ -84,6 +89,7 @@ class TestCage:
         assert mortality_updates['L5m'] == {('A', 'a'): 1, ('a',): 2}
         assert mortality_updates['L4'] == {('A', 'a'): 1, ('a',): 8}
         assert mortality_updates['L3'] == {('A',): 2, ('A', 'a'): 2, ('a',): 8}
+        assert first_cage.is_treated(cur_day)
 
         assert 55000 <= cost <= 60000
 

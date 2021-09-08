@@ -412,14 +412,13 @@ class Farm:
         return self.cfg.gain_per_kg * Money(sum(mass_per_cage))
 
     def handle_events(self, cur_date: dt.datetime):
-        def cts(command):
+        def cts_command_queue(command):
             if isinstance(command, SampleRequestCommand):
                 self.__sampling_events.put(SamplingEvent(command.request_date))
-            elif isinstance(command, TreatmentRequestCommand):
-                # TODO: handle other events here...
-                pass
 
-        pop_from_queue(self.command_queue, cur_date, cts)
+        pop_from_queue(self.command_queue, cur_date, cts_command_queue)
+
+        self.report_sample(cur_date)
 
     def report_sample(self, cur_date):
         def cts(_):

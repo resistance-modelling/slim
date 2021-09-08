@@ -213,15 +213,18 @@ class Cage:
         geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
 
         # if no treatment has been applied check if the previous treatment is still effective
-        if self.treatment_events.qsize() == 0 or cur_date < self.treatment_events.queue[0].affecting_date:
-            if self.last_effective_treatment is None:
-                return geno_treatment_distrib
 
-            if cur_date > self.last_effective_treatment.treatment_window:
-                # We are outside of the treatment window
-                return geno_treatment_distrib
-        else:
-            self.last_effective_treatment = self.treatment_events.get()
+        def cts(event):
+            nonlocal self
+            self.last_effective_treatment = event
+
+        pop_from_queue(self.treatment_events, cur_date, cts)
+
+        if self.last_effective_treatment is None or \
+            self.last_effective_treatment.affecting_date > cur_date or \
+                cur_date > self.last_effective_treatment.treatment_window:
+            return geno_treatment_distrib
+
         treatment_type = self.last_effective_treatment.treatment_type
 
         self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,

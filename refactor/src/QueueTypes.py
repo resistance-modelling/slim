@@ -80,13 +80,13 @@ class TreatmentEvent(CageEvent):
     def __lt__(self, other: TreatmentEvent):
         # in the rare case two treatments are applied in a row it would be better to prefer longer treatments.
         # Apparently there is no way to force a reverse lexicographical order for some fields with a @dataclass
-        return self.affecting_date < other.affecting_date or \
-               (self.affecting_date == other.affecting_date and
+        return self.first_application_date < other.first_application_date or \
+               (self.first_application_date == other.first_application_date and
                 self.effectiveness_duration_days > other.effectiveness_duration_days)
 
     @property
     def event_time(self):
-        return self.affecting_date
+        return self.first_application_date
 
     @property
     def treatment_window(self):
@@ -113,11 +113,6 @@ class FarmResponse(Event):
 
 
 @dataclass
-class TreatmentRequestCommand(FarmCommand):
-    treatment_type: Treatment
-
-
-@dataclass
 class SampleRequestCommand(FarmCommand):
     pass
 
@@ -133,8 +128,7 @@ EventT = TypeVar("EventT", CageEvent, FarmCommand, FarmResponse, SamplingEvent)
 def pop_from_queue(
     queue: PriorityQueue[EventT],
     cur_time: dt.datetime,
-    continuation: Callable[[EventT], None],
-    peek=False
+    continuation: Callable[[EventT], None]
 ):
     """
     Pops an event from a queue and call a continuation function
@@ -167,10 +161,5 @@ def pop_from_queue(
         return arg.sampling_date <= _cur_time  # pragma: no cover
 
     while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
-        event = queue.queue[0]
-        if not peek:
-            queue.get()
-        if continuation:
-            continuation(event)
-        if peek:
-            return
+        event = queue.get()
+        continuation(event)
