@@ -18,7 +18,7 @@ from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistan
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib,
                                 QuantitativeGenoDistrib, GenericGenoDistrib)
-from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
+from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent, pop_from_queue
 from src.JSONEncoders import CustomFarmEncoder
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -849,30 +849,6 @@ class Cage:
         expected_hatching_date = cur_date + dt.timedelta(self.cfg.rng.poisson(expected_time))
         return EggBatch(expected_hatching_date, egg_distrib)
 
-    @staticmethod
-    def pop_from_queue(queue: PriorityQueue, cur_time: dt.datetime, output_geno_distrib: GenoDistrib):
-        # process all the due events
-        # Note: queues miss a "peek" method, and this line relies on an implementation detail.
-
-        @singledispatch
-        def access_time_lt(_peek_element, _cur_time: dt.datetime):
-            pass  # pragma: no cover
-
-        @access_time_lt.register
-        def _(arg: EggBatch, _cur_time: dt.datetime):
-            return arg.hatch_date <= _cur_time
-
-        # have mypy ignore redefinitions of '_'
-        # see https://github.com/python/mypy/issues/2904 for details
-        @access_time_lt.register  # type: ignore[no-redef]
-        def _(arg: TravellingEggBatch, _cur_time: dt.datetime):
-            return arg.hatch_date <= _cur_time  # pragma: no cover
-
-        while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
-            event = queue.get()
-            for geno, value in event.geno_distrib.items():
-                output_geno_distrib[geno] += value
-
     def create_offspring(self, cur_time: dt.datetime) -> GenoDistrib:
         """
         Hatch the eggs from the event queue
@@ -881,8 +857,12 @@ class Cage:
         """
 
         delta_egg_offspring = GenoDistrib({geno: 0 for geno in self.cfg.genetic_ratios})
-        self.pop_from_queue(self.hatching_events, cur_time, delta_egg_offspring)
 
+        def cts(hatching_event: EggBatch):
+            nonlocal delta_egg_offspring
+            delta_egg_offspring += hatching_event.geno_distrib
+
+        pop_from_queue(self.hatching_events, cur_time, cts)
         return delta_egg_offspring
 
     def get_arrivals(self, cur_date: dt.datetime) -> GenoDistrib:
@@ -894,8 +874,9 @@ class Cage:
         hatched_dist = GenoDistrib()
 
         # check queue for arrivals at current date
-        while not self.arrival_events.empty() and self.arrival_events.queue[0].arrival_date <= cur_date:
-            batch = self.arrival_events.get()
+        def cts(batch: TravellingEggBatch):
+            nonlocal self
+            nonlocal hatched_dist
 
             # if the hatch date is after current date, add to stationary egg queue
             if batch.hatch_date >= cur_date:
@@ -907,6 +888,8 @@ class Cage:
             else:
                 # TODO: determine life stage it arrives at; assumes all are L1 for now
                 hatched_dist = batch.geno_distrib
+
+        pop_from_queue(self.arrival_events, cur_date, cts)
 
         return hatched_dist
 

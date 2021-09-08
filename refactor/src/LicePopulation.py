@@ -9,6 +9,7 @@ import iteround
 import numpy as np
 
 from src.Config import Config
+from src.QueueTypes import pop_from_queue
 
 if TYPE_CHECKING:  # pragma: no cover
     from src.QueueTypes import DamAvailabilityBatch
@@ -173,9 +174,11 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         """
         delta_avail_dams = GenericGenoDistrib()
 
-        while not self._busy_dams.empty() and self._busy_dams.queue[0].availability_date <= cur_time:
-            event = self._busy_dams.get()
+        def cts(event):
+            nonlocal delta_avail_dams
             delta_avail_dams += event.geno_distrib
+
+        pop_from_queue(self._busy_dams, cur_time, cts)
 
         return delta_avail_dams
 

@@ -11,10 +11,12 @@ from dataclasses import dataclass, field
 from functools import singledispatch
 from queue import PriorityQueue
 
-from src.LicePopulation import GenoDistrib
 from src.TreatmentTypes import Treatment
 
-from typing import Callable, TypeVar
+from typing import Callable, TypeVar, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.LicePopulation import GenoDistrib
 
 
 class Event:
@@ -62,7 +64,7 @@ class DamAvailabilityBatch(CageEvent):
         return self.availability_date
 
 
-@dataclass(repr=True)
+@dataclass
 class TreatmentEvent(CageEvent):
     # date at which the effects are noticeable = application date + delay
     affecting_date: dt.datetime
@@ -149,6 +151,10 @@ def pop_from_queue(
     @access_time_lt.register
     def _(arg: CageEvent, _cur_time: dt.datetime):
         return arg.event_time <= _cur_time
+
+    @access_time_lt.register
+    def _(arg: TravellingEggBatch, _cur_time: dt.datetime):
+        return arg.arrival_date <= _cur_time
 
     # have mypy ignore redefinitions of '_'
     # see https://github.com/python/mypy/issues/2904 for details
