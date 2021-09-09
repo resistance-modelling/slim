@@ -95,10 +95,11 @@ class Cage:
         del filtered_vars["cfg"]
 
         # May want to improve these or change them if we change the representation for genotype distribs
-        # TODO: these below can be probably moved to a proper encoder
-        filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
-        filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in
-                                              self.lice_population.geno_by_lifestage.items()}
+        # Note: JSON encoders do not allow a default() being run on the _keys_ of dictionaries
+        # and GenotypePopulation is a dict subclass. The simplest option here is to trivially force to_json_dict()
+        # whenever possible,
+        filtered_vars["egg_genotypes"] = self.egg_genotypes.to_json_dict()
+        filtered_vars["geno_by_lifestage"] = self.lice_population.geno_by_lifestage.to_json_dict()
         filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
 
         return filtered_vars

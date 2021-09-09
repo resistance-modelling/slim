@@ -58,7 +58,7 @@ class Organisation:
     def to_json_dict(self):
         return {
             "name": self.name,
-            "farms": [farm.to_json_dict() for farm in self.farms]
+            "farms": self.farms
         }
 
     def __repr__(self):

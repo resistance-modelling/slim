@@ -206,8 +206,6 @@ class Farm:
         :param can_defect if True, the farm has a choice to not apply treatment
         """
 
-        # Do I want to treat?
-
         self.logger.debug("Asking farm {} to treat".format(self.name))
 
         # TODO: this is extremely simple.
@@ -335,7 +333,7 @@ class Farm:
         probs_per_bin = np.full(ncages, 1 / ncages)
 
         # preconstruct the data structure
-        hatch_list = [{hatch_date: Counter() for hatch_date in eggs_by_hatch_date} for n in range(ncages)]  # type: CageAllocation
+        hatch_list = [{hatch_date: GenericGenoDistrib() for hatch_date in eggs_by_hatch_date} for n in range(ncages)]  # type: CageAllocation
         for hatch_date, geno_dict in eggs_by_hatch_date.items():
             for genotype in geno_dict:
                 # generate the bin distribution of this genotype with

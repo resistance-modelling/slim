@@ -1,3 +1,4 @@
+from collections import Counter
 from dataclasses import is_dataclass, asdict
 from enum import Enum
 import datetime as dt
@@ -14,6 +15,7 @@ class CustomFarmEncoder(json.JSONEncoder):
     Bespoke encoder to encode Farm objects to json. Specifically, numpy arrays
     and datetime objects are not automatically converted to json.
     """
+
     def default(self, o):
         """
         Provide a json string of an object.
@@ -29,14 +31,10 @@ class CustomFarmEncoder(json.JSONEncoder):
         elif isinstance(o, Enum):
             return str(o)
 
-        elif is_dataclass(o):
-            return asdict(o)
-
         elif isinstance(o, PriorityQueue):
             return sorted(list(o.queue))
 
-        # Python's circular dependencies are annoying
-        elif type(o).__name__ == "Cage":
+        elif hasattr(o, "to_json_dict"):
             return o.to_json_dict()
 
         elif isinstance(o, np.number):

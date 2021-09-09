@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import abc
 import datetime as dt
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from functools import singledispatch
 from queue import PriorityQueue
 
@@ -20,16 +20,21 @@ if TYPE_CHECKING:
 
 
 class Event:
-    """An empty parent class for all the events"""
-    pass
+    """An empty parent class for all the events with a default serialiser."""
+    def to_json_dict(self):
+        dct = asdict(self)
 
+        for k in dct:
+            v = dct[k]
+            if hasattr(v, "to_json_dict"):
+                dct[k] = v.to_json_dict()
+        return dct
 
 class CageEvent(abc.ABC, Event):
     @property
     @abc.abstractmethod
     def event_time(self):
         pass
-
 
 @dataclass(order=True)
 class EggBatch(CageEvent):

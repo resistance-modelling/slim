@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import copy
 from queue import PriorityQueue
+from types import GeneratorType
 from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, TypeVar, Generic, Counter as CounterType, Optional, \
-    TYPE_CHECKING
+    Iterable, TYPE_CHECKING
 
 import iteround
 import numpy as np
@@ -31,6 +31,18 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
     Internally, this is built on top of a Counter. As a consequence, this always
     represents an actual count and not a PMF. Float values are (currently) not allowed.
     """
+
+    def __init__(self, a: Optional[Union[GenericGenoDistrib[GenoKey], Dict[GenoKey, float]], Iterable[GenoKey, float]]=None):
+        # asdict() will call this constructor with a stream of tuples (Alleles, v)
+        # to prevent the default behaviour (Counter counts all the instances of the elements) we have to check
+        # for generators
+        if a:
+            if isinstance(a, GeneratorType):
+                super().__init__(dict(a))
+            else:
+                super().__init__(a)
+        else:
+            super().__init__()
 
     def normalise_to(self, population: int) -> GenericGenoDistrib[GenoKey]:
         keys = self.keys()
@@ -96,6 +108,9 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
 
         values = iteround.saferound(list(self.values()), n)
         return GenericGenoDistrib(dict(zip(self.keys(), values)))
+
+    def to_json_dict(self):
+        return {"".join(k): v for k, v in self.items()}
 
 
 GenoDistrib = GenericGenoDistrib[Alleles]
@@ -247,5 +262,5 @@ class GenotypePopulation(Dict[LifeStage, GenericGenoDistrib]):
                     delta_geno = delta * (geno_distrib.gross() / busy_dams_denom)
                     geno_distrib += delta_geno
 
-    def raw_update_value(self, stage: LifeStage, value: GenoDistrib):
-        super().__setitem__(stage, value)
+    def to_json_dict(self):
+        return {k: v.to_json_dict() for k, v in self.items()}
