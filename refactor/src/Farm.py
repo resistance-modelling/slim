@@ -1,5 +1,5 @@
 """
-A Farm is a fundamental agent in this simulation. It has a number of functions:
+damental agent in this simulation. It has a number of functions:
 
 - controlling individual cages
 - managing its own finances
@@ -13,7 +13,7 @@ import copy
 import datetime as dt
 import json
 from collections import Counter
-from typing import Counter as CounterType
+from queue import PriorityQueue
 from typing import Dict, List, Optional, Tuple
 
 from mypy_extensions import TypedDict
@@ -23,9 +23,9 @@ import numpy as np
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
-from src.LicePopulation import Alleles, GrossLiceDistrib, GenericGenoDistrib
-from src.TreatmentTypes import Treatment, TreatmentParams, Money
-from src.QueueBatches import TreatmentEvent
+from src.LicePopulation import GrossLiceDistrib, GenericGenoDistrib
+from src.TreatmentTypes import Money
+from src.QueueTypes import *
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenericGenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
@@ -38,7 +38,7 @@ class Farm:
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None):
+    def __init__(self, name: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None, ):
         """
         Create a farm.
         :param name: the id of the farm.
@@ -59,11 +59,17 @@ class Farm:
         self.current_capital = self.farm_cfg.start_capital
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
-        self.year_temperatures = self.initialize_temperatures(cfg.farm_data)
+        self.year_temperatures = self.initialise_temperatures(cfg.farm_data)
 
         # TODO: only for testing purposes
         self.preemptively_assign_treatments(self.farm_cfg.treatment_starts)
 
+        # Queues
+        self.command_queue = PriorityQueue()  # type: PriorityQueue[FarmCommand]
+        self.farm_to_org = PriorityQueue()  # type: PriorityQueue[FarmResponse]
+        self.__sampling_events = PriorityQueue()  # type: PriorityQueue[SamplingEvent]
+
+        self.generate_sampling_events()
 
     def __str__(self):
         """
@@ -93,7 +99,11 @@ class Farm:
 
         return self.name == other.name
 
-    def initialize_temperatures(self, temperatures: Dict[str, LocationTemps]) -> np.ndarray:
+    @property
+    def num_fish(self):
+        return sum(cage.num_fish for cage in self.cages)
+
+    def initialise_temperatures(self, temperatures: Dict[str, LocationTemps]) -> np.ndarray:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at
         month c_month interpolating data taken from
@@ -128,6 +138,15 @@ class Farm:
             cur_date + dt.timedelta(days=application_period)
         )
 
+    def generate_sampling_events(self):
+        spacing = self.farm_cfg.sampling_spacing
+        start_date = self.farm_cfg.farm_start
+        end_date = self.cfg.end_date
+
+        for days in range(0, (end_date - start_date).days, spacing):
+            sampling_event = SamplingEvent(start_date + dt.timedelta(days=days))
+            self.__sampling_events.put(sampling_event)
+
     def preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
         """
         Assign a few treatment dates to cages.
@@ -146,20 +165,23 @@ class Farm:
         Note that if **at least** one cage is eligible for treatment and the conditions above
         are still respected this method will still return True. Eligibility depends
         on whether the cage has started already or is fallowing - but that may depend on the type
-        of chemical treatment applied. If no cages are available no treatment
-        can be applied and the function returns False.
-
-        TODO: rejection by close treatments has not been implemented yet.
+        of chemical treatment applied. Furthermore, no treatment should be applied on cages that are already
+        undergoing a treatment of the same type. This usually means the actual treatment application period
+        plus a variable delay period. If no cages are available no treatment can be applied and the function returns
+        False.
 
         :param treatment_type: the treatment type to apply
         :param day: the day when to start applying the treatment
         :returns: whether the treatment has been added to at least one cage or not.
         """
+
+        self.logger.debug("\t\tFarm {} applies treatment {}".format(self.name, str(treatment_type)))
         if self.available_treatments <= 0:
             return False
 
-        # Python really needs lenses...
-        eligible_cages = [cage for cage in self.cages if not (cage.start_date > day or cage.is_fallowing)]
+        # TODO: no support for treatment combination. See #127
+        eligible_cages = [cage for cage in self.cages if not
+                          (cage.start_date > day or cage.is_fallowing or cage.is_treated(day))]
 
         if len(eligible_cages) == 0:
             return False
@@ -171,6 +193,34 @@ class Farm:
         self.available_treatments -= 1
 
         return True
+
+    def ask_for_treatment(self, cur_date: dt.datetime, can_defect=True):
+        """
+        Ask the farm to perform treatment.
+        The farm will thus respond in the following way:
+        - choose whether to apply treatment or not (regardless of the actual cage eligibility)
+        - if yes, which treatment to apply (according to internal evaluations, e.g. increased lice resistance)
+        The farm is not obliged to tell the organisation whether treatment is being performed.
+
+        :param cur_date the current date
+        :param can_defect if True, the farm has a choice to not apply treatment
+        """
+
+        self.logger.debug("Asking farm {} to treat".format(self.name))
+
+        # TODO: this is extremely simple.
+        p = [self.cfg.defection_proba, 1 - self.cfg.defection_proba]
+        want_to_treat = self.cfg.rng.choice([False, True], p=p) if can_defect else True
+
+        if not want_to_treat:
+            self.logger.debug("\tFarm {} refuses to treat".format(self.name))
+            return
+
+        # TODO: implement a strategy to pick a treatment of choice
+        treatments = list(Treatment)
+        picked_treatment = treatments[0]
+
+        self.add_treatment(picked_treatment, cur_date)
 
     def update(self, cur_date: dt.datetime) -> Tuple[GenoDistribByHatchDate, Money]:
         """Update the status of the farm given the growth of fish and change
@@ -184,6 +234,8 @@ class Farm:
             self.logger.debug("Updating farm {}".format(self.name))
         else:
             self.logger.debug("Updating farm {} (non-operational)".format(self.name))
+
+        self.handle_events(cur_date)
 
         # get number of lice from reservoir to be put in each cage
         pressures_per_cage = self.get_cage_pressures()
@@ -281,7 +333,7 @@ class Farm:
         probs_per_bin = np.full(ncages, 1 / ncages)
 
         # preconstruct the data structure
-        hatch_list = [{hatch_date: Counter() for hatch_date in eggs_by_hatch_date} for n in range(ncages)]  # type: CageAllocation
+        hatch_list = [{hatch_date: GenericGenoDistrib() for hatch_date in eggs_by_hatch_date} for n in range(ncages)]  # type: CageAllocation
         for hatch_date, geno_dict in eggs_by_hatch_date.items():
             for genotype in geno_dict:
                 # generate the bin distribution of this genotype with
@@ -335,7 +387,8 @@ class Farm:
             for cage in farm.cages:
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
-    def get_cage_arrivals_stats(self, cage_arrivals: CageAllocation) -> Tuple[int, List[int]]:
+    @staticmethod
+    def get_cage_arrivals_stats(cage_arrivals: CageAllocation) -> Tuple[int, List[int]]:
         """Get stats about the cage arrivals for logging
 
         :param cage_arrivals: Dictionary of genotype distributions based
@@ -350,3 +403,27 @@ class Farm:
             by_cage.append(cage_total)
 
         return sum(by_cage), by_cage
+
+    def get_profit(self, cur_date: dt.datetime):
+        """
+        Get the current mass of fish that can be resold.
+        """
+        mass_per_cage = [cage.average_fish_mass((cur_date - cage.start_date).days) for cage in self.cages]
+        return self.cfg.gain_per_kg * Money(sum(mass_per_cage))
+
+    def handle_events(self, cur_date: dt.datetime):
+        def cts_command_queue(command):
+            if isinstance(command, SampleRequestCommand):
+                self.__sampling_events.put(SamplingEvent(command.request_date))
+
+        pop_from_queue(self.command_queue, cur_date, cts_command_queue)
+
+        self.report_sample(cur_date)
+
+    def report_sample(self, cur_date):
+        def cts(_):
+            # report the worst across cages
+            rate = max(cage.aggregation_rate for cage in self.cages)
+            self.farm_to_org.put(SamplingResponse(cur_date, rate))
+
+        pop_from_queue(self.__sampling_events, cur_date, cts)

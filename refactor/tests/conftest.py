@@ -6,7 +6,7 @@ import datetime
 from src.Config import Config
 from src.Farm import Farm
 from src.Organisation import Organisation
-from src.QueueBatches import EggBatch, DamAvailabilityBatch
+from src.QueueTypes import EggBatch, DamAvailabilityBatch
 from src.LicePopulation import LicePopulation, GenoDistrib
 
 
@@ -23,21 +23,39 @@ def farm_config():
 
 
 @pytest.fixture
-def first_farm(farm_config, initial_lice_population):
-    return Farm(0, farm_config, initial_lice_population)
+def no_prescheduled_config(farm_config):
+    farm_config.farms[0].treatment_starts = []
+    return farm_config
 
 
 @pytest.fixture
-def second_farm(farm_config, initial_lice_population):
-    # use config of farm 1 but change the name
-    farm = Farm(0, farm_config, initial_lice_population)
-    farm.name = 1
-    return farm
+def no_prescheduled_organisation(no_prescheduled_config):
+    return Organisation(no_prescheduled_config)
+
+
+@pytest.fixture
+def no_prescheduled_farm(no_prescheduled_organisation):
+    return no_prescheduled_organisation.farms[0]
+
+
+@pytest.fixture
+def no_prescheduled_cage(no_prescheduled_farm):
+    return no_prescheduled_farm.cages[0]
 
 
 @pytest.fixture
 def organisation(farm_config):
     return Organisation(farm_config)
+
+
+@pytest.fixture
+def first_farm(organisation):
+    return organisation.farms[0]
+
+
+@pytest.fixture
+def second_farm(organisation):
+    return organisation.farms[1]
 
 
 @pytest.fixture

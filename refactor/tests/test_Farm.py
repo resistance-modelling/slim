@@ -6,6 +6,7 @@ import pytest
 from src.Cage import Cage
 from src.Config import to_dt
 from src.TreatmentTypes import Treatment
+from src.QueueTypes import SampleRequestCommand
 
 
 class TestFarm:
@@ -242,3 +243,48 @@ class TestFarm:
 
         assert not first_farm.add_treatment(Treatment.emb, cur_day)
         assert first_farm.available_treatments == 0
+
+    def test_prescheduled_sampling_events(self, first_farm, cur_day):
+        assert first_farm.farm_to_org.qsize() == 0
+        first_farm.report_sample(cur_day)
+        assert first_farm.farm_to_org.qsize() == 1
+        assert first_farm.farm_to_org.queue[0].detected_rate <= 0.1
+
+        first_farm.farm_to_org.get()
+
+        # One test today, one test in 14 days, another test in 28 days
+        # The first has already been consumed
+        first_farm.report_sample(cur_day + dt.timedelta(days=21))
+        assert first_farm.farm_to_org.qsize() == 1
+        first_farm.farm_to_org.get()
+
+        # The second too
+        first_farm.report_sample(cur_day + dt.timedelta(days=28))
+        assert first_farm.farm_to_org.qsize() == 1
+
+    def test_handle_reporting_event(self, first_farm, cur_day):
+        first_farm._Farm__sampling_events.queue = []
+        assert first_farm.farm_to_org.qsize() == 0
+        first_farm.command_queue.put(SampleRequestCommand(cur_day))
+        first_farm.handle_events(cur_day)
+        assert first_farm.farm_to_org.qsize() == 1
+
+    def test_ask_for_treatment_no_defection(self, no_prescheduled_farm, cur_day):
+        first_cage = no_prescheduled_farm.cages[0]
+        assert first_cage.treatment_events.qsize() == 0
+        first_available_day = cur_day + dt.timedelta(days=30)
+        no_prescheduled_farm.ask_for_treatment(first_available_day, False)
+        assert first_cage.treatment_events.qsize() == 1
+
+        # Asking again will not work, but it requires some internal cage update
+        first_cage.update(first_available_day, 0)
+        no_prescheduled_farm.ask_for_treatment(first_available_day, False)
+        assert first_cage.treatment_events.qsize() == 0
+
+    def test_ask_for_treatment(self, no_prescheduled_farm, no_prescheduled_cage, cur_day):
+        assert no_prescheduled_cage.treatment_events.qsize() == 0
+
+        for i in range(12):
+            first_available_day = cur_day + dt.timedelta(days=30*i)
+            no_prescheduled_farm.ask_for_treatment(first_available_day)
+        assert no_prescheduled_cage.treatment_events.qsize() == 9

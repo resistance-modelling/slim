@@ -12,6 +12,7 @@ from src.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB
 if TYPE_CHECKING:
     from src.LicePopulation import LifeStage
 
+
 def to_dt(string_date) -> dt.datetime:
     """Convert from string date to datetime date
 
@@ -75,6 +76,12 @@ class RuntimeConfig:
         # Farm data
         self.farm_data = data["farm_data"]["value"]
 
+        # Other reward/payoff constants
+        self.gain_per_kg = Money(data["gain_per_kg"]["value"])
+
+        # Other constraints
+        self.aggregation_rate_threshold = data["aggregation_rate_threshold"]["value"]  # type: float
+
         # load in the seed if provided
         # otherwise don't use a seed
         seed_dict = data.get("seed", 0)
@@ -116,7 +123,8 @@ class Config(RuntimeConfig):
         self.ext_pressure = data["ext_pressure"]["value"]
 
         self.monthly_cost = Money(data["monthly_cost"]["value"])
-        self.name = data["name"]["value"]
+        self.name = data["name"]["value"]  # type: str
+        self.defection_proba = data["defection_proba"]["value"]  # type: float
 
         # farms
         self.farms = [FarmConfig(farm_data["value"], self.logger)
@@ -153,6 +161,7 @@ class FarmConfig:
         self.cages_start = [to_dt(date)
                             for date in data["cages_start_dates"]["value"]]
         self.max_num_treatments = data["max_num_treatments"]["value"]  # type: int
+        self.sampling_spacing = data["sampling_spacing"]["value"]  # type: int
 
         # TODO: a farm may employ different chemicals
         self.treatment_type = Treatment[data["treatment_type"]["value"]]
@@ -162,6 +171,7 @@ class FarmConfig:
 
         # fixed treatment schedules
         self.treatment_starts = [to_dt(date) for date in data["treatment_dates"]["value"]]
+
 
 @dataclass
 class SmoltParams:

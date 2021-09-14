@@ -10,7 +10,7 @@ import pytest
 
 from src.Cage import Cage
 from src.Config import to_dt
-from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
+from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
 from src.TreatmentTypes import GeneticMechanism, Treatment, Money
 from src.LicePopulation import GenoDistrib
 
@@ -71,6 +71,11 @@ class TestCage:
     def test_cage_update_lice_treatment_mortality(self, first_farm, first_cage):
         treatment_dates = first_farm.farm_cfg.treatment_starts
 
+        # before the first useful day, make sure the cage is aware of being under treatment
+        cur_day = treatment_dates[1] + dt.timedelta(days=1)
+        first_cage.get_lice_treatment_mortality(cur_day)
+        assert first_cage.is_treated(cur_day)
+
         # first useful day
         cur_day = treatment_dates[1] + dt.timedelta(days=5)
         mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
@@ -84,6 +89,7 @@ class TestCage:
         assert mortality_updates['L5m'] == {('A', 'a'): 1, ('a',): 2}
         assert mortality_updates['L4'] == {('A', 'a'): 1, ('a',): 8}
         assert mortality_updates['L3'] == {('A',): 2, ('A', 'a'): 2, ('a',): 8}
+        assert first_cage.is_treated(cur_day)
 
         assert 55000 <= cost <= 60000
 
@@ -574,7 +580,7 @@ class TestCage:
         assert first_cage.lice_population.geno_by_lifestage["L3"] == old_L3
 
     def test_promote_population_offspring(self, first_cage):
-        offspring_distrib = {('A',): 500, ('a',): 500, ('A', 'a'): 500}
+        offspring_distrib = GenoDistrib({('A',): 500, ('a',): 500, ('A', 'a'): 500})
         new_L2 = 10
         old_L1 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L1"])
         first_cage.promote_population(offspring_distrib, "L1", new_L2)
@@ -808,7 +814,7 @@ class TestCage:
     ):
         first_cage_population["L5f"] = first_cage_population["L5f"] * 100
         first_cage_population["L5m"] = first_cage_population["L5m"] * 100
-        sample_treatment_mortality["L5f"] = sample_treatment_mortality["L5f"] * 100
+        sample_treatment_mortality["L5f"] = sample_treatment_mortality["L5f"] * 10
 
         dams, _ = first_cage.do_mating_events()
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
@@ -829,15 +835,14 @@ class TestCage:
         null_returned_dams = null_offspring_distrib
 
         old_busy_dams = first_cage_population.busy_dams.copy()
+        old_busy_dams_gross = old_busy_dams.gross
 
         first_cage.update_deltas(background_mortality, sample_treatment_mortality, fish_deaths_natural,
                                  fish_deaths_from_lice, fish_deaths_from_treatment, new_l2, new_l4, new_females,
                                  new_males, new_infections, reservoir_lice, null_dams_batch, null_offspring_distrib,
                                  null_hatched_arrivals)
 
-        # TODO: This is still broken
-        #assert first_cage.lice_population["L5f"] == 13
-        #for k in old_busy_dams:
-        #    assert old_busy_dams[k] >= first_cage.lice_population.busy_dams[k]
-        #assert first_cage.lice_population.available_dams.gross() == 587
-        #assert first_cage.lice_population.busy_dams.gross() == 0
+        assert first_cage.lice_population["L5f"] < 1000
+        assert first_cage.lice_population.busy_dams.gross < old_busy_dams_gross
+        assert first_cage.lice_population.busy_dams <= old_busy_dams
+        assert 800 <= first_cage.lice_population.busy_dams.gross <= 840

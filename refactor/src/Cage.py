@@ -18,7 +18,7 @@ from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistan
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib,
                                 QuantitativeGenoDistrib, GenericGenoDistrib)
-from src.QueueBatches import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
+from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent, pop_from_queue
 from src.JSONEncoders import CustomFarmEncoder
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -95,10 +95,11 @@ class Cage:
         del filtered_vars["cfg"]
 
         # May want to improve these or change them if we change the representation for genotype distribs
-        # TODO: these below can be probably moved to a proper encoder
-        filtered_vars["egg_genotypes"] = {str(key): val for key, val in filtered_vars["egg_genotypes"].items()}
-        filtered_vars["geno_by_lifestage"] = {str(key): str(val) for key, val in
-                                              self.lice_population.geno_by_lifestage.items()}
+        # Note: JSON encoders do not allow a default() being run on the _keys_ of dictionaries
+        # and GenotypePopulation is a dict subclass. The simplest option here is to trivially force to_json_dict()
+        # whenever possible,
+        filtered_vars["egg_genotypes"] = self.egg_genotypes.to_json_dict()
+        filtered_vars["geno_by_lifestage"] = self.lice_population.geno_by_lifestage.to_json_dict()
         filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
 
         return filtered_vars
@@ -213,16 +214,18 @@ class Cage:
         geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
 
         # if no treatment has been applied check if the previous treatment is still effective
-        if self.treatment_events.qsize() == 0 or cur_date < self.treatment_events.queue[0].affecting_date:
-            if self.last_effective_treatment is None:
-                return geno_treatment_distrib
-            treatment_window = self.last_effective_treatment.affecting_date + \
-                               dt.timedelta(days=self.last_effective_treatment.effectiveness_duration_days)
-            if cur_date > treatment_window:
-                # We are outside of the treatment window
-                return geno_treatment_distrib
-        else:
-            self.last_effective_treatment = self.treatment_events.get()
+
+        def cts(event):
+            nonlocal self
+            self.last_effective_treatment = event
+
+        pop_from_queue(self.treatment_events, cur_date, cts)
+
+        if self.last_effective_treatment is None or \
+            self.last_effective_treatment.affecting_date > cur_date or \
+                cur_date > self.last_effective_treatment.treatment_window:
+            return geno_treatment_distrib
+
         treatment_type = self.last_effective_treatment.treatment_type
 
         self.logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
@@ -504,7 +507,7 @@ class Cage:
         age_distrib = self.get_stage_ages_distrib("L2")
         num_avail_lice = round(self.lice_population["L2"] * np.sum(age_distrib[1:]))
         if num_avail_lice > 0:
-            num_fish_in_farm = sum([c.num_fish for c in self.farm.cages])
+            num_fish_in_farm = self.farm.num_fish
 
             # TODO: this has O(c^2) complexity
             etas = np.array([c.compute_eta_aldrin(num_fish_in_farm, days) for c in self.farm.cages])
@@ -850,30 +853,6 @@ class Cage:
         expected_hatching_date = cur_date + dt.timedelta(self.cfg.rng.poisson(expected_time))
         return EggBatch(expected_hatching_date, egg_distrib)
 
-    @staticmethod
-    def pop_from_queue(queue: PriorityQueue, cur_time: dt.datetime, output_geno_distrib: GenoDistrib):
-        # process all the due events
-        # Note: queues miss a "peek" method, and this line relies on an implementation detail.
-
-        @singledispatch
-        def access_time_lt(_peek_element, _cur_time: dt.datetime):
-            pass  # pragma: no cover
-
-        @access_time_lt.register
-        def _(arg: EggBatch, _cur_time: dt.datetime):
-            return arg.hatch_date <= _cur_time
-
-        # have mypy ignore redefinitions of '_'
-        # see https://github.com/python/mypy/issues/2904 for details
-        @access_time_lt.register  # type: ignore[no-redef]
-        def _(arg: TravellingEggBatch, _cur_time: dt.datetime):
-            return arg.hatch_date <= _cur_time  # pragma: no cover
-
-        while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
-            event = queue.get()
-            for geno, value in event.geno_distrib.items():
-                output_geno_distrib[geno] += value
-
     def create_offspring(self, cur_time: dt.datetime) -> GenoDistrib:
         """
         Hatch the eggs from the event queue
@@ -882,8 +861,12 @@ class Cage:
         """
 
         delta_egg_offspring = GenoDistrib({geno: 0 for geno in self.cfg.genetic_ratios})
-        self.pop_from_queue(self.hatching_events, cur_time, delta_egg_offspring)
 
+        def cts(hatching_event: EggBatch):
+            nonlocal delta_egg_offspring
+            delta_egg_offspring += hatching_event.geno_distrib
+
+        pop_from_queue(self.hatching_events, cur_time, cts)
         return delta_egg_offspring
 
     def get_arrivals(self, cur_date: dt.datetime) -> GenoDistrib:
@@ -895,8 +878,9 @@ class Cage:
         hatched_dist = GenoDistrib()
 
         # check queue for arrivals at current date
-        while not self.arrival_events.empty() and self.arrival_events.queue[0].arrival_date <= cur_date:
-            batch = self.arrival_events.get()
+        def cts(batch: TravellingEggBatch):
+            nonlocal self
+            nonlocal hatched_dist
 
             # if the hatch date is after current date, add to stationary egg queue
             if batch.hatch_date >= cur_date:
@@ -908,6 +892,8 @@ class Cage:
             else:
                 # TODO: determine life stage it arrives at; assumes all are L1 for now
                 hatched_dist = batch.geno_distrib
+
+        pop_from_queue(self.arrival_events, cur_date, cts)
 
         return hatched_dist
 
@@ -949,7 +935,7 @@ class Cage:
 
     def promote_population(
             self,
-            prev_stage: Union[str, dict],
+            prev_stage: Union[str, GenericGenoDistrib],
             cur_stage: str,
             leaving_lice: int,
             entering_lice: Optional[int] = None
@@ -1132,3 +1118,19 @@ class Cage:
     @property
     def is_fallowing(self):
         return self.num_fish == 0
+
+    def is_treated(self, cur_date):
+        if self.last_effective_treatment is not None:
+            treatment = self.last_effective_treatment
+            if cur_date <= treatment.treatment_window:
+                return True
+
+        return False
+
+    @property
+    def aggregation_rate(self):
+        """The aggregation rate is the number of lice over the total number of fish.
+        Elsewhere it is referred to as infection rate, but here "infection rate" only refers to host fish.
+
+        :returns the aggregation rate"""
+        return self.lice_population["L5f"] / self.num_fish if self.num_fish > 0 else 0.0

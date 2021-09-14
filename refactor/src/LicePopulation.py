@@ -1,17 +1,19 @@
 from __future__ import annotations
 
-import copy
+from heapq import heapify
 from queue import PriorityQueue
+from types import GeneratorType
 from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, TypeVar, Generic, Counter as CounterType, Optional, \
-    TYPE_CHECKING
+    Iterable, TYPE_CHECKING
 
 import iteround
 import numpy as np
 
 from src.Config import Config
+from src.QueueTypes import pop_from_queue
 
 if TYPE_CHECKING:  # pragma: no cover
-    from src.QueueBatches import DamAvailabilityBatch
+    from src.QueueTypes import DamAvailabilityBatch
 
 ################ Basic type aliases #####################
 LifeStage = str
@@ -31,6 +33,22 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
     represents an actual count and not a PMF. Float values are (currently) not allowed.
     """
 
+    def __init__(self, params: Optional[Union[
+        GenericGenoDistrib[GenoKey],
+        Dict[GenoKey, float],
+        Iterable[Tuple[GenoKey, float]]
+    ]] = None):
+        # asdict() will call this constructor with a stream of tuples (Alleles, v)
+        # to prevent the default behaviour (Counter counts all the instances of the elements) we have to check
+        # for generators
+        if params:
+            if isinstance(params, GeneratorType):
+                super().__init__(dict(params))
+            else:
+                super().__init__(params)
+        else:
+            super().__init__()
+
     def normalise_to(self, population: int) -> GenericGenoDistrib[GenoKey]:
         keys = self.keys()
         values = list(self.values())
@@ -48,24 +66,34 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
         self.clear()
         self.update(result)
 
+    @property
     def gross(self) -> int:
         return sum(self.values())
 
     def copy(self: GenericGenoDistrib[GenoKey]) -> GenericGenoDistrib[GenoKey]:
         return GenericGenoDistrib(super().copy())
 
-    def __add__(self, other: GenericGenoDistrib[GenoKey]) -> GenericGenoDistrib[GenoKey]:
+    def __add__(self, other: Union[GenericGenoDistrib[GenoKey], int]) -> GenericGenoDistrib[GenoKey]:
         """Overload add operation"""
         res = self.copy()
-        for k, v in other.items():
-            res[k] += v
+
+        if isinstance(other, GenericGenoDistrib):
+            for k, v in other.items():
+                res[k] += v
+        else:
+            res.set(res.gross + other)
         return res
 
-    def __sub__(self, other: GenericGenoDistrib[GenoKey]) -> GenericGenoDistrib[GenoKey]:
+    def __sub__(self, other: Union[GenericGenoDistrib[GenoKey], int]) -> GenericGenoDistrib[GenoKey]:
         """Overload sub operation"""
         res = self.copy()
-        for k, v in other.items():
-            res[k] -= v
+
+        if isinstance(other, GenericGenoDistrib):
+            for k, v in other.items():
+                res[k] -= v
+        else:
+            res.set(res.gross - other)
+
         return res
 
     def __mul__(self, other: Union[float, GenericGenoDistrib[GenoKey]]) -> GenericGenoDistrib[GenoKey]:
@@ -88,6 +116,16 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
             other = GenericGenoDistrib(other)
         return super().__eq__(other)
 
+    def __le__(self, other: Union[GenericGenoDistrib[GenoKey], float]):
+        """A <= B if B has all the keys of A and A[k] <= B[k] for every k
+        Note that __gt__ is not implemented as its behaviour is not "greater than" but rather
+        "there may be an unbounded frequency"."""
+        if isinstance(other, float):
+            return all(v <= other for v in self.values())
+
+        merged_keys = set(list(self.keys()) + list(other.keys()))
+        return all(self[k] <= other[k] for k in merged_keys)
+
     def __round__(self, n: Optional[int] = None) -> GenericGenoDistrib[GenoKey]:
         """Perform rounding to get an actual population distribution."""
         if n is None:
@@ -95,6 +133,9 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
 
         values = iteround.saferound(list(self.values()), n)
         return GenericGenoDistrib(dict(zip(self.keys(), values)))
+
+    def to_json_dict(self):
+        return {"".join(k): v for k, v in self.items()}
 
 
 GenoDistrib = GenericGenoDistrib[Alleles]
@@ -148,7 +189,7 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
             value = max(value, 0)
             self.geno_by_lifestage[stage] = self.geno_by_lifestage[stage].normalise_to(value)
         if stage == "L5f":
-            self.rescale_busy_dams(round(self.busy_dams.gross() * value / old_value) if old_value > 0 else 0)
+            self.__rescale_busy_dams(round(self.busy_dams.gross * value / old_value) if old_value > 0 else 0)
 
     def raw_update_value(self, stage: LifeStage, value: int):
         super().__setitem__(stage, value)
@@ -173,15 +214,23 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         """
         delta_avail_dams = GenericGenoDistrib()
 
-        while not self._busy_dams.empty() and self._busy_dams.queue[0].availability_date <= cur_time:
-            event = self._busy_dams.get()
+        def cts(event):
+            nonlocal delta_avail_dams
             delta_avail_dams += event.geno_distrib
+
+        pop_from_queue(self._busy_dams, cur_time, cts)
 
         return delta_avail_dams
 
     def add_busy_dams_batch(self, delta_dams_batch: DamAvailabilityBatch):
-        for k, v in delta_dams_batch.geno_distrib.items():
-            assert v <= self.geno_by_lifestage['L5f'][k]
+        dams_distrib = self.geno_by_lifestage["L5f"]
+        assert delta_dams_batch.geno_distrib <= dams_distrib
+
+        # clip the distribution, just in case
+        if not(self.busy_dams + delta_dams_batch.geno_distrib <= self.geno_by_lifestage["L5f"]):
+            assert all([frequency > 0 for frequency in self.busy_dams.values()])
+            delta_dams_batch.geno_distrib = self.geno_by_lifestage["L5f"] - self.busy_dams
+        assert self.busy_dams + delta_dams_batch.geno_distrib <= self.geno_by_lifestage["L5f"]
         self._busy_dams.put(delta_dams_batch)
 
     def remove_negatives(self):
@@ -191,22 +240,49 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
             distrib_purged = GenoDistrib(dict(zip(keys, [max(v, 0) for v in values])))
             self.geno_by_lifestage[stage] = distrib_purged
 
-    def rescale_busy_dams(self, num: int):
+    def __clear_empty_dams(self):
+        self._busy_dams.queue = [x for x in self._busy_dams.queue if x.geno_distrib.gross > 0]
+        # re-ensure heaping condition is respected.
+        # TODO: no synchronisation is done here. Determine if this causes threading issues
+        heapify(self._busy_dams.queue)
+
+    def __rescale_busy_dams(self, num: int):
         # rescale the number of busy dams to the given number.
         if num <= 0:
             self.clear_busy_dams()
 
-        elif self._busy_dams.qsize() == 0 or self.busy_dams.gross() == 0:
+        elif self._busy_dams.qsize() == 0 or self.busy_dams.gross == 0:
             raise ValueError("Busy dam queue is empty")
 
         else:
-            partitions = np.array([sum(event.geno_distrib.values()) for event in self._busy_dams.queue])
+            self.__clear_empty_dams()
+            partitions = np.array([event.geno_distrib.gross for event in self._busy_dams.queue])
             total_busy = np.sum(partitions)
-            ratios = total_busy / partitions
+            ratios = partitions / total_busy
 
-            # TODO: rounding this with iteround isn't easy...
+            # TODO: rounding this with iteround isn't easy so we need to make sure dams are clipped
             for event, ratio in zip(self._busy_dams.queue, ratios):
                 event.geno_distrib.set(num * ratio)
+
+            self._clip_dams_to_stage()
+
+        assert self.busy_dams <= self.geno_by_lifestage["L5f"]
+
+    def _clip_dams_to_stage(self):
+        # make sure that self.busy_dams <= self.geno_by_lifestage["L5f"]
+        offset = self.busy_dams - self.geno_by_lifestage["L5f"]
+
+        for allele in offset:
+            off = offset[allele]
+            if off <= 0:
+                continue
+            for event in self._busy_dams.queue:
+                to_reduce = min(event.geno_distrib[allele], off)
+                offset[allele] -= to_reduce
+                off -= to_reduce
+                event.geno_distrib[allele] -= to_reduce
+
+        assert self.busy_dams <= self.geno_by_lifestage["L5f"]
 
     @staticmethod
     def get_empty_geno_distrib() -> GenoLifeStageDistrib:
@@ -224,10 +300,10 @@ class GenotypePopulation(Dict[LifeStage, GenericGenoDistrib]):
         # update the value and the gross population accordingly
         old_value = self[stage].copy()
         old_value_sum = self._lice_population[stage]
-        old_value_sum_2 = old_value.gross()
+        old_value_sum_2 = old_value.gross
         assert old_value_sum == old_value_sum_2
         super().__setitem__(stage, value.copy())
-        value_sum = value.gross()
+        value_sum = value.gross
         self._lice_population.raw_update_value(stage, value_sum)
 
         # if L5f increases all the new lice are by default free
@@ -235,14 +311,17 @@ class GenotypePopulation(Dict[LifeStage, GenericGenoDistrib]):
         if stage == "L5f" and value_sum < old_value_sum:
             # calculate the deltas and
             delta = value - old_value
-            busy_dams_denom = self._lice_population.busy_dams.gross()
+            busy_dams_denom = self._lice_population.busy_dams.gross
             if busy_dams_denom == 0:
                 self._lice_population.clear_busy_dams()
             else:
                 for event in self._lice_population._busy_dams.queue:
                     geno_distrib = event.geno_distrib
-                    delta_geno = delta * (geno_distrib.gross() / busy_dams_denom)
+                    delta_geno = delta * (geno_distrib.gross/ busy_dams_denom)
                     geno_distrib += delta_geno
 
-    def raw_update_value(self, stage: LifeStage, value: GenoDistrib):
-        super().__setitem__(stage, value)
+        self._lice_population._clip_dams_to_stage()
+        pass
+
+    def to_json_dict(self):
+        return {k: v.to_json_dict() for k, v in self.items()}
