@@ -117,6 +117,9 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
         return super().__eq__(other)
 
     def __le__(self, other: Union[GenericGenoDistrib[GenoKey], float]):
+        """A <= B if B has all the keys of A and A[k] <= B[k] for every k
+        Note that __gt__ is not implemented as its behaviour is not "greater than" but rather
+        "there may be an unbounded frequency"."""
         if isinstance(other, float):
             return all(v <= other for v in self.values())
 
@@ -220,9 +223,13 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         return delta_avail_dams
 
     def add_busy_dams_batch(self, delta_dams_batch: DamAvailabilityBatch):
-        for k, v in delta_dams_batch.geno_distrib.items():
-            assert v <= self.geno_by_lifestage['L5f'][k]
+        dams_distrib = self.geno_by_lifestage["L5f"]
+        assert delta_dams_batch.geno_distrib <= dams_distrib
 
+        # clip the distribution, just in case
+        if not(self.busy_dams + delta_dams_batch.geno_distrib <= self.geno_by_lifestage["L5f"]):
+            assert all([frequency > 0 for frequency in self.busy_dams.values()])
+            delta_dams_batch.geno_distrib = self.geno_by_lifestage["L5f"] - self.busy_dams
         assert self.busy_dams + delta_dams_batch.geno_distrib <= self.geno_by_lifestage["L5f"]
         self._busy_dams.put(delta_dams_batch)
 

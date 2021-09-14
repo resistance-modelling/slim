@@ -935,7 +935,7 @@ class Cage:
 
     def promote_population(
             self,
-            prev_stage: Union[str, dict],
+            prev_stage: Union[str, GenericGenoDistrib],
             cur_stage: str,
             leaving_lice: int,
             entering_lice: Optional[int] = None
