@@ -165,6 +165,11 @@ def pop_from_queue(
     def _(arg: SamplingEvent, _cur_time: dt.datetime):
         return arg.sampling_date <= _cur_time  # pragma: no cover
 
+    @access_time_lt.register  # type: ignore[no-redef]
+    def _(arg: FarmResponse, _cur_time: dt.datetime):
+        return arg.response_date <= _cur_time  # pragma: no cover
+
+
     while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
         event = queue.get()
         continuation(event)

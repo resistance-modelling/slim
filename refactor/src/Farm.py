@@ -210,7 +210,7 @@ class Farm:
 
         # TODO: this is extremely simple.
         p = [self.cfg.defection_proba, 1 - self.cfg.defection_proba]
-        want_to_treat = (not can_defect) and self.cfg.rng.choice([False, True], p)
+        want_to_treat = self.cfg.rng.choice([False, True], p=p) if can_defect else True
 
         if not want_to_treat:
             self.logger.debug("\tFarm {} refuses to treat".format(self.name))

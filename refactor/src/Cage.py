@@ -1133,4 +1133,4 @@ class Cage:
         Elsewhere it is referred to as infection rate, but here "infection rate" only refers to host fish.
 
         :returns the aggregation rate"""
-        return sum(self.lice_population.values())/self.num_fish if self.num_fish > 0 else 0.0
+        return self.lice_population["L5f"] / self.num_fish if self.num_fish > 0 else 0.0
