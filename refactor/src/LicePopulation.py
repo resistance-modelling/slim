@@ -224,13 +224,14 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
 
     def add_busy_dams_batch(self, delta_dams_batch: DamAvailabilityBatch):
         dams_distrib = self.geno_by_lifestage["L5f"]
-        assert delta_dams_batch.geno_distrib <= dams_distrib
+        dams_to_add = delta_dams_batch.geno_distrib
 
         # clip the distribution, just in case
-        if not(self.busy_dams + delta_dams_batch.geno_distrib <= self.geno_by_lifestage["L5f"]):
-            assert all([frequency > 0 for frequency in self.busy_dams.values()])
-            delta_dams_batch.geno_distrib = self.geno_by_lifestage["L5f"] - self.busy_dams
-        assert self.busy_dams + delta_dams_batch.geno_distrib <= self.geno_by_lifestage["L5f"]
+        for k in dams_to_add:
+            dams_to_add[k] = max(dams_to_add[k], 0)
+
+        if not(self.busy_dams + dams_to_add <= dams_distrib):
+            delta_dams_batch.geno_distrib = dams_distrib - self.busy_dams
         self._busy_dams.put(delta_dams_batch)
 
     def remove_negatives(self):

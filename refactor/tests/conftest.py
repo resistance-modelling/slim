@@ -29,8 +29,8 @@ def no_prescheduled_config(farm_config):
 
 
 @pytest.fixture
-def no_prescheduled_organisation(no_prescheduled_config):
-    return Organisation(no_prescheduled_config)
+def no_prescheduled_organisation(no_prescheduled_config, initial_lice_population):
+    return Organisation(no_prescheduled_config, initial_lice_population)
 
 
 @pytest.fixture
@@ -44,8 +44,8 @@ def no_prescheduled_cage(no_prescheduled_farm):
 
 
 @pytest.fixture
-def organisation(farm_config):
-    return Organisation(farm_config)
+def organisation(farm_config, initial_lice_population):
+    return Organisation(farm_config, initial_lice_population)
 
 
 @pytest.fixture
