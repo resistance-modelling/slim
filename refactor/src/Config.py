@@ -1,8 +1,9 @@
+import logging
 from dataclasses import dataclass
 import datetime as dt
 import json
 import os
-from typing import Tuple, Dict, TYPE_CHECKING
+from typing import Tuple, Dict, Optional, TYPE_CHECKING
 
 
 import numpy as np
@@ -93,7 +94,14 @@ class RuntimeConfig:
 class Config(RuntimeConfig):
     """One-stop class to hold constants, farm setup and other settings."""
 
-    def __init__(self, config_file, simulation_dir, logger, override_params=None):
+    def __init__(
+        self,
+        config_file: str,
+        simulation_dir: str,
+        logger: logging.Logger,
+        override_params: dict = None,
+        save_rate: Optional[int] = None
+    ):
         """@DynamicAttrs Read the configuration from files
 
         :param config_file: Path to the environment JSON file
@@ -102,6 +110,7 @@ class Config(RuntimeConfig):
         :param logger: Logger to be used
         :type logger: logging.Logger
         :param override_params: options that override the config
+        :param save_rate if True
         """
 
         if override_params is None:
@@ -133,6 +142,9 @@ class Config(RuntimeConfig):
 
         self.interfarm_times = np.loadtxt(os.path.join(simulation_dir, "interfarm_time.csv"), delimiter=",")
         self.interfarm_probs = np.loadtxt(os.path.join(simulation_dir, "interfarm_prob.csv"), delimiter=",")
+
+        # driver-specific settings
+        self.save_rate = save_rate
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
         return [self.emb][treatment_type.value]

@@ -273,6 +273,9 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         # make sure that self.busy_dams <= self.geno_by_lifestage["L5f"]
         offset = self.busy_dams - self.geno_by_lifestage["L5f"]
 
+        #self.logger.debug(f"\t\t\t In _clip_dams_to_stage: L5f is {self.geno_by_lifestage['L5f']}")
+        #self.logger.debug(f"\t\t\t In _clip_dams_to_stage: L5f is {self.geno_by_lifestage['L5f']}")
+
         for allele in offset:
             off = offset[allele]
             if off <= 0:

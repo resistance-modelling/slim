@@ -4,25 +4,18 @@ a given body of water.
 See README.md for details.
 """
 import argparse
+from bisect import bisect_right
 import datetime as dt
 import json
 import logging
+import dill as pickle
 import sys
 
 from pathlib import Path
 
-from src.Config import Config
+from src.Config import Config, to_dt
 from src.Organisation import Organisation
-from src.JSONEncoders import CustomFarmEncoder
-
-
-def setup(data_folder, sim_id):
-    """
-    Set up the folders and files to hold the output of the simulation
-    :param data_folder: the folder where the output will bbe saved
-    :return: None
-    """
-    lice_counts = data_folder / "lice_counts_{}.txt".format(sim_id)
+from typing import Optional
 
 
 def create_logger():
@@ -43,48 +36,64 @@ def create_logger():
 
     return logger
 
+class Simulator:
+    def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
+        self.output_dir = output_dir
+        self.sim_id = sim_id
+        self.cfg = cfg
+        self.output_dump_path = self.get_simulation_path(output_dir, sim_id)
+        self.cur_day = cfg.start_date
+        self.organisation = Organisation(cfg)
 
-def initialise(data_folder, sim_id, cfg):
-    """
-    Create the Organisation(s) data files that we will need.
-    For now only one organisation can run at any time.
-    :return: Organisation
-    """
+    @staticmethod
+    def get_simulation_path(path: Path, sim_id: str):
+        return path / f"simulation_data_{sim_id}.pickle"
 
-    # set up the data files, deleting them if they already exist
-    lice_counts = data_folder / "lice_counts_{}.txt".format(sim_id)
-    lice_counts.unlink(missing_ok=True)
+    @staticmethod
+    def reload(path: Path, sim_id: str, timestep: Optional[dt.datetime] = None):
+        """Reload a simulator state from a dump"""
+        data_file = Simulator.get_simulation_path(path, sim_id)
+        states = []
+        times = []
+        with open(data_file, "rb") as fp:
+            try:
+                sim_state = pickle.load(fp)  # type: Simulator
+                states.append(sim_state)
+                times.append(sim_state.cur_day)
+            except EOFError:
+                pass
 
-    return Organisation(cfg)
+        if timestep:
+            idx = bisect_right(times, timestep)
+            return states[idx]
+        return states
 
+    def run_model(self, resume=False):
+        """Perform the simulation by running the model.
 
-def run_model(path: Path, sim_id: str, cfg: Config, org: Organisation):
-    """Perform the simulation by running the model.
+        :param path: Path to store the results in
+        :param sim_id: Simulation name
+        :param cfg: Configuration object holding parameter information.
+        :param Organisation: the organisation to work on.
+        """
+        cfg.logger.info("running simulation, saving to %s", self.output_dir)
 
-    :param path: Path to store the results in
-    :param sim_id: Simulation name
-    :param cfg: Configuration object holding parameter information.
-    :param Organisation: the organisation to work on.
-    """
-    cfg.logger.info("running simulation, saving to %s", path)
-    cur_date = cfg.start_date
+        # create a file to store the population data from our simulation
+        if resume and not self.output_dump_path.exists():
+            cfg.logger.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")
 
-    # create a file to store the population data from our simulation
-    data_file = path / "simulation_data_{}.json".format(sim_id)
-    data_file.unlink(missing_ok=True)
-    data_file = (data_file).open(mode="a")
+        data_file = (self.output_dump_path).open(mode="wb")
 
-    while cur_date <= cfg.end_date:
-        cfg.logger.debug("Current date = %s", cur_date)
-        cur_date += dt.timedelta(days=1)
-        org.step(cur_date)
+        while self.cur_day <= cfg.end_date:
+            cfg.logger.debug("Current date = %s", self.cur_day)
+            self.organisation.step(self.cur_day)
+            self.cur_day += dt.timedelta(days=1)
 
-        # Save the data
-        # TODO: log as json, serialise as pickle
-        data_file.write(org.to_json())
-        data_file.write("\n")
-        cfg.logger.info(repr(org))
-    data_file.close()
+            # Save the model snapshot
+            if self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0:
+                pickle.dump(self, data_file)
+
+        data_file.close()
 
 def generate_argparse_from_config(cfg_path: str, simulation_path: str):
     parser = argparse.ArgumentParser(description="Sea lice simulation")
@@ -133,10 +142,16 @@ if __name__ == "__main__":
                         help="Don't log to console or file.",
                         default=False,
                         action="store_true")
+    parser.add_argument("--save-rate",
+                        help="Interval to dump the simulation state. Useful for visualisation and debugging. Warning: saving a run is a slow operation.",
+                        type=int,
+                        required=False)
+    parser.add_argument("--resume",
+                        type=str,
+                        help="(DEBUG) resume the simulator from a given timestep. All configuration variables will be ignored.")
     args, unknown = parser.parse_known_args()
 
     # set up the data folders
-
     output_path = Path(args.simulation_path)
     simulation_id = output_path.name
     output_basename = output_path.parent
@@ -158,8 +173,13 @@ if __name__ == "__main__":
     config_args = config_parser.parse_args(unknown)
 
     # create the config object
-    cfg = Config(cfg_path, args.param_dir, logger, vars(config_args))
+    cfg = Config(cfg_path, args.param_dir, logger, vars(config_args), args.save_rate)
 
     # run the simulation
-    org = initialise(output_folder, simulation_id, cfg)
-    run_model(output_folder, simulation_id, cfg, org)
+
+    if args.resume:
+        resume_time = to_dt(args.resume)
+        sim = Simulator.reload(output_folder, simulation_id, resume_time)
+    else:
+        sim = Simulator(output_folder, simulation_id, cfg)
+    sim.run_model()
