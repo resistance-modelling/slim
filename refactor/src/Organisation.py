@@ -15,10 +15,10 @@ from src.TreatmentTypes import Money
 
 
 class Organisation:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, *args):
         self.name = cfg.name  # type: str
         self.cfg = cfg
-        self.farms = [Farm(i, cfg) for i in range(cfg.nfarms)]
+        self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
 
     @property
     def capital(self):
