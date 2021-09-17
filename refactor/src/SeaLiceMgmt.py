@@ -4,7 +4,7 @@ a given body of water.
 See README.md for details.
 """
 import argparse
-from bisect import bisect_right
+from bisect import bisect_left
 import datetime as dt
 import json
 import logging
@@ -50,8 +50,8 @@ class Simulator:
         return path / f"simulation_data_{sim_id}.pickle"
 
     @staticmethod
-    def reload(path: Path, sim_id: str, timestep: Optional[dt.datetime] = None):
-        """Reload a simulator state from a dump"""
+    def reload_all_dump(path: Path, sim_id: str):
+        """Reload a simulator"""
         data_file = Simulator.get_simulation_path(path, sim_id)
         states = []
         times = []
@@ -63,10 +63,15 @@ class Simulator:
             except EOFError:
                 pass
 
-        if timestep:
-            idx = bisect_right(times, timestep)
-            return states[idx]
-        return states
+        return states, times
+
+    @staticmethod
+    def reload(path: Path, sim_id: str, timestep: dt.datetime):
+        """Reload a simulator state from a dump at a given time"""
+        states, times = Simulator.reload_all_dump(path, sim_id)
+
+        idx = bisect_left(times, timestep)
+        return states[idx]
 
     def run_model(self, resume=False):
         """Perform the simulation by running the model.
@@ -179,7 +184,7 @@ if __name__ == "__main__":
 
     if args.resume:
         resume_time = to_dt(args.resume)
-        sim = Simulator.reload(output_folder, simulation_id, resume_time)
+        sim = Simulator.reload(output_folder, simulation_id, resume_time)  # type: Simulator
     else:
         sim = Simulator(output_folder, simulation_id, cfg)
     sim.run_model()

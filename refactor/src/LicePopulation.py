@@ -137,6 +137,10 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
     def to_json_dict(self):
         return {"".join(k): v for k, v in self.items()}
 
+    def truncate_negatives(self):
+        for k in self:
+            self[k] = max(self[k], 0)
+
 
 GenoDistrib = GenericGenoDistrib[Alleles]
 QuantitativeGenoDistrib = GenericGenoDistrib[float]
@@ -302,10 +306,9 @@ class GenotypePopulation(Dict[LifeStage, GenericGenoDistrib]):
 
     def __setitem__(self, stage: LifeStage, value: GenoDistrib):
         # update the value and the gross population accordingly
+        value.truncate_negatives()
         old_value = self[stage].copy()
         old_value_sum = self._lice_population[stage]
-        old_value_sum_2 = old_value.gross
-        assert old_value_sum == old_value_sum_2
         super().__setitem__(stage, value.copy())
         value_sum = value.gross
         self._lice_population.raw_update_value(stage, value_sum)

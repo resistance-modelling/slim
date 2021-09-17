@@ -99,10 +99,10 @@ class Config(RuntimeConfig):
         config_file: str,
         simulation_dir: str,
         logger: logging.Logger,
-        override_params: dict = None,
+        override_params: Optional[dict]= None,
         save_rate: Optional[int] = None
     ):
-        """@DynamicAttrs Read the configuration from files
+        """Read the configuration from files
 
         :param config_file: Path to the environment JSON file
         :type config_file: string
