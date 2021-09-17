@@ -129,7 +129,7 @@ class Simulator:
 
         data_file = (self.output_dump_path).open(mode="wb")
 
-        while self.cur_day <= cfg.end_date:
+        while self.cur_day <= self.cfg.end_date:
             self.cfg.logger.debug("Current date = %s", self.cur_day)
             self.organisation.step(self.cur_day)
             self.cur_day += dt.timedelta(days=1)
