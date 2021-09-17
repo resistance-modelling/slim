@@ -1,12 +1,10 @@
-"""
-An organisation controls multiple farms.
-For now, we assume an organisation is also an agent that can control all the
-farms at the same time.
-TODO: treatments should be decided rather than preemptively scheduled
-"""
-
 import datetime as dt
 import json
+from bisect import bisect_left
+from pathlib import Path
+
+import dill as pickle
+
 from src.Config import Config
 from src.Farm import Farm
 from src.JSONEncoders import CustomFarmEncoder
@@ -15,6 +13,9 @@ from src.TreatmentTypes import Money
 
 
 class Organisation:
+    """
+    An organisation is a cooperative of `Farm`s.
+    """
     def __init__(self, cfg: Config, *args):
         self.name = cfg.name  # type: str
         self.cfg = cfg
@@ -73,3 +74,68 @@ class Organisation:
                     other_farm.ask_for_treatment(cur_date, can_defect=other_farm != farm)
 
         pop_from_queue(farm.farm_to_org, cur_date, cts)
+
+
+class Simulator:
+    def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
+        self.output_dir = output_dir
+        self.sim_id = sim_id
+        self.cfg = cfg
+        self.output_dump_path = self.get_simulation_path(output_dir, sim_id)
+        self.cur_day = cfg.start_date
+        self.organisation = Organisation(cfg)
+
+    @staticmethod
+    def get_simulation_path(path: Path, sim_id: str):
+        return path / f"simulation_data_{sim_id}.pickle"
+
+    @staticmethod
+    def reload_all_dump(path: Path, sim_id: str):
+        """Reload a simulator"""
+        data_file = Simulator.get_simulation_path(path, sim_id)
+        states = []
+        times = []
+        with open(data_file, "rb") as fp:
+            try:
+                sim_state = pickle.load(fp)  # type: Simulator
+                states.append(sim_state)
+                times.append(sim_state.cur_day)
+            except EOFError:
+                pass
+
+        return states, times
+
+    @staticmethod
+    def reload(path: Path, sim_id: str, timestep: dt.datetime):
+        """Reload a simulator state from a dump at a given time"""
+        states, times = Simulator.reload_all_dump(path, sim_id)
+
+        idx = bisect_left(times, timestep)
+        return states[idx]
+
+    def run_model(self, resume=False):
+        """Perform the simulation by running the model.
+
+        :param path: Path to store the results in
+        :param sim_id: Simulation name
+        :param cfg: Configuration object holding parameter information.
+        :param Organisation: the organisation to work on.
+        """
+        self.cfg.logger.info("running simulation, saving to %s", self.output_dir)
+
+        # create a file to store the population data from our simulation
+        if resume and not self.output_dump_path.exists():
+            self.cfg.logger.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")
+
+        data_file = (self.output_dump_path).open(mode="wb")
+
+        while self.cur_day <= cfg.end_date:
+            self.cfg.logger.debug("Current date = %s", self.cur_day)
+            self.organisation.step(self.cur_day)
+            self.cur_day += dt.timedelta(days=1)
+
+            # Save the model snapshot
+            if self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0:
+                pickle.dump(self, data_file)
+
+        data_file.close()
