@@ -171,7 +171,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         :param geno_data a Genotype distribution
         :param generic_ratios a config to use
         """
-        self._cache = dict()
+        self._cache: Dict[LifeStage, int] = dict()
         self.geno_by_lifestage = GenotypePopulation(self, geno_data)
         self.genetic_ratios = generic_ratios
         self._busy_dams: PriorityQueue[DamAvailabilityBatch] = PriorityQueue()
@@ -333,7 +333,7 @@ class GenotypePopulation(MutableMapping[LifeStage, GenericGenoDistrib]):
         :param gross_lice_population: the parent LicePopulation to update
         :param geno_data: the initial geno population
         """
-        self._store:  Dict[LifeStage, GenotypePopulation] = {}
+        self._store:  Dict[LifeStage, GenericGenoDistrib] = {}
 
         self._lice_population = gross_lice_population
         for k, v in geno_data.items():
