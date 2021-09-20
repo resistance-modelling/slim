@@ -93,16 +93,19 @@ class Simulator:
     @staticmethod
     def reload_all_dump(path: Path, sim_id: str):
         """Reload a simulator"""
+        logger.info("Loading from a dump...")
         data_file = Simulator.get_simulation_path(path, sim_id)
         states = []
         times = []
         with open(data_file, "rb") as fp:
-            try:
-                sim_state = pickle.load(fp)  # type: Simulator
-                states.append(sim_state)
-                times.append(sim_state.cur_day)
-            except EOFError:
-                pass
+            while True:
+                try:
+                    sim_state = pickle.load(fp)  # type: Simulator
+                    states.append(sim_state)
+                    times.append(sim_state.cur_day)
+                except EOFError:
+                    logger.debug("Loaded %d states from the dump", len(states))
+                    break
 
         return states, times
 
@@ -111,7 +114,6 @@ class Simulator:
         """Reload a simulator state from a dump at a given time"""
         states, times = Simulator.reload_all_dump(path, sim_id)
 
-        print(times)
         idx = bisect_left(times, timestep)
         return states[idx]
 
@@ -133,7 +135,7 @@ class Simulator:
             data_file = (self.output_dump_path).open(mode="wb")
 
         while self.cur_day <= self.cfg.end_date:
-            logger.debug("Current date = %s", self.cur_day)
+            logger.info("Current date = %s", self.cur_day)
             self.organisation.step(self.cur_day)
             self.cur_day += dt.timedelta(days=1)
 

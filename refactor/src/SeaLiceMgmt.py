@@ -10,6 +10,7 @@ import sys
 
 from pathlib import Path
 
+from src import logger
 from src.Config import Config, to_dt
 from src.Simulator import Simulator
 
@@ -18,7 +19,6 @@ def create_logger():
     """
     Create a logger that logs to both file (in debug mode) and terminal (info).
     """
-    logger = logging.getLogger("SeaLiceManagementGame")
     logger.setLevel(logging.DEBUG)
     file_handler = logging.FileHandler("SeaLiceManagementGame.log", mode="w")
     file_handler.setLevel(logging.DEBUG)
@@ -29,8 +29,6 @@ def create_logger():
     file_handler.setFormatter(formatter)
     logger.addHandler(term_handler)
     logger.addHandler(file_handler)
-
-    return logger
 
 
 def generate_argparse_from_config(cfg_path: str, simulation_path: str):
@@ -89,6 +87,9 @@ if __name__ == "__main__":
                         help="(DEBUG) resume the simulator from a given timestep. All configuration variables will be ignored.")
     args, unknown = parser.parse_known_args()
 
+    # set up config class and logger (logging to file and screen.)
+    create_logger()
+
     # set up the data folders
     output_path = Path(args.simulation_path)
     simulation_id = output_path.name
@@ -99,9 +100,6 @@ if __name__ == "__main__":
 
     cfg_basename = Path(args.param_dir).parent
     cfg_path = str(cfg_basename / "config.json")
-
-    # set up config class and logger (logging to file and screen.)
-    logger = create_logger()
 
     # silence if needed
     if args.quiet:
