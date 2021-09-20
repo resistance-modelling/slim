@@ -111,7 +111,7 @@ if __name__ == "__main__":
     config_args = config_parser.parse_args(unknown)
 
     # create the config object
-    cfg = Config(cfg_path, args.param_dir, logger, vars(config_args), args.save_rate)
+    cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate)
 
     # run the simulation
     if args.resume:

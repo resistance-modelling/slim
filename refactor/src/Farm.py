@@ -20,6 +20,7 @@ from mypy_extensions import TypedDict
 
 import numpy as np
 
+from src import logger
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
@@ -46,7 +47,6 @@ class Farm:
         ::param initial_lice_pop: if provided, overrides default generated lice population
         """
 
-        self.logger = cfg.logger
         self.cfg = cfg
 
         farm_cfg = cfg.farms[name]
@@ -81,7 +81,6 @@ class Farm:
 
     def to_json_dict(self, **kwargs):
         filtered_vars = vars(self).copy()
-        del filtered_vars["logger"]
         del filtered_vars["farm_cfg"]
         del filtered_vars["cfg"]
         filtered_vars.update(kwargs)
@@ -175,7 +174,7 @@ class Farm:
         :returns: whether the treatment has been added to at least one cage or not.
         """
 
-        self.logger.debug("\t\tFarm {} applies treatment {}".format(self.name, str(treatment_type)))
+        logger.debug("\t\tFarm {} applies treatment {}".format(self.name, str(treatment_type)))
         if self.available_treatments <= 0:
             return False
 
@@ -206,14 +205,14 @@ class Farm:
         :param can_defect if True, the farm has a choice to not apply treatment
         """
 
-        self.logger.debug("Asking farm {} to treat".format(self.name))
+        logger.debug("Asking farm {} to treat".format(self.name))
 
         # TODO: this is extremely simple.
         p = [self.cfg.defection_proba, 1 - self.cfg.defection_proba]
         want_to_treat = self.cfg.rng.choice([False, True], p=p) if can_defect else True
 
         if not want_to_treat:
-            self.logger.debug("\tFarm {} refuses to treat".format(self.name))
+            logger.debug("\tFarm {} refuses to treat".format(self.name))
             return
 
         # TODO: implement a strategy to pick a treatment of choice
@@ -231,9 +230,9 @@ class Farm:
         """
 
         if cur_date >= self.start_date:
-            self.logger.debug("Updating farm {}".format(self.name))
+            logger.debug("Updating farm {}".format(self.name))
         else:
-            self.logger.debug("Updating farm {} (non-operational)".format(self.name))
+            logger.debug("Updating farm {} (non-operational)".format(self.name))
 
         self.handle_events(cur_date)
 
@@ -361,22 +360,22 @@ class Farm:
         :param cur_date: Current date of the simulation
         """
 
-        self.logger.debug("\tDispersing total offspring Farm {}".format(self.name))
+        logger.debug("\tDispersing total offspring Farm {}".format(self.name))
 
         for farm in farms:
 
             if farm.name == self.name:
-                self.logger.debug("\t\tFarm {}:".format(farm.name))
+                logger.debug("\t\tFarm {}:".format(farm.name))
             else:
-                self.logger.debug("\t\tFarm {} (current):".format(farm.name))
+                logger.debug("\t\tFarm {} (current):".format(farm.name))
 
             # allocate eggs to cages
             farm_arrivals = self.get_farm_allocation(farm, eggs_by_hatch_date)
             arrivals_per_cage = self.get_cage_allocation(len(farm.cages), farm_arrivals)
 
             total, by_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
-            self.logger.debug("\t\t\tTotal new eggs = {}".format(total))
-            self.logger.debug("\t\t\tPer cage distribution = {}".format(by_cage))
+            logger.debug("\t\t\tTotal new eggs = {}".format(total))
+            logger.debug("\t\t\tPer cage distribution = {}".format(by_cage))
 
             # get the arrival time of the egg batch at the allocated
             # destination

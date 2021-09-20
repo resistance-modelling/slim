@@ -33,9 +33,22 @@ class Window(QMainWindow):
         self.progressBar.setRange(0, 0)
         self.progressBar.setValue(0)
 
-    def _createWorker(self):
-        self.loader = QThread()
-        self.worker = SimulatorLoadingWorker()
+    def _createLoaderWorker(self, filename):
+        self.thread = QThread()
+        self.worker = SimulatorLoadingWorker(filename)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+
+        self.thread.start()
+
+        self.loadDumpAction.setEnabled(False)
+        self.thread.finished.connect(
+            lambda: self.loadDumpAction.setEnabled(True)
+        )
+
 
     def _createActions(self):
         self.loadDumpAction = QAction("&Load Dump")
@@ -64,7 +77,8 @@ class Window(QMainWindow):
         filename, _ = QFileDialog.getOpenFileName(
             self, "Load a dump", "../", "Pickle file (*.pickle)")
 
-        # if filename:
+        if filename:
+            self._createLoaderWorker(filename)
 
 
     def about(self):
@@ -78,16 +92,20 @@ class Window(QMainWindow):
     def helpContent(self):
         pass
 
+
 class SimulatorLoadingWorker(QObject):
     finished = pyqtSignal()
 
-    def run(self, filename: str):
-        filename_path = Path(filename)
+    def __init__(self, dump_path: str):
+        super().__init__()
+        self.dump_path = dump_path
+
+    def run(self):
+        filename_path = Path(self.dump_path)
         parent_path = filename_path.parent
         sim_name = filename_path.name[len("simulation_name_"):-len(".pickle")]
-        print(parent_path)
-        print(sim_name)
-        #return Simulator.reload_all_dump()
+        Simulator.reload_all_dump(parent_path, sim_name)
+        self.finished.emit()
 
 
 if __name__ == "__main__":

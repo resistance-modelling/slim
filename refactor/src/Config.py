@@ -98,7 +98,6 @@ class Config(RuntimeConfig):
         self,
         config_file: str,
         simulation_dir: str,
-        logger: logging.Logger,
         override_params: Optional[dict]= None,
         save_rate: Optional[int] = None
     ):
@@ -107,8 +106,6 @@ class Config(RuntimeConfig):
         :param config_file: Path to the environment JSON file
         :type config_file: string
         :param simulation_dir: path to the simulator parameters JSON file
-        :param logger: Logger to be used
-        :type logger: logging.Logger
         :param override_params: options that override the config
         :param save_rate if True
         """
@@ -116,7 +113,6 @@ class Config(RuntimeConfig):
         if override_params is None:
             override_params = dict()
         super().__init__(config_file, override_params)
-        self.logger = logger
 
         # read and set the params
         with open(os.path.join(simulation_dir, "params.json")) as f:
@@ -136,7 +132,7 @@ class Config(RuntimeConfig):
         self.defection_proba = data["defection_proba"]["value"]  # type: float
 
         # farms
-        self.farms = [FarmConfig(farm_data["value"], self.logger)
+        self.farms = [FarmConfig(farm_data["value"])
                       for farm_data in data["farms"]]
         self.nfarms = len(self.farms)
 
@@ -153,17 +149,11 @@ class Config(RuntimeConfig):
 class FarmConfig:
     """Config for individual farm"""
 
-    def __init__(self, data, logger):
+    def __init__(self, data: dict):
         """Create farm configuration
 
         :param data: Dictionary with farm data
-        :type data: dict
-        :param logger: Logger to be used
-        :type logger: logging.Logger
         """
-
-        # set logger
-        self.logger = logger
 
         # set params
         self.num_fish = data["num_fish"]["value"]  # type: int

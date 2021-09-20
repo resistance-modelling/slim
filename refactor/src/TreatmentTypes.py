@@ -39,24 +39,20 @@ class HeterozygousResistance(Enum):
 
 TreatmentResistance = Dict[HeterozygousResistance, float]
 
-
 class TreatmentParams(ABC):
     """
     Abstract class for all the treatments
     """
     name = ""
 
-    def __init__(self, data):
-        self.data = data
-        self.pheno_resistance = self.parse_pheno_resistance(data["pheno_resistance"]["value"])
-        self.price_per_kg = Money(data["price_per_kg"]["value"])
-        self.quadratic_fish_mortality_coeffs = np.array(data["quadratic_fish_mortality_coeffs"]["value"])
+    def __init__(self, payload):
+        self.pheno_resistance = self.parse_pheno_resistance(payload["pheno_resistance"]["value"])
+        self.price_per_kg = Money(payload["price_per_kg"]["value"])
+        self.quadratic_fish_mortality_coeffs = np.array(payload["quadratic_fish_mortality_coeffs"]["value"])
 
-    def __getattr__(self, name):
-        if name in self.data:
-            return self.data[name]["value"]
-        else:  # pragma: no cover
-            raise AttributeError("{} not found in {} parameters".format(name, self.name))
+        self.effect_delay: int = payload["effect_delay"]["value"]
+        self.durability_temp_ratio: float = payload["durability_temp_ratio"]["value"]
+        self.application_period: int = payload["application_period"]["value"]
 
     @staticmethod
     def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:
@@ -72,7 +68,6 @@ class TreatmentParams(ABC):
     @abstractmethod
     def delay(self, average_temperature: float):  # pragma: no cover
         pass
-
 
 class EMB(TreatmentParams):
     name = "EMB"

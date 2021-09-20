@@ -5,6 +5,7 @@ from pathlib import Path
 
 import dill as pickle
 
+from src import logger
 from src.Config import Config
 from src.Farm import Farm
 from src.JSONEncoders import CustomFarmEncoder
@@ -110,6 +111,7 @@ class Simulator:
         """Reload a simulator state from a dump at a given time"""
         states, times = Simulator.reload_all_dump(path, sim_id)
 
+        print(times)
         idx = bisect_left(times, timestep)
         return states[idx]
 
@@ -121,16 +123,17 @@ class Simulator:
         :param cfg: Configuration object holding parameter information.
         :param Organisation: the organisation to work on.
         """
-        self.cfg.logger.info("running simulation, saving to %s", self.output_dir)
+        logger.info("running simulation, saving to %s", self.output_dir)
 
         # create a file to store the population data from our simulation
         if resume and not self.output_dump_path.exists():
-            self.cfg.logger.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")
+            logger.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")
 
-        data_file = (self.output_dump_path).open(mode="wb")
+        if self.cfg.save_rate:
+            data_file = (self.output_dump_path).open(mode="wb")
 
         while self.cur_day <= self.cfg.end_date:
-            self.cfg.logger.debug("Current date = %s", self.cur_day)
+            logger.debug("Current date = %s", self.cur_day)
             self.organisation.step(self.cur_day)
             self.cur_day += dt.timedelta(days=1)
 
@@ -138,4 +141,5 @@ class Simulator:
             if self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0:
                 pickle.dump(self, data_file)
 
-        data_file.close()
+        if self.cfg.save_rate:
+            data_file.close()

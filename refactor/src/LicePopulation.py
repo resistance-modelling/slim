@@ -9,7 +9,7 @@ from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, TypeVar, Gene
 import iteround
 import numpy as np
 
-from src.Config import Config
+from src import logger
 from src.QueueTypes import pop_from_queue
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -158,7 +158,7 @@ GenoTreatmentDistrib = Dict[GenoKey, GenoTreatmentValue]
 
 
 # See https://stackoverflow.com/a/7760938
-class LicePopulation(dict, MutableMapping[LifeStage, int]):
+class LicePopulation(MutableMapping[LifeStage, int]):
     """
     Wrapper to keep the global population and genotype information updated
     This is definitely a convoluted way to do this, but I wanted to memoise as much as possible.
@@ -166,27 +166,30 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
 
-    def __init__(self, initial_population: GrossLiceDistrib, geno_data: GenoLifeStageDistrib, cfg: Config):
-        super().__init__()
+    def __init__(self, geno_data: GenoLifeStageDistrib, generic_ratios):
+        """
+        :param geno_data a Genotype distribution
+        :param generic_ratios a config to use
+        """
+        self._cache = dict()
         self.geno_by_lifestage = GenotypePopulation(self, geno_data)
-        self.genetic_ratios = cfg.genetic_ratios
-        self.logger = cfg.logger
-        self._busy_dams = PriorityQueue()  # type: PriorityQueue[DamAvailabilityBatch]
-        for k, v in initial_population.items():
-            super().__setitem__(k, v)
+        self.genetic_ratios = generic_ratios
+        self._busy_dams: PriorityQueue[DamAvailabilityBatch] = PriorityQueue()
+        for stage, distrib in geno_data.items():
+            self._cache[stage] = distrib.gross
 
     def __setitem__(self, stage: LifeStage, value: int):
         # If one attempts to make gross modifications to the population these will be repartitioned according to the
         # current genotype information.
-        old_value = self[stage]
+        old_value = self._cache[stage]
         if old_value == 0:
             if value > 0:
-                self.logger.warning(
+                logger.warning(
                     f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
             self.geno_by_lifestage[stage] = GenericGenoDistrib(self.genetic_ratios).normalise_to(value)
         else:
             if value < 0:
-                self.logger.warning(
+                logger.warning(
                     f"Trying to assign population stage {stage} a negative value. It will be truncated to zero, but this probably means an invariant was broken.")
             elif value == old_value:
                 return
@@ -195,8 +198,26 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         if stage == "L5f":
             self.__rescale_busy_dams(round(self.busy_dams.gross * value / old_value) if old_value > 0 else 0)
 
+    def __getitem__(self, stage: LifeStage):
+        return self._cache[stage]
+
+    def __delitem__(self, stage: LifeStage):
+        raise NotImplementedError()
+
+    def __iter__(self):
+        return iter(self._cache)
+
+    def __len__(self):
+        return len(self._cache)
+
+    def __repr__(self):
+        return repr(self._cache)
+
+    def __str__(self):
+        return f"LicePopulation({str(self._cache)})"
+
     def raw_update_value(self, stage: LifeStage, value: int):
-        super().__setitem__(stage, value)
+        self._cache[stage] = value
 
     def clear_busy_dams(self):
         self._busy_dams = PriorityQueue()
@@ -277,8 +298,7 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
         # make sure that self.busy_dams <= self.geno_by_lifestage["L5f"]
         offset = self.busy_dams - self.geno_by_lifestage["L5f"]
 
-        #self.logger.debug(f"\t\t\t In _clip_dams_to_stage: L5f is {self.geno_by_lifestage['L5f']}")
-        #self.logger.debug(f"\t\t\t In _clip_dams_to_stage: L5f is {self.geno_by_lifestage['L5f']}")
+        #logger.debug(f"\t\t\t In _clip_dams_to_stage: L5f is {self.geno_by_lifestage['L5f']}")
 
         for allele in offset:
             off = offset[allele]
@@ -296,20 +316,35 @@ class LicePopulation(dict, MutableMapping[LifeStage, int]):
     def get_empty_geno_distrib() -> GenoLifeStageDistrib:
         return {stage: GenoDistrib() for stage in LicePopulation.lice_stages}
 
+    def to_json_dict(self):
+        return self._cache
 
-class GenotypePopulation(Dict[LifeStage, GenericGenoDistrib]):
-    def __init__(self, gross_lice_population: LicePopulation, geno_data: GenoLifeStageDistrib):
-        super().__init__()
+
+class GenotypePopulation(MutableMapping[LifeStage, GenericGenoDistrib]):
+    def __init__(
+        self,
+        gross_lice_population: LicePopulation,
+        geno_data: GenoLifeStageDistrib
+    ):
+        """
+        A GenotypePopulation is a mapping between the life stage and the actual
+        population rather than a gross projection.
+
+        :param gross_lice_population: the parent LicePopulation to update
+        :param geno_data: the initial geno population
+        """
+        self._store:  Dict[LifeStage, GenotypePopulation] = {}
+
         self._lice_population = gross_lice_population
         for k, v in geno_data.items():
-            super().__setitem__(k, v.copy())
+            self._store[k] = v.copy()
 
     def __setitem__(self, stage: LifeStage, value: GenoDistrib):
         # update the value and the gross population accordingly
         value.truncate_negatives()
         old_value = self[stage].copy()
         old_value_sum = self._lice_population[stage]
-        super().__setitem__(stage, value.copy())
+        self._store[stage] = value.copy()
         value_sum = value.gross
         self._lice_population.raw_update_value(stage, value_sum)
 
@@ -328,7 +363,24 @@ class GenotypePopulation(Dict[LifeStage, GenericGenoDistrib]):
                     geno_distrib += delta_geno
 
         self._lice_population._clip_dams_to_stage()
-        pass
+
+    def __getitem__(self, stage: LifeStage):
+        return self._store[stage]
+
+    def __delitem__(self, stage: LifeStage):
+        raise NotImplementedError()
+
+    def __iter__(self):
+        return iter(self._store)
+
+    def __len__(self):
+        return len(self._store)
+
+    def __repr__(self):
+        return repr(self._store)
+
+    def __str__(self):
+        return f"GenericGenoDistrib({str(self._store)})"
 
     def to_json_dict(self):
         return {k: v.to_json_dict() for k, v in self.items()}

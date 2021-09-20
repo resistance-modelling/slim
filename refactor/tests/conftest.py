@@ -1,10 +1,8 @@
-import logging
 import numpy as np
 import pytest
 import datetime
 
 from src.Config import Config
-from src.Farm import Farm
 from src.Simulator import Organisation
 from src.QueueTypes import EggBatch, DamAvailabilityBatch
 from src.LicePopulation import LicePopulation, GenoDistrib
@@ -18,7 +16,7 @@ def initial_lice_population():
 @pytest.fixture
 def farm_config():
     np.random.seed(0)
-    cfg = Config("config_data/config.json", "config_data/Fyne", logging.getLogger('dummy'))
+    cfg = Config("config_data/config.json", "config_data/Fyne")
     return cfg
 
 
@@ -141,4 +139,4 @@ def planctonic_only_population(first_cage):
     geno = {stage: GenoDistrib({("a",): 0, ("A", "a"): 0, ("A",): 0}) for stage in lice_pop.keys()}
     geno["L1"][("a",)] = 100
     geno["L2"][("a",)] = 200
-    return LicePopulation(lice_pop, geno, first_cage.cfg)
+    return LicePopulation(geno, first_cage.cfg.genetic_ratios)
