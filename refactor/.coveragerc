@@ -2,6 +2,7 @@
 omit =
     tests/*
     src/SeaLiceMgmt.py
+    src/SeaLiceMgmtGUI.py
     src/__init__.py
     src/surveys/*
 
