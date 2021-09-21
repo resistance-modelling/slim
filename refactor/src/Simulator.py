@@ -85,6 +85,7 @@ class Simulator:
         self.output_dump_path = self.get_simulation_path(output_dir, sim_id)
         self.cur_day = cfg.start_date
         self.organisation = Organisation(cfg)
+        self.payoff = Money()
 
     @staticmethod
     def get_simulation_path(path: Path, sim_id: str):
@@ -143,7 +144,7 @@ class Simulator:
 
         while self.cur_day <= self.cfg.end_date:
             logger.info("Current date = %s", self.cur_day)
-            self.organisation.step(self.cur_day)
+            self.payoff += self.organisation.step(self.cur_day)
 
             # Save the model snapshot
             if self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0:

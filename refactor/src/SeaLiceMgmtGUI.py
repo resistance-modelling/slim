@@ -4,14 +4,16 @@ from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
-from PyQt5 import QtGui, QtWidgets
-from PyQt5.QtCore import QThread, pyqtSignal, QObject, QTimer, QSettings
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QMenu,
-                             QAction, QFileDialog, QMessageBox, QGridLayout, QProgressBar)
 import pyqtgraph as pg
+from PyQt5 import QtGui, QtWidgets
+from PyQt5.QtCore import QThread, pyqtSignal, QObject, QTimer, QSettings, Qt
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
+                             QAction, QFileDialog, QMessageBox, QGridLayout, QProgressBar, QSplitter, QCheckBox,
+                             QGroupBox, QVBoxLayout)
 
 from src.LicePopulation import LicePopulation
 from src.Simulator import Simulator
+
 
 class Window(QMainWindow):
     def __init__(self, parent=None):
@@ -21,8 +23,6 @@ class Window(QMainWindow):
         self.times: Optional[List[dt.datetime]] = None
 
         self._createUI()
-
-        # KeyboardInterrupt trick
 
     def _createUI(self):
         self.setWindowTitle("SLIM GUI")
@@ -37,7 +37,8 @@ class Window(QMainWindow):
         self.wd.setLayout(mainLayout)
 
 
-        mainLayout.addWidget(self.plot, 0, 0, 3, 1)
+        mainLayout.addWidget(self.plotSplitter, 0, 0, 2, 1)
+        mainLayout.addWidget(self.plotButtonGroup, 0, 1)
         mainLayout.addWidget(self.progressBar, 2, 0, 1, 2)
 
         #mainLayout.setRowStretch(1, 1)
@@ -52,15 +53,32 @@ class Window(QMainWindow):
     def _createWidgets(self):
         self.wd = QtWidgets.QWidget(self)
         self.setCentralWidget(self.wd)
-        self.plot = pg.PlotWidget()
 
-        self.plot.addLegend()
+        ## PLOTS
+        self.licePopulationPlot = pg.PlotWidget(title="Lice Population")
+        self.payoffPlot = pg.PlotWidget(title="Cumulated payoff")
+
+        self.licePopulationPlot.addLegend()
         # TODO: use a proper color palette from colorcet or matplotlib
         colours = dict(zip(LicePopulation.lice_stages, ['r', 'g', 'b', "c", 'w', 'y']))
-        self.stages_to_curve = {stage: self.plot.plot(name=stage, pen=colours[stage]) for stage in LicePopulation.lice_stages}
+        self.stages_to_curve = {stage: self.licePopulationPlot.plot(name=stage, pen=colours[stage]) for stage in LicePopulation.lice_stages}
 
-        self.plot.showGrid(x=True, y=True)
+        self.licePopulationPlot.showGrid(x=True, y=True)
+        self.payoffPlot.showGrid(x=True, y=True)
 
+        self.plotSplitter = QSplitter(self.wd)
+        self.plotSplitter.setOrientation(Qt.Vertical)
+        self.plotSplitter.addWidget(self.licePopulationPlot)
+        self.plotSplitter.addWidget(self.payoffPlot)
+
+        # Pane on the right
+        self.plotButtonGroup = QGroupBox("Plot options", self)
+        self.plotButtonGroupLayout = QVBoxLayout()
+        self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information(TODO)", self)
+        self.plotButtonGroupLayout.addWidget(self.showDetailedGenotypeCheckBox)
+        self.plotButtonGroup.setLayout(self.plotButtonGroupLayout)
+
+        ## PROGRESS BAR
         self.progressBar = QProgressBar()
         self.progressBar.setRange(0, 1)
 
@@ -102,20 +120,19 @@ class Window(QMainWindow):
 
     def _updatePlot(self):
         # TODO: not suited for real-time
-
-        # Show only one farm
-
+        # TODO: only showing one farm here
         population_data = []
         for snapshot in self.states:
             population_data.append(snapshot.organisation.farms[0].lice_population)
 
         # render per stage
-        print(population_data)
-        stages = {k: np.array([population[k] for population in population_data]) for k in LicePopulation.lice_stages}
+        stages = {k: np.array([population.get(k, 0) for population in population_data]) for k in LicePopulation.lice_stages}
 
         for k, v in stages.items():
             self.stages_to_curve[k].setData(v)
 
+        payoffs = [float(state.payoff) for state in self.states]
+        self.payoffPlot.plot(payoffs)
 
     def _createActions(self):
         self.loadDumpAction = QAction("&Load Dump")
@@ -206,7 +223,6 @@ class SimulatorLoadingWorker(QObject):
         self.dump_path = dump_path
 
     def run(self):
-        print(self.dump_path)
         filename_path = Path(self.dump_path)
         parent_path = filename_path.parent
         sim_name = filename_path.name[len("simulation_name_"):-len(".pickle")]
@@ -219,6 +235,7 @@ if __name__ == "__main__":
     win = Window()
     win.show()
 
+    # KeyboardInterrupt trick
     timer = QTimer()
     timer.timeout.connect(lambda: None)
     timer.start(100)
