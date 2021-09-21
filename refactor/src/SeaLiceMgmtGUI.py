@@ -42,10 +42,10 @@ class Window(QMainWindow):
         #mainLayout.setRowStretch(1, 1)
         #mainLayout.setRowStretch(2, 1)
 
+        self._createSettings()
         self._createActions()
         self._connectActions()
         self._createMenuBar()
-        self._createSettings()
 
 
     def _createWidgets(self):
@@ -127,7 +127,7 @@ class Window(QMainWindow):
 
     def _updateRecentFilesActions(self):
         # Recent files
-        recent_options = self.recentFilesList
+        recent_options = self.recentFilesList()
         self.recentFilesActions = []
         if not recent_options:
             return
@@ -145,12 +145,10 @@ class Window(QMainWindow):
         if new_recent_options != recent_options:
             self.settings.setValue("recentFileList", new_recent_options)
 
-    @property
     def recentFilesList(self):
-        return self.settings.value("recentFileList", "str") or []
+        return self.settings.value("recentFileList", type=str) or []
 
-    @recentFilesList.setter
-    def recentFilesList(self, value):
+    def setRecentFilesList(self, value):
         self.settings.setValue("recentFileList", value)
         self._updateRecentFilesActions()
 
@@ -159,9 +157,9 @@ class Window(QMainWindow):
             self, "Load a dump", "", "Pickle file (*.pickle)")
 
         if filename:
-            recentFiles = self.recentFilesList
+            recentFiles = self.recentFilesList()
             if filename not in recentFiles:
-                self.recentFilesList = recentFiles + [filename]
+                self.setRecentFilesList(recentFiles + [filename])
 
             self._createLoaderWorker(filename)
 
