@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QMenu,
                              QAction, QFileDialog, QMessageBox, QGridLayout, QProgressBar)
 import pyqtgraph as pg
 
+from src.LicePopulation import LicePopulation
 from src.Simulator import Simulator
 
 class Window(QMainWindow):
@@ -53,10 +54,12 @@ class Window(QMainWindow):
         self.setCentralWidget(self.wd)
         self.plot = pg.PlotWidget()
 
-        # a scientific lorem ipsum
-        xs = np.linspace(-100, 100, 1000)
-        ys = np.sin(xs) / xs
-        self.plot.plot(ys, pen=(255, 255, 255, 200))
+        self.plot.addLegend()
+        # TODO: use a proper color palette from colorcet or matplotlib
+        colours = dict(zip(LicePopulation.lice_stages, ['r', 'g', 'b', "c", 'w', 'y']))
+        self.stages_to_curve = {stage: self.plot.plot(name=stage, pen=colours[stage]) for stage in LicePopulation.lice_stages}
+
+        self.plot.showGrid(x=True, y=True)
 
         self.progressBar = QProgressBar()
         self.progressBar.setRange(0, 1)
@@ -75,7 +78,8 @@ class Window(QMainWindow):
     def _displaySimulatorData(self, states: List[Simulator], times: List[dt.datetime]):
         self.states = states
         self.times = times
-        print(f"Successfully loaded {states}")
+
+        self._updatePlot()
 
     def _createLoaderWorker(self, filename):
         # TODO: is there a valid reason why we shouldn't make worker a QThread subclass?
@@ -95,6 +99,22 @@ class Window(QMainWindow):
         self.thread.finished.connect(
             lambda: self._progressBarComplete()
         )
+
+    def _updatePlot(self):
+        # TODO: not suited for real-time
+
+        # Show only one farm
+
+        population_data = []
+        for snapshot in self.states:
+            population_data.append(snapshot.organisation.farms[0].lice_population)
+
+        # render per stage
+        print(population_data)
+        stages = {k: np.array([population[k] for population in population_data]) for k in LicePopulation.lice_stages}
+
+        for k, v in stages.items():
+            self.stages_to_curve[k].setData()
 
 
     def _createActions(self):
@@ -127,7 +147,7 @@ class Window(QMainWindow):
 
     def _updateRecentFilesActions(self):
         # Recent files
-        recent_options = self.recentFilesList()
+        recent_options = self.recentFilesList
         self.recentFilesActions = []
         if not recent_options:
             return
@@ -138,17 +158,19 @@ class Window(QMainWindow):
             filename_as_path = Path(option)
             if filename_as_path.exists():
                 new_action = QAction(f"&{idx}: {option}", self)
-                new_action.trigger.connect(lambda filename: self._createLoaderWorker(filename))
+                new_action.triggered.connect(lambda: self._createLoaderWorker(option))
                 new_recent_options.append(option)
                 self.recentFilesActions.append(new_action)
 
         if new_recent_options != recent_options:
             self.settings.setValue("recentFileList", new_recent_options)
 
+    @property
     def recentFilesList(self):
         return self.settings.value("recentFileList", type=str) or []
 
-    def setRecentFilesList(self, value):
+    @recentFilesList.setter
+    def recentFilesList(self, value):
         self.settings.setValue("recentFileList", value)
         self._updateRecentFilesActions()
 
@@ -157,9 +179,9 @@ class Window(QMainWindow):
             self, "Load a dump", "", "Pickle file (*.pickle)")
 
         if filename:
-            recentFiles = self.recentFilesList()
+            recentFiles = self.recentFilesList
             if filename not in recentFiles:
-                self.setRecentFilesList(recentFiles + [filename])
+                self.recentFilesList = recentFiles + [filename]
 
             self._createLoaderWorker(filename)
 
@@ -184,6 +206,7 @@ class SimulatorLoadingWorker(QObject):
         self.dump_path = dump_path
 
     def run(self):
+        print(self.dump_path)
         filename_path = Path(self.dump_path)
         parent_path = filename_path.parent
         sim_name = filename_path.name[len("simulation_name_"):-len(".pickle")]

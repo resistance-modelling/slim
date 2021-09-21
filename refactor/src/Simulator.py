@@ -109,6 +109,13 @@ class Simulator:
 
         return states, times
 
+    def dump_as_pd(self, states):
+        """
+        Convert a dump into a pandas dataframe
+        """
+        # TODO what could a good dataframe look like?
+        pass
+
     @staticmethod
     def reload(path: Path, sim_id: str, timestep: dt.datetime):
         """Reload a simulator state from a dump at a given time"""

@@ -216,6 +216,9 @@ class LicePopulation(MutableMapping[LifeStage, int]):
     def __str__(self):
         return f"LicePopulation({str(self._cache)})"
 
+    def as_dict(self):
+        return self._cache
+
     def raw_update_value(self, stage: LifeStage, value: int):
         self._cache[stage] = value
 

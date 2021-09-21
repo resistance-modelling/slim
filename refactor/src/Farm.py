@@ -102,6 +102,10 @@ class Farm:
     def num_fish(self):
         return sum(cage.num_fish for cage in self.cages)
 
+    @property
+    def lice_population(self):
+        return dict(sum([Counter(cage.lice_population.as_dict()) for cage in self.cages], Counter()))
+
     def initialise_temperatures(self, temperatures: Dict[str, LocationTemps]) -> np.ndarray:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at
