@@ -114,7 +114,7 @@ class Window(QMainWindow):
         stages = {k: np.array([population[k] for population in population_data]) for k in LicePopulation.lice_stages}
 
         for k, v in stages.items():
-            self.stages_to_curve[k].setData()
+            self.stages_to_curve[k].setData(v)
 
 
     def _createActions(self):
