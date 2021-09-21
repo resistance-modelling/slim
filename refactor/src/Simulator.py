@@ -137,11 +137,11 @@ class Simulator:
         while self.cur_day <= self.cfg.end_date:
             logger.info("Current date = %s", self.cur_day)
             self.organisation.step(self.cur_day)
-            self.cur_day += dt.timedelta(days=1)
 
             # Save the model snapshot
             if self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0:
                 pickle.dump(self, data_file)
+            self.cur_day += dt.timedelta(days=1)
 
         if self.cfg.save_rate:
             data_file.close()
