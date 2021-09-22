@@ -61,6 +61,7 @@ class Window(QMainWindow):
         self.licePopulationPlot.addLegend()
         # TODO: use a proper color palette from colorcet or matplotlib
         colours = dict(zip(LicePopulation.lice_stages, ['r', 'g', 'b', "c", 'w', 'y']))
+
         self.stages_to_curve = {stage: self.licePopulationPlot.plot(name=stage, pen=colours[stage]) for stage in LicePopulation.lice_stages}
 
         self.licePopulationPlot.showGrid(x=True, y=True)
@@ -75,6 +76,8 @@ class Window(QMainWindow):
         self.plotButtonGroup = QGroupBox("Plot options", self)
         self.plotButtonGroupLayout = QVBoxLayout()
         self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information(TODO)", self)
+
+        self.showDetailedGenotypeCheckBox.stateChanged.connect(lambda _: self._updatePlot())
         self.plotButtonGroupLayout.addWidget(self.showDetailedGenotypeCheckBox)
         self.plotButtonGroup.setLayout(self.plotButtonGroupLayout)
 
@@ -118,9 +121,19 @@ class Window(QMainWindow):
             lambda: self._progressBarComplete()
         )
 
+    def _cleanPlot(self):
+        self.payoffPlot.clear()
+        for curve in self.stages_to_curve.values():
+            curve.clear()
+
     def _updatePlot(self):
         # TODO: not suited for real-time
         # TODO: only showing one farm here
+
+        self._cleanPlot()
+        if self.states is None:
+            return
+
         population_data = []
         for snapshot in self.states:
             population_data.append(snapshot.organisation.farms[0].lice_population)
@@ -136,8 +149,8 @@ class Window(QMainWindow):
 
     def _createActions(self):
         self.loadDumpAction = QAction("&Load Dump")
-        self.helpContentAction = QAction("&Help Content", self)
         self.aboutAction = QAction("&About", self)
+        self.showDetailedGenotypeAction = QAction(self)
 
         self._updateRecentFilesActions()
 
@@ -156,7 +169,6 @@ class Window(QMainWindow):
 
         # Help menu
         helpMenu = QMenu("&Help", self)
-        helpMenu.addAction(self.helpContentAction)
         helpMenu.addAction(self.aboutAction)
 
         menuBar.addMenu(fileMenu)
