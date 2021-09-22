@@ -4,32 +4,21 @@ a given body of water.
 See README.md for details.
 """
 import argparse
-import datetime as dt
 import json
 import logging
 import sys
 
 from pathlib import Path
 
-from src.Config import Config
-from src.Organisation import Organisation
-from src.JSONEncoders import CustomFarmEncoder
-
-
-def setup(data_folder, sim_id):
-    """
-    Set up the folders and files to hold the output of the simulation
-    :param data_folder: the folder where the output will bbe saved
-    :return: None
-    """
-    lice_counts = data_folder / "lice_counts_{}.txt".format(sim_id)
+from src import logger
+from src.Config import Config, to_dt
+from src.Simulator import Simulator
 
 
 def create_logger():
     """
     Create a logger that logs to both file (in debug mode) and terminal (info).
     """
-    logger = logging.getLogger("SeaLiceManagementGame")
     logger.setLevel(logging.DEBUG)
     file_handler = logging.FileHandler("SeaLiceManagementGame.log", mode="w")
     file_handler.setLevel(logging.DEBUG)
@@ -41,50 +30,6 @@ def create_logger():
     logger.addHandler(term_handler)
     logger.addHandler(file_handler)
 
-    return logger
-
-
-def initialise(data_folder, sim_id, cfg):
-    """
-    Create the Organisation(s) data files that we will need.
-    For now only one organisation can run at any time.
-    :return: Organisation
-    """
-
-    # set up the data files, deleting them if they already exist
-    lice_counts = data_folder / "lice_counts_{}.txt".format(sim_id)
-    lice_counts.unlink(missing_ok=True)
-
-    return Organisation(cfg)
-
-
-def run_model(path: Path, sim_id: str, cfg: Config, org: Organisation):
-    """Perform the simulation by running the model.
-
-    :param path: Path to store the results in
-    :param sim_id: Simulation name
-    :param cfg: Configuration object holding parameter information.
-    :param Organisation: the organisation to work on.
-    """
-    cfg.logger.info("running simulation, saving to %s", path)
-    cur_date = cfg.start_date
-
-    # create a file to store the population data from our simulation
-    data_file = path / "simulation_data_{}.json".format(sim_id)
-    data_file.unlink(missing_ok=True)
-    data_file = (data_file).open(mode="a")
-
-    while cur_date <= cfg.end_date:
-        cfg.logger.debug("Current date = %s", cur_date)
-        cur_date += dt.timedelta(days=1)
-        org.step(cur_date)
-
-        # Save the data
-        # TODO: log as json, serialise as pickle
-        data_file.write(org.to_json())
-        data_file.write("\n")
-        cfg.logger.info(repr(org))
-    data_file.close()
 
 def generate_argparse_from_config(cfg_path: str, simulation_path: str):
     parser = argparse.ArgumentParser(description="Sea lice simulation")
@@ -133,10 +78,19 @@ if __name__ == "__main__":
                         help="Don't log to console or file.",
                         default=False,
                         action="store_true")
+    parser.add_argument("--save-rate",
+                        help="Interval to dump the simulation state. Useful for visualisation and debugging. Warning: saving a run is a slow operation.",
+                        type=int,
+                        required=False)
+    parser.add_argument("--resume",
+                        type=str,
+                        help="(DEBUG) resume the simulator from a given timestep. All configuration variables will be ignored.")
     args, unknown = parser.parse_known_args()
 
-    # set up the data folders
+    # set up config class and logger (logging to file and screen.)
+    create_logger()
 
+    # set up the data folders
     output_path = Path(args.simulation_path)
     simulation_id = output_path.name
     output_basename = output_path.parent
@@ -147,9 +101,6 @@ if __name__ == "__main__":
     cfg_basename = Path(args.param_dir).parent
     cfg_path = str(cfg_basename / "config.json")
 
-    # set up config class and logger (logging to file and screen.)
-    logger = create_logger()
-
     # silence if needed
     if args.quiet:
         logger.addFilter(lambda record: False)
@@ -158,8 +109,12 @@ if __name__ == "__main__":
     config_args = config_parser.parse_args(unknown)
 
     # create the config object
-    cfg = Config(cfg_path, args.param_dir, logger, vars(config_args))
+    cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate)
 
     # run the simulation
-    org = initialise(output_folder, simulation_id, cfg)
-    run_model(output_folder, simulation_id, cfg, org)
+    if args.resume:
+        resume_time = to_dt(args.resume)
+        sim = Simulator.reload(output_folder, simulation_id, resume_time)  # type: Simulator
+    else:
+        sim = Simulator(output_folder, simulation_id, cfg)
+    sim.run_model()

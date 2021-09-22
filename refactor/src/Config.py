@@ -1,8 +1,9 @@
+import logging
 from dataclasses import dataclass
 import datetime as dt
 import json
 import os
-from typing import Tuple, Dict, TYPE_CHECKING
+from typing import Tuple, Dict, Optional, TYPE_CHECKING
 
 
 import numpy as np
@@ -93,21 +94,25 @@ class RuntimeConfig:
 class Config(RuntimeConfig):
     """One-stop class to hold constants, farm setup and other settings."""
 
-    def __init__(self, config_file, simulation_dir, logger, override_params=None):
-        """@DynamicAttrs Read the configuration from files
+    def __init__(
+        self,
+        config_file: str,
+        simulation_dir: str,
+        override_params: Optional[dict]= None,
+        save_rate: Optional[int] = None
+    ):
+        """Read the configuration from files
 
         :param config_file: Path to the environment JSON file
         :type config_file: string
         :param simulation_dir: path to the simulator parameters JSON file
-        :param logger: Logger to be used
-        :type logger: logging.Logger
         :param override_params: options that override the config
+        :param save_rate if True
         """
 
         if override_params is None:
             override_params = dict()
         super().__init__(config_file, override_params)
-        self.logger = logger
 
         # read and set the params
         with open(os.path.join(simulation_dir, "params.json")) as f:
@@ -127,12 +132,15 @@ class Config(RuntimeConfig):
         self.defection_proba = data["defection_proba"]["value"]  # type: float
 
         # farms
-        self.farms = [FarmConfig(farm_data["value"], self.logger)
+        self.farms = [FarmConfig(farm_data["value"])
                       for farm_data in data["farms"]]
         self.nfarms = len(self.farms)
 
         self.interfarm_times = np.loadtxt(os.path.join(simulation_dir, "interfarm_time.csv"), delimiter=",")
         self.interfarm_probs = np.loadtxt(os.path.join(simulation_dir, "interfarm_prob.csv"), delimiter=",")
+
+        # driver-specific settings
+        self.save_rate = save_rate
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
         return [self.emb][treatment_type.value]
@@ -141,17 +149,11 @@ class Config(RuntimeConfig):
 class FarmConfig:
     """Config for individual farm"""
 
-    def __init__(self, data, logger):
+    def __init__(self, data: dict):
         """Create farm configuration
 
         :param data: Dictionary with farm data
-        :type data: dict
-        :param logger: Logger to be used
-        :type logger: logging.Logger
         """
-
-        # set logger
-        self.logger = logger
 
         # set params
         self.num_fish = data["num_fish"]["value"]  # type: int
