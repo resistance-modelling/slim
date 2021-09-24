@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+from colorcet import glasbey_dark
 import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtWidgets
@@ -58,11 +59,12 @@ class Window(QMainWindow):
         self.licePopulationPlot = pg.PlotWidget(title="Lice Population")
         self.payoffPlot = pg.PlotWidget(title="Cumulated payoff")
 
-        self.licePopulationPlot.addLegend()
-        # TODO: use a proper color palette from colorcet or matplotlib
-        colours = dict(zip(LicePopulation.lice_stages, ['r', 'g', 'b', "c", 'w', 'y']))
+        self.licePopulationLegend = None
 
-        self.stages_to_curve = {stage: self.licePopulationPlot.plot(name=stage, pen=colours[stage]) for stage in LicePopulation.lice_stages}
+
+        # We cannot know the genotypes in advance
+        self.geno_to_curve = {}
+        self.stages_to_curve = {}
 
         self.licePopulationPlot.showGrid(x=True, y=True)
         self.payoffPlot.showGrid(x=True, y=True)
@@ -75,7 +77,7 @@ class Window(QMainWindow):
         # Pane on the right
         self.plotButtonGroup = QGroupBox("Plot options", self)
         self.plotButtonGroupLayout = QVBoxLayout()
-        self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information(TODO)", self)
+        self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information", self)
 
         self.showDetailedGenotypeCheckBox.stateChanged.connect(lambda _: self._updatePlot())
         self.plotButtonGroupLayout.addWidget(self.showDetailedGenotypeCheckBox)
@@ -125,6 +127,11 @@ class Window(QMainWindow):
         self.payoffPlot.clear()
         for curve in self.stages_to_curve.values():
             curve.clear()
+        for curve in self.geno_to_curve.values():
+            curve.clear()
+
+        if self.licePopulationLegend:
+            self.licePopulationLegend.clear()
 
     def _updatePlot(self):
         # TODO: not suited for real-time
@@ -134,15 +141,30 @@ class Window(QMainWindow):
         if self.states is None:
             return
 
-        population_data = []
-        for snapshot in self.states:
-            population_data.append(snapshot.organisation.farms[0].lice_population)
+        self.licePopulationLegend = self.licePopulationPlot.addLegend()
 
-        # render per stage
-        stages = {k: np.array([population.get(k, 0) for population in population_data]) for k in LicePopulation.lice_stages}
+        if self.showDetailedGenotypeCheckBox.isChecked():
+            df = Simulator.dump_as_pd(self.states, self.times).reset_index()
 
-        for k, v in stages.items():
-            self.stages_to_curve[k].setData(v)
+            first_farm_df = df[df["farm_name"] == "farm_0"]
+            allele_names = ["a", "A", "Aa"] # TODO: extract from column names
+            colours = dict(zip(allele_names, glasbey_dark[:len(allele_names)]))
+
+            allele_data = {allele: first_farm_df[allele].to_numpy() for allele in allele_names}
+            self.geno_to_curve = {allele_name: self.licePopulationPlot.plot(stage_value, name=allele_name, pen=colours[allele_name])
+                                  for allele_name, stage_value in allele_data.items()}
+        else:
+            population_data = []
+            for snapshot in self.states:
+                population_data.append(snapshot.organisation.farms[0].lice_population)
+
+            # render per stage
+            stages = {k: np.array([population.get(k, 0) for population in population_data]) for k in LicePopulation.lice_stages}
+
+            # TODO: use a proper color palette from colorcet or matplotlib
+            colours = dict(zip(LicePopulation.lice_stages, glasbey_dark[:len(stages)]))
+            self.stages_to_curve = {stage: self.licePopulationPlot.plot(stages[stage], name=stage, pen=colours[stage])
+                                    for stage in LicePopulation.lice_stages}
 
         payoffs = [float(state.payoff) for state in self.states]
         self.payoffPlot.plot(payoffs)

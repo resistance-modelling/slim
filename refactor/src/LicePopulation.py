@@ -387,3 +387,6 @@ class GenotypePopulation(MutableMapping[LifeStage, GenericGenoDistrib]):
 
     def to_json_dict(self):
         return {k: v.to_json_dict() for k, v in self.items()}
+
+    def as_dict(self):
+        return self._store

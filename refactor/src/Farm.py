@@ -12,7 +12,7 @@ from __future__ import annotations
 import copy
 import datetime as dt
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 from queue import PriorityQueue
 from typing import Dict, List, Optional, Tuple
 
@@ -104,8 +104,20 @@ class Farm:
 
     @property
     def lice_population(self):
+        """Return the overall lice population in a farm"""
         return dict(sum([Counter(cage.lice_population.as_dict()) for cage in self.cages], Counter()))
 
+    @property
+    def lice_genomics(self):
+        """Return the overall lice population indexed by geno distribution and stage."""
+
+        genomics = defaultdict(lambda: GenericGenoDistrib())
+        for cage in self.cages:
+            for stage, value in cage.lice_population.geno_by_lifestage.as_dict().items():
+                genomics[stage] = genomics[stage] + value
+
+
+        return {k: v.to_json_dict() for k, v in genomics.items()}
     def initialise_temperatures(self, temperatures: Dict[str, LocationTemps]) -> np.ndarray:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at

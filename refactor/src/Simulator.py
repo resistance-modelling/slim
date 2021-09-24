@@ -1,14 +1,18 @@
+from __future__ import annotations
 import datetime as dt
 import json
 from bisect import bisect_left
 from pathlib import Path
+from typing import Tuple, List
 
 import dill as pickle
+import pandas as pd
 
 from src import logger
 from src.Config import Config
 from src.Farm import Farm
 from src.JSONEncoders import CustomFarmEncoder
+from src.LicePopulation import GenericGenoDistrib
 from src.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
 from src.TreatmentTypes import Money
 
@@ -78,6 +82,7 @@ class Organisation:
 
 
 class Simulator:
+
     def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
         self.output_dir = output_dir
         self.sim_id = sim_id
@@ -110,12 +115,32 @@ class Simulator:
 
         return states, times
 
-    def dump_as_pd(self, states):
+    @staticmethod
+    def dump_as_pd(states: List[Simulator], times: List[dt.datetime]) -> pd.DataFrame:
         """
         Convert a dump into a pandas dataframe
+
+        Format: index is (timestamp, farm)
+        Columns are: "L1" ... "L5f" (nested dict for now...), "a", "A", "Aa" (ints)
         """
-        # TODO what could a good dataframe look like?
-        pass
+
+        farm_data = {}
+        # farms = states[0].organisation.farms
+        for state, time in zip(states, times):
+            for farm in state.organisation.farms:
+                farm_data[(time, "farm_" + str(farm.name))] =  farm.lice_genomics
+
+        dataframe = pd.DataFrame.from_dict(farm_data, orient='index')
+
+        # extract cumulative geno info regardless of the stage
+        def aggregate_geno(data):
+            return sum([GenericGenoDistrib(stage) for stage in data], GenericGenoDistrib())
+
+        aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
+
+        dataframe = dataframe.join(aggregate_geno_info)
+
+        return dataframe.rename_axis(("timestamp", "farm_name"))
 
     @staticmethod
     def reload(path: Path, sim_id: str, timestep: dt.datetime):
