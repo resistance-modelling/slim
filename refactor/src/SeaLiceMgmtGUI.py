@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+import pandas as pd
 from colorcet import glasbey_dark
 import numpy as np
 import pyqtgraph as pg
@@ -10,7 +11,7 @@ from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtCore import QThread, pyqtSignal, QObject, QTimer, QSettings, Qt
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
                              QAction, QFileDialog, QMessageBox, QGridLayout, QProgressBar, QSplitter, QCheckBox,
-                             QGroupBox, QVBoxLayout)
+                             QGroupBox, QVBoxLayout, QComboBox)
 
 from src.LicePopulation import LicePopulation
 from src.Simulator import Simulator
@@ -22,6 +23,7 @@ class Window(QMainWindow):
 
         self.states: Optional[List[Simulator]] = None
         self.times: Optional[List[dt.datetime]] = None
+        self.states_as_df: Optional[pd.DataFrame] = None
 
         self._createUI()
 
@@ -37,8 +39,7 @@ class Window(QMainWindow):
         mainLayout = QGridLayout()
         self.wd.setLayout(mainLayout)
 
-
-        mainLayout.addWidget(self.plotSplitter, 0, 0, 2, 1)
+        mainLayout.addWidget(self.plotPane, 0, 0, 2, 1)
         mainLayout.addWidget(self.plotButtonGroup, 0, 1)
         mainLayout.addWidget(self.progressBar, 2, 0, 1, 2)
 
@@ -50,17 +51,15 @@ class Window(QMainWindow):
         self._connectActions()
         self._createMenuBar()
 
-
-    def _createWidgets(self):
-        self.wd = QtWidgets.QWidget(self)
-        self.setCentralWidget(self.wd)
-
+    def _createPlots(self):
         ## PLOTS
-        self.licePopulationPlot = pg.PlotWidget(title="Lice Population")
-        self.payoffPlot = pg.PlotWidget(title="Cumulated payoff")
+        self.plotPane = pg.GraphicsLayoutWidget(self)
+
+        self.licePopulationPlot = self.plotPane.addPlot(title="Lice Population per stage", row=0, col=0)
+        self.payoffPlot = self.plotPane.addPlot(title="Cumulated payoff", row=1, col=0)
+        self.payoffPlot.setXLink(self.licePopulationPlot)
 
         self.licePopulationLegend = None
-
 
         # We cannot know the genotypes in advance
         self.geno_to_curve = {}
@@ -69,17 +68,21 @@ class Window(QMainWindow):
         self.licePopulationPlot.showGrid(x=True, y=True)
         self.payoffPlot.showGrid(x=True, y=True)
 
-        self.plotSplitter = QSplitter(self.wd)
-        self.plotSplitter.setOrientation(Qt.Vertical)
-        self.plotSplitter.addWidget(self.licePopulationPlot)
-        self.plotSplitter.addWidget(self.payoffPlot)
+    def _createWidgets(self):
+        self.wd = QtWidgets.QWidget(self)
+        self.setCentralWidget(self.wd)
+
+        self._createPlots()
 
         # Pane on the right
         self.plotButtonGroup = QGroupBox("Plot options", self)
         self.plotButtonGroupLayout = QVBoxLayout()
+        self.farmSelector = QComboBox(self)
+        self.farmSelector.setEnabled(False)
         self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information", self)
 
         self.showDetailedGenotypeCheckBox.stateChanged.connect(lambda _: self._updatePlot())
+        self.plotButtonGroupLayout.addWidget(self.farmSelector)
         self.plotButtonGroupLayout.addWidget(self.showDetailedGenotypeCheckBox)
         self.plotButtonGroup.setLayout(self.plotButtonGroupLayout)
 
@@ -101,6 +104,10 @@ class Window(QMainWindow):
     def _displaySimulatorData(self, states: List[Simulator], times: List[dt.datetime]):
         self.states = states
         self.times = times
+        self.states_as_df = Simulator.dump_as_pd(states, times)
+
+        # how many unique farms are there?
+        #farms = self.states[0].organisation.farms
 
         self._updatePlot()
 
@@ -144,7 +151,7 @@ class Window(QMainWindow):
         self.licePopulationLegend = self.licePopulationPlot.addLegend()
 
         if self.showDetailedGenotypeCheckBox.isChecked():
-            df = Simulator.dump_as_pd(self.states, self.times).reset_index()
+            df = self.states_as_df.reset_index()
 
             first_farm_df = df[df["farm_name"] == "farm_0"]
             allele_names = ["a", "A", "Aa"] # TODO: extract from column names
@@ -154,6 +161,7 @@ class Window(QMainWindow):
             self.geno_to_curve = {allele_name: self.licePopulationPlot.plot(stage_value, name=allele_name, pen=colours[allele_name])
                                   for allele_name, stage_value in allele_data.items()}
         else:
+            # TODO: use pandas here
             population_data = []
             for snapshot in self.states:
                 population_data.append(snapshot.organisation.farms[0].lice_population)
@@ -169,8 +177,17 @@ class Window(QMainWindow):
         payoffs = [float(state.payoff) for state in self.states]
         self.payoffPlot.plot(payoffs)
 
+        # keep ranges consistent
+        self.licePopulationPlot.setXRange(0, len(payoffs), padding=0)
+        self.licePopulationPlot.vb.setLimits(xMin=0, xMax=len(payoffs))
+        self.payoffPlot.setXRange(0, len(payoffs), padding=0)
+        self.payoffPlot.vb.setLimits(xMin=0, xMax=len(payoffs))
+
+
     def _createActions(self):
         self.loadDumpAction = QAction("&Load Dump")
+        self.paperModeAction = QAction("Set &light mode (paper mode)")
+        self.paperModeAction.setCheckable(True)
         self.aboutAction = QAction("&About", self)
         self.showDetailedGenotypeAction = QAction(self)
 
@@ -178,7 +195,8 @@ class Window(QMainWindow):
 
     def _connectActions(self):
         self.loadDumpAction.triggered.connect(self.openDump)
-        self.aboutAction.triggered.connect(self.about)
+        self.paperModeAction.toggled.connect(self._switchPaperMode)
+        self.aboutAction.triggered.connect(self._openAboutMessage)
 
     def _createMenuBar(self):
         menuBar = self.menuBar()
@@ -189,12 +207,31 @@ class Window(QMainWindow):
         for action in self.recentFilesActions:
             fileMenu.addAction(action)
 
+        viewMenu = QMenu("&View", self)
+        viewMenu.addAction(self.paperModeAction)
+
         # Help menu
         helpMenu = QMenu("&Help", self)
         helpMenu.addAction(self.aboutAction)
 
         menuBar.addMenu(fileMenu)
+        menuBar.addMenu(viewMenu)
         menuBar.addMenu(helpMenu)
+
+    def _switchPaperMode(self, lightMode: bool):
+        # in light mode prefer a strong white for background
+        # in dark mode, prefer a dimmed white for labels
+        background = 'w' if lightMode else 'k'
+        foreground = 'k' if lightMode else 'd'
+
+        pg.setConfigOption('background', background)
+        pg.setConfigOption('foreground', foreground)
+
+        layout: QGridLayout = self.wd.layout()
+        layout.removeWidget(self.plotPane)
+        self._createPlots()
+        layout.addWidget(self.plotPane, 0, 0, 2, 1)
+        self._updatePlot()
 
     def _updateRecentFilesActions(self):
         # Recent files
@@ -237,7 +274,7 @@ class Window(QMainWindow):
             self._createLoaderWorker(filename)
 
 
-    def about(self):
+    def _openAboutMessage(self):
         QMessageBox.about(self, "About SLIM",
             """
             GUI for the Sea Lice sIMulator.
