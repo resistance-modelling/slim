@@ -1,0 +1,98 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "http://slim-project/config.json.schema",
+    "title": "FarmConfig",
+    "type": "object",
+    "properties": {
+        "name": {
+            "description": "Organisation name",
+            "type": "string"
+        },
+        "start_date": {
+            "description": "Simulation start date",
+            "type": "string"
+        },
+        "end_date": {
+            "description": "Simulation end date",
+            "type": "string"
+        },
+        "ext_pressure": {
+            "description": "Sealice per day per cage/farm arriving from wildlife. Note that this value has been determined experimentally in the original code.",
+            "type": "integer"
+        },
+        "monthly_cost": {
+            "description": "Fixed infrastructure cost (per 28 activity day)",
+            "comment": "TODO: dummy value",
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$"
+        },
+        "farms": {
+            "type": "array",
+            "description": "Farm-specific configuration",
+            "title": "FarmConfig",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "ncages": {
+                        "description": "Number of cages on the farm",
+                        "type": "integer"
+                    },
+                    "location": {
+                        "description": "Location of the farm (in northing and easthing)",
+                        "type": "array",
+                        "items": {
+                            "type": "number",
+                            "minLength": 2,
+                            "maxLength": 2
+                        }
+                    },
+                    "num_fish": {
+                        "description": "Starting number of fish. We assume this to be constant across all cages",
+                        "type": "integer"
+                    },
+                    "start_date": {
+                        "description": "Start date of simulation of the farm",
+                        "type": "string"
+                    },
+                    "cages_start_dates": {
+                        "description": "Start dates for individual cages. This is discouraged",
+                        "type": "array",
+                        "item": {
+                            "type": "string"
+                        }
+                    },
+                    "treatment_type": {
+                        "description": "Type of applied treatment",
+                        "enum": [
+                            "emb"
+                        ]
+                    },
+                    "treatment_dates": {
+                        "description": "Treatment dates for each cage",
+                        "type": "array",
+                        "item": {
+                            "type": "string"
+                        }
+                    },
+                    "start_capital": {
+                        "description": "Organisation capital (in GBP)",
+                        "type": "string",
+                        "pattern": "^[0-9]+\\.[0-9]{2}$"
+                    },
+                    "max_num_treatments": {
+                        "description": "Maximum number of treatments allowed within one year",
+                        "type": "integer"
+                    },
+                    "sampling_spacing": {
+                        "description": "Time distance (in days) between fish samplings",
+                        "type": "integer"
+                    },
+                    "defection_proba": {
+                        "description": "Probability to defect and not apply treatment contemporarily with the other farms",
+                        "type": "number"
+                    }
+                }
+            }
+        }
+    }
+}

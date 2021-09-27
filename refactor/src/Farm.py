@@ -224,7 +224,7 @@ class Farm:
         logger.debug("Asking farm {} to treat".format(self.name))
 
         # TODO: this is extremely simple.
-        p = [self.cfg.defection_proba, 1 - self.cfg.defection_proba]
+        p = [self.farm_cfg.defection_proba, 1 - self.farm_cfg.defection_proba]
         want_to_treat = self.cfg.rng.choice([False, True], p=p) if can_defect else True
 
         if not want_to_treat:

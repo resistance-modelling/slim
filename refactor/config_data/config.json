@@ -1,182 +1,115 @@
 {
-  "seed": {
-    "description": "Global seed to use in the simulations",
-    "value": 0
-  },
-  "stage_age_evolutions": {
-    "description": "Stage-age average evolution times (in days)",
-    "source": "Taken from the maximums in Heuch et al. (2000)",
-    "value": {
-      "L1": 4.3,
-      "L2": 10,
-      "L3": 25,
-      "L4": 11,
-      "L5f": 80
-    }
-  },
-  "delta_p": {
-    "description": "Weibull power transformation constant for each development stage",
-    "source": "L0's value is taken from Stien et al. (2005) as beta_2, while the others are taken from Aldrin et al. (2017)",
-    "value": {
-      "L0": 0.338,
-      "L1": 0.401,
-      "L3": 1.305,
-      "L4": 0.866
-    }
-  },
-  "delta_s": {
-    "description": "Weibull shape transformation constant for each development stage",
-    "value": {
-      "L1": 18.869,
-      "L3": 7.945,
-      "L4": 1.643
-    }
-  },
-  "delta_m10": {
-    "description": "10 °C median development time",
-    "source": "L0's value is taken from Stien et al. (2005) as beta_1, while the others are taken from Aldrin et al. (2017)",
-    "value": {
-      "L0": 41.98,
-      "L1": 8.814,
-      "L3": 18.934,
-      "L4": 10.742
-    }
-  },
-  "infection_main_delta": {
-    "description": "Infection expectation",
-    "source": "Aldrin et al., 2017",
-    "value": -2.576
-  },
-  "infection_weight_delta": {
-    "description": "Infection regression coefficient",
-    "source": "Aldrin et al., 2017",
-    "value": 0.082
-  },
-  "delta_expectation_weight_log": {
-    "description": "Log-expectation of fish weight",
-    "value": -0.55
-  },
-  "fish_mortality_center": {
-    "description": "Fish mortality sigmoid center",
-    "value": 0.63
-  },
-  "fish_mortality_k": {
-    "description": "Fish mortality sigmoid steepness",
-    "value": 19
-  },
-  "background_lice_mortality_rates": {
-    "description": "Background lice mortality rates per stage",
-    "source": "Aldrin et al., 2017",
-    "value": {
-      "L1": 0.17,
-      "L2": 0.22,
-      "L3": 0.008,
-      "L4": 0.05,
-      "L5f": 0.02,
-      "L5m": 0.06
-    }
-  },
-  "reproduction_eggs_first_extruded": {
-    "description": "Initial number of viable eggs after the first extrusion",
-    "source": "Aldrin et al., 2017",
-    "value": 172.5
-  },
-  "reproduction_age_dependence": {
-    "description": "Exponential coefficient on viable eggs depending on age",
-    "value": 0.2
-  },
-  "dam_unavailability": {
-    "description": "Female unavailability time after mating (in days)",
-    "value": 3
-  },
-  "farm_data": {
-    "description": "Average temperatures at known farm locations. Farm temperatures will be interpolated from them.",
-    "source": "Data taken from www.seatemperature.org",
-    "value": {
-      "ardrishaig": {
-        "northing": 685715,
-        "temperatures": [8.2,7.55,7.45,8.25,9.65,11.35,13.15,13.75,13.65,12.85,11.75,9.85]
-      },
-      "tarbert": {
-        "northing": 665300,
-        "temperatures": [8.4,7.8,7.7,8.6,9.8,11.65,13.4,13.9,13.9,13.2,12.15,10.2]
-      }
-    }
-  },
-  "smolt_mass_params": {
-    "description": "Sigmoid parameters that pilot the average smolt-to-adult average weight development",
-    "source": "FAO - http://www.fao.org/fishery/affris/species-profiles/atlantic-salmon/growth/en/ . See figure 5",
-    "note": "These constants were manually fitted on the given figure.",
-    "value": {
-      "max_mass": 10000,
-      "skewness": -0.01,
-      "x_shift": 475
-    }
-  },
-  "gain_per_kg": {
-    "description": "Selling rate for fish kg (in GBP)",
-    "value": "4.39",
-    "source": "NASDAQ Salmon Index, last updated 6/08/21, with a corresponding NOK-GBP currency conversion"
-  },
-  "genetic_ratios": {
-    "description": "Genetic ratios of lice population",
-    "value": {"A": 0.25, "a": 0.25, "A,a": 0.5}
-  },
-  "genetic_mechanism": {
-    "description": "The breeding strategy. Can be 'maternal', 'quantitative' or 'discrete'",
-    "value": "discrete"
-  },
-  "geno_mutation_rate": {
-    "description": "Mutation rate, as in number of individual mutation events that can happen out of the number of offsprings. For example, 1e-5 is one mutation every 10,000 extruded eggs",
-    "value": 1e-5
-  },
-  "male_detachment_rate": {
-    "description": "Rate at which an adult male detaches from a dying fish and survives",
-    "note": "TODO: dummy value.",
-    "value": 0.7
-  },
-  "aggregation_rate_threshold": {
-    "description": "The allowed aggregation rate at any time",
-    "value": 0.5
-  },
-  "treatments": {
-    "description": "Parameters related to specific treatments",
-    "value": {
-      "emb": {
-        "description": "Emamectin Benzoate",
-        "value": {
-          "effect_delay": {
-            "description": "Delay between application and observation of noticeable effects of the Emamectin Benzoate (in days)",
-            "value": 5
-          },
-          "durability_temp_ratio": {
-            "description": "Ratio between durability and current sea temperature (unit: days / °C)",
-            "value": 210
-          },
-          "price_per_kg": {
-            "description": "Cost per kg when applying treatment",
-            "note": "Values taken from www.sigmaaldrich.com , rescaled to have a 1kg denominator",
-            "value": "341.20"
-          },
-          "application_period": {
-            "description": "For how long to apply the treatment (in days)",
-            "value": 7
-          },
-          "pheno_resistance": {
-            "description": "Lookup table to translate between genotype.",
-            "value": {
-              "dominant": 0.95,
-              "incompletely_dominant": 0.85,
-              "recessive": 0.05
-            }
-          },
-          "quadratic_fish_mortality_coeffs": {
-            "description": "Fitted quadratic regression coefficients from Overton et al.",
-            "note": "The values were found by the overton_treatment_mortalities.py script.",
-            "value": [0.0, 0.72140707, -3.57850456, -0.02576944, 1.40270749, -3.57850456]
-          }
+    "seed": 0,
+    "stage_age_evolutions": {
+        "L1": 4.3,
+        "L2": 10,
+        "L3": 25,
+        "L4": 11,
+        "L5f": 80
+    },
+    "delta_p": {
+        "L0": 0.338,
+        "L1": 0.401,
+        "L3": 1.305,
+        "L4": 0.866
+    },
+    "delta_s": {
+        "L1": 18.869,
+        "L3": 7.945,
+        "L4": 1.643
+    },
+    "delta_m10": {
+        "L0": 41.98,
+        "L1": 8.814,
+        "L3": 18.934,
+        "L4": 10.742
+    },
+    "infection_main_delta": -2.576,
+    "infection_weight_delta": 0.082,
+    "delta_expectation_weight_log": -0.55,
+    "fish_mortality_center": 0.63,
+    "fish_mortality_k": 19,
+    "background_lice_mortality_rates": {
+        "L1": 0.17,
+        "L2": 0.22,
+        "L3": 0.008,
+        "L4": 0.05,
+        "L5f": 0.02,
+        "L5m": 0.06
+    },
+    "reproduction_eggs_first_extruded": 172.5,
+    "reproduction_age_dependence": 0.2,
+    "dam_unavailability": 3,
+    "farm_data": {
+        "ardrishaig": {
+            "northing": 685715,
+            "temperatures": [
+                8.2,
+                7.55,
+                7.45,
+                8.25,
+                9.65,
+                11.35,
+                13.15,
+                13.75,
+                13.65,
+                12.85,
+                11.75,
+                9.85
+            ]
+        },
+        "tarbert": {
+            "northing": 665300,
+            "temperatures": [
+                8.4,
+                7.8,
+                7.7,
+                8.6,
+                9.8,
+                11.65,
+                13.4,
+                13.9,
+                13.9,
+                13.2,
+                12.15,
+                10.2
+            ]
         }
-      }
-    }
-  }
+    },
+    "smolt_mass_params": {
+        "max_mass": 10000,
+        "skewness": -0.01,
+        "x_shift": 475
+    },
+    "gain_per_kg": "4.39",
+    "genetic_ratios": {
+        "A": 0.25,
+        "a": 0.25,
+        "A,a": 0.5
+    },
+    "genetic_mechanism": "discrete",
+    "geno_mutation_rate": 1e-5,
+    "male_detachment_rate": 0.7,
+    "aggregation_rate_threshold": 0.5,
+    "treatments": [
+        {
+            "effect_delay": 5,
+            "durability_temp_ratio": 210,
+            "price_per_kg": "341.20",
+            "application_period": 7,
+            "pheno_resistance": {
+                "dominant": 0.95,
+                "incompletely_dominant": 0.85,
+                "recessive": 0.05
+            },
+            "quadratic_fish_mortality_coeffs": [
+                0.0,
+                0.72140707,
+                -3.57850456,
+                -0.02576944,
+                1.40270749,
+                -3.57850456
+            ]
+        }
+    ]
 }
