@@ -4,69 +4,12 @@ a given body of water.
 See README.md for details.
 """
 import argparse
-import json
-import logging
 import sys
 from pathlib import Path
 
-from src import logger
+from src import logger, create_logger
 from src.Config import Config, to_dt
 from src.Simulator import Simulator
-
-
-def create_logger():
-    """
-    Create a logger that logs to both file (in debug mode) and terminal (info).
-    """
-    logger.setLevel(logging.DEBUG)
-    file_handler = logging.FileHandler("SeaLiceManagementGame.log", mode="w")
-    file_handler.setLevel(logging.DEBUG)
-    term_handler = logging.StreamHandler()
-    term_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    term_handler.setFormatter(formatter)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(term_handler)
-    logger.addHandler(file_handler)
-
-
-def generate_argparse_from_config(cfg_schema_path: str, simulation_schema_path: str):
-    parser = argparse.ArgumentParser(description="Sea lice simulation")
-
-    # TODO: we are parsing the config twice.
-    print(cfg_schema_path)
-    print(simulation_schema_path)
-    with open(cfg_schema_path) as fp:
-        cfg_dict = json.load(fp)  # type: dict
-
-    with open(simulation_schema_path) as fp:
-        simulation_dict = json.load(fp)  # type: dict
-
-    def add_to_group(group_name, data):
-        group = parser.add_argument_group(group_name)
-        schema_types_to_python = {
-            "string": str,
-            "numeric": float,
-            "integer": int
-        }
-
-        for k, v in data.items():
-            if type(v) != dict:
-                continue
-            if "type" not in v:
-                print(v)
-            type_ = v["type"]
-            if type_ == "array" or type_ == "object":
-                continue # TODO: deal with them later, e.g. prop_a.prop_b for dicts?
-            description = v["description"]
-            value_type = schema_types_to_python.get(type_, type_)
-
-            group.add_argument(f"--{k.replace('_', '-')}", type=value_type, help=description)
-
-    add_to_group("Organisation parameters", simulation_dict["properties"])
-    add_to_group("Runtime parameters", cfg_dict["properties"])
-
-    return parser
 
 
 if __name__ == "__main__":
@@ -122,7 +65,7 @@ if __name__ == "__main__":
     if args.quiet:
         logger.addFilter(lambda record: False)
 
-    config_parser = generate_argparse_from_config(cfg_schema_path, str(cfg_basename / "params.schema.json"))
+    config_parser = Config.generate_argparse_from_config(cfg_schema_path, str(cfg_basename / "params.schema.json"))
     config_args = config_parser.parse_args(unknown)
 
     # create the config object

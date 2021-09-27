@@ -1,4 +1,4 @@
-import logging
+import argparse
 from dataclasses import dataclass
 import datetime as dt
 import json
@@ -154,6 +154,45 @@ class Config(RuntimeConfig):
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
         return [self.emb][treatment_type.value]
 
+    @staticmethod
+    def generate_argparse_from_config(cfg_schema_path: str, simulation_schema_path: str):
+        parser = argparse.ArgumentParser(description="Sea lice simulation")
+
+        # TODO: we are parsing the config twice.
+        print(cfg_schema_path)
+        print(simulation_schema_path)
+        with open(cfg_schema_path) as fp:
+            cfg_dict = json.load(fp)  # type: dict
+
+        with open(simulation_schema_path) as fp:
+            simulation_dict = json.load(fp)  # type: dict
+
+        def add_to_group(group_name, data):
+            group = parser.add_argument_group(group_name)
+            schema_types_to_python = {
+                "string": str,
+                "numeric": float,
+                "integer": int
+            }
+
+            for k, v in data.items():
+                if type(v) != dict:
+                    continue
+                if "type" not in v:
+                    print(v)
+                type_ = v["type"]
+                if type_ == "array" or type_ == "object":
+                    continue  # TODO: deal with them later, e.g. prop_a.prop_b for dicts?
+                description = v["description"]
+                value_type = schema_types_to_python.get(type_, type_)
+
+                group.add_argument(f"--{k.replace('_', '-')}", type=value_type, help=description)
+
+        add_to_group("Organisation parameters", simulation_dict["properties"])
+        add_to_group("Runtime parameters", cfg_dict["properties"])
+
+        return parser
+
 
 class FarmConfig:
     """Config for individual farm"""
@@ -192,3 +231,5 @@ class SmoltParams:
     max_mass: float
     skewness: float
     x_shift: float
+
+
