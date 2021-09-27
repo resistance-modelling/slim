@@ -3,7 +3,7 @@ import datetime as dt
 import json
 from bisect import bisect_left
 from pathlib import Path
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 import dill as pickle
 import pandas as pd
@@ -143,11 +143,17 @@ class Simulator:
         return dataframe.rename_axis(("timestamp", "farm_name"))
 
     @staticmethod
-    def reload(path: Path, sim_id: str, timestep: dt.datetime):
+    def reload(path: Path, sim_id: str, timestamp: Optional[dt.datetime] = None, resume_after: Optional[int] = None):
         """Reload a simulator state from a dump at a given time"""
         states, times = Simulator.reload_all_dump(path, sim_id)
 
-        idx = bisect_left(times, timestep)
+        if not (timestamp or resume_after):
+            raise ValueError("Resume timestep or range must be provided")
+
+        if resume_after:
+            return states[resume_after]
+
+        idx = (timestamp - times[0]).days
         return states[idx]
 
     def run_model(self, resume=False):

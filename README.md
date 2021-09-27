@@ -85,6 +85,8 @@ To _resume_ a session one can instead pass the `--resume` parameter, e.g.
 
 `python -m src.SeaLiceMgmt outputs/sim_1 config_data/Fyne --end-date "2018-01-01 00:00:00" --resume="2017-12-05 00:00:00"`
 
+If you only know `n` days have elapsed since the start use the `--resume-after=n` option.
+
 ### GUI
 We also provide a GUI for debugging and visualisation. Its support is still heavily experimental so please
 use with caution.

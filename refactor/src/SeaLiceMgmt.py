@@ -7,7 +7,6 @@ import argparse
 import json
 import logging
 import sys
-
 from pathlib import Path
 
 from src import logger
@@ -82,9 +81,15 @@ if __name__ == "__main__":
                         help="Interval to dump the simulation state. Useful for visualisation and debugging. Warning: saving a run is a slow operation.",
                         type=int,
                         required=False)
-    parser.add_argument("--resume",
-                        type=str,
-                        help="(DEBUG) resume the simulator from a given timestep. All configuration variables will be ignored.")
+
+    resume_group = parser.add_mutually_exclusive_group()
+    resume_group.add_argument("--resume",
+                              type=str,
+                              help="(DEBUG) resume the simulator from a given timestep. All configuration variables will be ignored.")
+    resume_group.add_argument("--resume-after",
+                              type=int,
+                              help="(DEBUG) resume the simulator from a given number of days since the beginning of the simulation. All configuration variables will be ignored.")
+
     args, unknown = parser.parse_known_args()
 
     # set up config class and logger (logging to file and screen.)
@@ -114,7 +119,9 @@ if __name__ == "__main__":
     # run the simulation
     if args.resume:
         resume_time = to_dt(args.resume)
-        sim = Simulator.reload(output_folder, simulation_id, resume_time)  # type: Simulator
+        sim = Simulator.reload(output_folder, simulation_id, timestamp=resume_time)  # type: Simulator
+    elif args.resume_after:
+        sim = Simulator.reload(output_folder, simulation_id, resume_after=args.resume_after)  # type: Simulator
     else:
         sim = Simulator(output_folder, simulation_id, cfg)
     sim.run_model()
