@@ -30,30 +30,41 @@ def create_logger():
     logger.addHandler(file_handler)
 
 
-def generate_argparse_from_config(cfg_path: str, simulation_path: str):
+def generate_argparse_from_config(cfg_schema_path: str, simulation_schema_path: str):
     parser = argparse.ArgumentParser(description="Sea lice simulation")
 
     # TODO: we are parsing the config twice.
-    with open(cfg_path) as fp:
+    print(cfg_schema_path)
+    print(simulation_schema_path)
+    with open(cfg_schema_path) as fp:
         cfg_dict = json.load(fp)  # type: dict
 
-    with open(simulation_path) as fp:
+    with open(simulation_schema_path) as fp:
         simulation_dict = json.load(fp)  # type: dict
 
     def add_to_group(group_name, data):
         group = parser.add_argument_group(group_name)
+        schema_types_to_python = {
+            "string": str,
+            "numeric": float,
+            "integer": int
+        }
+
         for k, v in data.items():
-            if isinstance(v, list) or isinstance(v["value"], list) or isinstance(v["value"], dict):
+            if type(v) != dict:
+                continue
+            if "type" not in v:
+                print(v)
+            type_ = v["type"]
+            if type_ == "array" or type_ == "object":
                 continue # TODO: deal with them later, e.g. prop_a.prop_b for dicts?
-            value = v["value"]
             description = v["description"]
-            value_type = type(value)
+            value_type = schema_types_to_python.get(type_, type_)
 
+            group.add_argument(f"--{k.replace('_', '-')}", type=value_type, help=description)
 
-            group.add_argument(f"--{k.replace('_', '-')}", type=value_type, help=description, default=value)
-
-    add_to_group("Organisation parameters", simulation_dict)
-    add_to_group("Runtime parameters", cfg_dict)
+    add_to_group("Organisation parameters", simulation_dict["properties"])
+    add_to_group("Runtime parameters", cfg_dict["properties"])
 
     return parser
 
@@ -105,12 +116,13 @@ if __name__ == "__main__":
 
     cfg_basename = Path(args.param_dir).parent
     cfg_path = str(cfg_basename / "config.json")
+    cfg_schema_path = str(cfg_basename / "config.schema.json")
 
     # silence if needed
     if args.quiet:
         logger.addFilter(lambda record: False)
 
-    config_parser = generate_argparse_from_config(cfg_path, args.param_dir + "/params.json")
+    config_parser = generate_argparse_from_config(cfg_schema_path, str(cfg_basename / "params.schema.json"))
     config_args = config_parser.parse_args(unknown)
 
     # create the config object

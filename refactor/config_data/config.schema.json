@@ -77,15 +77,6 @@
     "background_lice_mortality_rates": {
       "description": "Background lice mortality rates per stage",
       "source": "Aldrin et al., 2017",
-      "value": {
-        "L1": 0.17,
-        "L2": 0.22,
-        "L3": 0.008,
-        "L4": 0.05,
-        "L5f": 0.02,
-        "L5m": 0.06
-      },
-
       "type": "object",
       "properties": {
         "L1": {"type": "number"},

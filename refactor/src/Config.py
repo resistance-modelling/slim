@@ -29,7 +29,7 @@ def to_dt(string_date) -> dt.datetime:
 
 def override(data, override_options: dict):
     for k, v in override_options.items():
-        if k in data:
+        if k in data and v is not None:
             data[k] = v
 
 
