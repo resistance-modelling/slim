@@ -70,7 +70,7 @@ class Window(QMainWindow):
         self.payoffPlot = self.plotPane.addPlot(title="Cumulated payoff", row=1, col=0)
         # self.payoffPlot.setXLink(self.licePopulationPlots[0])
 
-        self.licePopulationLegend = []
+        self.licePopulationLegend = None
 
         self.geno_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
         self.stages_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
@@ -129,6 +129,7 @@ class Window(QMainWindow):
         # TODO: is there a valid reason why we shouldn't make worker a QThread subclass?
         self.thread = QThread()
         self.worker = SimulatorLoadingWorker(filename)
+        print(f"Opening {filename}")
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(self.thread.quit)
@@ -146,6 +147,9 @@ class Window(QMainWindow):
 
     def _cleanPlot(self):
         self.payoffPlot.clear()
+        for plot in self.licePopulationPlots:
+            plot.clear()
+
         for curves in self.stages_to_curve.values():
             for curve in curves.values():
                 curve.clear()
@@ -154,9 +158,7 @@ class Window(QMainWindow):
                 curve.clear()
 
         if self.licePopulationLegend:
-            for v in self.licePopulationLegend:
-                v.clear()
-            self.licePopulationLegend = []
+            self.licePopulationLegend.clear()
 
     def _remountPlot(self):
         layout: QGridLayout = self.wd.layout()
@@ -179,8 +181,7 @@ class Window(QMainWindow):
         elif len(self._getUniqueFarms) != len(self.licePopulationPlots):
             self._remountPlot()
 
-        for plot in self.licePopulationPlots:
-            self.licePopulationLegend.append(plot.addLegend())
+        self.licePopulationLegend = self.licePopulationPlots[0].addLegend()
 
         farm_list = self._getUniqueFarms
 
@@ -236,6 +237,7 @@ class Window(QMainWindow):
         self.loadDumpAction = QAction("&Load Dump")
         self.paperModeAction = QAction("Set &light mode (paper mode)")
         self.paperModeAction.setCheckable(True)
+        self.clearAction = QAction("&Clear plot", self)
         self.aboutAction = QAction("&About", self)
         self.showDetailedGenotypeAction = QAction(self)
 
@@ -245,6 +247,7 @@ class Window(QMainWindow):
         self.loadDumpAction.triggered.connect(self.openDump)
         self.paperModeAction.toggled.connect(self._switchPaperMode)
         self.aboutAction.triggered.connect(self._openAboutMessage)
+        self.clearAction.triggered.connect(self._cleanPlot)
 
     def _createMenuBar(self):
         menuBar = self.menuBar()
@@ -257,6 +260,7 @@ class Window(QMainWindow):
 
         viewMenu = QMenu("&View", self)
         viewMenu.addAction(self.paperModeAction)
+        viewMenu.addAction(self.clearAction)
 
         # Help menu
         helpMenu = QMenu("&Help", self)
@@ -290,7 +294,8 @@ class Window(QMainWindow):
             filename_as_path = Path(option)
             if filename_as_path.exists():
                 new_action = QAction(f"&{idx}: {option}", self)
-                new_action.triggered.connect(lambda: self._createLoaderWorker(option))
+                # ugly hack as python does not capture "option" but only a reference to it
+                new_action.triggered.connect(lambda _, option=option: self._createLoaderWorker(option))
                 new_recent_options.append(option)
                 self.recentFilesActions.append(new_action)
 
