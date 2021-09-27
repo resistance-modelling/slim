@@ -89,7 +89,7 @@ To _resume_ a session one can instead pass the `--resume` parameter, e.g.
 We also provide a GUI for debugging and visualisation. Its support is still heavily experimental so please
 use with caution.
 
-You can lauch it via `python -m src.SeaLiceMgmtGUI` and provide your run data (generated via the `--save-rate` option mentioned
+You can launch it via `python -m src.SeaLiceMgmtGUI` and provide your run data (generated via the `--save-rate` option mentioned
 above) from the given menu.
 
 ## Testing
