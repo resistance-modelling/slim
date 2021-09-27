@@ -3,18 +3,52 @@ Entry point to generate a strategy optimiser
 """
 
 import argparse
+from copy import deepcopy
 from pathlib import Path
 import sys
+
+import numpy as np
 
 from src import logger, create_logger
 from src.Simulator import Simulator
 from src.Config import Config
 
+def get_simulator_from_probas(starting_cfg, probas, out_path, sim_name):
+    current_cfg = deepcopy(starting_cfg)
+    for farm, defection_proba in zip(current_cfg.farms, probas):
+        farm.defection_proba = defection_proba
+
+    return Simulator(out_path, sim_name, current_cfg)
+
+def get_neighbour(probas, rng):
+    return np.clip(rng.normal(probas, 0.1), 0, 1)
+
+
 def annealing(starting_cfg: Config, **kwargs):
     iterations = kwargs["iterations"]
+    repeating_iterations = kwargs["repeat_experiment"]
+    output_path = kwargs["output_path"]
     # TODO: logging + tqdm would be nice to have
+    optimiser_rng =  np.random.default_rng(kwargs["optimiser_seed"])
+    farm_no = len(starting_cfg.farms)
+    current_best_sol = np.clip(optimiser_rng.normal(0.5, 0.5, farm_no), 0, 1)
+    current_best = -np.inf
     for i in range(iterations):
-        pass
+        candidate_probas = get_neighbour(current_best_sol, optimiser_rng)
+        payoff_sum = 0.0
+        for t in range(repeating_iterations):
+            sim_name = f"optimisation_{i}_{t}"
+            sim = get_simulator_from_probas(starting_cfg, candidate_probas, output_path, sim_name)
+            sim.run_model()
+            payoff_sum += float(sim.payoff)
+
+        candidate_payoff = payoff_sum / repeating_iterations
+
+        if candidate_payoff / current_best > optimiser_rng.uniform(0, 1):
+            current_best = candidate_payoff
+            current_best_sol = candidate_probas
+
+    return current_best_sol
 
 
 if __name__ == "__main__":
@@ -47,6 +81,10 @@ if __name__ == "__main__":
                         help="What is the objective function to optimise",
                         choices=["cumulative_payoff"],
                         default="cumulative_payoff")
+    parser.add_argument("--optimiser-seed",
+                        help="Seed used by the optimiser",
+                        type=int,
+                        default=42)
 
     args, unknown = parser.parse_known_args()
 
@@ -75,4 +113,4 @@ if __name__ == "__main__":
     # create the config object
     cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate)
 
-    annealing(cfg, **vars(args))
+    print(annealing(cfg, **vars(args)))
