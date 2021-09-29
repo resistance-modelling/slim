@@ -23,7 +23,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sea lice simulation")
     parser.add_argument("simulation_path",
                         type=str,
-                        help="Output directory path. The base directory will be used for logging")
+                        help="Output directory path. The base directory will be used for logging and serialisation " + \
+                             "of the simulator state.")
     parser.add_argument("param_dir",
                         type=str,
                         help="Directory of simulation parameters files.")
@@ -31,10 +32,6 @@ if __name__ == "__main__":
                         help="Don't log to console or file.",
                         default=False,
                         action="store_true")
-    parser.add_argument("--save-rate",
-                        help="Interval to dump the simulation state. Useful for visualisation and debugging. Warning: saving a run is a slow operation.",
-                        type=int,
-                        required=False)
 
     resume_group = parser.add_mutually_exclusive_group()
     resume_group.add_argument("--resume",
@@ -43,6 +40,12 @@ if __name__ == "__main__":
     resume_group.add_argument("--resume-after",
                               type=int,
                               help="(DEBUG) resume the simulator from a given number of days since the beginning of the simulation. All configuration variables will be ignored.")
+    resume_group.add_argument("--save-rate",
+                              help="Interval to dump the simulation state. Useful for visualisation and debugging." + \
+                                   "Warning: saving a run is a slow operation. Saving and resuming at the same time" + \
+                                   "is forbidden. If this is not provided, only the last timestep is serialised",
+                              type=int,
+                              required=False)
 
     args, unknown = parser.parse_known_args()
 

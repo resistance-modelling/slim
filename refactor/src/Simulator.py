@@ -94,6 +94,9 @@ class Simulator:
 
     @staticmethod
     def get_simulation_path(path: Path, sim_id: str):
+        if not path.is_dir():
+            path.mkdir(parents=True, exist_ok=True)
+
         return path / f"simulation_data_{sim_id}.pickle"
 
     @staticmethod
@@ -166,21 +169,26 @@ class Simulator:
         """
         logger.info("running simulation, saving to %s", self.output_dir)
 
+        assert not (self.cfg.save_rate and resume), \
+            "Resuming and serialising intermediate steps is not allowed."
+
         # create a file to store the population data from our simulation
         if resume and not self.output_dump_path.exists():
             logger.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")
 
-        if self.cfg.save_rate:
+        if not resume:
             data_file = (self.output_dump_path).open(mode="wb")
 
         while self.cur_day <= self.cfg.end_date:
             logger.info("Current date = %s", self.cur_day)
             self.payoff += self.organisation.step(self.cur_day)
 
-            # Save the model snapshot
-            if self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0:
-                pickle.dump(self, data_file)
-            self.cur_day += dt.timedelta(days=1)
+            # Save the model snapshot either when checkpointing or during the last iteration
+            if not resume:
+                if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0)\
+                        or self.cur_day ==  self.cfg.end_date:
+                    pickle.dump(self, data_file)
+                self.cur_day += dt.timedelta(days=1)
 
-        if self.cfg.save_rate:
+        if not resume:
             data_file.close()

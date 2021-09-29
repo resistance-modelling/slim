@@ -13,10 +13,13 @@ from src import logger, create_logger
 from src.Simulator import Simulator
 from src.Config import Config
 
-def get_simulator_from_probas(starting_cfg, probas, out_path, sim_name):
+def get_simulator_from_probas(starting_cfg, probas, out_path: Path, sim_name: str, rng):
     current_cfg = deepcopy(starting_cfg)
     for farm, defection_proba in zip(current_cfg.farms, probas):
         farm.defection_proba = defection_proba
+
+    current_cfg.seed = rng.integers(1<<32)
+    current_cfg.rng = np.random.default_rng(current_cfg.seed)
 
     return Simulator(out_path, sim_name, current_cfg)
 
@@ -24,31 +27,50 @@ def get_neighbour(probas, rng):
     return np.clip(rng.normal(probas, 0.1), 0, 1)
 
 
-def annealing(starting_cfg: Config, **kwargs):
-    iterations = kwargs["iterations"]
-    repeating_iterations = kwargs["repeat_experiment"]
-    output_path = kwargs["output_path"]
-    # TODO: logging + tqdm would be nice to have
-    optimiser_rng =  np.random.default_rng(kwargs["optimiser_seed"])
+def annealing(starting_cfg: Config,
+              iterations,
+              repeat_experiment,
+              output_path,
+              optimiser_seed,
+              **kwargs):
+   # TODO: logging + tqdm would be nice to have
     farm_no = len(starting_cfg.farms)
-    current_best_sol = np.clip(optimiser_rng.normal(0.5, 0.5, farm_no), 0, 1)
-    current_best = -np.inf
+    optimiser_rng =  np.random.default_rng(optimiser_seed)
+    current_state = np.clip(optimiser_rng.normal(0.5, 0.5, farm_no), 0, 1)
+    current_state_sol = 1e-6
+    best_sol = current_state.copy()
+    best_payoff = -np.inf
+
     for i in range(iterations):
-        candidate_probas = get_neighbour(current_best_sol, optimiser_rng)
+        logger.info(f"Started iteration {i}")
+        candidate_state = get_neighbour(current_state, optimiser_rng)
+        logger.info(f"Chosen candidate state {candidate_state}")
         payoff_sum = 0.0
-        for t in range(repeating_iterations):
+        for t in range(repeat_experiment):
             sim_name = f"optimisation_{i}_{t}"
-            sim = get_simulator_from_probas(starting_cfg, candidate_probas, output_path, sim_name)
+            sim = get_simulator_from_probas(
+                starting_cfg,
+                candidate_state,
+                Path(output_path),
+                sim_name,
+                optimiser_rng
+            )
             sim.run_model()
             payoff_sum += float(sim.payoff)
 
-        candidate_payoff = payoff_sum / repeating_iterations
 
-        if candidate_payoff / current_best > optimiser_rng.uniform(0, 1):
-            current_best = candidate_payoff
-            current_best_sol = candidate_probas
+        candidate_payoff = payoff_sum / repeat_experiment
+        candidate_payoff = max(candidate_payoff, 0)
 
-    return current_best_sol
+        if candidate_payoff / current_state_sol > optimiser_rng.uniform(0, 1):
+            current_state = candidate_state
+            current_state_sol = candidate_payoff
+
+        if best_payoff < candidate_payoff:
+            best_payoff = candidate_payoff
+            best_sol = candidate_state
+
+    return best_sol
 
 
 if __name__ == "__main__":
@@ -110,7 +132,7 @@ if __name__ == "__main__":
     config_parser = Config.generate_argparse_from_config(cfg_schema_path, str(cfg_basename / "params.schema.json"))
     config_args = config_parser.parse_args(unknown)
 
-    # create the config object
-    cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate)
+    # create the basic config object
+    cfg = Config(cfg_path, args.param_dir, vars(config_args))
 
     print(annealing(cfg, **vars(args)))

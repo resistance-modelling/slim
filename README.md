@@ -78,7 +78,7 @@ TODO: add help CLI option
 
 #### Debugging
 
-For efficiency reasons, this only saves a snapshot of the model at the end of the simulation. To generate
+For efficiency reasons, this only saves a checkpoint of the model at the end of the simulation. To generate
 a dump every `n` days add the `--save-rate=n` option. 
 
 To _resume_ a session one can instead pass the `--resume` parameter, e.g. 
