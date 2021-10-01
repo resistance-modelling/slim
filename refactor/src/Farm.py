@@ -65,9 +65,9 @@ class Farm:
         self.preemptively_assign_treatments(self.farm_cfg.treatment_starts)
 
         # Queues
-        self.command_queue = PriorityQueue()  # type: PriorityQueue[FarmCommand]
-        self.farm_to_org = PriorityQueue()  # type: PriorityQueue[FarmResponse]
-        self.__sampling_events = PriorityQueue()  # type: PriorityQueue[SamplingEvent]
+        self.command_queue: PriorityQueue[FarmCommand] = PriorityQueue() 
+        self.farm_to_org: PriorityQueue[FarmResponse] = PriorityQueue() 
+        self.__sampling_events: PriorityQueue[SamplingEvent] = PriorityQueue() 
 
         self.generate_sampling_events()
 
@@ -258,7 +258,7 @@ class Farm:
         total_cost = Money("0.00")
 
         # collate egg batches by hatch time
-        eggs_by_hatch_date = {}  # type: GenoDistribByHatchDate
+        eggs_by_hatch_date: GenoDistribByHatchDate = {} 
         for cage in self.cages:
 
             # update the cage and collect the offspring info
@@ -348,7 +348,7 @@ class Farm:
         probs_per_bin = np.full(ncages, 1 / ncages)
 
         # preconstruct the data structure
-        hatch_list = [{hatch_date: GenericGenoDistrib() for hatch_date in eggs_by_hatch_date} for n in range(ncages)]  # type: CageAllocation
+        hatch_list: CageAllocation = [{hatch_date: GenericGenoDistrib() for hatch_date in eggs_by_hatch_date} for n in range(ncages)] 
         for hatch_date, geno_dict in eggs_by_hatch_date.items():
             for genotype in geno_dict:
                 # generate the bin distribution of this genotype with

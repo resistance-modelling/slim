@@ -22,7 +22,7 @@ class Organisation:
     An organisation is a cooperative of `Farm`s.
     """
     def __init__(self, cfg: Config, *args):
-        self.name = cfg.name  # type: str
+        self.name: str = cfg.name 
         self.cfg = cfg
         self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
 
@@ -109,7 +109,7 @@ class Simulator:
         with open(data_file, "rb") as fp:
             while True:
                 try:
-                    sim_state = pickle.load(fp)  # type: Simulator
+                    sim_state: Simulator = pickle.load(fp) 
                     states.append(sim_state)
                     times.append(sim_state.cur_day)
                 except EOFError:

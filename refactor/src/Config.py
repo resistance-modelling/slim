@@ -48,27 +48,27 @@ class RuntimeConfig:
         jsonschema.validate(data, schema)
 
         # Evolution constants
-        self.stage_age_evolutions = data["stage_age_evolutions"]  # type: Dict[LifeStage, float]
-        self.delta_p = data["delta_p"]  # type: Dict[LifeStage, float]
-        self.delta_s = data["delta_s"]  # type: Dict[LifeStage, float]
-        self.delta_m10 = data["delta_m10"]  # type: Dict[LifeStage, float]
+        self.stage_age_evolutions: Dict[LifeStage, float] = data["stage_age_evolutions"] 
+        self.delta_p: Dict[LifeStage, float] = data["delta_p"] 
+        self.delta_s: Dict[LifeStage, float] = data["delta_s"] 
+        self.delta_m10: Dict[LifeStage, float] = data["delta_m10"] 
         self.smolt_mass_params = SmoltParams(**data["smolt_mass_params"])
 
         # Infection constants
-        self.infection_main_delta = data["infection_main_delta"]  # type: float
-        self.infection_weight_delta = data["infection_weight_delta"]  # type: float
-        self.delta_expectation_weight_log = data["delta_expectation_weight_log"]  # type: float
+        self.infection_main_delta: float = data["infection_main_delta"] 
+        self.infection_weight_delta: float = data["infection_weight_delta"] 
+        self.delta_expectation_weight_log: float = data["delta_expectation_weight_log"] 
 
         # Treatment constants
         self.emb = EMB(data["treatments"][0])
 
         # Fish mortality constants
-        self.fish_mortality_center = data["fish_mortality_center"]  # type: float
-        self.fish_mortality_k = data["fish_mortality_k"]  # type: float
-        self.male_detachment_rate = data["male_detachment_rate"]  # type: float
+        self.fish_mortality_center: float = data["fish_mortality_center"] 
+        self.fish_mortality_k: float = data["fish_mortality_k"] 
+        self.male_detachment_rate: float = data["male_detachment_rate"] 
 
         # Background lice mortality constants
-        self.background_lice_mortality_rates = data["background_lice_mortality_rates"]  # type: Dict[LifeStage, float]
+        self.background_lice_mortality_rates: Dict[LifeStage, float] = data["background_lice_mortality_rates"] 
 
         # Reproduction and recruitment constants
         self.reproduction_eggs_first_extruded: int = data["reproduction_eggs_first_extruded"]
@@ -87,7 +87,7 @@ class RuntimeConfig:
         self.gain_per_kg = Money(data["gain_per_kg"])
 
         # Other constraints
-        self.aggregation_rate_threshold = data["aggregation_rate_threshold"]  # type: float
+        self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"] 
 
         # load in the seed if provided
         # otherwise don't use a seed
@@ -138,7 +138,7 @@ class Config(RuntimeConfig):
         self.ext_pressure = data["ext_pressure"]
 
         self.monthly_cost = Money(data["monthly_cost"])
-        self.name = data["name"]  # type: str
+        self.name: str = data["name"] 
 
         # farms
         self.farms = [FarmConfig(farm_data)
@@ -162,10 +162,10 @@ class Config(RuntimeConfig):
         print(cfg_schema_path)
         print(simulation_schema_path)
         with open(cfg_schema_path) as fp:
-            cfg_dict = json.load(fp)  # type: dict
+            cfg_dict: dict = json.load(fp) 
 
         with open(simulation_schema_path) as fp:
-            simulation_dict = json.load(fp)  # type: dict
+            simulation_dict: dict = json.load(fp) 
 
         def add_to_group(group_name, data):
             group = parser.add_argument_group(group_name)
@@ -204,14 +204,14 @@ class FarmConfig:
         """
 
         # set params
-        self.num_fish = data["num_fish"]  # type: int
-        self.n_cages = data["ncages"]  # type: int
-        self.farm_location = data["location"]  # type: Tuple[int, int]
+        self.num_fish: int = data["num_fish"] 
+        self.n_cages: int = data["ncages"] 
+        self.farm_location: Tuple[int, int] = data["location"] 
         self.farm_start = to_dt(data["start_date"])
         self.cages_start = [to_dt(date)
                             for date in data["cages_start_dates"]]
-        self.max_num_treatments = data["max_num_treatments"]  # type: int
-        self.sampling_spacing = data["sampling_spacing"]  # type: int
+        self.max_num_treatments: int = data["max_num_treatments"] 
+        self.sampling_spacing: int = data["sampling_spacing"] 
 
         # TODO: a farm may employ different chemicals
         self.treatment_type = Treatment[data["treatment_type"]]

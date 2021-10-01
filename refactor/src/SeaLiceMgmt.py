@@ -77,9 +77,9 @@ if __name__ == "__main__":
     # run the simulation
     if args.resume:
         resume_time = to_dt(args.resume)
-        sim = Simulator.reload(output_folder, simulation_id, timestamp=resume_time)  # type: Simulator
+        sim: Simulator = Simulator.reload(output_folder, simulation_id, timestamp=resume_time) 
     elif args.resume_after:
-        sim = Simulator.reload(output_folder, simulation_id, resume_after=args.resume_after)  # type: Simulator
+        sim: Simulator = Simulator.reload(output_folder, simulation_id, resume_after=args.resume_after) 
     else:
         sim = Simulator(output_folder, simulation_id, cfg)
     sim.run_model()
