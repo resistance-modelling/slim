@@ -1,140 +1,62 @@
 {
-    "name": {
-        "description": "Organisation name",
-        "value": "Loch Fyne ACME Ltd."
-    },
-    "start_date": {
-        "description": "Simulation start date",
-        "value": "2017-10-01 00:00:00"
-    },
-    "end_date": {
-        "description": "Simulation end date",
-        "value": "2018-10-01 00:00:00"
-    },
-    "ext_pressure": {
-        "description": "Sealice per day per cage/farm arriving from wildlife. Note that this value has been determined experimentally in the original code.",
-        "value": 150
-    },
-    "monthly_cost": {
-        "description": "Fixed infrastructure cost (per 28 activity day)",
-        "note": "TODO: dummy value",
-        "value": "5000"
-    },
-    "defection_proba": {
-        "description": "Probability to defect and not apply treatment contemporarily with the other farms",
-        "value": 0.2
-    },
+    "name": "Loch Fyne ACME Ltd.",
+    "start_date": "2017-10-01 00:00:00",
+    "end_date": "2018-10-01 00:00:00",
+    "ext_pressure": 150,
+    "monthly_cost": "5000.00",
     "farms": [
         {
-            "description": "Test farm",
-            "value": {
-                "ncages": {
-                    "description": "Number of cages on the farm",
-                    "value": 6
-                },
-                "location": {
-                    "description": "Location of the farm",
-                    "value": [190300, 665300]
-                },
-                "num_fish": {
-                    "description": "Starting number of fish. We assume this to be constant across all cages",
-                    "value": 4000
-                },
-                "start_date": {
-                    "description": "Start date of simulation of the farm",
-                    "value": "2017-10-01 00:00:00"
-                },
-                "cages_start_dates": {
-                    "description": "Start dates for individual cages",
-                    "value": [
-                        "2017-10-01 00:00:00",
-                        "2017-10-08 00:00:00",
-                        "2017-10-15 00:00:00",
-                        "2017-10-22 00:00:00",
-                        "2017-10-29 00:00:00",
-                        "2017-11-05 00:00:00"
-                    ]
-                },
-                "treatment_type": {
-                    "description": "Type of applied treatment",
-                    "value": "emb"
-                },
-                "treatment_dates": {
-                    "description": "Treatment dates for each cage",
-                    "value": [
-                        "2017-09-15 00:00:00",
-                        "2017-12-01 00:00:00",
-                        "2018-02-01 00:00:00",
-                        "2018-05-01 00:00:00"
-                    ]
-                },
-                "start_capital": {
-                    "description": "Organisation capital (in GBP)",
-                    "value": "100000.00"
-                },
-                "max_num_treatments": {
-                    "description": "Maximum number of treatments allowed within one year",
-                    "value": 10
-                },
-                "sampling_spacing": {
-                    "description": "Time distance (in days) between fish samplings",
-                    "value": 14
-                }
-            }
+            "ncages": 6,
+            "location": [
+                190300,
+                665300
+            ],
+            "num_fish": 4000,
+            "start_date": "2017-10-01 00:00:00",
+            "cages_start_dates": [
+                "2017-10-01 00:00:00",
+                "2017-10-08 00:00:00",
+                "2017-10-15 00:00:00",
+                "2017-10-22 00:00:00",
+                "2017-10-29 00:00:00",
+                "2017-11-05 00:00:00"
+            ],
+            "treatment_type": "emb",
+            "treatment_dates": [
+                "2017-09-15 00:00:00",
+                "2017-12-01 00:00:00",
+                "2018-02-01 00:00:00",
+                "2018-05-01 00:00:00"
+            ],
+            "start_capital": "100000.00",
+            "max_num_treatments": 10,
+            "sampling_spacing": 14,
+            "defection_proba": 0.2
         },
         {
-            "description": "Test farm 2: Electric Boogaloo",
-            "value": {
-                "ncages": {
-                    "description": "Number of cages on the farm",
-                    "value": 3
-                },
-                "location": {
-                    "description": "Location of the farm",
-                    "value": [190300, 665300]
-                },
-                "num_fish": {
-                    "description": "Starting number of fish",
-                    "value": 4000
-                },
-                "start_date": {
-                    "description": "Start date of simulation of the farm",
-                    "value": "2017-10-05 00:00:00"
-                },
-                "cages_start_dates": {
-                    "description": "Start dates for individual cages",
-                    "value": [
-                        "2017-10-09 00:00:00",
-                        "2017-10-16 00:00:00",
-                        "2017-10-23 00:00:00"
-                    ]
-                },
-                "treatment_type": {
-                    "description": "Type of applied treatment",
-                    "value": "emb"
-                },
-                "treatment_dates": {
-                    "description": "Prescheduled treatment dates for each cage",
-                    "value": [
-                        "2017-09-16 00:00:00",
-                        "2017-12-02 00:00:00",
-                        "2018-02-02 00:00:00",
-                        "2018-05-02 00:00:00"
-                    ]
-                },
-                "start_capital": {
-                    "description": "Organisation capital (in GBP)",
-                    "value": "80000.00"
-                },
-                "max_num_treatments": {
-                    "description": "Maximum number of treatments allowed within one year",
-                    "value": 8
-                },
-                "sampling_spacing": {
-                    "description": "Time distance (in days) between fish samplings",
-                    "value": 7
-                }
-            }
+            "ncages": 3,
+            "location": [
+                190300,
+                665300
+            ],
+            "num_fish": 4000,
+            "start_date": "2017-10-05 00:00:00",
+            "cages_start_dates": [
+                "2017-10-09 00:00:00",
+                "2017-10-16 00:00:00",
+                "2017-10-23 00:00:00"
+            ],
+            "treatment_type": "emb",
+            "treatment_dates": [
+                "2017-09-16 00:00:00",
+                "2017-12-02 00:00:00",
+                "2018-02-02 00:00:00",
+                "2018-05-02 00:00:00"
+            ],
+            "start_capital": "80000.00",
+            "max_num_treatments": 8,
+            "sampling_spacing": 7,
+            "defection_proba": 0.2
         }
     ]
 }

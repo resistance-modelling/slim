@@ -4,58 +4,12 @@ a given body of water.
 See README.md for details.
 """
 import argparse
-import json
-import logging
 import sys
 from pathlib import Path
 
-from src import logger
+from src import logger, create_logger
 from src.Config import Config, to_dt
 from src.Simulator import Simulator
-
-
-def create_logger():
-    """
-    Create a logger that logs to both file (in debug mode) and terminal (info).
-    """
-    logger.setLevel(logging.DEBUG)
-    file_handler = logging.FileHandler("SeaLiceManagementGame.log", mode="w")
-    file_handler.setLevel(logging.DEBUG)
-    term_handler = logging.StreamHandler()
-    term_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    term_handler.setFormatter(formatter)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(term_handler)
-    logger.addHandler(file_handler)
-
-
-def generate_argparse_from_config(cfg_path: str, simulation_path: str):
-    parser = argparse.ArgumentParser(description="Sea lice simulation")
-
-    # TODO: we are parsing the config twice.
-    with open(cfg_path) as fp:
-        cfg_dict = json.load(fp)  # type: dict
-
-    with open(simulation_path) as fp:
-        simulation_dict = json.load(fp)  # type: dict
-
-    def add_to_group(group_name, data):
-        group = parser.add_argument_group(group_name)
-        for k, v in data.items():
-            if isinstance(v, list) or isinstance(v["value"], list) or isinstance(v["value"], dict):
-                continue # TODO: deal with them later, e.g. prop_a.prop_b for dicts?
-            value = v["value"]
-            description = v["description"]
-            value_type = type(value)
-
-
-            group.add_argument(f"--{k.replace('_', '-')}", type=value_type, help=description, default=value)
-
-    add_to_group("Organisation parameters", simulation_dict)
-    add_to_group("Runtime parameters", cfg_dict)
-
-    return parser
 
 
 if __name__ == "__main__":
@@ -69,7 +23,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sea lice simulation")
     parser.add_argument("simulation_path",
                         type=str,
-                        help="Output directory path. The base directory will be used for logging")
+                        help="Output directory path. The base directory will be used for logging and serialisation " + \
+                             "of the simulator state.")
     parser.add_argument("param_dir",
                         type=str,
                         help="Directory of simulation parameters files.")
@@ -77,10 +32,6 @@ if __name__ == "__main__":
                         help="Don't log to console or file.",
                         default=False,
                         action="store_true")
-    parser.add_argument("--save-rate",
-                        help="Interval to dump the simulation state. Useful for visualisation and debugging. Warning: saving a run is a slow operation.",
-                        type=int,
-                        required=False)
 
     resume_group = parser.add_mutually_exclusive_group()
     resume_group.add_argument("--resume",
@@ -89,6 +40,12 @@ if __name__ == "__main__":
     resume_group.add_argument("--resume-after",
                               type=int,
                               help="(DEBUG) resume the simulator from a given number of days since the beginning of the simulation. All configuration variables will be ignored.")
+    resume_group.add_argument("--save-rate",
+                              help="Interval to dump the simulation state. Useful for visualisation and debugging." + \
+                                   "Warning: saving a run is a slow operation. Saving and resuming at the same time" + \
+                                   "is forbidden. If this is not provided, only the last timestep is serialised",
+                              type=int,
+                              required=False)
 
     args, unknown = parser.parse_known_args()
 
@@ -105,12 +62,13 @@ if __name__ == "__main__":
 
     cfg_basename = Path(args.param_dir).parent
     cfg_path = str(cfg_basename / "config.json")
+    cfg_schema_path = str(cfg_basename / "config.schema.json")
 
     # silence if needed
     if args.quiet:
         logger.addFilter(lambda record: False)
 
-    config_parser = generate_argparse_from_config(cfg_path, args.param_dir + "/params.json")
+    config_parser = Config.generate_argparse_from_config(cfg_schema_path, str(cfg_basename / "params.schema.json"))
     config_args = config_parser.parse_args(unknown)
 
     # create the config object
@@ -119,9 +77,9 @@ if __name__ == "__main__":
     # run the simulation
     if args.resume:
         resume_time = to_dt(args.resume)
-        sim = Simulator.reload(output_folder, simulation_id, timestamp=resume_time)  # type: Simulator
+        sim: Simulator = Simulator.reload(output_folder, simulation_id, timestamp=resume_time) 
     elif args.resume_after:
-        sim = Simulator.reload(output_folder, simulation_id, resume_after=args.resume_after)  # type: Simulator
+        sim: Simulator = Simulator.reload(output_folder, simulation_id, resume_after=args.resume_after) 
     else:
         sim = Simulator(output_folder, simulation_id, cfg)
     sim.run_model()

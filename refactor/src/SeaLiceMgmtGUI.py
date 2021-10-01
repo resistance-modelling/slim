@@ -68,9 +68,8 @@ class Window(QMainWindow):
         self.licePopulationPlots = [self.plotPane.addPlot(title=f"Lice Population of farm {i}", row=0, col=i)
                                     for i in range(num_farms)]
         self.payoffPlot = self.plotPane.addPlot(title="Cumulated payoff", row=1, col=0)
-        # self.payoffPlot.setXLink(self.licePopulationPlots[0])
 
-        self.licePopulationLegend = None
+        self.licePopulationLegend: Optional[pg.LegendItem] = None
 
         self.geno_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
         self.stages_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
@@ -223,7 +222,6 @@ class Window(QMainWindow):
 
         payoffs = [float(state.payoff) for state in self.states]
 
-        # TODO!
         self.payoffPlot.plot(payoffs)
 
         # keep ranges consistent
@@ -294,7 +292,7 @@ class Window(QMainWindow):
             filename_as_path = Path(option)
             if filename_as_path.exists():
                 new_action = QAction(f"&{idx}: {option}", self)
-                # ugly hack as python does not capture "option" but only a reference to it
+                # ugly hack as python does not capture "option" but only a lexical reference to it
                 new_action.triggered.connect(lambda _, option=option: self._createLoaderWorker(option))
                 new_recent_options.append(option)
                 self.recentFilesActions.append(new_action)

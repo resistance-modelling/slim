@@ -46,13 +46,13 @@ class TreatmentParams(ABC):
     name = ""
 
     def __init__(self, payload):
-        self.pheno_resistance = self.parse_pheno_resistance(payload["pheno_resistance"]["value"])
-        self.price_per_kg = Money(payload["price_per_kg"]["value"])
-        self.quadratic_fish_mortality_coeffs = np.array(payload["quadratic_fish_mortality_coeffs"]["value"])
+        self.pheno_resistance = self.parse_pheno_resistance(payload["pheno_resistance"])
+        self.price_per_kg = Money(payload["price_per_kg"])
+        self.quadratic_fish_mortality_coeffs = np.array(payload["quadratic_fish_mortality_coeffs"])
 
-        self.effect_delay: int = payload["effect_delay"]["value"]
-        self.durability_temp_ratio: float = payload["durability_temp_ratio"]["value"]
-        self.application_period: int = payload["application_period"]["value"]
+        self.effect_delay: int = payload["effect_delay"]
+        self.durability_temp_ratio: float = payload["durability_temp_ratio"]
+        self.application_period: int = payload["application_period"]
 
     @staticmethod
     def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:

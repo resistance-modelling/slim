@@ -78,11 +78,11 @@ class Cage:
         self.num_fish = cfg.farms[self.farm_id].num_fish
         self.num_infected_fish = self.get_mean_infected_fish()
 
-        self.hatching_events = PriorityQueue()  # type: PriorityQueue[EggBatch]
-        self.arrival_events = PriorityQueue()  # type: PriorityQueue[TravellingEggBatch]
-        self.treatment_events = PriorityQueue()  # type: PriorityQueue[TreatmentEvent]
+        self.hatching_events: PriorityQueue[EggBatch] = PriorityQueue()
+        self.arrival_events: PriorityQueue[TravellingEggBatch] = PriorityQueue()
+        self.treatment_events: PriorityQueue[TreatmentEvent] = PriorityQueue()
 
-        self.last_effective_treatment = None  # type: Optional[TreatmentEvent]
+        self.last_effective_treatment: Optional[TreatmentEvent] = None
 
     def to_json_dict(self):
         """
@@ -101,7 +101,6 @@ class Cage:
         filtered_vars["lice_population"] = self.lice_population.to_json_dict()
         filtered_vars["geno_by_lifestage"] = self.lice_population.geno_by_lifestage.to_json_dict()
         filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[len("GeneticMechanism."):]
-
 
         return filtered_vars
 
@@ -149,8 +148,8 @@ class Cage:
             treatment_mortality = self.lice_population.get_empty_geno_distrib()
             fish_deaths_natural, fish_deaths_from_lice = 0, 0
             num_infection_events = 0
-            avail_dams_batch = None  # type: OptionalDamBatch
-            new_egg_batch = None  # type: OptionalEggBatch
+            avail_dams_batch: OptionalDamBatch = None
+            new_egg_batch: OptionalEggBatch = None
             cost = self.cfg.monthly_cost / 28
 
         else:
@@ -200,7 +199,7 @@ class Cage:
         logger.debug("\t\tfinal lice population= {}".format(self.lice_population))
 
         egg_distrib = GenoDistrib()
-        hatch_date = None  # type: Optional[dt.datetime]
+        hatch_date: Optional[dt.datetime] = None
         if cur_date >= self.start_date and new_egg_batch:
             logger.debug("\t\tfinal fish population = {}".format(self.num_fish))
             egg_distrib = new_egg_batch.geno_distrib
@@ -223,14 +222,14 @@ class Cage:
         pop_from_queue(self.treatment_events, cur_date, cts)
 
         if self.last_effective_treatment is None or \
-            self.last_effective_treatment.affecting_date > cur_date or \
+                self.last_effective_treatment.affecting_date > cur_date or \
                 cur_date > self.last_effective_treatment.treatment_window:
             return geno_treatment_distrib
 
         treatment_type = self.last_effective_treatment.treatment_type
 
         logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
-                                                                           self.id, cur_date))
+                                                                      self.id, cur_date))
 
         if treatment_type == Treatment.emb:
             # For now, assume a simple heterozygous distribution with a mere geometric distribution
@@ -292,7 +291,7 @@ class Cage:
                         dead_lice_dist[stage][geno] = num_dead
 
                 logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
-                                  .format(self.farm_id, self.id, dead_lice_dist))
+                             .format(self.farm_id, self.id, dead_lice_dist))
 
         # Compute cost
         if self.last_effective_treatment is not None and self.last_effective_treatment.end_application_date > cur_date:
@@ -408,7 +407,7 @@ class Cage:
         lice_dist["L2"] = num_to_move
 
         logger.debug("\t\t\tdistribution of new lice lifecycle stages on farm {}/cage {} = {}"
-                          .format(self.farm_id, self.id, lice_dist))
+                     .format(self.farm_id, self.id, lice_dist))
 
         return new_L2, new_L4, new_females, new_males
 
@@ -435,7 +434,7 @@ class Cage:
         efficacy_window = self.last_effective_treatment.effectiveness_duration_days
 
         cur_date = self.start_date + dt.timedelta(days=days_since_start)
-        temperature = self.farm.year_temperatures[cur_date.month-1]
+        temperature = self.farm.year_temperatures[cur_date.month - 1]
         mortality_events_pp = 100 * mortality_events / self.num_fish
         fish_mass = self.average_fish_mass(days_since_start)
 
@@ -488,7 +487,7 @@ class Cage:
         fish_deaths_from_lice = self.cfg.rng.poisson(elf_death)
 
         logger.debug("\t\t\tnumber of background fish death {}, from lice {}"
-                          .format(fish_deaths_natural, fish_deaths_from_lice))
+                     .format(fish_deaths_natural, fish_deaths_from_lice))
 
         return fish_deaths_natural, fish_deaths_from_lice
 
@@ -709,7 +708,8 @@ class Cage:
         """
         return tuple(sorted({sire_geno, dam_geno}))
 
-    def generate_eggs_quantitative(self, sire: np.ndarray, dam: np.ndarray, number_eggs: int) -> QuantitativeGenoDistrib:
+    def generate_eggs_quantitative(self, sire: np.ndarray, dam: np.ndarray,
+                                   number_eggs: int) -> QuantitativeGenoDistrib:
         """Get number of eggs based on quantitative genetic mechanism.
 
         Additive genes, assume genetic state for an individual looks like a number between 0 and 1.
@@ -924,7 +924,7 @@ class Cage:
         affected_lice = Counter(iteround.saferound(affected_lice, 0))
 
         surviving_lice = Counter(iteround.saferound({
-            'L4': self.lice_population['L4'] / (2*infecting_lice) *
+            'L4': self.lice_population['L4'] / (2 * infecting_lice) *
                   affected_lice_gross * self.cfg.male_detachment_rate,
             'L5m': self.lice_population['L5m'] / infecting_lice *
                    affected_lice_gross * self.cfg.male_detachment_rate,
@@ -1012,7 +1012,8 @@ class Cage:
 
             # update population due to treatment
             # TODO: __isub__ here is broken
-            self.lice_population.geno_by_lifestage[stage] = self.lice_population.geno_by_lifestage[stage] - treatment_mortality[stage]
+            self.lice_population.geno_by_lifestage[stage] = self.lice_population.geno_by_lifestage[stage] - \
+                                                            treatment_mortality[stage]
 
         self.lice_population.remove_negatives()
 
@@ -1073,7 +1074,7 @@ class Cage:
         dead_lice_dist = {}
         for stage in lice_population:
             mortality_rate = lice_population[stage] * lice_mortality_rates[stage]
-            mortality = min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])  # type: int
+            mortality: int = min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
             dead_lice_dist[stage] = mortality
 
         logger.debug("\t\tbackground mortality distribution of dead lice = {}".format(dead_lice_dist))
