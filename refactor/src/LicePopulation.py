@@ -4,7 +4,7 @@ from heapq import heapify
 from queue import PriorityQueue
 from types import GeneratorType
 from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, TypeVar, Generic, Counter as CounterType, Optional, \
-    Iterable, TYPE_CHECKING
+    Iterable, TYPE_CHECKING, List
 
 import iteround
 import numpy as np
@@ -141,6 +141,16 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
         for k in self:
             self[k] = max(self[k], 0)
 
+    @staticmethod
+    def batch_sum(batches: List[GenoDistrib]) -> GenoDistrib:
+        # TODO: it's quite official quantitative is not the way to go
+        alleles = [('a',), ('A', 'a'), ('A',)]
+        res = {}
+        for allele in alleles:
+            res[allele] = sum([batch[allele] for batch in batches])
+
+        return GenoDistrib(res)
+
 
 GenoDistrib = GenericGenoDistrib[Alleles]
 QuantitativeGenoDistrib = GenericGenoDistrib[float]
@@ -231,7 +241,14 @@ class LicePopulation(MutableMapping[LifeStage, int]):
 
     @property
     def busy_dams(self):
-        return sum(map(lambda x: x.geno_distrib, self._busy_dams.queue), GenericGenoDistrib())
+        return GenericGenoDistrib.batch_sum([x.geno_distrib for x in self._busy_dams.queue])
+        """
+        s = GenericGenoDistrib()
+        for x in self._busy_dams.queue:
+            s += x.geno_distrib
+        return s
+        """
+        # return sum(map(lambda x: x.geno_distrib, self._busy_dams.queue), GenericGenoDistrib())
 
     def free_dams(self, cur_time) -> GenericGenoDistrib:
         """

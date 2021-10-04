@@ -159,8 +159,6 @@ class Config(RuntimeConfig):
         parser = argparse.ArgumentParser(description="Sea lice simulation")
 
         # TODO: we are parsing the config twice.
-        print(cfg_schema_path)
-        print(simulation_schema_path)
         with open(cfg_schema_path) as fp:
             cfg_dict: dict = json.load(fp) 
 

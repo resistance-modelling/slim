@@ -21,8 +21,9 @@ class Organisation:
     """
     An organisation is a cooperative of `Farm`s.
     """
+
     def __init__(self, cfg: Config, *args):
-        self.name: str = cfg.name 
+        self.name: str = cfg.name
         self.cfg = cfg
         self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
 
@@ -109,7 +110,7 @@ class Simulator:
         with open(data_file, "rb") as fp:
             while True:
                 try:
-                    sim_state: Simulator = pickle.load(fp) 
+                    sim_state: Simulator = pickle.load(fp)
                     states.append(sim_state)
                     times.append(sim_state.cur_day)
                 except EOFError:
@@ -131,7 +132,7 @@ class Simulator:
         # farms = states[0].organisation.farms
         for state, time in zip(states, times):
             for farm in state.organisation.farms:
-                farm_data[(time, "farm_" + str(farm.name))] =  farm.lice_genomics
+                farm_data[(time, "farm_" + str(farm.name))] = farm.lice_genomics
 
         dataframe = pd.DataFrame.from_dict(farm_data, orient='index')
 
@@ -177,7 +178,7 @@ class Simulator:
             logger.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")
 
         if not resume:
-            data_file = (self.output_dump_path).open(mode="wb")
+            data_file = self.output_dump_path.open(mode="wb")
 
         while self.cur_day <= self.cfg.end_date:
             logger.info("Current date = %s", self.cur_day)
@@ -185,8 +186,8 @@ class Simulator:
 
             # Save the model snapshot either when checkpointing or during the last iteration
             if not resume:
-                if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0)\
-                        or self.cur_day ==  self.cfg.end_date:
+                if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0) \
+                        or self.cur_day == self.cfg.end_date:
                     pickle.dump(self, data_file)
                 self.cur_day += dt.timedelta(days=1)
 

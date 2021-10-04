@@ -118,7 +118,7 @@ class TestFarm:
         for allocation_keys in allocation_keys_list:
             assert allocation_keys == hatch_keys
 
-    @pytest.mark.parametrize("nbins", [(0), (-10)])
+    @pytest.mark.parametrize("nbins", [0, (-10)])
     def test_get_cage_allocation_nonpositive_bins(self, first_farm, nbins):
         with pytest.raises(Exception):
             first_farm.get_cage_allocation(nbins, {})

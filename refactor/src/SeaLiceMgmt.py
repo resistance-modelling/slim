@@ -4,6 +4,7 @@ a given body of water.
 See README.md for details.
 """
 import argparse
+import cProfile
 import sys
 from pathlib import Path
 
@@ -32,6 +33,11 @@ if __name__ == "__main__":
                         help="Don't log to console or file.",
                         default=False,
                         action="store_true")
+    parser.add_argument("--profile",
+                        help="(DEBUG) Dump cProfile stats. The output path is your_simulation_path/profile.bin.",
+                        default=False,
+                        action="store_true"
+                        )
 
     resume_group = parser.add_mutually_exclusive_group()
     resume_group.add_argument("--resume",
@@ -82,4 +88,10 @@ if __name__ == "__main__":
         sim: Simulator = Simulator.reload(output_folder, simulation_id, resume_after=args.resume_after) 
     else:
         sim = Simulator(output_folder, simulation_id, cfg)
-    sim.run_model()
+
+    if not args.profile:
+        sim.run_model()
+    else:
+        profile_output_path = output_folder / f"profile_{simulation_id}.bin"
+        print(profile_output_path)
+        cProfile.run("sim.run_model()", str(profile_output_path))
