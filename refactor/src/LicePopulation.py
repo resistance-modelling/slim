@@ -53,7 +53,8 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
         keys = self.keys()
         values = list(self.values())
         np_values = np.array(values)
-        if np.isclose(np.sum(np_values), 0.0) or population == 0:
+        # np.isclose is slow and not needed: all values are granted to be real and positive.
+        if np.sum(np_values) < 1 or population == 0:
             return GenericGenoDistrib({k: 0 for k in keys})
 
         np_values = np_values * population / np.sum(np_values)
@@ -242,13 +243,6 @@ class LicePopulation(MutableMapping[LifeStage, int]):
     @property
     def busy_dams(self):
         return GenericGenoDistrib.batch_sum([x.geno_distrib for x in self._busy_dams.queue])
-        """
-        s = GenericGenoDistrib()
-        for x in self._busy_dams.queue:
-            s += x.geno_distrib
-        return s
-        """
-        # return sum(map(lambda x: x.geno_distrib, self._busy_dams.queue), GenericGenoDistrib())
 
     def free_dams(self, cur_time) -> GenericGenoDistrib:
         """
