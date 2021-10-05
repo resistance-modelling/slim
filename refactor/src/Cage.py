@@ -934,6 +934,7 @@ class Cage:
 
         return {k: int(v) for k, v in dying_lice.items() if v > 0}
 
+    @profile
     def promote_population(
             self,
             prev_stage: Union[str, GenericGenoDistrib],

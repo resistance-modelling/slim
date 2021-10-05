@@ -2,10 +2,16 @@ import numpy as np
 import pytest
 import datetime
 
+
+# ignore profiling
+import builtins
+builtins.__dict__['profile'] = lambda x: x
+
 from src.Config import Config
 from src.Simulator import Organisation
 from src.QueueTypes import EggBatch, DamAvailabilityBatch
 from src.LicePopulation import LicePopulation, GenoDistrib
+
 
 
 @pytest.fixture

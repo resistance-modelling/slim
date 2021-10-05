@@ -74,6 +74,7 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
     def copy(self: GenericGenoDistrib[GenoKey]) -> GenericGenoDistrib[GenoKey]:
         return GenericGenoDistrib(super().copy())
 
+    @profile
     def __add__(self, other: Union[GenericGenoDistrib[GenoKey], int]) -> GenericGenoDistrib[GenoKey]:
         """Overload add operation"""
         res = self.copy()
@@ -85,17 +86,33 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
             res.set(res.gross + other)
         return res
 
+    @profile
     def __sub__(self, other: Union[GenericGenoDistrib[GenoKey], int]) -> GenericGenoDistrib[GenoKey]:
         """Overload sub operation"""
-        res = self.copy()
 
         if isinstance(other, GenericGenoDistrib):
+            #res = GenericGenoDistrib()
+            #res.update(self)
+            res = self.copy()
+            #for k, v in other.items():
+            #    res[k] = self[k] - v
             for k, v in other.items():
                 res[k] -= v
+            return res
         else:
-            res.set(res.gross - other)
+            return self.normalise_to(self.gross - other)
 
-        return res
+
+        """
+        if isinstance(other, GenericGenoDistrib):
+            res = GenericGenoDistrib()
+            for k, v in other.items():
+                res[k] = self[k] - v
+            return res
+
+        return self.normalise_to(self.gross - other)
+
+        """
 
     def __mul__(self, other: Union[float, GenericGenoDistrib[GenoKey]]) -> GenericGenoDistrib[GenoKey]:
         """Multiply a distribution."""
@@ -145,12 +162,14 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
     @staticmethod
     def batch_sum(batches: List[GenoDistrib]) -> GenoDistrib:
         # TODO: it's quite official quantitative is not the way to go
+        # this function is ugly but it's a hotspot.
         alleles = [('a',), ('A', 'a'), ('A',)]
-        res = {}
+        res = GenericGenoDistrib()
         for allele in alleles:
-            res[allele] = sum([batch[allele] for batch in batches])
+            for batch in batches:
+                res[allele] += batch[allele]
 
-        return GenoDistrib(res)
+        return res
 
 
 GenoDistrib = GenericGenoDistrib[Alleles]
@@ -308,6 +327,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
 
         assert self.busy_dams <= self.geno_by_lifestage["L5f"]
 
+    @profile
     def _clip_dams_to_stage(self):
         # make sure that self.busy_dams <= self.geno_by_lifestage["L5f"]
         offset = self.busy_dams - self.geno_by_lifestage["L5f"]
@@ -356,9 +376,10 @@ class GenotypePopulation(MutableMapping[LifeStage, GenericGenoDistrib]):
     def __setitem__(self, stage: LifeStage, value: GenoDistrib):
         # update the value and the gross population accordingly
         value.truncate_negatives()
-        old_value = self[stage].copy()
+        old_value = self[stage]
         old_value_sum = self._lice_population[stage]
-        self._store[stage] = value.copy()
+        delta = value - old_value
+        self._store[stage] = value#.copy()
         value_sum = value.gross
         self._lice_population.raw_update_value(stage, value_sum)
 
@@ -366,7 +387,6 @@ class GenotypePopulation(MutableMapping[LifeStage, GenericGenoDistrib]):
         # if it decreases we subtract the delta from each dam event
         if stage == "L5f" and value_sum < old_value_sum:
             # calculate the deltas and
-            delta = value - old_value
             busy_dams_denom = self._lice_population.busy_dams.gross
             if busy_dams_denom == 0:
                 self._lice_population.clear_busy_dams()
