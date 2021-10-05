@@ -7,6 +7,7 @@ from typing import Tuple, List, Optional
 
 import dill as pickle
 import pandas as pd
+from tqdm import tqdm
 
 from src import logger
 from src.Config import Config
@@ -180,8 +181,9 @@ class Simulator:
         if not resume:
             data_file = self.output_dump_path.open(mode="wb")
 
-        while self.cur_day <= self.cfg.end_date:
-            logger.info("Current date = %s", self.cur_day)
+        num_days = (self.cfg.end_date - self.cur_day).days
+        for day in tqdm(range(num_days)):
+            logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
             self.payoff += self.organisation.step(self.cur_day)
 
             # Save the model snapshot either when checkpointing or during the last iteration
@@ -189,7 +191,7 @@ class Simulator:
                 if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0) \
                         or self.cur_day == self.cfg.end_date:
                     pickle.dump(self, data_file)
-                self.cur_day += dt.timedelta(days=1)
+            self.cur_day += dt.timedelta(days=1)
 
         if not resume:
             data_file.close()

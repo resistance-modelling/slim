@@ -22,11 +22,12 @@ Alleles = Union[Tuple[Allele, ...]]
 
 GenoKey = TypeVar('GenoKey', Alleles, float)
 
+@profile
 def largest_remainder(nums: np.ndarray):
     # a vectorised implementation of largest remainder
     approx = np.trunc(nums)
     diff = nums - approx
-    diff_sum = np.trunc(np.sum(nums)) - np.sum(approx)
+    diff_sum = np.sum(diff)
     positions = np.argsort(diff)
     tweaks = int(min(len(nums), abs(diff_sum)))
     if diff_sum < 0:
