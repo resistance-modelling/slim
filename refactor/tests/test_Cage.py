@@ -85,8 +85,8 @@ class TestCage:
                 assert sum(mortality_updates[stage].values()) == 0
 
         assert first_cage.last_effective_treatment.affecting_date == cur_day
-        assert mortality_updates['L5f'] == {('a',): 2}
-        assert mortality_updates['L5m'] == {('A', 'a'): 1, ('a',): 2}
+        assert mortality_updates['L5f'] == {('a',): 3}
+        assert mortality_updates['L5m'] == {('a',): 3}
         assert mortality_updates['L4'] == {('A', 'a'): 1, ('a',): 8}
         assert mortality_updates['L3'] == {('A',): 2, ('A', 'a'): 2, ('a',): 8}
         assert first_cage.is_treated(cur_day)

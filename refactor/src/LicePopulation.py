@@ -22,6 +22,19 @@ Alleles = Union[Tuple[Allele, ...]]
 
 GenoKey = TypeVar('GenoKey', Alleles, float)
 
+def largest_remainder(nums: np.ndarray):
+    # a vectorised implementation of largest remainder
+    approx = np.trunc(nums)
+    diff = nums - approx
+    diff_sum = np.trunc(np.sum(nums)) - np.sum(approx)
+    positions = np.argsort(diff)
+    tweaks = int(min(len(nums), abs(diff_sum)))
+    if diff_sum < 0:
+        approx[positions[:tweaks]] -= 1
+    else:
+        approx[positions[::-1][:tweaks]] += 1
+
+    return approx
 
 class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
     """
@@ -49,6 +62,7 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
         else:
             super().__init__()
 
+    @profile
     def normalise_to(self, population: int) -> GenericGenoDistrib[GenoKey]:
         keys = self.keys()
         values = list(self.values())
@@ -59,7 +73,8 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
 
         np_values = np_values * population / np.sum(np_values)
 
-        rounded_values = iteround.saferound(np_values.tolist(), 0)
+        # TODO: rewrite saferound to be vectorised
+        rounded_values = largest_remainder(np_values).tolist()
         return GenericGenoDistrib(dict(zip(keys, map(int, rounded_values))))
 
     def set(self, other: int):
@@ -74,30 +89,27 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
     def copy(self: GenericGenoDistrib[GenoKey]) -> GenericGenoDistrib[GenoKey]:
         return GenericGenoDistrib(super().copy())
 
-    @profile
     def __add__(self, other: Union[GenericGenoDistrib[GenoKey], int]) -> GenericGenoDistrib[GenoKey]:
         """Overload add operation"""
         res = self.copy()
 
         if isinstance(other, GenericGenoDistrib):
+            res = GenericGenoDistrib()
+            res.update(self)
             for k, v in other.items():
-                res[k] += v
+                res[k] = self[k] + v
+            return res
         else:
-            res.set(res.gross + other)
-        return res
+            return self.normalise_to(self.gross + other)
 
-    @profile
     def __sub__(self, other: Union[GenericGenoDistrib[GenoKey], int]) -> GenericGenoDistrib[GenoKey]:
         """Overload sub operation"""
 
         if isinstance(other, GenericGenoDistrib):
-            #res = GenericGenoDistrib()
-            #res.update(self)
-            res = self.copy()
-            #for k, v in other.items():
-            #    res[k] = self[k] - v
+            res = GenericGenoDistrib()
+            res.update(self)
             for k, v in other.items():
-                res[k] -= v
+                res[k] = self[k] - v
             return res
         else:
             return self.normalise_to(self.gross - other)
@@ -120,7 +132,7 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
             keys = self.keys()
             values = [v * other for v in self.values()]
             if isinstance(other, float):
-                values = iteround.saferound(values, 0)
+                values = largest_remainder(np.array(values)).tolist()
         else:
             # pairwise product
             # Sometimes it may be helpful to not round
@@ -144,14 +156,6 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
         merged_keys = set(list(self.keys()) + list(other.keys()))
         return all(self[k] <= other[k] for k in merged_keys)
 
-    def __round__(self, n: Optional[int] = None) -> GenericGenoDistrib[GenoKey]:
-        """Perform rounding to get an actual population distribution."""
-        if n is None:
-            n = 0
-
-        values = iteround.saferound(list(self.values()), n)
-        return GenericGenoDistrib(dict(zip(self.keys(), values)))
-
     def to_json_dict(self):
         return {"".join(k): v for k, v in self.items()}
 
@@ -160,6 +164,7 @@ class GenericGenoDistrib(CounterType[GenoKey], Generic[GenoKey]):
             self[k] = max(self[k], 0)
 
     @staticmethod
+    @profile
     def batch_sum(batches: List[GenoDistrib]) -> GenoDistrib:
         # TODO: it's quite official quantitative is not the way to go
         # this function is ugly but it's a hotspot.
@@ -208,6 +213,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         for stage, distrib in geno_data.items():
             self._cache[stage] = distrib.gross
 
+    @profile
     def __setitem__(self, stage: LifeStage, value: int):
         # If one attempts to make gross modifications to the population these will be repartitioned according to the
         # current genotype information.
@@ -373,6 +379,7 @@ class GenotypePopulation(MutableMapping[LifeStage, GenericGenoDistrib]):
         for k, v in geno_data.items():
             self._store[k] = v.copy()
 
+    @profile
     def __setitem__(self, stage: LifeStage, value: GenoDistrib):
         # update the value and the gross population accordingly
         value.truncate_negatives()

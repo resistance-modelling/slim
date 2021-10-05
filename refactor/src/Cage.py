@@ -18,7 +18,7 @@ from src.Config import Config
 from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib,
-                                QuantitativeGenoDistrib, GenericGenoDistrib)
+                                QuantitativeGenoDistrib, GenericGenoDistrib, largest_remainder)
 from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent, pop_from_queue
 from src.JSONEncoders import CustomFarmEncoder
 
@@ -918,17 +918,20 @@ class Cage:
                                     num_dead_fish / self.num_infected_fish)
         infecting_lice = self.get_infecting_population()
 
-        affected_lice = {stage: self.lice_population[stage] / infecting_lice * affected_lice_gross
-                         for stage in self.susceptible_stages}
+        affected_lice_quotas = np.array([self.lice_population[stage] / infecting_lice * affected_lice_gross
+                         for stage in self.susceptible_stages])
+        affected_lice_np = largest_remainder(affected_lice_quotas)
 
-        affected_lice = Counter(iteround.saferound(affected_lice, 0))
+        affected_lice = Counter(dict(zip(self.susceptible_stages, affected_lice_np.tolist())))
 
-        surviving_lice = Counter(iteround.saferound({
-            'L4': self.lice_population['L4'] / (2 * infecting_lice) *
-                  affected_lice_gross * self.cfg.male_detachment_rate,
-            'L5m': self.lice_population['L5m'] / infecting_lice *
-                   affected_lice_gross * self.cfg.male_detachment_rate,
-        }, 0))  # type: Counter[str]
+        surviving_lice_quotas = np.array([
+            self.lice_population['L4'] / (2 * infecting_lice) *
+            affected_lice_gross * self.cfg.male_detachment_rate,
+            self.lice_population['L5m'] / infecting_lice *
+            affected_lice_gross * self.cfg.male_detachment_rate,
+        ])
+        surviving_lice_np = largest_remainder(surviving_lice_quotas)
+        surviving_lice = Counter(dict(zip(['L4', 'L5m'], surviving_lice_np.tolist())))
 
         dying_lice = affected_lice - surviving_lice
 
