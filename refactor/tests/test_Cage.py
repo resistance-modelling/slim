@@ -369,25 +369,6 @@ class TestCage:
             assert key == dam
             assert eggs[key] == target_eggs[key]
 
-    def test_generate_eggs_quantitative(self, first_cage):
-        first_cage.cfg.geno_mutation_rate = 0
-        first_cage.genetic_mechanism = GeneticMechanism.quantitative
-        sire = 0.7
-        dam = 0.0
-        num_matings = 10
-        target_eggs = {0.4: 2550}
-        eggs = first_cage.generate_eggs(sire, dam, num_matings)
-        for key in eggs:
-            assert eggs[key] == target_eggs[key]
-
-        sire = 0.2
-        dam = 0.2
-        num_matings = 10
-        target_eggs = {0.2: 2401}
-        eggs = first_cage.generate_eggs(sire, dam, num_matings)
-        for key in eggs:
-            assert eggs[key] == target_eggs[key]
-
     def test_generate_eggs_discrete(self, first_cage):
         first_cage.cfg.geno_mutation_rate = 0
         first_cage.genetic_mechanism = GeneticMechanism.discrete

@@ -25,7 +25,6 @@ class GeneticMechanism(Enum):
     """
     discrete = 1
     maternal = 2
-    quantitative = 3
 
 
 class HeterozygousResistance(Enum):

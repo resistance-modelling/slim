@@ -13,7 +13,7 @@ from src import logger
 from src.Config import Config
 from src.Farm import Farm
 from src.JSONEncoders import CustomFarmEncoder
-from src.LicePopulation import GenericGenoDistrib
+from src.LicePopulation import GenoDistrib
 from src.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
 from src.TreatmentTypes import Money
 
@@ -139,7 +139,7 @@ class Simulator:
 
         # extract cumulative geno info regardless of the stage
         def aggregate_geno(data):
-            return GenericGenoDistrib.batch_sum(data)
+            return GenoDistrib.batch_sum(data)
 
         aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
 

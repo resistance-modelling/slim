@@ -10,11 +10,13 @@ from pathlib import Path
 
 # This needs to be done before import src.
 # Maybe a cleaner approach would be to use an env var?
+"""
 import line_profiler
 import builtins
 import atexit
 prof = line_profiler.LineProfiler()
 builtins.__dict__['profile'] = prof
+"""
 
 from src import logger, create_logger
 from src.Config import Config, to_dt
@@ -102,5 +104,5 @@ if __name__ == "__main__":
     else:
         profile_output_path = output_folder / f"profile_{simulation_id}.bin"
         print(profile_output_path)
-        atexit.register(lambda prof=prof: prof.print_stats(output_unit=1e-3))
+        # atexit.register(lambda prof=prof: prof.print_stats(output_unit=1e-3))
         cProfile.run("sim.run_model()", str(profile_output_path))
