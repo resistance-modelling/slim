@@ -23,6 +23,7 @@ Alleles = Union[Tuple[Allele, ...]]
 
 from line_profiler_pycharm import profile
 
+
 def largest_remainder(nums: np.ndarray):
     # a vectorised implementation of largest remainder
     nums = nums.astype(np.float32)
@@ -170,6 +171,12 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
 
     def __len__(self):
         return len(self._store)
+
+    def __repr__(self):
+        return repr(self._store)
+
+    def __str__(self):
+        return "GenoDistrib(" + str(self._store) + ")"
 
     def to_json_dict(self):
         return {"".join(k): v for k, v in self.items()}

@@ -88,7 +88,7 @@ class TestCage:
         assert mortality_updates['L5f'] == {('a',): 3}
         assert mortality_updates['L5m'] == {('a',): 3}
         assert mortality_updates['L4'] == {('A', 'a'): 1, ('a',): 8}
-        assert mortality_updates['L3'] == {('A',): 2, ('A', 'a'): 2, ('a',): 8}
+        assert mortality_updates['L3'] == {('A',): 2, ('A', 'a'): 1, ('a',): 8}
         assert first_cage.is_treated(cur_day)
 
         assert 55000 <= cost <= 60000
@@ -108,10 +108,10 @@ class TestCage:
         cur_day = treatment_dates[1] + dt.timedelta(days=10)
         mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
 
-        assert mortality_updates['L3'] == {('A', 'a'): 2, ('a',): 8}
-        assert mortality_updates['L4'] == {('A',): 1, ('A', 'a'): 1, ('a',): 8}
-        assert mortality_updates['L5m'] == {('a',): 2}
-        assert mortality_updates['L5f'] == {('a',): 2}
+        assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 3, ('a',): 8}
+        assert mortality_updates['L4'] == {('A', 'a'): 2, ('a',): 8}
+        assert mortality_updates['L5m'] == {('a',): 3, ('A', 'a'): 2}
+        assert mortality_updates['L5f'] == {('a',): 3, ('A', 'a'): 2}
 
         assert cost == 0
 
@@ -336,7 +336,7 @@ class TestCage:
         first_cage_population.clear_busy_dams()
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day, GenoDistrib({('A', 'a'): 15})))
 
-        target_eggs = {('a',): 1545.5, ('A',): 763.0, tuple(sorted(('a', 'A'))): 6842.5}
+        target_eggs = {('A', 'a'): 5325.5, ('a',): 3062.5, ('A',): 763.0}
         target_delta_dams = {('A',): 2, ('a',): 4}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
@@ -346,7 +346,7 @@ class TestCage:
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('a',): 1574.5, tuple(sorted(('a', 'A'))): 1537.5, ('A',): 1015.0}
+        target_mutated_eggs = {('a',): 1574.5, tuple(sorted(('a', 'A'))): 2552.5}
 
         _, delta_mutated_eggs = first_cage.do_mating_events()
         assert delta_mutated_eggs == target_mutated_eggs
@@ -551,7 +551,7 @@ class TestCage:
         new_L4 = first_cage.lice_population.geno_by_lifestage["L4"]
 
         target_population = sum(old_L4.values()) + entering_lice - leaving_lice
-        target_geno = {('A',): 532, ('a',): 534, ('A', 'a'): 534}
+        target_geno = {('A',): 533, ('a',): 533, ('A', 'a'): 534}
 
         assert new_L4 == target_geno
         assert sum(new_L4.values()) == sum(old_L4.values()) + entering_lice - leaving_lice
@@ -673,10 +673,9 @@ class TestCage:
         for stage in Cage.susceptible_stages:
             first_cage.lice_population[stage] *= 100
 
-        rate = first_cage.get_mean_infected_fish() / first_cage.get_infecting_population()
         dead_lice_target = {
             'L3': 190,
-            'L4': 123,
+            'L4': 124,
             'L5m': 19,
             'L5f': 63
         }
@@ -826,4 +825,4 @@ class TestCage:
         assert first_cage.lice_population["L5f"] < 1000
         assert first_cage.lice_population.busy_dams.gross < old_busy_dams_gross
         assert first_cage.lice_population.busy_dams <= old_busy_dams
-        assert 800 <= first_cage.lice_population.busy_dams.gross <= 840
+        assert 800 <= first_cage.lice_population.busy_dams.gross <= 900
