@@ -171,9 +171,6 @@ class Simulator:
         """
         logger.info("running simulation, saving to %s", self.output_dir)
 
-        assert not (self.cfg.save_rate and resume), \
-            "Resuming and serialising intermediate steps is not allowed."
-
         # create a file to store the population data from our simulation
         if resume and not self.output_dump_path.exists():
             logger.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")

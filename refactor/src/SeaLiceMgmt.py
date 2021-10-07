@@ -91,6 +91,7 @@ if __name__ == "__main__":
     cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate)
 
     # run the simulation
+    resume = True
     if args.resume:
         resume_time = to_dt(args.resume)
         sim: Simulator = Simulator.reload(output_folder, simulation_id, timestamp=resume_time) 
@@ -98,9 +99,10 @@ if __name__ == "__main__":
         sim: Simulator = Simulator.reload(output_folder, simulation_id, resume_after=args.resume_after) 
     else:
         sim = Simulator(output_folder, simulation_id, cfg)
+        resume = False
 
     if not args.profile:
-        sim.run_model()
+        sim.run_model(resume)
     else:
         profile_output_path = output_folder / f"profile_{simulation_id}.bin"
         print(profile_output_path)
