@@ -551,7 +551,7 @@ class TestCage:
         new_L4 = first_cage.lice_population.geno_by_lifestage["L4"]
 
         target_population = sum(old_L4.values()) + entering_lice - leaving_lice
-        target_geno = {('A',): 533, ('a',): 533, ('A', 'a'): 534}
+        target_geno = {('A',): 533, ('a',): 534, ('A', 'a'): 533}
 
         assert new_L4 == target_geno
         assert sum(new_L4.values()) == sum(old_L4.values()) + entering_lice - leaving_lice
@@ -662,7 +662,7 @@ class TestCage:
         dead_fish = 5
         dead_lice_target = {
             'L3': 2,
-            'L4': 1,
+            'L4': 2,
             'L5m': 1,
         }
 

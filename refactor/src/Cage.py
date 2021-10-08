@@ -900,14 +900,14 @@ class Cage:
 
         affected_lice = Counter(dict(zip(self.susceptible_stages, affected_lice_np.tolist())))
 
-        surviving_lice_quotas = np.array([
+        #
+        surviving_lice_quotas = np.rint(np.trunc([
             self.lice_population['L4'] / (2 * infecting_lice) *
             affected_lice_gross * self.cfg.male_detachment_rate,
             self.lice_population['L5m'] / infecting_lice *
             affected_lice_gross * self.cfg.male_detachment_rate,
-        ])
-        surviving_lice_np = largest_remainder(surviving_lice_quotas)
-        surviving_lice = Counter(dict(zip(['L4', 'L5m'], surviving_lice_np.tolist())))
+        ]))
+        surviving_lice = Counter(dict(zip(['L4', 'L5m'], surviving_lice_quotas.tolist())))
 
         dying_lice = affected_lice - surviving_lice
 

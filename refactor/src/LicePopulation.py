@@ -26,17 +26,26 @@ from line_profiler_pycharm import profile
 
 def largest_remainder(nums: np.ndarray):
     # a vectorised implementation of largest remainder
+    assert np.all(nums >= 0) or np.all(nums <= 0)
+
     nums = nums.astype(np.float32)
     approx = np.trunc(nums, dtype=np.float32)
-    diff = nums - approx
-    diff_sum = int(np.sum(diff))
-    positions = np.argsort(diff)
-    tweaks = min(len(nums), abs(diff_sum))
-    if diff_sum > 0:
-        approx[positions[::-1][:tweaks]] += 1.0
-    else:
-        approx[positions[:tweaks]] -= 1.0
 
+    while True:
+        diff = nums - approx
+        diff_sum = int(np.rint(np.sum(diff)))
+
+        if diff_sum == 0:
+            break
+
+        positions = np.argsort(diff)
+        tweaks = min(len(nums), abs(diff_sum))
+        if diff_sum > 0:
+            approx[positions[::-1][:tweaks]] += 1.0
+        else:
+            approx[positions[:tweaks]] -= 1.0
+
+    assert np.rint(np.sum(approx)) == np.rint(np.sum(nums)), f"{approx} is not summing to {nums}, as the first sums to {np.sum(approx)} and the second to {np.sum(nums)}"
     return approx
 
 
@@ -59,7 +68,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         # to prevent the default behaviour (Counter counts all the instances of the elements) we have to check
         # for generators
 
-        self._store: Dict[Alleles, float] = {}
+        self._store = {}
 
         if params:
             if isinstance(params, GeneratorType):
@@ -70,6 +79,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
                 self._store.update(params._store)
 
     def normalise_to(self, population: int) -> GenoDistrib:
+        assert np.rint(population) == population, f"{population} is not an integer"
         keys = self.keys()
         values = list(self.values())
         np_values = np.array(values)
@@ -348,11 +358,11 @@ class LicePopulation(MutableMapping[LifeStage, int]):
             self.__clear_empty_dams()
             partitions = np.array([event.geno_distrib.gross for event in self._busy_dams.queue])
             total_busy = np.sum(partitions)
-            ratios = partitions / total_busy
+            proportions = largest_remainder(num * partitions / total_busy)
 
             # TODO: rounding this with iteround isn't easy so we need to make sure dams are clipped
-            for event, ratio in zip(self._busy_dams.queue, ratios):
-                event.geno_distrib.set(num * ratio)
+            for event, new_population in zip(self._busy_dams.queue, proportions):
+                event.geno_distrib.set(new_population)
 
             self._clip_dams_to_stage()
 

@@ -14,6 +14,10 @@ resistanceBVs*.txt
 resistanceBVs*.csv
 lice_counts*.txt
 
+# outputs
+*.bin
+*.pickle
+
 # Testing
 .pytest_cache/
 .coverage
@@ -22,6 +26,10 @@ coverage.xml
 
 # Typechecking
 /.pytype
+
+# Profiling
+*.prof
+*.pclprof
 
 # Original .gitignore
 Figures/
