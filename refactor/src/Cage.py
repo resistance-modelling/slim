@@ -206,6 +206,7 @@ class Cage:
             hatch_date = new_egg_batch.hatch_date
             logger.debug("\t\tlice offspring = {}".format(sum(egg_distrib.values())))
 
+        assert egg_distrib.is_positive()
         return egg_distrib, hatch_date, cost
 
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
@@ -627,8 +628,8 @@ class Cage:
 
     def generate_eggs(
             self,
-            sire: Union[Alleles, np.ndarray],
-            dam: Union[Alleles, np.ndarray],
+            sire: Alleles,
+            dam: Alleles,
             num_matings: int
     ) -> GenoDistrib:
         """
@@ -647,7 +648,6 @@ class Cage:
         # TODO: since the genetic mechanism cannot change one could try to cache this
 
         if self.genetic_mechanism == GeneticMechanism.discrete:
-            sire, dam = cast(Alleles, sire), cast(Alleles, dam)
             geno_eggs = self.generate_eggs_discrete(sire, dam, number_eggs)
 
         elif self.genetic_mechanism == GeneticMechanism.maternal:
@@ -657,7 +657,9 @@ class Cage:
             raise Exception("Genetic mechanism must be 'maternal', or 'discrete' - '{}' given".format(
                 self.genetic_mechanism))
 
-        self.mutate(geno_eggs, mutation_rate=self.cfg.geno_mutation_rate)
+        assert geno_eggs.is_positive()
+        geno_eggs = self.mutate(geno_eggs, mutation_rate=self.cfg.geno_mutation_rate)
+        assert geno_eggs.is_positive()
         return geno_eggs
 
     def generate_eggs_discrete(self, sire: Alleles, dam: Alleles, number_eggs: int) -> GenoDistrib:
@@ -714,7 +716,7 @@ class Cage:
         """
         return GenoDistrib({dam: number_eggs})
 
-    def mutate(self, eggs: GenoDistrib, mutation_rate: float):
+    def mutate(self, eggs: GenoDistrib, mutation_rate: float) -> GenoDistrib:
         """
         Mutate the genotype distribution
 
@@ -722,7 +724,7 @@ class Cage:
         :param mutation_rate: the rate of mutation with respect to the number of eggs.
         """
         if mutation_rate == 0:
-            return
+            return eggs
 
         mutations = self.cfg.rng.poisson(mutation_rate * sum(eggs.values()))
 
@@ -742,14 +744,21 @@ class Cage:
 
         p = mask_matrix.flatten() / np.sum(mask_matrix)
 
-        swap_matrix = self.cfg.rng.multinomial(mutations, p).reshape(n, n)
+        # since I can't really be bothered to avoid negative mutations, we simply roll the dice every time until we get
+        # a favourable outcome. Not ideal, but it works...
 
-        for idx, allele in enumerate(alleles):
-            if allele not in eggs:
-                eggs[allele] = 0
-            eggs[allele] += np.sum(swap_matrix[idx, :]) - np.sum(swap_matrix[:, idx])
-            if eggs[allele] == 0:
-                del eggs[allele]
+        while True:
+            swap_matrix = self.cfg.rng.multinomial(mutations, p).reshape(n, n)
+            result = eggs.copy()
+            for idx, allele in enumerate(alleles):
+                to_add = np.sum(swap_matrix[idx, :]) - np.sum(swap_matrix[:, idx])
+                result[allele] += to_add
+                if result[allele] == 0:
+                    del result[allele]
+            if result.is_positive():
+                break
+
+        return result
 
     def select_dams(self, distrib_dams_available: GenoDistrib, num_dams: int) -> GenoDistrib:
         """
@@ -900,7 +909,6 @@ class Cage:
 
         affected_lice = Counter(dict(zip(self.susceptible_stages, affected_lice_np.tolist())))
 
-        #
         surviving_lice_quotas = np.rint(np.trunc([
             self.lice_population['L4'] / (2 * infecting_lice) *
             affected_lice_gross * self.cfg.male_detachment_rate,

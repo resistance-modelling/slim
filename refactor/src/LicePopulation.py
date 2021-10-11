@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 from abc import ABC
+import os
 from heapq import heapify
 from queue import PriorityQueue
 from types import GeneratorType
@@ -21,6 +23,14 @@ LifeStage = str
 Allele = str
 Alleles = Union[Tuple[Allele, ...]]
 
+
+"""
+if "PYCHARM_HOSTED" in os.environ:
+    from line_profiler_pycharm import profile
+else:
+    import builtins
+    builtins.__dict__["profile"] = lambda x: x
+"""
 from line_profiler_pycharm import profile
 
 
@@ -142,7 +152,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         if isinstance(other, float) or isinstance(other, int):
             keys = self.keys()
             values = [v * other for v in self.values()]
-            if isinstance(other, float):
+            if isinstance(other, float) and math.trunc(other) != other:
                 values = largest_remainder(np.array(values)).tolist()
         else:
             # pairwise product
@@ -166,6 +176,9 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
 
         merged_keys = set(list(self.keys()) + list(other.keys()))
         return all(self[k] <= other[k] for k in merged_keys)
+
+    def is_positive(self):
+        return all(v >= 0 for v in self.values())
 
     def __getitem__(self, key):
         return self._store.setdefault(key, 0)
@@ -196,13 +209,21 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
             self[k] = max(self[k], 0)
 
     @staticmethod
-    def batch_sum(batches: List[GenoDistrib]) -> GenoDistrib:
+    def batch_sum(batches: Union[List[GenoDistrib], List[Dict[str, int]]],
+                  as_pure_dict=False) -> Union[GenoDistrib, Dict[str, int]]:
         # this function is ugly but it's a hotspot.
-        alleles_to_idx = {('a',): 0, ('A', 'a'): 1, ('A',): 2}
+        alleles_to_idx = {('a',): 0, ('a'): 0,
+                          ('A', 'a'): 1,
+                          ('Aa'): 1,
+                          ('A',): 2,
+                          ('A'): 2}
         res_as_vector = [0, 0, 0]
         for batch in batches:
             for allele in batch:
                 res_as_vector[alleles_to_idx[allele]] += batch[allele]
+
+        if as_pure_dict:
+            return dict(zip(["a", "Aa", "A"], res_as_vector))
 
         return GenoDistrib({
             ('a',): res_as_vector[0],

@@ -346,7 +346,7 @@ class TestCage:
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('a',): 1574.5, tuple(sorted(('a', 'A'))): 2552.5}
+        target_mutated_eggs = {('a',): 1574.5, ('A', 'a'): 2552.5}
 
         _, delta_mutated_eggs = first_cage.do_mating_events()
         assert delta_mutated_eggs == target_mutated_eggs
@@ -360,14 +360,12 @@ class TestCage:
 
     def test_generate_eggs_maternal(self, first_cage):
         first_cage.genetic_mechanism = GeneticMechanism.maternal
-        sire = 'z'
-        dam = 'Z'
+        sire = ('a',)
+        dam = ('A',)
         num_matings = 10
-        target_eggs = {dam: 2550}
+        target_eggs = {('A',): 2550}
         eggs = first_cage.generate_eggs(sire, dam, num_matings)
-        for key in eggs:
-            assert key == dam
-            assert eggs[key] == target_eggs[key]
+        assert eggs == target_eggs
 
     def test_generate_eggs_discrete(self, first_cage):
         first_cage.cfg.geno_mutation_rate = 0
@@ -451,10 +449,23 @@ class TestCage:
     def test_egg_mutation(self, first_cage, sample_offspring_distrib):
         sample_offspring = copy.deepcopy(sample_offspring_distrib)
         mutations = 0.001
-        first_cage.mutate(sample_offspring, mutations)
+        mutated_offspring = first_cage.mutate(sample_offspring, mutations)
 
-        assert sample_offspring != sample_offspring_distrib
-        assert sample_offspring == {('a',): 199, ('A', 'a'): 301, ('A',): 100}
+        assert mutated_offspring != sample_offspring_distrib
+        assert mutated_offspring == {('a',): 199, ('A', 'a'): 301, ('A',): 100}
+
+        # corner case
+        offspring_bordering = GenoDistrib({('a',): 1, ('A',): 500, ('A', 'a'): 500})
+        for i in range(10):
+            mutated_offspring = first_cage.mutate(offspring_bordering, mutations)
+            assert mutated_offspring.gross == offspring_bordering.gross
+            assert mutated_offspring.is_positive()
+
+        # domino effect case
+        for i in range(10):
+            mutated_offspring = first_cage.mutate(mutated_offspring, mutations)
+            assert mutated_offspring.gross == offspring_bordering.gross
+            assert mutated_offspring.is_positive()
 
     def test_get_egg_batch_null(self, first_cage, null_offspring_distrib, cur_day):
         egg_batch = first_cage.get_egg_batch(cur_day, null_offspring_distrib)

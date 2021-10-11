@@ -280,8 +280,7 @@ class Farm:
 
     def get_cage_pressures(self) -> List[int]:
         """Get external pressure divided into cages
-
-        :return: List of values of external pressure for each cage
+:return: List of values of external pressure for each cage
         """
 
         if len(self.cages) < 1:

@@ -139,7 +139,7 @@ class Simulator:
 
         # extract cumulative geno info regardless of the stage
         def aggregate_geno(data):
-            return GenoDistrib.batch_sum(data)
+            return GenoDistrib.batch_sum(data, True)
 
         aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
 
