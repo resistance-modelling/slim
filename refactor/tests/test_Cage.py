@@ -85,10 +85,10 @@ class TestCage:
                 assert sum(mortality_updates[stage].values()) == 0
 
         assert first_cage.last_effective_treatment.affecting_date == cur_day
-        assert mortality_updates['L5f'] == {('a',): 2}
-        assert mortality_updates['L5m'] == {('A', 'a'): 1, ('a',): 2}
+        assert mortality_updates['L5f'] == {('a',): 3}
+        assert mortality_updates['L5m'] == {('a',): 3}
         assert mortality_updates['L4'] == {('A', 'a'): 1, ('a',): 8}
-        assert mortality_updates['L3'] == {('A',): 2, ('A', 'a'): 2, ('a',): 8}
+        assert mortality_updates['L3'] == {('A',): 2, ('A', 'a'): 1, ('a',): 8}
         assert first_cage.is_treated(cur_day)
 
         assert 55000 <= cost <= 60000
@@ -108,10 +108,10 @@ class TestCage:
         cur_day = treatment_dates[1] + dt.timedelta(days=10)
         mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
 
-        assert mortality_updates['L3'] == {('A', 'a'): 2, ('a',): 8}
-        assert mortality_updates['L4'] == {('A',): 1, ('A', 'a'): 1, ('a',): 8}
-        assert mortality_updates['L5m'] == {('a',): 2}
-        assert mortality_updates['L5f'] == {('a',): 2}
+        assert mortality_updates['L3'] == {('A',): 1, ('A', 'a'): 3, ('a',): 8}
+        assert mortality_updates['L4'] == {('A', 'a'): 2, ('a',): 8}
+        assert mortality_updates['L5m'] == {('a',): 3, ('A', 'a'): 2}
+        assert mortality_updates['L5f'] == {('a',): 3, ('A', 'a'): 2}
 
         assert cost == 0
 
@@ -336,7 +336,7 @@ class TestCage:
         first_cage_population.clear_busy_dams()
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day, GenoDistrib({('A', 'a'): 15})))
 
-        target_eggs = {('a',): 1545.5, ('A',): 763.0, tuple(sorted(('a', 'A'))): 6842.5}
+        target_eggs = {('A', 'a'): 5325.5, ('a',): 3062.5, ('A',): 763.0}
         target_delta_dams = {('A',): 2, ('a',): 4}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
@@ -346,7 +346,7 @@ class TestCage:
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('a',): 1574.5, tuple(sorted(('a', 'A'))): 1537.5, ('A',): 1015.0}
+        target_mutated_eggs = {('a',): 1574.5, ('A', 'a'): 2552.5}
 
         _, delta_mutated_eggs = first_cage.do_mating_events()
         assert delta_mutated_eggs == target_mutated_eggs
@@ -360,33 +360,12 @@ class TestCage:
 
     def test_generate_eggs_maternal(self, first_cage):
         first_cage.genetic_mechanism = GeneticMechanism.maternal
-        sire = 'z'
-        dam = 'Z'
+        sire = ('a',)
+        dam = ('A',)
         num_matings = 10
-        target_eggs = {dam: 2550}
+        target_eggs = {('A',): 2550}
         eggs = first_cage.generate_eggs(sire, dam, num_matings)
-        for key in eggs:
-            assert key == dam
-            assert eggs[key] == target_eggs[key]
-
-    def test_generate_eggs_quantitative(self, first_cage):
-        first_cage.cfg.geno_mutation_rate = 0
-        first_cage.genetic_mechanism = GeneticMechanism.quantitative
-        sire = 0.7
-        dam = 0.0
-        num_matings = 10
-        target_eggs = {0.4: 2550}
-        eggs = first_cage.generate_eggs(sire, dam, num_matings)
-        for key in eggs:
-            assert eggs[key] == target_eggs[key]
-
-        sire = 0.2
-        dam = 0.2
-        num_matings = 10
-        target_eggs = {0.2: 2401}
-        eggs = first_cage.generate_eggs(sire, dam, num_matings)
-        for key in eggs:
-            assert eggs[key] == target_eggs[key]
+        assert eggs == target_eggs
 
     def test_generate_eggs_discrete(self, first_cage):
         first_cage.cfg.geno_mutation_rate = 0
@@ -470,10 +449,23 @@ class TestCage:
     def test_egg_mutation(self, first_cage, sample_offspring_distrib):
         sample_offspring = copy.deepcopy(sample_offspring_distrib)
         mutations = 0.001
-        first_cage.mutate(sample_offspring, mutations)
+        mutated_offspring = first_cage.mutate(sample_offspring, mutations)
 
-        assert sample_offspring != sample_offspring_distrib
-        assert sample_offspring == {('a',): 199, ('A', 'a'): 301, ('A',): 100}
+        assert mutated_offspring != sample_offspring_distrib
+        assert mutated_offspring == {('a',): 199, ('A', 'a'): 301, ('A',): 100}
+
+        # corner case
+        offspring_bordering = GenoDistrib({('a',): 1, ('A',): 500, ('A', 'a'): 500})
+        for i in range(10):
+            mutated_offspring = first_cage.mutate(offspring_bordering, mutations)
+            assert mutated_offspring.gross == offspring_bordering.gross
+            assert mutated_offspring.is_positive()
+
+        # domino effect case
+        for i in range(10):
+            mutated_offspring = first_cage.mutate(mutated_offspring, mutations)
+            assert mutated_offspring.gross == offspring_bordering.gross
+            assert mutated_offspring.is_positive()
 
     def test_get_egg_batch_null(self, first_cage, null_offspring_distrib, cur_day):
         egg_batch = first_cage.get_egg_batch(cur_day, null_offspring_distrib)
@@ -570,7 +562,7 @@ class TestCage:
         new_L4 = first_cage.lice_population.geno_by_lifestage["L4"]
 
         target_population = sum(old_L4.values()) + entering_lice - leaving_lice
-        target_geno = {('A',): 532, ('a',): 534, ('A', 'a'): 534}
+        target_geno = {('A',): 533, ('a',): 534, ('A', 'a'): 533}
 
         assert new_L4 == target_geno
         assert sum(new_L4.values()) == sum(old_L4.values()) + entering_lice - leaving_lice
@@ -681,7 +673,7 @@ class TestCage:
         dead_fish = 5
         dead_lice_target = {
             'L3': 2,
-            'L4': 1,
+            'L4': 2,
             'L5m': 1,
         }
 
@@ -692,10 +684,9 @@ class TestCage:
         for stage in Cage.susceptible_stages:
             first_cage.lice_population[stage] *= 100
 
-        rate = first_cage.get_mean_infected_fish() / first_cage.get_infecting_population()
         dead_lice_target = {
             'L3': 190,
-            'L4': 123,
+            'L4': 124,
             'L5m': 19,
             'L5f': 63
         }
@@ -845,4 +836,4 @@ class TestCage:
         assert first_cage.lice_population["L5f"] < 1000
         assert first_cage.lice_population.busy_dams.gross < old_busy_dams_gross
         assert first_cage.lice_population.busy_dams <= old_busy_dams
-        assert 800 <= first_cage.lice_population.busy_dams.gross <= 840
+        assert 800 <= first_cage.lice_population.busy_dams.gross <= 900

@@ -4,8 +4,12 @@ a given body of water.
 See README.md for details.
 """
 import argparse
+import cProfile
 import sys
 from pathlib import Path
+
+# This needs to be done before import src.
+# Maybe a cleaner approach would be to use an env var?
 
 from src import logger, create_logger
 from src.Config import Config, to_dt
@@ -32,6 +36,11 @@ if __name__ == "__main__":
                         help="Don't log to console or file.",
                         default=False,
                         action="store_true")
+    parser.add_argument("--profile",
+                        help="(DEBUG) Dump cProfile stats. The output path is your_simulation_path/profile.bin.",
+                        default=False,
+                        action="store_true"
+                        )
 
     resume_group = parser.add_mutually_exclusive_group()
     resume_group.add_argument("--resume",
@@ -75,6 +84,7 @@ if __name__ == "__main__":
     cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate)
 
     # run the simulation
+    resume = True
     if args.resume:
         resume_time = to_dt(args.resume)
         sim: Simulator = Simulator.reload(output_folder, simulation_id, timestamp=resume_time) 
@@ -82,4 +92,11 @@ if __name__ == "__main__":
         sim: Simulator = Simulator.reload(output_folder, simulation_id, resume_after=args.resume_after) 
     else:
         sim = Simulator(output_folder, simulation_id, cfg)
-    sim.run_model()
+        resume = False
+
+    if not args.profile:
+        sim.run_model(resume)
+    else:
+        profile_output_path = output_folder / f"profile_{simulation_id}.bin"
+        # atexit.register(lambda prof=prof: prof.print_stats(output_unit=1e-3))
+        cProfile.run("sim.run_model()", str(profile_output_path))

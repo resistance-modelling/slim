@@ -7,12 +7,13 @@ from typing import Tuple, List, Optional
 
 import dill as pickle
 import pandas as pd
+from tqdm import tqdm
 
 from src import logger
 from src.Config import Config
 from src.Farm import Farm
 from src.JSONEncoders import CustomFarmEncoder
-from src.LicePopulation import GenericGenoDistrib
+from src.LicePopulation import GenoDistrib
 from src.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
 from src.TreatmentTypes import Money
 
@@ -21,8 +22,9 @@ class Organisation:
     """
     An organisation is a cooperative of `Farm`s.
     """
+
     def __init__(self, cfg: Config, *args):
-        self.name: str = cfg.name 
+        self.name: str = cfg.name
         self.cfg = cfg
         self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
 
@@ -109,7 +111,7 @@ class Simulator:
         with open(data_file, "rb") as fp:
             while True:
                 try:
-                    sim_state: Simulator = pickle.load(fp) 
+                    sim_state: Simulator = pickle.load(fp)
                     states.append(sim_state)
                     times.append(sim_state.cur_day)
                 except EOFError:
@@ -131,13 +133,13 @@ class Simulator:
         # farms = states[0].organisation.farms
         for state, time in zip(states, times):
             for farm in state.organisation.farms:
-                farm_data[(time, "farm_" + str(farm.name))] =  farm.lice_genomics
+                farm_data[(time, "farm_" + str(farm.name))] = farm.lice_genomics
 
         dataframe = pd.DataFrame.from_dict(farm_data, orient='index')
 
         # extract cumulative geno info regardless of the stage
         def aggregate_geno(data):
-            return sum([GenericGenoDistrib(stage) for stage in data], GenericGenoDistrib())
+            return GenoDistrib.batch_sum(data, True)
 
         aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
 
@@ -169,26 +171,24 @@ class Simulator:
         """
         logger.info("running simulation, saving to %s", self.output_dir)
 
-        assert not (self.cfg.save_rate and resume), \
-            "Resuming and serialising intermediate steps is not allowed."
-
         # create a file to store the population data from our simulation
         if resume and not self.output_dump_path.exists():
             logger.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")
 
         if not resume:
-            data_file = (self.output_dump_path).open(mode="wb")
+            data_file = self.output_dump_path.open(mode="wb")
 
-        while self.cur_day <= self.cfg.end_date:
-            logger.info("Current date = %s", self.cur_day)
+        num_days = (self.cfg.end_date - self.cur_day).days
+        for day in tqdm(range(num_days)):
+            logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
             self.payoff += self.organisation.step(self.cur_day)
 
             # Save the model snapshot either when checkpointing or during the last iteration
             if not resume:
-                if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0)\
-                        or self.cur_day ==  self.cfg.end_date:
+                if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0) \
+                        or self.cur_day == self.cfg.end_date:
                     pickle.dump(self, data_file)
-                self.cur_day += dt.timedelta(days=1)
+            self.cur_day += dt.timedelta(days=1)
 
         if not resume:
             data_file.close()

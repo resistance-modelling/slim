@@ -24,11 +24,11 @@ from src import logger
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
-from src.LicePopulation import GrossLiceDistrib, GenericGenoDistrib
+from src.LicePopulation import GrossLiceDistrib, GenoDistrib
 from src.TreatmentTypes import Money
 from src.QueueTypes import *
 
-GenoDistribByHatchDate = Dict[dt.datetime, GenericGenoDistrib]
+GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
 LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
 
@@ -111,7 +111,7 @@ class Farm:
     def lice_genomics(self):
         """Return the overall lice population indexed by geno distribution and stage."""
 
-        genomics = defaultdict(lambda: GenericGenoDistrib())
+        genomics = defaultdict(lambda: GenoDistrib())
         for cage in self.cages:
             for stage, value in cage.lice_population.geno_by_lifestage.as_dict().items():
                 genomics[stage] = genomics[stage] + value
@@ -280,8 +280,7 @@ class Farm:
 
     def get_cage_pressures(self) -> List[int]:
         """Get external pressure divided into cages
-
-        :return: List of values of external pressure for each cage
+:return: List of values of external pressure for each cage
         """
 
         if len(self.cages) < 1:
@@ -348,7 +347,7 @@ class Farm:
         probs_per_bin = np.full(ncages, 1 / ncages)
 
         # preconstruct the data structure
-        hatch_list: CageAllocation = [{hatch_date: GenericGenoDistrib() for hatch_date in eggs_by_hatch_date} for n in range(ncages)] 
+        hatch_list: CageAllocation = [{hatch_date: GenoDistrib() for hatch_date in eggs_by_hatch_date} for n in range(ncages)]
         for hatch_date, geno_dict in eggs_by_hatch_date.items():
             for genotype in geno_dict:
                 # generate the bin distribution of this genotype with
