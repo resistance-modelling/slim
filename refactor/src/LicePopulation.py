@@ -23,17 +23,6 @@ LifeStage = str
 Allele = str
 Alleles = Union[Tuple[Allele, ...]]
 
-
-"""
-if "PYCHARM_HOSTED" in os.environ:
-    from line_profiler_pycharm import profile
-else:
-    import builtins
-    builtins.__dict__["profile"] = lambda x: x
-"""
-from line_profiler_pycharm import profile
-
-
 def largest_remainder(nums: np.ndarray):
     # a vectorised implementation of largest remainder
     assert np.all(nums >= 0) or np.all(nums <= 0)
@@ -152,7 +141,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         if isinstance(other, float) or isinstance(other, int):
             keys = self.keys()
             values = [v * other for v in self.values()]
-            if isinstance(other, float) and math.trunc(other) != other:
+            if isinstance(other, float) and math.trunc(other) == other:
                 values = largest_remainder(np.array(values)).tolist()
         else:
             # pairwise product
@@ -209,8 +198,8 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
             self[k] = max(self[k], 0)
 
     @staticmethod
-    def batch_sum(batches: Union[List[GenoDistrib], List[Dict[str, int]]],
-                  as_pure_dict=False) -> Union[GenoDistrib, Dict[str, int]]:
+    def batch_sum(batches: Union[List[GenoDistrib], List[Dict[str, float]]],
+                  as_pure_dict=False) -> Union[GenoDistrib, Dict[str, float]]:
         # this function is ugly but it's a hotspot.
         alleles_to_idx = {('a',): 0, ('a'): 0,
                           ('A', 'a'): 1,
@@ -265,7 +254,6 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         for stage, distrib in geno_data.items():
             self._cache[stage] = distrib.gross
 
-    @profile
     def __setitem__(self, stage: LifeStage, value: int):
         # If one attempts to make gross modifications to the population these will be repartitioned according to the
         # current genotype information.
@@ -335,6 +323,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
             delta_avail_dams += event.geno_distrib
             self._busy_dams_cache = self._busy_dams_cache - event.geno_distrib
 
+        logger.debug(f"\t\t\t\tIn free dams: self._busy_dams has {self._busy_dams.qsize()} events")
         pop_from_queue(self._busy_dams, cur_time, cts)
 
         return delta_avail_dams
@@ -352,7 +341,6 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         self._busy_dams.put(delta_dams_batch)
         self._busy_dams_cache = self._busy_dams_cache + delta_dams_batch.geno_distrib
 
-    @profile
     def remove_negatives(self):
         for stage, distrib in self.geno_by_lifestage.items():
             keys = distrib.keys()
@@ -360,12 +348,15 @@ class LicePopulation(MutableMapping[LifeStage, int]):
             distrib_purged = GenoDistrib(dict(zip(keys, [max(v, 0) for v in values])))
             self.geno_by_lifestage[stage] = distrib_purged
 
+    def _flush_busy_dams_cache(self):
+        self._busy_dams_cache = GenoDistrib.batch_sum([x.geno_distrib for x in self._busy_dams.queue])  # type: GenoDistrib
+
     def __clear_empty_dams(self):
         self._busy_dams.queue = [x for x in self._busy_dams.queue if x.geno_distrib.gross > 0]
-        self._busy_dams_cache = GenoDistrib.batch_sum([x.geno_distrib for x in self._busy_dams.queue])
         # re-ensure heaping condition is respected.
         # TODO: no synchronisation is done here. Determine if this causes threading issues
         heapify(self._busy_dams.queue)
+        self._flush_busy_dams_cache()
 
     def __rescale_busy_dams(self, num: int):
         # rescale the number of busy dams to the given number.
@@ -389,7 +380,6 @@ class LicePopulation(MutableMapping[LifeStage, int]):
 
         assert self.busy_dams <= self.geno_by_lifestage["L5f"]
 
-    @profile
     def _clip_dams_to_stage(self):
         # make sure that self.busy_dams <= self.geno_by_lifestage["L5f"]
         busy_sum = self.busy_dams
@@ -407,7 +397,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
                 off -= to_reduce
                 event.geno_distrib[allele] -= to_reduce
 
-        self._busy_dams_cache = GenoDistrib.batch_sum([x.geno_distrib for x in self._busy_dams.queue])
+        self._flush_busy_dams_cache()
         assert self.busy_dams <= self.geno_by_lifestage["L5f"]
 
     @staticmethod
@@ -437,7 +427,6 @@ class GenotypePopulation(MutableMapping[LifeStage, GenoDistrib]):
         for k, v in geno_data.items():
             self._store[k] = v.copy()
 
-    @profile
     def __setitem__(self, stage: LifeStage, value: GenoDistrib):
         # update the value and the gross population accordingly
         value.truncate_negatives()

@@ -26,9 +26,6 @@ if TYPE_CHECKING:  # pragma: no cover
 OptionalDamBatch = Optional[DamAvailabilityBatch]
 OptionalEggBatch = Optional[EggBatch]
 
-
-from line_profiler_pycharm import profile
-
 class Cage:
     """
     Fish cages contain the fish.
@@ -167,9 +164,11 @@ class Cage:
             num_infection_events = self.do_infection_events(cur_date, days_since_start)
 
             # Mating events that create eggs
+            self.lice_population.free_dams(cur_date)
             delta_avail_dams, delta_eggs = self.do_mating_events()
             avail_dams_batch = DamAvailabilityBatch(cur_date + dt.timedelta(days=self.cfg.dam_unavailability),
                                                     delta_avail_dams)
+
 
             new_egg_batch = self.get_egg_batch(cur_date, delta_eggs)
 
@@ -921,7 +920,6 @@ class Cage:
 
         return {k: int(v) for k, v in dying_lice.items() if v > 0}
 
-    @profile
     def promote_population(
             self,
             prev_stage: Union[str, GenoDistrib],
