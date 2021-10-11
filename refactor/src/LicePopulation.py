@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import math
 from abc import ABC
-import os
+import datetime as dt
 from heapq import heapify
 from queue import PriorityQueue
 from types import GeneratorType
-from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, TypeVar, Generic, Counter as CounterType, Optional, \
-    Iterable, TYPE_CHECKING, List, Mapping
+from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, Optional, \
+    Iterable, TYPE_CHECKING, List, cast
 
-import iteround
 import numpy as np
 
 from src import logger
@@ -22,8 +21,11 @@ if TYPE_CHECKING:  # pragma: no cover
 LifeStage = str
 Allele = str
 Alleles = Union[Tuple[Allele, ...]]
+# These are used when GenoDistrib is not available
+GenoDistribSerialisable = Dict[str, float]
+GenoDistribDict = Dict[Alleles, float]
 
-def largest_remainder(nums: np.ndarray):
+def largest_remainder(nums: np.ndarray) -> np.ndarray:
     # a vectorised implementation of largest remainder
     assert np.all(nums >= 0) or np.all(nums <= 0)
 
@@ -156,7 +158,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
             other = GenoDistrib(other)
         return self._store == other._store
 
-    def __le__(self, other: Union[GenoDistrib, float]):
+    def __le__(self, other: Union[GenoDistrib, float]) -> bool:
         """A <= B if B has all the keys of A and A[k] <= B[k] for every k
         Note that __gt__ is not implemented as its behaviour is not "greater than" but rather
         "there may be an unbounded frequency"."""
@@ -169,7 +171,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
     def is_positive(self):
         return all(v >= 0 for v in self.values())
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> float:
         return self._store.setdefault(key, 0)
 
     def __setitem__(self, key, value):
@@ -190,7 +192,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
     def __str__(self):
         return "GenoDistrib(" + str(self._store) + ")"
 
-    def to_json_dict(self):
+    def to_json_dict(self) -> Dict[str, float]:
         return {"".join(k): v for k, v in self.items()}
 
     def truncate_negatives(self):
@@ -199,7 +201,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
 
     @staticmethod
     def batch_sum(batches: Union[List[GenoDistrib], List[Dict[str, float]]],
-                  as_pure_dict=False) -> Union[GenoDistrib, Dict[str, float]]:
+                  as_pure_dict=False) -> Union[GenoDistrib, GenoDistribSerialisable]:
         # this function is ugly but it's a hotspot.
         alleles_to_idx = {('a',): 0, ('a'): 0,
                           ('A', 'a'): 1,
@@ -241,7 +243,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
 
-    def __init__(self, geno_data: GenoLifeStageDistrib, generic_ratios):
+    def __init__(self, geno_data: GenoLifeStageDistrib, generic_ratios: GenoDistribDict):
         """
         :param geno_data a Genotype distribution
         :param generic_ratios a config to use
@@ -274,7 +276,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         if stage == "L5f":
             self.__rescale_busy_dams(round(self.busy_dams.gross * value / old_value) if old_value > 0 else 0)
 
-    def __getitem__(self, stage: LifeStage):
+    def __getitem__(self, stage: LifeStage) -> int:
         return self._cache[stage]
 
     def __delitem__(self, stage: LifeStage):
@@ -309,7 +311,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
     def busy_dams(self):
         return self._busy_dams_cache
 
-    def free_dams(self, cur_time) -> GenoDistrib:
+    def free_dams(self, cur_time: dt.datetime) -> GenoDistrib:
         """
         Return the number of available dams
 
@@ -349,7 +351,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
             self.geno_by_lifestage[stage] = distrib_purged
 
     def _flush_busy_dams_cache(self):
-        self._busy_dams_cache = GenoDistrib.batch_sum([x.geno_distrib for x in self._busy_dams.queue])  # type: GenoDistrib
+        self._busy_dams_cache = cast(GenoDistrib, GenoDistrib.batch_sum([x.geno_distrib for x in self._busy_dams.queue]))
 
     def __clear_empty_dams(self):
         self._busy_dams.queue = [x for x in self._busy_dams.queue if x.geno_distrib.gross > 0]

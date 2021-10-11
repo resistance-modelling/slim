@@ -12,7 +12,7 @@ import numpy as np
 from src.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB, Money
 
 if TYPE_CHECKING:
-    from src.LicePopulation import LifeStage
+    from src.LicePopulation import LifeStage, GenoDistribDict
 
 
 def to_dt(string_date) -> dt.datetime:
@@ -78,7 +78,7 @@ class RuntimeConfig:
         self.geno_mutation_rate: float = data["geno_mutation_rate"]
 
         # TODO: take into account processing of non-discrete keys
-        self.genetic_ratios = {tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"].items()}
+        self.genetic_ratios: GenoDistribDict = {tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"].items()}
 
         # Farm data
         self.farm_data = data["farm_data"]
