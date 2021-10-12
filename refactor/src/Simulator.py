@@ -127,6 +127,10 @@ class Simulator:
 
         Format: index is (timestamp, farm)
         Columns are: "L1" ... "L5f" (nested dict for now...), "a", "A", "Aa" (ints)
+
+        :param states a list of states
+        :param times a list of timestamps for each state
+        :return a dataframe as described above
         """
 
         farm_data = {}

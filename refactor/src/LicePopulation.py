@@ -20,7 +20,7 @@ if TYPE_CHECKING:  # pragma: no cover
 ################ Basic type aliases #####################
 LifeStage = str
 Allele = str
-Alleles = Union[Tuple[Allele, ...]]
+Alleles = Tuple[Allele, ...]
 # These are used when GenoDistrib is not available
 GenoDistribSerialisable = Dict[str, float]
 GenoDistribDict = Dict[Alleles, float]
@@ -69,13 +69,13 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         # to prevent the default behaviour (Counter counts all the instances of the elements) we have to check
         # for generators
 
-        self._store = {}
+        self._store: Dict[Alleles, float] = {}
 
         if params:
             if isinstance(params, GeneratorType):
-                self._store = dict(params)
+                self._store = cast(Dict[Alleles, float], dict(params))
             elif isinstance(params, dict):
-                self._store = params
+                self._store = cast(Dict[Alleles, float], params)
             elif isinstance(params, GenoDistrib):
                 self._store.update(params._store)
 
@@ -98,15 +98,6 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         result = self.normalise_to(other)
         self._store.clear()
         self._store.update(result)
-
-    def keys(self):
-        return self._store.keys()
-
-    def values(self):
-        return self._store.values()
-
-    def items(self):
-        return self._store.items()
 
     @property
     def gross(self) -> int:
@@ -168,7 +159,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         merged_keys = set(list(self.keys()) + list(other.keys()))
         return all(self[k] <= other[k] for k in merged_keys)
 
-    def is_positive(self):
+    def is_positive(self) -> bool:
         return all(v >= 0 for v in self.values())
 
     def __getitem__(self, key) -> float:
@@ -248,7 +239,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         :param geno_data a Genotype distribution
         :param generic_ratios a config to use
         """
-        self._cache: Dict[LifeStage, int] = dict()
+        self._cache: Dict[LifeStage, int] = {}
         self.geno_by_lifestage = GenotypePopulation(self, geno_data)
         self.genetic_ratios = generic_ratios
         self._busy_dams: PriorityQueue[DamAvailabilityBatch] = PriorityQueue()
@@ -406,7 +397,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
     def get_empty_geno_distrib() -> GenoLifeStageDistrib:
         return {stage: GenoDistrib() for stage in LicePopulation.lice_stages}
 
-    def to_json_dict(self):
+    def to_json_dict(self) -> GenoDistribSerialisable:
         return self._cache
 
 
@@ -454,7 +445,7 @@ class GenotypePopulation(MutableMapping[LifeStage, GenoDistrib]):
 
         self._lice_population._clip_dams_to_stage()
 
-    def __getitem__(self, stage: LifeStage):
+    def __getitem__(self, stage: LifeStage) -> GenoDistrib:
         return self._store[stage]
 
     def __delitem__(self, stage: LifeStage):

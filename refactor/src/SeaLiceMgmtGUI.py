@@ -15,17 +15,26 @@ from colorcet import glasbey_dark, glasbey_light
 
 from src.LicePopulation import LicePopulation
 from src.Simulator import Simulator
+from src.gui_utils.internal_ipkernel import InternalIPKernel
 
 
-class Window(QMainWindow):
-    def __init__(self, parent=None):
+class Window(QMainWindow, InternalIPKernel):
+    def __init__(self, app: QApplication, parent=None):
         super().__init__(parent)
 
+        self.app = app
         self.states: Optional[List[Simulator]] = None
         self.times: Optional[List[dt.datetime]] = None
         self.states_as_df: Optional[pd.DataFrame] = None
 
         self._createUI()
+        self.init_ipkernel('qt')
+
+        self.app.lastWindowClosed.connect(self.app.quit)
+
+        self.app.aboutToQuit.connect(self.cleanup_consoles)
+
+        self.new_qt_console()
 
     def _createUI(self):
         self.setWindowTitle("SLIM GUI")
@@ -91,6 +100,7 @@ class Window(QMainWindow):
         self._createPlots()
 
         # Pane on the right
+
         self.plotButtonGroup = QGroupBox("Plot options", self)
         self.plotButtonGroupLayout = QVBoxLayout()
         self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information", self)
@@ -167,7 +177,6 @@ class Window(QMainWindow):
         layout.addWidget(self.plotPane, 0, 0, 2, 1)
         self._updatePlot()
 
-
     def _updatePlot(self):
         # TODO: not suited for real-time
 
@@ -186,7 +195,6 @@ class Window(QMainWindow):
 
         if self.showDetailedGenotypeCheckBox.isChecked():
             df = self.states_as_df.reset_index()
-
 
             allele_names = ["a", "A", "Aa"]  # TODO: extract from column names
             colours = dict(zip(allele_names, self._colorPalette[:len(allele_names)]))
@@ -350,7 +358,7 @@ class SimulatorLoadingWorker(QObject):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    win = Window()
+    win = Window(app)
     win.show()
 
     # KeyboardInterrupt trick
@@ -358,4 +366,4 @@ if __name__ == "__main__":
     timer.timeout.connect(lambda: None)
     timer.start(100)
 
-    sys.exit(app.exec_())
+    sys.exit(win.ipkernel.start())

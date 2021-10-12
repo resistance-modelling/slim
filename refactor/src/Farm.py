@@ -10,23 +10,19 @@ damental agent in this simulation. It has a number of functions:
 from __future__ import annotations
 
 import copy
-import datetime as dt
 import json
 from collections import Counter, defaultdict
-from queue import PriorityQueue
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 from mypy_extensions import TypedDict
 
-import numpy as np
-
-from src import logger
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 from src.LicePopulation import GrossLiceDistrib, GenoDistrib
-from src.TreatmentTypes import Money
 from src.QueueTypes import *
+from src.TreatmentTypes import Money
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
