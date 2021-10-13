@@ -67,20 +67,25 @@ class Window(QMainWindow):
 
         self.licePopulationPlots = [self.pqgPlotContainer.addPlot(title=f"Lice Population of farm {i}", row=0, col=i)
                                     for i in range(num_farms)]
-        self.payoffPlot = self.pqgPlotContainer.addPlot(title="Cumulated payoff", row=1, col=0)
+        self.fishPopulationPlots = [self.pqgPlotContainer.addPlot(title=f"Lice Population of farm {i}", row=1, col=i)
+                                    for i in range(num_farms)]
+        self.payoffPlot = self.pqgPlotContainer.addPlot(title="Cumulated payoff", row=2, col=0)
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
         self.geno_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
         self.stages_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
+        self.fish_population: Dict[str, pg.PlotItem] = {}
 
         # add grid, synchronise Y-range
         # TODO: make this toggleable?
         for plot in self.licePopulationPlots:
             plot.showGrid(x=True, y=True)
-        for idx in range(1, len(self.licePopulationPlots)):
-            # TODO is this a good idea?
-            self.licePopulationPlots[idx].setYLink(self.licePopulationPlots[idx - 1])
+
+        for plotList in [self.licePopulationPlots, self.fishPopulationPlots]:
+            for idx in range(1, len(plotList)):
+                plotList[idx].setYLink(plotList[idx - 1])
+                plotList[idx].setXLink(plotList[idx - 1])
 
         self.payoffPlot.showGrid(x=True, y=True)
 
@@ -102,9 +107,9 @@ class Window(QMainWindow):
         mainLayout = QGridLayout()
         self.plotPane.setLayout(mainLayout)
 
-        mainLayout.addWidget(self.pqgPlotContainer, 0, 0, 2, 1)
-        mainLayout.addWidget(self.plotButtonGroup, 2, 0)
-        mainLayout.addWidget(self.progressBar, 3, 0, 1, 2)
+        mainLayout.addWidget(self.pqgPlotContainer, 0, 0, 3, 1)
+        mainLayout.addWidget(self.plotButtonGroup, 3, 0)
+        mainLayout.addWidget(self.progressBar, 4, 0, 1, 2)
 
     def _createTabs(self):
         self.plotTabs = QTabWidget(self)
@@ -170,7 +175,7 @@ class Window(QMainWindow):
 
     def _cleanPlot(self):
         self.payoffPlot.clear()
-        for plot in self.licePopulationPlots:
+        for plot in self.licePopulationPlots + self.fishPopulationPlots:
             plot.clear()
 
         for curves in self.stages_to_curve.values():
@@ -188,7 +193,7 @@ class Window(QMainWindow):
         layout.removeWidget(self.pqgPlotContainer)
         # I need to know the exact number of farms right now
         self._createPlots()
-        layout.addWidget(self.pqgPlotContainer, 0, 0, 2, 1)
+        layout.addWidget(self.pqgPlotContainer, 0, 0, 3, 1)
         self._updatePlot()
 
     def _updatePlot(self):
@@ -206,10 +211,9 @@ class Window(QMainWindow):
         self.licePopulationLegend = self.licePopulationPlots[0].addLegend()
 
         farm_list = self._getUniqueFarms
+        df = self.states_as_df.reset_index()
 
         if self.showDetailedGenotypeCheckBox.isChecked():
-            df = self.states_as_df.reset_index()
-
             allele_names = ["a", "A", "Aa"]  # TODO: extract from column names
             colours = dict(zip(allele_names, self._colorPalette[:len(allele_names)]))
 
@@ -242,12 +246,20 @@ class Window(QMainWindow):
                     stage: self.licePopulationPlots[farm_idx].plot(stages[stage], name=stage, pen=colours[stage])
                     for stage in LicePopulation.lice_stages}
 
-        payoffs = [float(state.payoff) for state in self.states]
 
+        # TODO: add this to pandas
+        payoffs = [float(state.payoff) for state in self.states]
         self.payoffPlot.plot(payoffs)
 
+        for farm_idx, farm_name in enumerate(farm_list):
+            # TODO: condense this loop and the previous one
+            num_fish = df[df["farm_name"] == farm_name]["num_fish"].to_numpy()
+            num_fish_cumulative = -np.diff(num_fish)
+            self.fish_population[farm_name] = self.fishPopulationPlots[farm_idx].plot(num_fish, pen=self._colorPalette[0])
+            self.fishPopulationPlots[farm_idx].plot(num_fish_cumulative, pen=self._colorPalette[1])
+
         # keep ranges consistent
-        for plot in self.licePopulationPlots:
+        for plot in self.licePopulationPlots + self.licePopulationPlots:
             plot.setXRange(0, len(payoffs), padding=0)
             plot.vb.setLimits(xMin=0, xMax=len(payoffs))
         self.payoffPlot.setXRange(0, len(payoffs), padding=0)

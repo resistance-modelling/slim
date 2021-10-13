@@ -60,6 +60,9 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
     when possible
     """
 
+    alleles: List[Alleles] = [('a',), ('A', 'a'), ('A',)]
+    allele_labels = ["".join(allele) for allele in alleles]
+
     def __init__(self, params: Optional[Union[
         GenoDistrib,
         Dict[Alleles, float],
@@ -201,16 +204,13 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
                           ('A'): 2}
         res_as_vector = [0, 0, 0]
         for batch in batches:
-            for allele in batch:
-                res_as_vector[alleles_to_idx[allele]] += batch[allele]
+            for allele in GenoDistrib.alleles:
+                res_as_vector[alleles_to_idx[allele]] += batch.get(allele, 0)
 
         if as_pure_dict:
             return dict(zip(["a", "Aa", "A"], res_as_vector))
 
-        return GenoDistrib({
-            ('a',): res_as_vector[0],
-            ('A', 'a'): res_as_vector[1],
-            ('A',): res_as_vector[2]})
+        return GenoDistrib(dict(zip(GenoDistrib.alleles, res_as_vector)))
 
 
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]

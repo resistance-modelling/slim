@@ -137,13 +137,15 @@ class Simulator:
         # farms = states[0].organisation.farms
         for state, time in zip(states, times):
             for farm in state.organisation.farms:
-                farm_data[(time, "farm_" + str(farm.name))] = farm.lice_genomics
+                key = (time, "farm_" + str(farm.name))
+                farm_data[key] = {**farm.lice_genomics, "num_fish": farm.num_fish}
 
         dataframe = pd.DataFrame.from_dict(farm_data, orient='index')
 
         # extract cumulative geno info regardless of the stage
         def aggregate_geno(data):
-            return GenoDistrib.batch_sum(data, True)
+            data_to_sum = [elem for elem in data if isinstance(elem, dict)]
+            return GenoDistrib.batch_sum(data_to_sum, True)
 
         aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
 
