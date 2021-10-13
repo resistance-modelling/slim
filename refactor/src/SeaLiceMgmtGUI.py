@@ -10,15 +10,15 @@ from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtCore import QThread, pyqtSignal, QObject, QTimer, QSettings
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
                              QAction, QFileDialog, QMessageBox, QGridLayout, QProgressBar, QCheckBox,
-                             QGroupBox, QVBoxLayout)
+                             QGroupBox, QVBoxLayout, QTabWidget)
 from colorcet import glasbey_dark, glasbey_light
 
 from src.LicePopulation import LicePopulation
 from src.Simulator import Simulator
-from src.gui_utils.internal_ipkernel import InternalIPKernel
+from src.gui_utils.console import ConsoleWidget
 
 
-class Window(QMainWindow, InternalIPKernel):
+class Window(QMainWindow):
     def __init__(self, app: QApplication, parent=None):
         super().__init__(parent)
 
@@ -28,13 +28,6 @@ class Window(QMainWindow, InternalIPKernel):
         self.states_as_df: Optional[pd.DataFrame] = None
 
         self._createUI()
-        self.init_ipkernel('qt')
-
-        self.app.lastWindowClosed.connect(self.app.quit)
-
-        self.app.aboutToQuit.connect(self.cleanup_consoles)
-
-        self.new_qt_console()
 
     def _createUI(self):
         self.setWindowTitle("SLIM GUI")
@@ -45,12 +38,10 @@ class Window(QMainWindow, InternalIPKernel):
 
         self._createWidgets()
 
-        mainLayout = QGridLayout()
+        mainLayout = QVBoxLayout()
         self.wd.setLayout(mainLayout)
 
-        mainLayout.addWidget(self.plotPane, 0, 0, 2, 1)
-        mainLayout.addWidget(self.plotButtonGroup, 2, 0)
-        mainLayout.addWidget(self.progressBar, 3, 0, 1, 2)
+        mainLayout.addWidget(self.plotTabs)
 
         self._createSettings()
         self._createActions()
@@ -72,11 +63,11 @@ class Window(QMainWindow, InternalIPKernel):
     def _createPlots(self):
         num_farms = len(self._getUniqueFarms)
 
-        self.plotPane = pg.GraphicsLayoutWidget(self)
+        self.pqgPlotContainer = pg.GraphicsLayoutWidget(self)
 
-        self.licePopulationPlots = [self.plotPane.addPlot(title=f"Lice Population of farm {i}", row=0, col=i)
+        self.licePopulationPlots = [self.pqgPlotContainer.addPlot(title=f"Lice Population of farm {i}", row=0, col=i)
                                     for i in range(num_farms)]
-        self.payoffPlot = self.plotPane.addPlot(title="Cumulated payoff", row=1, col=0)
+        self.payoffPlot = self.pqgPlotContainer.addPlot(title="Cumulated payoff", row=1, col=0)
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
@@ -97,10 +88,32 @@ class Window(QMainWindow, InternalIPKernel):
         self.wd = QtWidgets.QWidget(self)
         self.setCentralWidget(self.wd)
 
+        self._createPlotPane()
+        self._createConsole()
+        self._createTabs()
+
+    def _createPlotPane(self):
+        self.plotPane = QtWidgets.QWidget(self)
+
         self._createPlots()
+        self._createPlotOptionGroup()
+        self._createProgressBar()
 
-        # Pane on the right
+        mainLayout = QGridLayout()
+        self.plotPane.setLayout(mainLayout)
 
+        mainLayout.addWidget(self.pqgPlotContainer, 0, 0, 2, 1)
+        mainLayout.addWidget(self.plotButtonGroup, 2, 0)
+        mainLayout.addWidget(self.progressBar, 3, 0, 1, 2)
+
+    def _createTabs(self):
+        self.plotTabs = QTabWidget(self)
+
+        self.plotTabs.addTab(self.plotPane, "Plotter")
+        self.plotTabs.addTab(self.console, "Debugging console")
+
+    def _createPlotOptionGroup(self):
+        # Panel in the bottom
         self.plotButtonGroup = QGroupBox("Plot options", self)
         self.plotButtonGroupLayout = QVBoxLayout()
         self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information", self)
@@ -109,9 +122,12 @@ class Window(QMainWindow, InternalIPKernel):
         self.plotButtonGroupLayout.addWidget(self.showDetailedGenotypeCheckBox)
         self.plotButtonGroup.setLayout(self.plotButtonGroupLayout)
 
-        ## PROGRESS BAR
+    def _createProgressBar(self):
         self.progressBar = QProgressBar()
         self.progressBar.setRange(0, 1)
+
+    def _createConsole(self):
+        self.console = ConsoleWidget()
 
     def _createSettings(self):
         self.settings = QSettings("SLIM Project", "Slim")
@@ -129,9 +145,7 @@ class Window(QMainWindow, InternalIPKernel):
         self.times = times
         self.states_as_df = Simulator.dump_as_pd(states, times)
 
-        # how many unique farms are there?
-        # farms = self.states[0].organisation.farms
-
+        self.console.push_vars(vars(self))
         self._updatePlot()
 
     def _createLoaderWorker(self, filename):
@@ -170,11 +184,11 @@ class Window(QMainWindow, InternalIPKernel):
             self.licePopulationLegend.clear()
 
     def _remountPlot(self):
-        layout: QGridLayout = self.wd.layout()
-        layout.removeWidget(self.plotPane)
+        layout: QGridLayout = self.plotPane.layout()
+        layout.removeWidget(self.pqgPlotContainer)
         # I need to know the exact number of farms right now
         self._createPlots()
-        layout.addWidget(self.plotPane, 0, 0, 2, 1)
+        layout.addWidget(self.pqgPlotContainer, 0, 0, 2, 1)
         self._updatePlot()
 
     def _updatePlot(self):
@@ -366,4 +380,4 @@ if __name__ == "__main__":
     timer.timeout.connect(lambda: None)
     timer.start(100)
 
-    sys.exit(win.ipkernel.start())
+    sys.exit(app.exec_())

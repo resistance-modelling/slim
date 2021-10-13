@@ -18,6 +18,8 @@ dependencies:
   - tqdm>=4.62.0
   - ipython>=7.9.0
   - notebook>=6.4.0
+  - qtconsole>=5.1.0
+  - matplotlib>=3.4.0
   - pip:
       - pytype==2021.07.19
       - iteround==1.0.2
