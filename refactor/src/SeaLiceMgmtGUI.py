@@ -3,24 +3,26 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Dict
 
-import numpy as np
 import pandas as pd
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtCore import QThread, pyqtSignal, QObject, QTimer, QSettings
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
                              QAction, QFileDialog, QMessageBox, QGridLayout, QProgressBar, QCheckBox,
-                             QGroupBox, QVBoxLayout)
+                             QGroupBox, QVBoxLayout, QTabWidget)
 from colorcet import glasbey_dark, glasbey_light
+from pyqtgraph import LinearRegionItem
 
 from src.LicePopulation import LicePopulation
 from src.Simulator import Simulator
+from src.gui_utils.console import ConsoleWidget
 
 
 class Window(QMainWindow):
-    def __init__(self, parent=None):
+    def __init__(self, app: QApplication, parent=None):
         super().__init__(parent)
 
+        self.app = app
         self.states: Optional[List[Simulator]] = None
         self.times: Optional[List[dt.datetime]] = None
         self.states_as_df: Optional[pd.DataFrame] = None
@@ -36,12 +38,10 @@ class Window(QMainWindow):
 
         self._createWidgets()
 
-        mainLayout = QGridLayout()
+        mainLayout = QVBoxLayout()
         self.wd.setLayout(mainLayout)
 
-        mainLayout.addWidget(self.plotPane, 0, 0, 2, 1)
-        mainLayout.addWidget(self.plotButtonGroup, 2, 0)
-        mainLayout.addWidget(self.progressBar, 3, 0, 1, 2)
+        mainLayout.addWidget(self.plotTabs)
 
         self._createSettings()
         self._createActions()
@@ -63,24 +63,29 @@ class Window(QMainWindow):
     def _createPlots(self):
         num_farms = len(self._getUniqueFarms)
 
-        self.plotPane = pg.GraphicsLayoutWidget(self)
+        self.pqgPlotContainer = pg.GraphicsLayoutWidget(self)
 
-        self.licePopulationPlots = [self.plotPane.addPlot(title=f"Lice Population of farm {i}", row=0, col=i)
+        self.licePopulationPlots = [self.pqgPlotContainer.addPlot(title=f"Lice Population of farm {i}", row=0, col=i)
                                     for i in range(num_farms)]
-        self.payoffPlot = self.plotPane.addPlot(title="Cumulated payoff", row=1, col=0)
+        self.fishPopulationPlots = [self.pqgPlotContainer.addPlot(title=f"Fish Population of farm {i}", row=1, col=i)
+                                    for i in range(num_farms)]
+        self.payoffPlot = self.pqgPlotContainer.addPlot(title="Cumulated payoff", row=2, col=0)
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
         self.geno_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
         self.stages_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
+        self.fish_population: Dict[str, pg.PlotItem] = {}
 
         # add grid, synchronise Y-range
         # TODO: make this toggleable?
-        for plot in self.licePopulationPlots:
+        for plot in self.licePopulationPlots + self.fishPopulationPlots:
             plot.showGrid(x=True, y=True)
-        for idx in range(1, len(self.licePopulationPlots)):
-            # TODO is this a good idea?
-            self.licePopulationPlots[idx].setYLink(self.licePopulationPlots[idx - 1])
+
+        for plotList in [self.licePopulationPlots, self.fishPopulationPlots]:
+            for idx in range(1, len(plotList)):
+                plotList[idx].setYLink(plotList[idx - 1])
+                plotList[idx].setXLink(plotList[idx - 1])
 
         self.payoffPlot.showGrid(x=True, y=True)
 
@@ -88,20 +93,51 @@ class Window(QMainWindow):
         self.wd = QtWidgets.QWidget(self)
         self.setCentralWidget(self.wd)
 
-        self._createPlots()
+        self._createPlotPane()
+        self._createConsole()
+        self._createTabs()
 
-        # Pane on the right
+    def _createPlotPane(self):
+        self.plotPane = QtWidgets.QWidget(self)
+
+        self._createPlots()
+        self._createPlotOptionGroup()
+        self._createProgressBar()
+
+        mainLayout = QGridLayout()
+        self.plotPane.setLayout(mainLayout)
+
+        mainLayout.addWidget(self.pqgPlotContainer, 0, 0, 3, 1)
+        mainLayout.addWidget(self.plotButtonGroup, 3, 0)
+        mainLayout.addWidget(self.progressBar, 4, 0, 1, 2)
+
+    def _createTabs(self):
+        self.plotTabs = QTabWidget(self)
+
+        self.plotTabs.addTab(self.plotPane, "Plotter")
+        self.plotTabs.addTab(self.console, "Debugging console")
+
+    def _createPlotOptionGroup(self):
+        # Panel in the bottom
         self.plotButtonGroup = QGroupBox("Plot options", self)
         self.plotButtonGroupLayout = QVBoxLayout()
         self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information", self)
+        self.showOffspringDistribution = QCheckBox("Sh&ow offspring distribution", self)
 
         self.showDetailedGenotypeCheckBox.stateChanged.connect(lambda _: self._updatePlot())
+        self.showOffspringDistribution.stateChanged.connect(lambda _: self._updatePlot())
+
         self.plotButtonGroupLayout.addWidget(self.showDetailedGenotypeCheckBox)
+        self.plotButtonGroupLayout.addWidget(self.showOffspringDistribution)
+
         self.plotButtonGroup.setLayout(self.plotButtonGroupLayout)
 
-        ## PROGRESS BAR
+    def _createProgressBar(self):
         self.progressBar = QProgressBar()
         self.progressBar.setRange(0, 1)
+
+    def _createConsole(self):
+        self.console = ConsoleWidget()
 
     def _createSettings(self):
         self.settings = QSettings("SLIM Project", "Slim")
@@ -119,9 +155,7 @@ class Window(QMainWindow):
         self.times = times
         self.states_as_df = Simulator.dump_as_pd(states, times)
 
-        # how many unique farms are there?
-        # farms = self.states[0].organisation.farms
-
+        self.console.push_vars(vars(self))
         self._updatePlot()
 
     def _createLoaderWorker(self, filename):
@@ -146,7 +180,7 @@ class Window(QMainWindow):
 
     def _cleanPlot(self):
         self.payoffPlot.clear()
-        for plot in self.licePopulationPlots:
+        for plot in self.licePopulationPlots + self.fishPopulationPlots:
             plot.clear()
 
         for curves in self.stages_to_curve.values():
@@ -160,22 +194,21 @@ class Window(QMainWindow):
             self.licePopulationLegend.clear()
 
     def _remountPlot(self):
-        layout: QGridLayout = self.wd.layout()
-        layout.removeWidget(self.plotPane)
+        layout: QGridLayout = self.plotPane.layout()
+        layout.removeWidget(self.pqgPlotContainer)
         # I need to know the exact number of farms right now
         self._createPlots()
-        layout.addWidget(self.plotPane, 0, 0, 2, 1)
+        layout.addWidget(self.pqgPlotContainer, 0, 0, 3, 1)
         self._updatePlot()
-
 
     def _updatePlot(self):
         # TODO: not suited for real-time
+        # TODO: this function has become an atrocious mess
 
         self._cleanPlot()
         if self.states is None:
             return
 
-        # TODO this is ugly. Wrap this logic inside a widget with a few slots
         # if the number of farms has changed
         elif len(self._getUniqueFarms) != len(self.licePopulationPlots):
             self._remountPlot()
@@ -183,11 +216,9 @@ class Window(QMainWindow):
         self.licePopulationLegend = self.licePopulationPlots[0].addLegend()
 
         farm_list = self._getUniqueFarms
+        df = self.states_as_df.reset_index()
 
         if self.showDetailedGenotypeCheckBox.isChecked():
-            df = self.states_as_df.reset_index()
-
-
             allele_names = ["a", "A", "Aa"]  # TODO: extract from column names
             colours = dict(zip(allele_names, self._colorPalette[:len(allele_names)]))
 
@@ -201,31 +232,58 @@ class Window(QMainWindow):
                     for allele_name, stage_value in allele_data.items()
                 }
         else:
-            # TODO: use pandas here
-            population_data = {}
-            for snapshot in self.states:
-                farms = snapshot.organisation.farms
-                for farm in farms:
-                    population_data.setdefault(farm.name, []).append(farm.lice_population)
-
             for farm_idx, farm_name in enumerate(farm_list):
-                # TODO: this is ugly
-                farm_name_as_int = int(farm_name[len("farm_"):])
-                stages = {k: np.array([population.get(k, 0) for population in population_data[farm_name_as_int]]) for k in
-                          LicePopulation.lice_stages}
-                # render per stage
+                farm_df = df[df["farm_name"] == farm_name]
+                stages = farm_df[LicePopulation.lice_stages].applymap(lambda geno_data: sum(geno_data.values()))
+
+               # render per stage
                 colours = dict(zip(LicePopulation.lice_stages, self._colorPalette[:len(stages)]))
 
                 self.stages_to_curve[farm_name] = {
-                    stage: self.licePopulationPlots[farm_idx].plot(stages[stage], name=stage, pen=colours[stage])
-                    for stage in LicePopulation.lice_stages}
+                    stage: self.licePopulationPlots[farm_idx].plot(
+                        series.to_numpy(), name=stage, pen=colours[stage])
+                    for stage, series in stages.items()}
 
+                # treatment markers
+                treatment_days_df = farm_df[farm_df["is_treating"]]["timestamp"] - self.times[0]
+                treatment_days = treatment_days_df.apply(lambda x: x.days).to_numpy()
+
+                # Generate treatment regions by looking for the first non-consecutive treatment blocks.
+                # There may be a chance where multiple treatments happen consecutively, on which case
+                # we simply consider them as a unique case.
+                # TODO: move this in another function
+                # TODO: we are not keeping tracks of all the PlotItem's - clear events may not delete them
+                treatment_ranges = []
+                lo = 0
+                for i in range(1, len(treatment_days)):
+                    if treatment_days[i] > treatment_days[i - 1] + 1:
+                        treatment_ranges.append((treatment_days[lo], treatment_days[i - 1] + 1))
+                        lo = i
+                treatment_ranges.append((lo, i))
+
+                treatment_lri = [LinearRegionItem(
+                    values=range,
+                    movable=False) for range in treatment_ranges]
+                for lri in treatment_lri:
+                    self.licePopulationPlots[farm_idx].addItem(lri)
+
+                if self.showOffspringDistribution.isChecked():
+                    # get gross arrivals
+                    arrivals_gross = farm_df["arrivals_per_cage"].apply(
+                        lambda cages: sum([sum(cage.values()) for cage in cages])).to_numpy()
+                    self.licePopulationPlots[farm_idx].plot(arrivals_gross, name="Offspring", pen=self._colorPalette[7])
+
+        # TODO: add this to pandas
         payoffs = [float(state.payoff) for state in self.states]
-
         self.payoffPlot.plot(payoffs)
 
+        for farm_idx, farm_name in enumerate(farm_list):
+            # TODO: condense this loop and the previous one
+            num_fish = df[df["farm_name"] == farm_name]["num_fish"].to_numpy()
+            self.fish_population[farm_name] = self.fishPopulationPlots[farm_idx].plot(num_fish, pen=self._colorPalette[0])
+
         # keep ranges consistent
-        for plot in self.licePopulationPlots:
+        for plot in self.licePopulationPlots + self.licePopulationPlots:
             plot.setXRange(0, len(payoffs), padding=0)
             plot.vb.setLimits(xMin=0, xMax=len(payoffs))
         self.payoffPlot.setXRange(0, len(payoffs), padding=0)
@@ -350,7 +408,7 @@ class SimulatorLoadingWorker(QObject):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    win = Window()
+    win = Window(app)
     win.show()
 
     # KeyboardInterrupt trick

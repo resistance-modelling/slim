@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import math
 from abc import ABC
-import os
+import datetime as dt
 from heapq import heapify
 from queue import PriorityQueue
 from types import GeneratorType
-from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, TypeVar, Generic, Counter as CounterType, Optional, \
-    Iterable, TYPE_CHECKING, List, Mapping
+from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, Optional, \
+    Iterable, TYPE_CHECKING, List, cast, Iterator
 
-import iteround
 import numpy as np
 
 from src import logger
@@ -21,9 +20,12 @@ if TYPE_CHECKING:  # pragma: no cover
 ################ Basic type aliases #####################
 LifeStage = str
 Allele = str
-Alleles = Union[Tuple[Allele, ...]]
+Alleles = Tuple[Allele, ...]
+# These are used when GenoDistrib is not available
+GenoDistribSerialisable = Dict[str, float]
+GenoDistribDict = Dict[Alleles, float]
 
-def largest_remainder(nums: np.ndarray):
+def largest_remainder(nums: np.ndarray) -> np.ndarray:
     # a vectorised implementation of largest remainder
     assert np.all(nums >= 0) or np.all(nums <= 0)
 
@@ -58,6 +60,9 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
     when possible
     """
 
+    alleles: List[Alleles] = [('a',), ('A', 'a'), ('A',)]
+    allele_labels = ["".join(allele) for allele in alleles]
+
     def __init__(self, params: Optional[Union[
         GenoDistrib,
         Dict[Alleles, float],
@@ -67,13 +72,13 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         # to prevent the default behaviour (Counter counts all the instances of the elements) we have to check
         # for generators
 
-        self._store = {}
+        self._store: Dict[Alleles, float] = {}
 
         if params:
             if isinstance(params, GeneratorType):
-                self._store = dict(params)
+                self._store = cast(Dict[Alleles, float], dict(params))
             elif isinstance(params, dict):
-                self._store = params
+                self._store = cast(Dict[Alleles, float], params)
             elif isinstance(params, GenoDistrib):
                 self._store.update(params._store)
 
@@ -88,7 +93,6 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
 
         np_values = np_values * population / np.sum(np_values)
 
-        # TODO: rewrite saferound to be vectorised
         rounded_values = largest_remainder(np_values).tolist()
         return GenoDistrib(dict(zip(keys, map(int, rounded_values))))
 
@@ -96,15 +100,6 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         result = self.normalise_to(other)
         self._store.clear()
         self._store.update(result)
-
-    def keys(self):
-        return self._store.keys()
-
-    def values(self):
-        return self._store.values()
-
-    def items(self):
-        return self._store.items()
 
     @property
     def gross(self) -> int:
@@ -156,7 +151,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
             other = GenoDistrib(other)
         return self._store == other._store
 
-    def __le__(self, other: Union[GenoDistrib, float]):
+    def __le__(self, other: Union[GenoDistrib, float]) -> bool:
         """A <= B if B has all the keys of A and A[k] <= B[k] for every k
         Note that __gt__ is not implemented as its behaviour is not "greater than" but rather
         "there may be an unbounded frequency"."""
@@ -166,10 +161,10 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         merged_keys = set(list(self.keys()) + list(other.keys()))
         return all(self[k] <= other[k] for k in merged_keys)
 
-    def is_positive(self):
+    def is_positive(self) -> bool:
         return all(v >= 0 for v in self.values())
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> float:
         return self._store.setdefault(key, 0)
 
     def __setitem__(self, key, value):
@@ -178,19 +173,19 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
     def __delitem__(self, key):
         del self._store[key]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Alleles]:
         return iter(self._store)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._store)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._store)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "GenoDistrib(" + str(self._store) + ")"
 
-    def to_json_dict(self):
+    def to_json_dict(self) -> Dict[str, float]:
         return {"".join(k): v for k, v in self.items()}
 
     def truncate_negatives(self):
@@ -199,7 +194,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
 
     @staticmethod
     def batch_sum(batches: Union[List[GenoDistrib], List[Dict[str, float]]],
-                  as_pure_dict=False) -> Union[GenoDistrib, Dict[str, float]]:
+                  as_pure_dict=False) -> Union[GenoDistrib, GenoDistribSerialisable]:
         # this function is ugly but it's a hotspot.
         alleles_to_idx = {('a',): 0, ('a'): 0,
                           ('A', 'a'): 1,
@@ -208,16 +203,13 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
                           ('A'): 2}
         res_as_vector = [0, 0, 0]
         for batch in batches:
-            for allele in batch:
-                res_as_vector[alleles_to_idx[allele]] += batch[allele]
+            for allele in GenoDistrib.alleles:
+                res_as_vector[alleles_to_idx[allele]] += batch.get(allele, 0)
 
         if as_pure_dict:
             return dict(zip(["a", "Aa", "A"], res_as_vector))
 
-        return GenoDistrib({
-            ('a',): res_as_vector[0],
-            ('A', 'a'): res_as_vector[1],
-            ('A',): res_as_vector[2]})
+        return GenoDistrib(dict(zip(GenoDistrib.alleles, res_as_vector)))
 
 
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
@@ -241,12 +233,12 @@ class LicePopulation(MutableMapping[LifeStage, int]):
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
 
-    def __init__(self, geno_data: GenoLifeStageDistrib, generic_ratios):
+    def __init__(self, geno_data: GenoLifeStageDistrib, generic_ratios: GenoDistribDict):
         """
         :param geno_data a Genotype distribution
         :param generic_ratios a config to use
         """
-        self._cache: Dict[LifeStage, int] = dict()
+        self._cache: Dict[LifeStage, int] = {}
         self.geno_by_lifestage = GenotypePopulation(self, geno_data)
         self.genetic_ratios = generic_ratios
         self._busy_dams: PriorityQueue[DamAvailabilityBatch] = PriorityQueue()
@@ -274,25 +266,25 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         if stage == "L5f":
             self.__rescale_busy_dams(round(self.busy_dams.gross * value / old_value) if old_value > 0 else 0)
 
-    def __getitem__(self, stage: LifeStage):
+    def __getitem__(self, stage: LifeStage) -> int:
         return self._cache[stage]
 
     def __delitem__(self, stage: LifeStage):
         raise NotImplementedError()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[LifeStage]:
         return iter(self._cache)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._cache)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._cache)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"LicePopulation({str(self._cache)})"
 
-    def as_dict(self):
+    def as_dict(self) -> Dict[LifeStage, int]:
         return self._cache
 
     def raw_update_value(self, stage: LifeStage, value: int):
@@ -302,14 +294,14 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         self._busy_dams = PriorityQueue()
 
     @property
-    def available_dams(self):
+    def available_dams(self) -> GenoDistrib:
         return self.geno_by_lifestage["L5f"] - self.busy_dams
 
     @property
-    def busy_dams(self):
+    def busy_dams(self) -> GenoDistrib:
         return self._busy_dams_cache
 
-    def free_dams(self, cur_time) -> GenoDistrib:
+    def free_dams(self, cur_time: dt.datetime) -> GenoDistrib:
         """
         Return the number of available dams
 
@@ -349,7 +341,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
             self.geno_by_lifestage[stage] = distrib_purged
 
     def _flush_busy_dams_cache(self):
-        self._busy_dams_cache = GenoDistrib.batch_sum([x.geno_distrib for x in self._busy_dams.queue])  # type: GenoDistrib
+        self._busy_dams_cache = cast(GenoDistrib, GenoDistrib.batch_sum([x.geno_distrib for x in self._busy_dams.queue]))
 
     def __clear_empty_dams(self):
         self._busy_dams.queue = [x for x in self._busy_dams.queue if x.geno_distrib.gross > 0]
@@ -404,7 +396,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
     def get_empty_geno_distrib() -> GenoLifeStageDistrib:
         return {stage: GenoDistrib() for stage in LicePopulation.lice_stages}
 
-    def to_json_dict(self):
+    def to_json_dict(self) -> GenoDistribSerialisable:
         return self._cache
 
 
@@ -452,26 +444,26 @@ class GenotypePopulation(MutableMapping[LifeStage, GenoDistrib]):
 
         self._lice_population._clip_dams_to_stage()
 
-    def __getitem__(self, stage: LifeStage):
+    def __getitem__(self, stage: LifeStage) -> GenoDistrib:
         return self._store[stage]
 
     def __delitem__(self, stage: LifeStage):
         raise NotImplementedError()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[LifeStage]:
         return iter(self._store)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._store)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._store)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"GenericGenoDistrib({str(self._store)})"
 
-    def to_json_dict(self):
+    def to_json_dict(self) -> Dict[LifeStage, GenoDistribSerialisable] :
         return {k: v.to_json_dict() for k, v in self.items()}
 
-    def as_dict(self):
+    def as_dict(self) -> Dict[LifeStage, GenoDistrib]:
         return self._store

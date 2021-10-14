@@ -57,12 +57,12 @@ class TreatmentParams(ABC):
     def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:
         return {HeterozygousResistance[key]: val for key, val in pheno_resistance_dict.items()}
 
-    def get_mortality_pp_increase(self, temperature: float, fish_mass: float):
+    def get_mortality_pp_increase(self, temperature: float, fish_mass: float) -> float:
         """Get the mortality percentage point difference increase."""
         fish_mass_indicator = 1 if fish_mass > 2000 else 0
 
         input = np.array([1, temperature, fish_mass_indicator, temperature**2, temperature*fish_mass_indicator, fish_mass_indicator**2])
-        return max(self.quadratic_fish_mortality_coeffs.dot(input), 0)
+        return max(float(self.quadratic_fish_mortality_coeffs.dot(input)), 0)
 
     @abstractmethod
     def delay(self, average_temperature: float):  # pragma: no cover

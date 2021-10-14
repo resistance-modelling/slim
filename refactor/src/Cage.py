@@ -11,7 +11,7 @@ from typing import Union, Optional, Tuple, cast, TYPE_CHECKING
 import numpy as np
 from scipy import stats
 
-from src import logger
+from src import logger, LoggableMixin
 from src.Config import Config
 from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
@@ -26,7 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover
 OptionalDamBatch = Optional[DamAvailabilityBatch]
 OptionalEggBatch = Optional[EggBatch]
 
-class Cage:
+class Cage(LoggableMixin):
     """
     Fish cages contain the fish.
     """
@@ -44,6 +44,7 @@ class Cage:
         :param farm: a Farm object
         :param initial_lice_pop: if provided, overrides default generated lice population
         """
+        super().__init__()
 
         self.cfg = cfg
         self.id = cage_id
@@ -89,6 +90,7 @@ class Cage:
 
         del filtered_vars["farm"]
         del filtered_vars["cfg"]
+        del filtered_vars["logged_data"]
 
         # May want to improve these or change them if we change the representation for genotype distribs
         # Note: JSON encoders do not allow a default() being run on the _keys_ of dictionaries
@@ -115,6 +117,8 @@ class Cage:
         :param pressure: External pressure, planctonic lice coming from the reservoir
         :return: Tuple (egg genotype distribution, hatching date, cost)
         """
+
+        self.clear_log()
 
         if cur_date >= self.start_date:
             logger.debug("\tUpdating farm {} / cage {}".format(self.farm_id, self.id))

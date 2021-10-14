@@ -127,19 +127,31 @@ class Simulator:
 
         Format: index is (timestamp, farm)
         Columns are: "L1" ... "L5f" (nested dict for now...), "a", "A", "Aa" (ints)
+
+        :param states a list of states
+        :param times a list of timestamps for each state
+        :return a dataframe as described above
         """
 
         farm_data = {}
         # farms = states[0].organisation.farms
         for state, time in zip(states, times):
             for farm in state.organisation.farms:
-                farm_data[(time, "farm_" + str(farm.name))] = farm.lice_genomics
+                key = (time, "farm_" + str(farm.name))
+                is_treating = all([cage.is_treated(time) for cage in farm.cages])
+                farm_data[key] = {
+                    **farm.lice_genomics,
+                    **farm.logged_data,
+                    "num_fish": farm.num_fish,
+                    "is_treating": is_treating
+                }
 
         dataframe = pd.DataFrame.from_dict(farm_data, orient='index')
 
         # extract cumulative geno info regardless of the stage
         def aggregate_geno(data):
-            return GenoDistrib.batch_sum(data, True)
+            data_to_sum = [elem for elem in data if isinstance(elem, dict)]
+            return GenoDistrib.batch_sum(data_to_sum, True)
 
         aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
 

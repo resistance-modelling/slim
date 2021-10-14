@@ -18,7 +18,6 @@ from src.Simulator import Simulator
 
 if __name__ == "__main__":
     # NOTE: missing_ok argument of unlink is only supported from Python 3.8
-    # TODO: decide if that's ok or whether to revamp the file handling
     if sys.version_info < (3, 8, 0):
         sys.stderr.write("You need python 3.8 or later to run this script\n")
         sys.exit(1)

@@ -188,7 +188,7 @@ class TestFarm:
 
         arrivals = [cage_1, cage_2]
 
-        total, by_cage = first_farm.get_cage_arrivals_stats(arrivals)
+        total, by_cage, _ = first_farm.get_cage_arrivals_stats(arrivals)
 
         assert total == 105
         assert by_cage == [70, 35]

@@ -1,5 +1,5 @@
 """
-damental agent in this simulation. It has a number of functions:
+A Farm is a fundamental agent in this simulation. It has a number of functions:
 
 - controlling individual cages
 - managing its own finances
@@ -10,30 +10,27 @@ damental agent in this simulation. It has a number of functions:
 from __future__ import annotations
 
 import copy
-import datetime as dt
 import json
 from collections import Counter, defaultdict
-from queue import PriorityQueue
-from typing import Dict, List, Optional, Tuple
-
-from mypy_extensions import TypedDict
+from typing import Dict, List, Optional, Tuple, cast
 
 import numpy as np
+from mypy_extensions import TypedDict
 
-from src import logger
+from src import LoggableMixin
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 from src.LicePopulation import GrossLiceDistrib, GenoDistrib
-from src.TreatmentTypes import Money
 from src.QueueTypes import *
+from src.TreatmentTypes import Money
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
 LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
 
 
-class Farm:
+class Farm(LoggableMixin):
     """
     Define a salmon farm containing salmon cages. Over time the salmon in the cages grow and are
     subjected to external infestation pressure from sea lice.
@@ -46,6 +43,7 @@ class Farm:
         :param cfg: the farm configuration
         ::param initial_lice_pop: if provided, overrides default generated lice population
         """
+        super().__init__()
 
         self.cfg = cfg
 
@@ -71,6 +69,7 @@ class Farm:
 
         self.generate_sampling_events()
 
+
     def __str__(self):
         """
         Get a human readable string representation of the farm.
@@ -83,6 +82,8 @@ class Farm:
         filtered_vars = vars(self).copy()
         del filtered_vars["farm_cfg"]
         del filtered_vars["cfg"]
+        del filtered_vars["logged_data"]
+
         filtered_vars.update(kwargs)
 
         return filtered_vars
@@ -118,6 +119,7 @@ class Farm:
 
 
         return {k: v.to_json_dict() for k, v in genomics.items()}
+
     def initialise_temperatures(self, temperatures: Dict[str, LocationTemps]) -> np.ndarray:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at
@@ -190,7 +192,7 @@ class Farm:
         :returns: whether the treatment has been added to at least one cage or not.
         """
 
-        logger.debug("\t\tFarm {} applies treatment {}".format(self.name, str(treatment_type)))
+        logger.debug("\t\tFarm {} requests treatment {}".format(self.name, str(treatment_type)))
         if self.available_treatments <= 0:
             return False
 
@@ -199,6 +201,7 @@ class Farm:
                           (cage.start_date > day or cage.is_fallowing or cage.is_treated(day))]
 
         if len(eligible_cages) == 0:
+            logger.debug("\t\tTreatment not scheduled as no cages were eligible")
             return False
 
         event = self.generate_treatment_event(treatment_type, day)
@@ -226,6 +229,7 @@ class Farm:
         # TODO: this is extremely simple.
         p = [self.farm_cfg.defection_proba, 1 - self.farm_cfg.defection_proba]
         want_to_treat = self.cfg.rng.choice([False, True], p=p) if can_defect else True
+        self.log("Outcome of the vote: %r", is_treating=want_to_treat)
 
         if not want_to_treat:
             logger.debug("\tFarm {} refuses to treat".format(self.name))
@@ -244,6 +248,8 @@ class Farm:
         :param cur_date: Current date
         :return: pair of Dictionary of genotype distributions based on hatch date, and cost of the update
         """
+
+        self.clear_log()
 
         if cur_date >= self.start_date:
             logger.debug("Updating farm {}".format(self.name))
@@ -367,7 +373,7 @@ class Farm:
         Assumes the lice can float freely across a given farm so that
         they are not bound to a single cage while not attached to a fish.
 
-        NOTE: This method is not multiprocessing safe.
+        NOTE: This method is not multiprocessing safe. (why?)
 
         :param eggs_by_hatch_date: Dictionary of genotype distributions based
         on hatch date
@@ -378,7 +384,6 @@ class Farm:
         logger.debug("\tDispersing total offspring Farm {}".format(self.name))
 
         for farm in farms:
-
             if farm.name == self.name:
                 logger.debug("\t\tFarm {}:".format(farm.name))
             else:
@@ -388,9 +393,10 @@ class Farm:
             farm_arrivals = self.get_farm_allocation(farm, eggs_by_hatch_date)
             arrivals_per_cage = self.get_cage_allocation(len(farm.cages), farm_arrivals)
 
-            total, by_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
+            total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
             logger.debug("\t\t\tTotal new eggs = {}".format(total))
             logger.debug("\t\t\tPer cage distribution = {}".format(by_cage))
+            self.log("\t\t\tPer cage distribution (as geno) = %s", arrivals_per_cage=by_geno_cage)
 
             # get the arrival time of the egg batch at the allocated
             # destination
@@ -402,21 +408,21 @@ class Farm:
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
     @staticmethod
-    def get_cage_arrivals_stats(cage_arrivals: CageAllocation) -> Tuple[int, List[int]]:
+    def get_cage_arrivals_stats(cage_arrivals: CageAllocation) -> Tuple[int, List[int], List[GenoDistrib]]:
         """Get stats about the cage arrivals for logging
 
-        :param cage_arrivals: Dictionary of genotype distributions based
-        on hatch date
-        :return: Tuple representing total number of arrivals and arrival
-        distribution
+        :param cage_arrivals: List of Dictionaries of genotype distributions based
+        on hatch date.
+        :return: Tuple representing total number of arrivals, arrival
+        distribution and genotype distribution by cage
         """
 
-        by_cage = []
-        for hatch_dict in cage_arrivals:
-            cage_total = sum([n for genotype_dict in hatch_dict.values() for n in genotype_dict.values()])
-            by_cage.append(cage_total)
-
-        return sum(by_cage), by_cage
+        # Basically ignore the hatch dates and sum up the batches
+        geno_by_cage = [cast(GenoDistrib,
+                             GenoDistrib.batch_sum(list(hatch_dict.values())))
+                   for hatch_dict in cage_arrivals]
+        gross_by_cage = [geno.gross for geno in geno_by_cage]
+        return sum(gross_by_cage), gross_by_cage, geno_by_cage
 
     def get_profit(self, cur_date: dt.datetime):
         """
