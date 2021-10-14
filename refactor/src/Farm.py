@@ -17,6 +17,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from mypy_extensions import TypedDict
 
+from src import record_log
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
@@ -55,6 +56,8 @@ class Farm:
         self.current_capital = self.farm_cfg.start_capital
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
+        self.logged_data = {}
+
         self.year_temperatures = self.initialise_temperatures(cfg.farm_data)
 
         # TODO: only for testing purposes
@@ -66,6 +69,7 @@ class Farm:
         self.__sampling_events: PriorityQueue[SamplingEvent] = PriorityQueue() 
 
         self.generate_sampling_events()
+
 
     def __str__(self):
         """
@@ -79,6 +83,8 @@ class Farm:
         filtered_vars = vars(self).copy()
         del filtered_vars["farm_cfg"]
         del filtered_vars["cfg"]
+        del filtered_vars["logged_data"]
+
         filtered_vars.update(kwargs)
 
         return filtered_vars
@@ -93,6 +99,10 @@ class Farm:
             return NotImplemented
 
         return self.name == other.name
+
+    def log(self, log_message, *args, **kwargs):
+        record_log(self.logged_data, log_message, *args, **kwargs)
+
 
     @property
     def num_fish(self):
@@ -114,6 +124,7 @@ class Farm:
 
 
         return {k: v.to_json_dict() for k, v in genomics.items()}
+
     def initialise_temperatures(self, temperatures: Dict[str, LocationTemps]) -> np.ndarray:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at
@@ -186,7 +197,7 @@ class Farm:
         :returns: whether the treatment has been added to at least one cage or not.
         """
 
-        logger.debug("\t\tFarm {} applies treatment {}".format(self.name, str(treatment_type)))
+        logger.debug("\t\tFarm {} requests treatment {}".format(self.name, str(treatment_type)))
         if self.available_treatments <= 0:
             return False
 
@@ -195,8 +206,10 @@ class Farm:
                           (cage.start_date > day or cage.is_fallowing or cage.is_treated(day))]
 
         if len(eligible_cages) == 0:
+            logger.debug("\t\tTreatment not scheduled as no cages were eligible")
             return False
 
+        self.log("\t\tTreatment %s scheduled", treatment_type=str(treatment_type))
         event = self.generate_treatment_event(treatment_type, day)
 
         for cage in eligible_cages:
@@ -222,6 +235,7 @@ class Farm:
         # TODO: this is extremely simple.
         p = [self.farm_cfg.defection_proba, 1 - self.farm_cfg.defection_proba]
         want_to_treat = self.cfg.rng.choice([False, True], p=p) if can_defect else True
+        self.log("Outcome of the vote: %r", is_treating=want_to_treat)
 
         if not want_to_treat:
             logger.debug("\tFarm {} refuses to treat".format(self.name))
@@ -363,7 +377,7 @@ class Farm:
         Assumes the lice can float freely across a given farm so that
         they are not bound to a single cage while not attached to a fish.
 
-        NOTE: This method is not multiprocessing safe.
+        NOTE: This method is not multiprocessing safe. (why?)
 
         :param eggs_by_hatch_date: Dictionary of genotype distributions based
         on hatch date
@@ -374,7 +388,6 @@ class Farm:
         logger.debug("\tDispersing total offspring Farm {}".format(self.name))
 
         for farm in farms:
-
             if farm.name == self.name:
                 logger.debug("\t\tFarm {}:".format(farm.name))
             else:
@@ -384,9 +397,10 @@ class Farm:
             farm_arrivals = self.get_farm_allocation(farm, eggs_by_hatch_date)
             arrivals_per_cage = self.get_cage_allocation(len(farm.cages), farm_arrivals)
 
-            total, by_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
+            total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
             logger.debug("\t\t\tTotal new eggs = {}".format(total))
             logger.debug("\t\t\tPer cage distribution = {}".format(by_cage))
+            self.log("\t\t\tPer cage distribution (as geno) = %s", arrivals_per_cage=arrivals_per_cage)
 
             # get the arrival time of the egg batch at the allocated
             # destination
@@ -398,21 +412,20 @@ class Farm:
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
     @staticmethod
-    def get_cage_arrivals_stats(cage_arrivals: CageAllocation) -> Tuple[int, List[int]]:
+    def get_cage_arrivals_stats(cage_arrivals: CageAllocation) -> Tuple[int, List[int], List[GenoDistrib]]:
         """Get stats about the cage arrivals for logging
 
-        :param cage_arrivals: Dictionary of genotype distributions based
-        on hatch date
+        :param cage_arrivals: List of Dictionaries of genotype distributions based
+        on hatch date.
         :return: Tuple representing total number of arrivals and arrival
         distribution
         """
 
-        by_cage = []
-        for hatch_dict in cage_arrivals:
-            cage_total = sum([n for genotype_dict in hatch_dict.values() for n in genotype_dict.values()])
-            by_cage.append(cage_total)
-
-        return sum(by_cage), by_cage
+        # Basically ignore the hatch dates and sum up the batches
+        geno_by_cage = [GenoDistrib.batch_sum(list(hatch_dict.values()))
+                   for hatch_dict in cage_arrivals]
+        gross_by_cage = [geno.gross for geno in geno_by_cage]
+        return sum(gross_by_cage), gross_by_cage, geno_by_cage
 
     def get_profit(self, cur_date: dt.datetime):
         """

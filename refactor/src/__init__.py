@@ -17,3 +17,8 @@ def create_logger():
     file_handler.setFormatter(formatter)
     logger.addHandler(term_handler)
     logger.addHandler(file_handler)
+
+def record_log(var: dict, log_message: str, *args, **kwargs):
+    """Wrapper on the logger function that logs a message and saves these for visualisation purposes"""
+    var.update(kwargs)
+    logger.debug(log_message, *args, *(kwargs.values()))
