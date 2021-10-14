@@ -12,7 +12,7 @@ from __future__ import annotations
 import copy
 import json
 from collections import Counter, defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, cast
 
 import numpy as np
 from mypy_extensions import TypedDict
@@ -413,12 +413,13 @@ class Farm(LoggableMixin):
 
         :param cage_arrivals: List of Dictionaries of genotype distributions based
         on hatch date.
-        :return: Tuple representing total number of arrivals and arrival
-        distribution
+        :return: Tuple representing total number of arrivals, arrival
+        distribution and genotype distribution by cage
         """
 
         # Basically ignore the hatch dates and sum up the batches
-        geno_by_cage = [GenoDistrib.batch_sum(list(hatch_dict.values()))
+        geno_by_cage = [cast(GenoDistrib,
+                             GenoDistrib.batch_sum(list(hatch_dict.values())))
                    for hatch_dict in cage_arrivals]
         gross_by_cage = [geno.gross for geno in geno_by_cage]
         return sum(gross_by_cage), gross_by_cage, geno_by_cage
