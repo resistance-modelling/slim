@@ -271,7 +271,7 @@ class Window(QMainWindow):
                     # get gross arrivals
                     arrivals_gross = farm_df["arrivals_per_cage"].apply(
                         lambda cages: sum([sum(cage.values()) for cage in cages])).to_numpy()
-                    self.licePopulationPlots[farm_idx].plot(arrivals_gross, name="L0", pen=self._colorPalette[7])
+                    self.licePopulationPlots[farm_idx].plot(arrivals_gross, name="Offspring", pen=self._colorPalette[7])
 
         # TODO: add this to pandas
         payoffs = [float(state.payoff) for state in self.states]
