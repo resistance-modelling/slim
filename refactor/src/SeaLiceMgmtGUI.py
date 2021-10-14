@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Dict
 
-import numpy as np
 import pandas as pd
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtWidgets
@@ -123,9 +122,14 @@ class Window(QMainWindow):
         self.plotButtonGroup = QGroupBox("Plot options", self)
         self.plotButtonGroupLayout = QVBoxLayout()
         self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information", self)
+        self.showOffspringDistribution = QCheckBox("Sh&ow offspring distribution", self)
 
         self.showDetailedGenotypeCheckBox.stateChanged.connect(lambda _: self._updatePlot())
+        self.showOffspringDistribution.stateChanged.connect(lambda _: self._updatePlot())
+
         self.plotButtonGroupLayout.addWidget(self.showDetailedGenotypeCheckBox)
+        self.plotButtonGroupLayout.addWidget(self.showOffspringDistribution)
+
         self.plotButtonGroup.setLayout(self.plotButtonGroupLayout)
 
     def _createProgressBar(self):
@@ -199,12 +203,12 @@ class Window(QMainWindow):
 
     def _updatePlot(self):
         # TODO: not suited for real-time
+        # TODO: this function has become an atrocious mess
 
         self._cleanPlot()
         if self.states is None:
             return
 
-        # TODO this is ugly. Wrap this logic inside a widget with a few slots
         # if the number of farms has changed
         elif len(self._getUniqueFarms) != len(self.licePopulationPlots):
             self._remountPlot()
@@ -244,23 +248,30 @@ class Window(QMainWindow):
                 treatment_days_df = farm_df[farm_df["is_treating"]]["timestamp"] - self.times[0]
                 treatment_days = treatment_days_df.apply(lambda x: x.days).to_numpy()
 
-                # TODO: move this in another function. Or better, move this entire widget in another module
-                treatment_rois = []
-
+                # Generate treatment regions by looking for the first non-consecutive treatment blocks.
+                # There may be a chance where multiple treatments happen consecutively, on which case
+                # we simply consider them as a unique case.
+                # TODO: move this in another function
+                # TODO: we are not keeping tracks of all the PlotItem's - clear events may not delete them
                 treatment_ranges = []
                 lo = 0
                 for i in range(1, len(treatment_days)):
                     if treatment_days[i] > treatment_days[i - 1] + 1:
-                        treatment_ranges.append((lo, i))
+                        treatment_ranges.append((treatment_days[lo], treatment_days[i - 1] + 1))
                         lo = i
                 treatment_ranges.append((lo, i))
 
                 treatment_lri = [LinearRegionItem(
-                    values=(treatment_days[range[0]], treatment_days[range[1]]),
+                    values=range,
                     movable=False) for range in treatment_ranges]
                 for lri in treatment_lri:
                     self.licePopulationPlots[farm_idx].addItem(lri)
 
+                if self.showOffspringDistribution.isChecked():
+                    # get gross arrivals
+                    arrivals_gross = farm_df["arrivals_per_cage"].apply(
+                        lambda cages: sum([sum(cage.values()) for cage in cages])).to_numpy()
+                    self.licePopulationPlots[farm_idx].plot(arrivals_gross, name="L0", pen=self._colorPalette[7])
 
         # TODO: add this to pandas
         payoffs = [float(state.payoff) for state in self.states]

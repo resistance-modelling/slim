@@ -44,6 +44,7 @@ class Cage(LoggableMixin):
         :param farm: a Farm object
         :param initial_lice_pop: if provided, overrides default generated lice population
         """
+        super().__init__()
 
         self.cfg = cfg
         self.id = cage_id

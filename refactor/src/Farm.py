@@ -43,7 +43,7 @@ class Farm(LoggableMixin):
         :param cfg: the farm configuration
         ::param initial_lice_pop: if provided, overrides default generated lice population
         """
-        super(LoggableMixin).__init__()
+        super().__init__()
 
         self.cfg = cfg
 
