@@ -138,7 +138,13 @@ class Simulator:
         for state, time in zip(states, times):
             for farm in state.organisation.farms:
                 key = (time, "farm_" + str(farm.name))
-                farm_data[key] = {**farm.lice_genomics, "num_fish": farm.num_fish}
+                is_treating = all([cage.is_treated(time) for cage in farm.cages])
+                farm_data[key] = {
+                    **farm.lice_genomics,
+                    **farm.logged_data,
+                    "num_fish": farm.num_fish,
+                    "is_treating": is_treating
+                }
 
         dataframe = pd.DataFrame.from_dict(farm_data, orient='index')
 

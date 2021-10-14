@@ -1,5 +1,5 @@
 """
-damental agent in this simulation. It has a number of functions:
+A Farm is a fundamental agent in this simulation. It has a number of functions:
 
 - controlling individual cages
 - managing its own finances
@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from mypy_extensions import TypedDict
 
-from src import record_log
+from src import LoggableMixin
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
@@ -30,7 +30,7 @@ CageAllocation = List[GenoDistribByHatchDate]
 LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
 
 
-class Farm:
+class Farm(LoggableMixin):
     """
     Define a salmon farm containing salmon cages. Over time the salmon in the cages grow and are
     subjected to external infestation pressure from sea lice.
@@ -43,6 +43,7 @@ class Farm:
         :param cfg: the farm configuration
         ::param initial_lice_pop: if provided, overrides default generated lice population
         """
+        super(LoggableMixin).__init__()
 
         self.cfg = cfg
 
@@ -55,8 +56,6 @@ class Farm:
         self.available_treatments = farm_cfg.max_num_treatments
         self.current_capital = self.farm_cfg.start_capital
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
-
-        self.logged_data = {}
 
         self.year_temperatures = self.initialise_temperatures(cfg.farm_data)
 
@@ -99,10 +98,6 @@ class Farm:
             return NotImplemented
 
         return self.name == other.name
-
-    def log(self, log_message, *args, **kwargs):
-        record_log(self.logged_data, log_message, *args, **kwargs)
-
 
     @property
     def num_fish(self):
@@ -209,7 +204,6 @@ class Farm:
             logger.debug("\t\tTreatment not scheduled as no cages were eligible")
             return False
 
-        self.log("\t\tTreatment %s scheduled", treatment_type=str(treatment_type))
         event = self.generate_treatment_event(treatment_type, day)
 
         for cage in eligible_cages:
@@ -254,6 +248,8 @@ class Farm:
         :param cur_date: Current date
         :return: pair of Dictionary of genotype distributions based on hatch date, and cost of the update
         """
+
+        self.clear_log()
 
         if cur_date >= self.start_date:
             logger.debug("Updating farm {}".format(self.name))
@@ -400,7 +396,7 @@ class Farm:
             total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
             logger.debug("\t\t\tTotal new eggs = {}".format(total))
             logger.debug("\t\t\tPer cage distribution = {}".format(by_cage))
-            self.log("\t\t\tPer cage distribution (as geno) = %s", arrivals_per_cage=arrivals_per_cage)
+            self.log("\t\t\tPer cage distribution (as geno) = %s", arrivals_per_cage=by_geno_cage)
 
             # get the arrival time of the egg batch at the allocated
             # destination

@@ -1,6 +1,8 @@
 import logging
 
 # one-stop entry point for logging
+from typing import Any, Dict
+
 logger = logging.getLogger("SeaLiceManagementGame")
 
 def create_logger():
@@ -18,7 +20,15 @@ def create_logger():
     logger.addHandler(term_handler)
     logger.addHandler(file_handler)
 
-def record_log(var: dict, log_message: str, *args, **kwargs):
-    """Wrapper on the logger function that logs a message and saves these for visualisation purposes"""
-    var.update(kwargs)
-    logger.debug(log_message, *args, *(kwargs.values()))
+class LoggableMixin:
+    """A mixin to store variables when recording log entries."""
+    def __init__(self):
+        self.logged_data: Dict[str, Any] = {}
+
+    def log(self, log_message: str, *args, **kwargs):
+        """Wrapper on the logger function that logs a message and saves these for visualisation purposes"""
+        self.logged_data.update(kwargs)
+        logger.debug(log_message, *args, *(kwargs.values()))
+
+    def clear_log(self):
+        self.logged_data.clear()

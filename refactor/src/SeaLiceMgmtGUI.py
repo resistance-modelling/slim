@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
                              QAction, QFileDialog, QMessageBox, QGridLayout, QProgressBar, QCheckBox,
                              QGroupBox, QVBoxLayout, QTabWidget)
 from colorcet import glasbey_dark, glasbey_light
+from pyqtgraph import LinearRegionItem
 
 from src.LicePopulation import LicePopulation
 from src.Simulator import Simulator
@@ -67,7 +68,7 @@ class Window(QMainWindow):
 
         self.licePopulationPlots = [self.pqgPlotContainer.addPlot(title=f"Lice Population of farm {i}", row=0, col=i)
                                     for i in range(num_farms)]
-        self.fishPopulationPlots = [self.pqgPlotContainer.addPlot(title=f"Lice Population of farm {i}", row=1, col=i)
+        self.fishPopulationPlots = [self.pqgPlotContainer.addPlot(title=f"Fish Population of farm {i}", row=1, col=i)
                                     for i in range(num_farms)]
         self.payoffPlot = self.pqgPlotContainer.addPlot(title="Cumulated payoff", row=2, col=0)
 
@@ -79,7 +80,7 @@ class Window(QMainWindow):
 
         # add grid, synchronise Y-range
         # TODO: make this toggleable?
-        for plot in self.licePopulationPlots:
+        for plot in self.licePopulationPlots + self.fishPopulationPlots:
             plot.showGrid(x=True, y=True)
 
         for plotList in [self.licePopulationPlots, self.fishPopulationPlots]:
@@ -227,24 +228,38 @@ class Window(QMainWindow):
                     for allele_name, stage_value in allele_data.items()
                 }
         else:
-            # TODO: use pandas here
-            population_data = {}
-            for snapshot in self.states:
-                farms = snapshot.organisation.farms
-                for farm in farms:
-                    population_data.setdefault(farm.name, []).append(farm.lice_population)
-
             for farm_idx, farm_name in enumerate(farm_list):
-                # TODO: this is ugly
-                farm_name_as_int = int(farm_name[len("farm_"):])
-                stages = {k: np.array([population.get(k, 0) for population in population_data[farm_name_as_int]]) for k in
-                          LicePopulation.lice_stages}
-                # render per stage
+                farm_df = df[df["farm_name"] == farm_name]
+                stages = farm_df[LicePopulation.lice_stages].applymap(lambda geno_data: sum(geno_data.values()))
+
+               # render per stage
                 colours = dict(zip(LicePopulation.lice_stages, self._colorPalette[:len(stages)]))
 
                 self.stages_to_curve[farm_name] = {
-                    stage: self.licePopulationPlots[farm_idx].plot(stages[stage], name=stage, pen=colours[stage])
-                    for stage in LicePopulation.lice_stages}
+                    stage: self.licePopulationPlots[farm_idx].plot(
+                        series.to_numpy(), name=stage, pen=colours[stage])
+                    for stage, series in stages.items()}
+
+                # treatment markers
+                treatment_days_df = farm_df[farm_df["is_treating"]]["timestamp"] - self.times[0]
+                treatment_days = treatment_days_df.apply(lambda x: x.days).to_numpy()
+
+                # TODO: move this in another function. Or better, move this entire widget in another module
+                treatment_rois = []
+
+                treatment_ranges = []
+                lo = 0
+                for i in range(1, len(treatment_days)):
+                    if treatment_days[i] > treatment_days[i - 1] + 1:
+                        treatment_ranges.append((lo, i))
+                        lo = i
+                treatment_ranges.append((lo, i))
+
+                treatment_lri = [LinearRegionItem(
+                    values=(treatment_days[range[0]], treatment_days[range[1]]),
+                    movable=False) for range in treatment_ranges]
+                for lri in treatment_lri:
+                    self.licePopulationPlots[farm_idx].addItem(lri)
 
 
         # TODO: add this to pandas
@@ -254,9 +269,7 @@ class Window(QMainWindow):
         for farm_idx, farm_name in enumerate(farm_list):
             # TODO: condense this loop and the previous one
             num_fish = df[df["farm_name"] == farm_name]["num_fish"].to_numpy()
-            num_fish_cumulative = -np.diff(num_fish)
             self.fish_population[farm_name] = self.fishPopulationPlots[farm_idx].plot(num_fish, pen=self._colorPalette[0])
-            self.fishPopulationPlots[farm_idx].plot(num_fish_cumulative, pen=self._colorPalette[1])
 
         # keep ranges consistent
         for plot in self.licePopulationPlots + self.licePopulationPlots:
