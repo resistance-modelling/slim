@@ -7,7 +7,7 @@ from heapq import heapify
 from queue import PriorityQueue
 from types import GeneratorType
 from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, Optional, \
-    Iterable, TYPE_CHECKING, List, cast
+    Iterable, TYPE_CHECKING, List, cast, Iterator
 
 import numpy as np
 
@@ -93,7 +93,6 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
 
         np_values = np_values * population / np.sum(np_values)
 
-        # TODO: rewrite saferound to be vectorised
         rounded_values = largest_remainder(np_values).tolist()
         return GenoDistrib(dict(zip(keys, map(int, rounded_values))))
 
@@ -174,16 +173,16 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
     def __delitem__(self, key):
         del self._store[key]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Alleles]:
         return iter(self._store)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._store)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._store)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "GenoDistrib(" + str(self._store) + ")"
 
     def to_json_dict(self) -> Dict[str, float]:
@@ -273,19 +272,19 @@ class LicePopulation(MutableMapping[LifeStage, int]):
     def __delitem__(self, stage: LifeStage):
         raise NotImplementedError()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[LifeStage]:
         return iter(self._cache)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._cache)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._cache)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"LicePopulation({str(self._cache)})"
 
-    def as_dict(self):
+    def as_dict(self) -> Dict[LifeStage, int]:
         return self._cache
 
     def raw_update_value(self, stage: LifeStage, value: int):
@@ -295,11 +294,11 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         self._busy_dams = PriorityQueue()
 
     @property
-    def available_dams(self):
+    def available_dams(self) -> GenoDistrib:
         return self.geno_by_lifestage["L5f"] - self.busy_dams
 
     @property
-    def busy_dams(self):
+    def busy_dams(self) -> GenoDistrib:
         return self._busy_dams_cache
 
     def free_dams(self, cur_time: dt.datetime) -> GenoDistrib:
@@ -451,20 +450,20 @@ class GenotypePopulation(MutableMapping[LifeStage, GenoDistrib]):
     def __delitem__(self, stage: LifeStage):
         raise NotImplementedError()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[LifeStage]:
         return iter(self._store)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._store)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._store)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"GenericGenoDistrib({str(self._store)})"
 
-    def to_json_dict(self):
+    def to_json_dict(self) -> Dict[LifeStage, GenoDistribSerialisable] :
         return {k: v.to_json_dict() for k, v in self.items()}
 
-    def as_dict(self):
+    def as_dict(self) -> Dict[LifeStage, GenoDistrib]:
         return self._store
