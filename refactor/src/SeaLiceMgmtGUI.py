@@ -15,6 +15,7 @@ from pyqtgraph import LinearRegionItem
 
 from src.LicePopulation import LicePopulation
 from src.Simulator import Simulator
+from src.gui_utils.configuration import ConfigurationPane
 from src.gui_utils.console import ConsoleWidget
 
 
@@ -94,6 +95,7 @@ class Window(QMainWindow):
         self.setCentralWidget(self.wd)
 
         self._createPlotPane()
+        self._createConfigurationPane()
         self._createConsole()
         self._createTabs()
 
@@ -111,10 +113,14 @@ class Window(QMainWindow):
         mainLayout.addWidget(self.plotButtonGroup, 3, 0)
         mainLayout.addWidget(self.progressBar, 4, 0, 1, 2)
 
+    def _createConfigurationPane(self):
+        self.configurationPane = ConfigurationPane()
+
     def _createTabs(self):
         self.plotTabs = QTabWidget(self)
 
         self.plotTabs.addTab(self.plotPane, "Plotter")
+        self.plotTabs.addTab(self.configurationPane, "Configuration")
         self.plotTabs.addTab(self.console, "Debugging console")
 
     def _createPlotOptionGroup(self):
@@ -155,7 +161,9 @@ class Window(QMainWindow):
         self.times = times
         self.states_as_df = Simulator.dump_as_pd(states, times)
 
+        self.configurationPane.newConfig.emit(states[0].cfg)
         self.console.push_vars(vars(self))
+        # TODO: updatePlot should invoked after a signal
         self._updatePlot()
 
     def _createLoaderWorker(self, filename):
