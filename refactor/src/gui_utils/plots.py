@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Optional, Dict, TYPE_CHECKING, List
 
+import numpy as np
 import pandas as pd
 import pyqtgraph as pg
+import scipy
 from PyQt5.QtCore import QThread
-from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox
+from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox, QSpinBox, QLabel
 from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem
 
@@ -113,12 +115,19 @@ class PlotPane(QWidget):
         self.plotButtonGroupLayout = QVBoxLayout()
         self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information", self)
         self.showOffspringDistribution = QCheckBox("Sh&ow offspring distribution", self)
+        self.convolutionKernelSizeLabel = QLabel("Kernel size")
+        self.convolutionKernelSizeBox = QSpinBox(self)
+        self.convolutionKernelSizeBox.setRange(1, 10)
+        self.convolutionKernelSizeBox.setValue(3)
+        self.convolutionKernelSizeBox.valueChanged.connect(lambda _: self._updatePlot())
 
         self.showDetailedGenotypeCheckBox.stateChanged.connect(lambda _: self._updatePlot())
         self.showOffspringDistribution.stateChanged.connect(lambda _: self._updatePlot())
 
         self.plotButtonGroupLayout.addWidget(self.showDetailedGenotypeCheckBox)
         self.plotButtonGroupLayout.addWidget(self.showOffspringDistribution)
+        self.plotButtonGroupLayout.addWidget(self.convolutionKernelSizeLabel)
+        self.plotButtonGroupLayout.addWidget(self.convolutionKernelSizeBox)
 
         self.plotButtonGroup.setLayout(self.plotButtonGroupLayout)
 
@@ -168,16 +177,23 @@ class PlotPane(QWidget):
 
         for farm_idx, farm_name in enumerate(farm_list):
             farm_df = df[df["farm_name"] == farm_name]
+
+            # Show fish population
+            num_fish = df[df["farm_name"] == farm_name]["num_fish"].to_numpy()
+            self.fish_population[farm_name] = self.fishPopulationPlots[farm_idx].plot(num_fish, pen=self._colorPalette[0])
+
+            # Genotype information
             if self.showDetailedGenotypeCheckBox.isChecked():
                 allele_names = GenoDistrib.allele_labels
                 colours = dict(zip(allele_names, self._colorPalette[:len(allele_names)]))
 
-                allele_data = {allele: farm_df[allele].to_numpy() for allele in allele_names}
+                allele_data = {allele: self._convolve(farm_df[allele].to_numpy()) for allele in allele_names}
                 self.geno_to_curve[farm_name] = {
                     allele_name: self.licePopulationPlots[farm_idx].plot(stage_value, name=allele_name,
                                                                          pen=colours[allele_name])
                     for allele_name, stage_value in allele_data.items()
                 }
+            # Stage information
             else:
                 stages = farm_df[LicePopulation.lice_stages].applymap(
                     lambda geno_data: sum(geno_data.values()))
@@ -187,7 +203,7 @@ class PlotPane(QWidget):
 
                 self.stages_to_curve[farm_name] = {
                     stage: self.licePopulationPlots[farm_idx].plot(
-                        series.to_numpy(), name=stage, pen=colours[stage])
+                        self._convolve(series.to_numpy()), name=stage, pen=colours[stage])
                     for stage, series in stages.items()}
 
 
@@ -204,8 +220,6 @@ class PlotPane(QWidget):
                 self.licePopulationPlots[farm_idx].addItem(lri[0])
                 self.fishPopulationPlots[farm_idx].addItem(lri[1])
 
-        # TODO: add this to pandas
-
         # because of the leaky scope, this is going to be something
         payoffs = farm_df["payoff"].to_numpy()
         self.payoffPlot.plot(payoffs)
@@ -221,6 +235,13 @@ class PlotPane(QWidget):
             plot.vb.setLimits(xMin=0, xMax=len(payoffs))
         self.payoffPlot.setXRange(0, len(payoffs), padding=0)
         self.payoffPlot.vb.setLimits(xMin=0, xMax=len(payoffs))
+
+    def _convolve(self, signal):
+        kernel_size = self.convolutionKernelSizeBox.value()
+        # TODO: support multiple rolling averages
+        kernel = np.full(kernel_size, 1/kernel_size)
+        return scipy.ndimage.convolve(signal, kernel, mode="nearest")
+
 
     def _getTreatmentRegions(self, farm_df: pd.DataFrame, shape: int) -> List[List[LinearRegionItem]]:
         # generate treatment regions
