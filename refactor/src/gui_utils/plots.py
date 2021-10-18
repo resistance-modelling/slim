@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from typing import Optional, Dict, TYPE_CHECKING
+from typing import Optional, Dict, TYPE_CHECKING, List
 
+import pandas as pd
 import pyqtgraph as pg
 from PyQt5.QtCore import QThread
 from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox
 from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem
 
-from src.LicePopulation import LicePopulation
+from src.LicePopulation import LicePopulation, GenoDistrib
 from src.gui_utils.model import SimulatorSingleRunState
 
 if TYPE_CHECKING:
@@ -165,12 +166,11 @@ class PlotPane(QWidget):
         farm_list = self._getUniqueFarms
         df = self.state.states_as_df.reset_index()
 
-        if self.showDetailedGenotypeCheckBox.isChecked():
-            allele_names = ["a", "A", "Aa"]  # TODO: extract from column names
-            colours = dict(zip(allele_names, self._colorPalette[:len(allele_names)]))
-
-            for farm_idx, farm_name in enumerate(farm_list):
-                farm_df = df[df["farm_name"] == farm_name]
+        for farm_idx, farm_name in enumerate(farm_list):
+            farm_df = df[df["farm_name"] == farm_name]
+            if self.showDetailedGenotypeCheckBox.isChecked():
+                allele_names = GenoDistrib.allele_labels
+                colours = dict(zip(allele_names, self._colorPalette[:len(allele_names)]))
 
                 allele_data = {allele: farm_df[allele].to_numpy() for allele in allele_names}
                 self.geno_to_curve[farm_name] = {
@@ -178,12 +178,11 @@ class PlotPane(QWidget):
                                                                          pen=colours[allele_name])
                     for allele_name, stage_value in allele_data.items()
                 }
-        else:
-            for farm_idx, farm_name in enumerate(farm_list):
-                farm_df = df[df["farm_name"] == farm_name]
-                stages = farm_df[LicePopulation.lice_stages].applymap(lambda geno_data: sum(geno_data.values()))
+            else:
+                stages = farm_df[LicePopulation.lice_stages].applymap(
+                    lambda geno_data: sum(geno_data.values()))
 
-               # render per stage
+                # render per stage
                 colours = dict(zip(LicePopulation.lice_stages, self._colorPalette[:len(stages)]))
 
                 self.stages_to_curve[farm_name] = {
@@ -191,29 +190,6 @@ class PlotPane(QWidget):
                         series.to_numpy(), name=stage, pen=colours[stage])
                     for stage, series in stages.items()}
 
-                # treatment markers
-                treatment_days_df = farm_df[farm_df["is_treating"]]["timestamp"] - self.state.times[0]
-                treatment_days = treatment_days_df.apply(lambda x: x.days).to_numpy()
-
-                # Generate treatment regions by looking for the first non-consecutive treatment blocks.
-                # There may be a chance where multiple treatments happen consecutively, on which case
-                # we simply consider them as a unique case.
-                # TODO: move this in another function
-                # TODO: we are not keeping tracks of all the PlotItem's - clear events may not delete them
-                if len(treatment_days) > 0:
-                    treatment_ranges = []
-                    lo = 0
-                    for i in range(1, len(treatment_days)):
-                        if treatment_days[i] > treatment_days[i - 1] + 1:
-                            treatment_ranges.append((treatment_days[lo], treatment_days[i - 1] + 1))
-                            lo = i
-                    treatment_ranges.append((lo, i))
-
-                    treatment_lri = [LinearRegionItem(
-                        values=range,
-                        movable=False) for range in treatment_ranges]
-                    for lri in treatment_lri:
-                        self.licePopulationPlots[farm_idx].addItem(lri)
 
                 if self.showOffspringDistribution.isChecked():
                     # get gross arrivals
@@ -221,8 +197,17 @@ class PlotPane(QWidget):
                         lambda cages: sum([sum(cage.values()) for cage in cages])).to_numpy()
                     self.licePopulationPlots[farm_idx].plot(arrivals_gross, name="Offspring", pen=self._colorPalette[7])
 
+            # Plot treatments
+            # note: PG does not allow to reuse the same
+            treatment_lri = self._getTreatmentRegions(farm_df, 2)
+            for lri in treatment_lri:
+                self.licePopulationPlots[farm_idx].addItem(lri[0])
+                self.fishPopulationPlots[farm_idx].addItem(lri[1])
+
         # TODO: add this to pandas
-        payoffs = [float(state.payoff) for state in self.state.states]
+
+        # because of the leaky scope, this is going to be something
+        payoffs = farm_df["payoff"].to_numpy()
         self.payoffPlot.plot(payoffs)
 
         for farm_idx, farm_name in enumerate(farm_list):
@@ -236,6 +221,31 @@ class PlotPane(QWidget):
             plot.vb.setLimits(xMin=0, xMax=len(payoffs))
         self.payoffPlot.setXRange(0, len(payoffs), padding=0)
         self.payoffPlot.vb.setLimits(xMin=0, xMax=len(payoffs))
+
+    def _getTreatmentRegions(self, farm_df: pd.DataFrame, shape: int) -> List[List[LinearRegionItem]]:
+        # generate treatment regions
+        # treatment markers
+        treatment_days_df = farm_df[farm_df["is_treating"]]["timestamp"] - self.state.times[0]
+        treatment_days = treatment_days_df.apply(lambda x: x.days).to_numpy()
+
+        # Generate treatment regions by looking for the first non-consecutive treatment blocks.
+        # There may be a chance where multiple treatments happen consecutively, on which case
+        # we simply consider them as a unique case.
+        # TODO: move this in another function
+        # TODO: we are not keeping tracks of all the PlotItem's - clear events may not delete them
+        if len(treatment_days) > 0:
+            treatment_ranges = []
+            lo = 0
+            for i in range(1, len(treatment_days)):
+                if treatment_days[i] > treatment_days[i - 1] + 1:
+                    treatment_ranges.append((treatment_days[lo], treatment_days[i - 1]))
+                    lo = i
+            treatment_ranges.append((treatment_days[lo], treatment_days[-1]))
+
+            return [[LinearRegionItem(values=trange, movable=False) for _ in range(shape)]
+                    for trange in treatment_ranges]
+        return []
+
 
 
 class PlotUpdateWorker(QThread):

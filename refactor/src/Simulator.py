@@ -143,7 +143,8 @@ class Simulator:
                     **farm.lice_genomics,
                     **farm.logged_data,
                     "num_fish": farm.num_fish,
-                    "is_treating": is_treating
+                    "is_treating": is_treating,
+                    "payoff": float(state.payoff)
                 }
 
         dataframe = pd.DataFrame.from_dict(farm_data, orient='index')
