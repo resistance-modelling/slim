@@ -204,11 +204,12 @@ class Simulator:
 
             res = []
             prematurely_ended = False
-            for step in walk_iterations:
+            for step in range(walk_iterations):
                 new_step = []
                 for it in range(avg_iterations):
                     try:
                         pickle_path = path / f"simulation_data_optimisation_{step}_{it}.pickle"
+                        print(pickle_path)
                         with pickle_path.open("rb") as f:
                             new_step.append(pickle.load(f))
                     except FileNotFoundError:
@@ -248,7 +249,7 @@ class Simulator:
             # Save the model snapshot either when checkpointing or during the last iteration
             if not resume:
                 if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0) \
-                        or self.cur_day == self.cfg.end_date:
+                        or self.cur_day == self.cfg.end_date - 1:
                     pickle.dump(self, data_file)
             self.cur_day += dt.timedelta(days=1)
 

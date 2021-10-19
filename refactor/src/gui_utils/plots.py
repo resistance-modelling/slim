@@ -12,7 +12,7 @@ from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem
 
 from src.LicePopulation import LicePopulation, GenoDistrib
-from src.gui_utils.model import SimulatorSingleRunState
+from src.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState
 
 if TYPE_CHECKING:
     from src.SeaLiceMgmtGUI import Window
@@ -41,7 +41,7 @@ class SingleRunPlotPane(QWidget):
         mainLayout.addWidget(self.pqgPlotContainer, 0, 0, 3, 1)
         mainLayout.addWidget(self.plotButtonGroup, 3, 0)
 
-        mainPane.newState.connect(self._updateModel)
+        mainPane.loadedSimulatorState.connect(self._updateModel)
 
     @property
     def _getUniqueFarms(self):
@@ -269,6 +269,29 @@ class SingleRunPlotPane(QWidget):
 
 
 class OptimiserPlotPane(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self, mainPane: Window):
+        super().__init__(mainPane)
+        self._addWidgets()
 
+        self.optimiserState: Optional[SimulatorOptimiserState] = None
+
+        mainPane.loadedOptimiserState.connect(self._updateState)
+
+    def _addWidgets(self):
+        self.pqgPlotContainer = pg.GraphicsLayoutWidget(self)
+        self.payoffPlot = self.pqgPlotContainer.addPlot(title="Hill-climbing payoff walk", row=0, col=0)
+
+        mainLayout = QVBoxLayout()
+        self.setLayout(mainLayout)
+        mainLayout.addWidget(self.pqgPlotContainer)
+
+    def _updateState(self, state: SimulatorOptimiserState):
+        self.optimiserState = state
+        self._updatePlot()
+
+    def _updatePlot(self):
+        df = self.optimiserState.states_as_df
+
+        print(df)
+
+        self.payoffPlot.plot(df["payoff"])
