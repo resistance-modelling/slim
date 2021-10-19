@@ -1,8 +1,9 @@
 """
-Entry point to generate a strategy optimiser
+Entry point for our optimisation framework
 """
 
 import argparse
+import json
 from copy import deepcopy
 from pathlib import Path
 import sys
@@ -26,6 +27,20 @@ def get_simulator_from_probas(starting_cfg, probas, out_path: Path, sim_name: st
 def get_neighbour(probas, rng):
     return np.clip(rng.normal(probas, 0.1), 0, 1)
 
+def save_settings(method, output_path: Path, **kwargs):
+    param_path = output_path / "params.json"
+
+    if method == "annealing":
+        payload = {
+            "average_iterations": kwargs["repeat_experiment"],
+            "walk_iterations": kwargs["iterations"]
+        }
+    else:
+        # other methods
+        raise NotImplementedError("Only annealing is supported")
+
+    with param_path.open("w") as f:
+        json.dump({"method": method, **payload}, indent=4)
 
 def annealing(starting_cfg: Config,
               iterations,
@@ -40,6 +55,9 @@ def annealing(starting_cfg: Config,
     current_state_sol = 1e-6
     best_sol = current_state.copy()
     best_payoff = -np.inf
+
+    save_settings("annealing", output_path,
+                  iterations=iterations, repeat_experiment=repeat_experiment)
 
     for i in range(iterations):
         logger.info(f"Started iteration {i}")
@@ -83,7 +101,8 @@ if __name__ == "__main__":
     # set up and read the command line arguments
     parser.add_argument("output_path",
                         type=str,
-                        help="Output directory path. The base directory will be used for logging. All intermediate run files will be generated under subfolders")
+                        help="Output directory path. The base directory will be used for logging. " + \
+                             "All intermediate run files will be generated under subfolders")
     parser.add_argument("param_dir",
                         type=str,
                         help="Directory of simulation parameters files.")

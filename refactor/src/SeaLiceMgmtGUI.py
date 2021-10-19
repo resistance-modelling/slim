@@ -13,8 +13,8 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
 from src.Simulator import Simulator
 from src.gui_utils.configuration import ConfigurationPane
 from src.gui_utils.console import ConsoleWidget
-from src.gui_utils.plots import PlotPane
-from src.gui_utils.model import SimulatorSingleRunState
+from src.gui_utils.plots import SingleRunPlotPane, OptimiserPlotPane
+from src.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState
 
 
 class Window(QMainWindow):
@@ -60,7 +60,8 @@ class Window(QMainWindow):
         self._createProgressBar()
 
     def _createPlotPane(self):
-        self.plotPane = PlotPane(self)
+        self.simulationPlotPane = SingleRunPlotPane(self)
+        self.optimiserPlotPane = OptimiserPlotPane(self)
 
     def _createConfigurationPane(self):
         self.configurationPane = ConfigurationPane()
@@ -68,7 +69,7 @@ class Window(QMainWindow):
     def _createTabs(self):
         self.plotTabs = QTabWidget(self)
 
-        self.plotTabs.addTab(self.plotPane, "Plotter")
+        self.plotTabs.addTab(self.simulationPlotPane, "Simulation plotter")
         self.plotTabs.addTab(self.configurationPane, "Configuration")
         self.plotTabs.addTab(self.console, "Debugging console")
 
@@ -78,6 +79,7 @@ class Window(QMainWindow):
 
     def _createConsole(self):
         self.console = ConsoleWidget()
+        self.console.push_vars(vars(self))
 
     def _createSettings(self):
         self.settings = QSettings("SLIM Project", "Slim")
@@ -90,21 +92,21 @@ class Window(QMainWindow):
         self.progressBar.setRange(0, 1)
         self.loadDumpAction.setEnabled(True)
 
-    def _displaySimulatorData(self, states: List[Simulator], times: List[dt.datetime]):
-        self.states = states
-        self.times = times
-        self.states_as_df = Simulator.dump_as_pd(states, times)
+    def _displaySimulatorData(self, simulator_data: SimulatorSingleRunState):
 
-        self.configurationPane.newConfig.emit(states[0].cfg)
-        self.console.push_vars(vars(self))
-        self.newState.emit(SimulatorSingleRunState(states, times, self.states_as_df))
+        self.configurationPane.newConfig.emit(simulator_data.states[0].cfg)
+        self.console.push_vars(vars(simulator_data))
+        self.newState.emit(simulator_data)
 
-    def _createLoaderWorker(self, filename):
-        # TODO: is there a valid reason why we shouldn't make worker a QThread subclass?
-        self.worker = SimulatorLoadingWorker(filename)
+    def _createLoaderWorker(self, filename, is_optimiser=False):
+        if is_optimiser:
+            self.worker = OptimiserLoadingWorker(filename)
+        else:
+            self.worker = SimulatorLoadingWorker(filename)
+            self.worker.finished.connect(self._displaySimulatorData)
+
         print(f"Opening {filename}")
 
-        self.worker.finished.connect(self._displaySimulatorData)
         self.worker.finished.connect(self._progressBarComplete)
 
         self._progressBarLoad()
@@ -112,6 +114,7 @@ class Window(QMainWindow):
 
     def _createActions(self):
         self.loadDumpAction = QAction("&Load Dump")
+        self.loadOptimiserDumpAction = QAction("&Load Optimiser Dump")
         self.paperModeAction = QAction("Set &light mode (paper mode)")
         self.paperModeAction.setCheckable(True)
         self.clearAction = QAction("&Clear plot", self)
@@ -121,10 +124,10 @@ class Window(QMainWindow):
         self._updateRecentFilesActions()
 
     def _connectActions(self):
-        self.loadDumpAction.triggered.connect(self.openDump)
-        self.paperModeAction.toggled.connect(self.plotPane.setPaperMode)
+        self.loadDumpAction.triggered.connect(self.openSimulatorDump)
+        self.paperModeAction.toggled.connect(self.simulationPlotPane.setPaperMode)
         self.aboutAction.triggered.connect(self._openAboutMessage)
-        self.clearAction.triggered.connect(self.plotPane.cleanPlot)
+        self.clearAction.triggered.connect(self.simulationPlotPane.cleanPlot)
 
     def _createMenuBar(self):
         menuBar = self.menuBar()
@@ -177,7 +180,7 @@ class Window(QMainWindow):
         self.settings.setValue("recentFileList", value)
         self._updateRecentFilesActions()
 
-    def openDump(self):
+    def openSimulatorDump(self):
         filename, _ = QFileDialog.getOpenFileName(
             self, "Load a dump", "", "Pickle file (*.pickle)")
 
@@ -187,6 +190,13 @@ class Window(QMainWindow):
                 self.recentFilesList = recentFiles + [filename]
 
             self._createLoaderWorker(filename)
+
+    def openOptimiserDump(self):
+        dirname = QFileDialog.getExistingDirectory(
+            self, "Load an Optimiser dump", "", QFileDialog.ShowDirsOnly)
+
+        if dirname:
+            self._createSimulatorLoaderWorker(dirname)
 
     def _openAboutMessage(self):
         QMessageBox.about(self, "About SLIM",
@@ -201,7 +211,7 @@ class Window(QMainWindow):
 
 
 class SimulatorLoadingWorker(QThread):
-    finished = pyqtSignal((list, list))
+    finished = pyqtSignal(SimulatorSingleRunState)
 
     def __init__(self, dump_path: str):
         super().__init__()
@@ -212,8 +222,23 @@ class SimulatorLoadingWorker(QThread):
         parent_path = filename_path.parent
         sim_name = filename_path.name[len("simulation_name_"):-len(".pickle")]
         states, times = Simulator.reload_all_dump(parent_path, sim_name)
+        states_as_df = Simulator.dump_as_pd(states, times)
         print("Loaded simulation")
-        self.finished.emit(states, times)
+        self.finished.emit(SimulatorSingleRunState(states, times, states_as_df))
+
+class OptimiserLoadingWorker(QThread):
+    finished = pyqtSignal(SimulatorOptimiserState)
+
+    def __init__(self, dump_path: str):
+        super().__init__()
+        self.dir_dump_path = Path(dump_path)
+
+    def run(self):
+        states = Simulator.reload_from_optimiser(self.dir_dump_path)
+        states_as_df = Simulator.dump_optimiser_as_pd(states)
+
+        print("Loaded optimiser data")
+        self.finished.emit(SimulatorOptimiserState(states, states_as_df))
 
 
 if __name__ == "__main__":

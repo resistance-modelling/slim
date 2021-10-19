@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from src.SeaLiceMgmtGUI import Window
 
 
-class PlotPane(QWidget):
+class SingleRunPlotPane(QWidget):
     """
     Main visualisation pane for the plots
     """
@@ -268,6 +268,7 @@ class PlotPane(QWidget):
         return []
 
 
+class OptimiserPlotPane(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
-class PlotUpdateWorker(QThread):
-    pass
