@@ -10,7 +10,7 @@ import scipy
 from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox, QSpinBox, QLabel
 from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget
-from pyqtgraph.graphicsItems import PlotDataItem
+from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
 
 from src.LicePopulation import LicePopulation, GenoDistrib
 from src.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState
@@ -68,6 +68,9 @@ class LightModeMixin:
         pg.setConfigOption('foreground', foreground)
 
         self._remountPlot()
+
+    def _remountPlot(self):
+        pass
 
 
 class SingleRunPlotPane(LightModeMixin, QWidget):
