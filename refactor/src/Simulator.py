@@ -165,7 +165,7 @@ class Simulator:
         payoff_row = []
         proba_row = {}
         for state_row in states:
-            payoff = sum([state.payoff for state in state_row])/len(state_row)
+            payoff = sum([float(state.payoff) for state in state_row])/len(state_row)
             farm_cfgs = state_row[0].cfg.farms
             farms = state_row[0].organisation.farms
             payoff_row.append(payoff)
@@ -221,6 +221,9 @@ class Simulator:
                             new_step.append(pickle.load(f))
                     except FileNotFoundError:
                         # The run is incomplete. We reject it and terminate it prematurely
+                        prematurely_ended = True
+                        break
+                    except EOFError:
                         prematurely_ended = True
                         break
                 if prematurely_ended:

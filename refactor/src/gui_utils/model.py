@@ -19,5 +19,5 @@ class SimulatorSingleRunState:
 @dataclasses.dataclass
 class SimulatorOptimiserState:
     """Optimiser state"""
-    states: List[Simulator]
+    states: List[List[Simulator]]
     states_as_df: pd.DataFrame

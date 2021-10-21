@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import pyqtgraph as pg
 import scipy
-from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox, QSpinBox, QLabel
 from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget
@@ -124,7 +123,10 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                                     for i in range(num_farms)]
         self.fishPopulationPlots = [self.pqgPlotContainer.addSmoothedPlot(title=f"Fish Population of farm {i}", row=1, col=i)
                                     for i in range(num_farms)]
-        self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(title="Cumulated payoff", row=2, col=0)
+        self.aggregationRatePlot = [self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", row=2, col=i)
+                                    for i in range(num_farms)]
+
+        self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(title="Cumulated payoff", row=3, col=0)
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
@@ -171,7 +173,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
     def cleanPlot(self):
         self.payoffPlot.clear()
-        for plot in self.licePopulationPlots + self.fishPopulationPlots:
+        for plot in self.licePopulationPlots + self.aggregationRatePlot + self.fishPopulationPlots:
             plot.clear()
 
         for plot in self.fish_population.values():
@@ -180,6 +182,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         for curves in self.stages_to_curve.values():
             for curve in curves.values():
                 curve.clear()
+
         for curves in self.geno_to_curve.values():
             for curve in curves.values():
                 curve.clear()
@@ -222,8 +225,13 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             # Show fish population
             num_fish = farm_df["num_fish"].to_numpy()
             if self.showFishPopulationDx.isChecked():
-                num_fish = -np.diff(num_fish)
-            self.fishPopulationPlots[farm_idx].plot(num_fish, pen=self._colorPalette[0])
+                num_fish_dx = -np.diff(num_fish)
+                self.fishPopulationPlots[farm_idx].plot(num_fish_dx, pen=self._colorPalette[0])
+            else:
+                self.fishPopulationPlots[farm_idx].plot(num_fish, pen=self._colorPalette[0])
+
+            stages = farm_df[LicePopulation.lice_stages].applymap(
+                lambda geno_data: sum(geno_data.values()))
 
             # Genotype information
             if self.showDetailedGenotypeCheckBox.isChecked():
@@ -238,9 +246,6 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                 }
             # Stage information
             else:
-                stages = farm_df[LicePopulation.lice_stages].applymap(
-                    lambda geno_data: sum(geno_data.values()))
-
                 # render per stage
                 colours = dict(zip(LicePopulation.lice_stages, self._colorPalette[:len(stages)]))
 
@@ -254,6 +259,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                     arrivals_gross = farm_df["arrivals_per_cage"].apply(
                         lambda cages: sum([sum(cage.values()) for cage in cages])).to_numpy()
                     self.licePopulationPlots[farm_idx].plot(arrivals_gross, name="Offspring", pen=self._colorPalette[7])
+
+            aggregation_rate = stages["L5f"].to_numpy() / num_fish
+            self.aggregationRatePlot[farm_idx].plot(aggregation_rate, pen=self._colorPalette[0])
 
             # Plot treatments
             # note: PG does not allow to reuse the same
@@ -352,9 +360,11 @@ class OptimiserPlotPane(QWidget, LightModeMixin):
             probaPlot.clear()
 
     def _updatePlot(self):
-        df = self.optimiserState.states_as_df
-
         self._clearPlot()
+
+        if not self.optimiserState.states_as_df is not None:
+            return
+        df = self.optimiserState.states_as_df
 
         penColour = self._colorPalette[0]
         payoff = df["payoff"].map(float).to_numpy()
