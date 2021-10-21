@@ -1,13 +1,12 @@
 from __future__ import annotations
 import datetime as dt
 import json
-from bisect import bisect_left
 from pathlib import Path
-from typing import Tuple, List, Optional
+from typing import List, Optional
 
 import dill as pickle
 import pandas as pd
-from tqdm import tqdm
+import tqdm
 
 from src import logger
 from src.Config import Config
@@ -164,11 +163,19 @@ class Simulator:
     def dump_optimiser_as_pd(states: List[List[Simulator]]):
         # TODO: maybe more things may be valuable to visualise
         payoff_row = []
+        proba_row = {}
         for state_row in states:
             payoff = sum([state.payoff for state in state_row])/len(state_row)
+            farm_cfgs = state_row[0].cfg.farms
+            farms = state_row[0].organisation.farms
             payoff_row.append(payoff)
 
-        return pd.DataFrame({"payoff": payoff_row})
+            for farm_cfg, farm in zip(farm_cfgs, farms):
+                proba = farm_cfg.defection_proba
+                key = "farm_" + str(farm.name)
+                proba_row.setdefault(key, []).append(proba)
+
+        return pd.DataFrame({"payoff": payoff_row, **proba_row})
 
 
     @staticmethod
@@ -242,14 +249,14 @@ class Simulator:
             data_file = self.output_dump_path.open(mode="wb")
 
         num_days = (self.cfg.end_date - self.cur_day).days
-        for day in tqdm(range(num_days)):
+        for day in tqdm.trange(num_days):
             logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
             self.payoff += self.organisation.step(self.cur_day)
 
             # Save the model snapshot either when checkpointing or during the last iteration
             if not resume:
                 if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0) \
-                        or self.cur_day == self.cfg.end_date - 1:
+                        or day == num_days - 1:
                     pickle.dump(self, data_file)
             self.cur_day += dt.timedelta(days=1)
 

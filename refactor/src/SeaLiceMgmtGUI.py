@@ -129,6 +129,7 @@ class Window(QMainWindow):
         self.loadDumpAction.triggered.connect(self.openSimulatorDump)
         self.loadOptimiserDumpAction.triggered.connect(self.openOptimiserDump)
         self.paperModeAction.toggled.connect(self.simulationPlotPane.setPaperMode)
+        self.paperModeAction.toggled.connect(self.optimiserPlotPane.setPaperMode)
         self.aboutAction.triggered.connect(self._openAboutMessage)
         self.clearAction.triggered.connect(self.simulationPlotPane.cleanPlot)
 

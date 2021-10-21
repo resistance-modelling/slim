@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+import tqdm
 
 from src import logger, create_logger
 from src.Simulator import Simulator
@@ -28,6 +29,8 @@ def get_neighbour(probas, rng):
     return np.clip(rng.normal(probas, 0.1), 0, 1)
 
 def save_settings(method, output_path: Path, **kwargs):
+    output_path.mkdir(parents=True, exist_ok=True)
+
     param_path = output_path / "params.json"
 
     if method == "annealing":
@@ -40,16 +43,17 @@ def save_settings(method, output_path: Path, **kwargs):
         raise NotImplementedError("Only annealing is supported")
 
     with param_path.open("w") as f:
-        json.dump({"method": method, **payload}, indent=4)
+        json.dump({"method": method, **payload}, f, indent=4)
 
 def annealing(starting_cfg: Config,
-              iterations,
-              repeat_experiment,
-              output_path,
-              optimiser_seed,
+              iterations: int,
+              repeat_experiment: int,
+              output_path: Path,
+              optimiser_seed: int,
               **kwargs):
    # TODO: logging + tqdm would be nice to have
     farm_no = len(starting_cfg.farms)
+    output_path = Path(output_path)
     optimiser_rng =  np.random.default_rng(optimiser_seed)
     current_state = np.clip(optimiser_rng.normal(0.5, 0.5, farm_no), 0, 1)
     current_state_sol = 1e-6
@@ -59,17 +63,17 @@ def annealing(starting_cfg: Config,
     save_settings("annealing", output_path,
                   iterations=iterations, repeat_experiment=repeat_experiment)
 
-    for i in range(iterations):
-        logger.info(f"Started iteration {i}")
+    for i in tqdm.trange(iterations):
+        logger.debug(f"Started iteration {i}")
         candidate_state = get_neighbour(current_state, optimiser_rng)
-        logger.info(f"Chosen candidate state {candidate_state}")
+        logger.debug(f"Chosen candidate state {candidate_state}")
         payoff_sum = 0.0
-        for t in range(repeat_experiment):
+        for t in tqdm.trange(repeat_experiment):
             sim_name = f"optimisation_{i}_{t}"
             sim = get_simulator_from_probas(
                 starting_cfg,
                 candidate_state,
-                Path(output_path),
+                output_path,
                 sim_name,
                 optimiser_rng
             )
