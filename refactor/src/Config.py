@@ -169,22 +169,38 @@ class Config(RuntimeConfig):
             group = parser.add_argument_group(group_name)
             schema_types_to_python = {
                 "string": str,
-                "numeric": float,
+                "number": float,
                 "integer": int
             }
 
             for k, v in data.items():
+                choices = None
+                nargs = None
+                type_ = None
                 if type(v) != dict:
                     continue
                 if "type" not in v:
-                    print(v)
-                type_ = v["type"]
-                if type_ == "array" or type_ == "object":
+                    if "enum" in v:
+                        choices = v["enum"]
+                        type_ = "string"
+                    else:
+                        # skip property
+                        continue
+                else:
+                    type_ = v["type"]
+
+                if type_ == "array":
+                    nargs = v.get("minLength", "*")
+                    if "items" in v:
+                        type_ = v["items"]["type"] # this breaks with object arrays
+
+                if type_ == "object":
                     continue  # TODO: deal with them later, e.g. prop_a.prop_b for dicts?
                 description = v["description"]
                 value_type = schema_types_to_python.get(type_, type_)
 
-                group.add_argument(f"--{k.replace('_', '-')}", type=value_type, help=description)
+                group.add_argument(f"--{k.replace('_', '-')}",
+                                   type=value_type, help=description, choices=choices, nargs=nargs)
 
         add_to_group("Organisation parameters", simulation_dict["properties"])
         add_to_group("Runtime parameters", cfg_dict["properties"])

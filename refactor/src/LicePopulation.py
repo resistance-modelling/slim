@@ -203,8 +203,8 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
                           ('A'): 2}
         res_as_vector = [0, 0, 0]
         for batch in batches:
-            for allele in GenoDistrib.alleles:
-                res_as_vector[alleles_to_idx[allele]] += batch.get(allele, 0)
+            for allele, value in batch.items():
+                res_as_vector[alleles_to_idx[allele]] += value
 
         if as_pure_dict:
             return dict(zip(["a", "Aa", "A"], res_as_vector))
