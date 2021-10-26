@@ -16,7 +16,7 @@ from src.Config import Config
 from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib,
-                                largest_remainder)
+                                largest_remainder, LifeStage)
 from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent, pop_from_queue
 from src.JSONEncoders import CustomFarmEncoder
 
@@ -165,7 +165,7 @@ class Cage(LoggableMixin):
             fish_deaths_natural, fish_deaths_from_lice = self.get_fish_growth(days_since_start)
 
             # Infection events
-            num_infection_events = self.do_infection_events(cur_date, days_since_start)
+            num_infection_events = self.do_infection_events(days_since_start)
 
             # Mating events that create eggs
             self.lice_population.free_dams(cur_date)
@@ -306,40 +306,56 @@ class Cage(LoggableMixin):
 
         return dead_lice_dist, cost
 
-    def get_stage_ages_distrib(self, stage: str, size=15, stage_age_max_days=None):
+    def get_stage_ages_distrib(self, stage: str, temp_c: float = 10.0):
         """
         Create an age distribution (in days) for the sea lice within a lifecycle stage.
-        In absence of further data or constraints, we simply assume it's a uniform distribution
+
+        This distribution is computed by using a simplified version of formulae (4), (6), (8)
+        in Aldrin et al.: we assume that all lice of a stage m-1 that evolve at stage m
+        will be put at a stage-age of 0, and that this is going to be a constant/stable
+        amount.
         """
 
-        # NOTE: no data is available for L5 stages. We assume for simplicity they die after 30-ish days
-        if stage_age_max_days is None:
-            stage_age_max_days = min(self.cfg.stage_age_evolutions[stage], size + 1)
-        p = np.zeros((size,))
-        p[:stage_age_max_days] = 1
-        return p / np.sum(p)
+        stage_age_max_days = int(self.cfg.stage_age_evolutions[stage])
 
-    def get_evolution_ages(self, size: int, minimum_age: int, mean: int, development_days=25):
+        if stage == "L2" or stage == "L5f":
+            # Bogus uniform distribution L5m/L5f follow different schemes.
+            # More realistically, this is an exponential/poisson distribution
+            return np.full(stage_age_max_days, 1/stage_age_max_days)
+
+        delta_p = self.cfg.delta_p[stage]
+        delta_m10 = self.cfg.delta_m10[stage]
+        delta_s = self.cfg.delta_s[stage]
+
+        ages = np.arange(stage_age_max_days)
+
+        weibull_median_rates = self._dev_rates(delta_p, delta_m10, delta_s, temp_c, ages)
+
+        probas = np.empty_like(ages, dtype=np.float64)
+        probas[0] = 1.0
+        for i in range(1, stage_age_max_days):
+            probas[i] = probas[i-1] * (1.0 - weibull_median_rates[i-1])
+
+        return probas / np.sum(probas)
+
+    @staticmethod
+    def _dev_rates(del_p: float, del_m10: float, del_s: float, temp_c: float, ages: np.ndarray):
         """
-        Create an age distribution (in days) for the sea lice within a lifecycle stage.
-        TODO: This actually computes the evolution ages.
-        :param size the number of lice to consider
-        :param minimum_age the minimum age before an evolution is allowed
-        :param mean the mean of the distribution. mean must be bigger than min.
-        :param development_days the maximum age to consider
-        :return a size-long array of ages (in days)
+        Probability of developing after n_days days in a stage as given by Aldrin et al 2017
+        See section 2.2.4 of Aldrin et al. (2017)
+        :param del_p: power transformation constant on temp_c
+        :param del_m10: 10 °C median reference value
+        :param del_s: fitted Weibull shape parameter
+        :param temp_c: average temperature in °C
+        :param ages: stage-age
+        :return: expected development rate
         """
+        epsilon = np.float64(1e-30)
+        del_m = del_m10 * (10 / temp_c) ** del_p
 
-        # Create a shifted poisson distribution,
-        k = mean - minimum_age
-        max_quantile = development_days - minimum_age
+        unbounded = np.clip(np.log(2) * del_s * ages ** (del_s - 1) * del_m ** (-del_s), epsilon, np.float64(1.0))
+        return unbounded
 
-        assert minimum_age > 0, "min must be positive"
-        assert k > 0, "mean must be greater than min."
-
-        p = stats.poisson.pmf(range(max_quantile), k)
-        p = p / np.sum(p)  # probs need to add up to one
-        return self.cfg.rng.choice(range(max_quantile), size, p=p) + minimum_age
 
     def get_lice_lifestage(self, cur_month) -> Tuple[int, int, int, int]:
         """
@@ -351,64 +367,41 @@ class Cage(LoggableMixin):
         """
         logger.debug("\t\tupdating lice lifecycle stages")
 
-        def dev_times(del_p: float, del_m10: float, del_s: float, temp_c: float, ages: np.ndarray):
-            """
-            Probability of developing after n_days days in a stage as given by Aldrin et al 2017
-            See section 2.2.4 of Aldrin et al. (2017)
-            :param ages: stage-age
-            :param del_p: power transformation constant on temp_c
-            :param del_m10: 10 °C median reference value
-            :param del_s: fitted Weibull shape parameter
-            :param temp_c: average temperature in °C
-            :return: expected development rate
-            """
-            epsilon = 1e-30
-            del_m = del_m10 * (10 / temp_c) ** del_p
+        def evolve_next_stage(stage: LifeStage, temp_c: float) -> int:
+            # weibull params
+            del_p = self.cfg.delta_p[stage]
+            del_m10 = self.cfg.delta_m10[stage]
+            del_s = self.cfg.delta_s[stage]
+            num_lice = self.lice_population[stage]
+            if num_lice == 0:
+                return 0
+            max_dev_time = self.cfg.stage_age_evolutions[stage]
+            ages_distrib = self.get_stage_ages_distrib(stage, temp_c)
+            ages = self.cfg.rng.choice(np.arange(max_dev_time), num_lice, p=ages_distrib)
 
-            unbounded = math.log(2) * del_s * ages ** (del_s - 1) * del_m ** (-del_s)
-            unbounded = np.clip(unbounded, np.float64(epsilon), np.float64(1.0))
-            return unbounded.astype(np.float64)
+            evolution_rates = self._dev_rates(del_p, del_s, del_m10, temp_c, ages)
+            average_rates = np.mean(evolution_rates)
+
+            return int(min(self.cfg.rng.poisson(num_lice * average_rates), num_lice))
 
         lice_dist = {}
         ave_temp = self.farm.year_temperatures[cur_month - 1]
 
         # L4 -> L5
-        # TODO these blocks look like the same?
-
-        num_lice = self.lice_population["L4"]
-        stage_ages = self.get_evolution_ages(num_lice, minimum_age=10, mean=15)
-
-        l4_to_l5 = dev_times(self.cfg.delta_p["L4"], self.cfg.delta_m10["L4"], self.cfg.delta_s["L4"],
-                             ave_temp, stage_ages)
-        num_to_move = min(self.cfg.rng.poisson(np.sum(l4_to_l5)), num_lice)
-        new_females = int(self.cfg.rng.choice([math.floor(num_to_move / 2.0), math.ceil(num_to_move / 2.0)]))
-        new_males = (num_to_move - new_females)
+        l4_to_l5 = evolve_next_stage("L4", ave_temp)
+        new_females = int(self.cfg.rng.choice([math.floor(l4_to_l5 / 2.0), math.ceil(l4_to_l5 / 2.0)]))
+        new_males = (l4_to_l5 - new_females)
 
         lice_dist["L5f"] = new_females
-        lice_dist["L5m"] = (num_to_move - new_females)
+        lice_dist["L5m"] = new_males
 
         # L3 -> L4
-        num_lice = self.lice_population["L3"]
-        stage_ages = self.get_evolution_ages(num_lice, minimum_age=15, mean=18)
-        l3_to_l4 = dev_times(self.cfg.delta_p["L3"], self.cfg.delta_m10["L3"], self.cfg.delta_s["L3"],
-                             ave_temp, stage_ages)
-        num_to_move = min(self.cfg.rng.poisson(np.sum(l3_to_l4)), num_lice)
-        new_L4 = num_to_move
+        new_L4 = lice_dist["L4"] = evolve_next_stage("L3", ave_temp)
 
-        lice_dist["L4"] = num_to_move
-
-        # L2 -> L3
-        # This is done in do_infection_events()
+        # L2 -> L3 is done in do_infection_events(). Indeed, evolution from L2 to L3 is (virtually) age-independent
 
         # L1 -> L2
-        num_lice = self.lice_population["L2"]
-        stage_ages = self.get_evolution_ages(num_lice, minimum_age=3, mean=4)
-        l1_to_l2 = dev_times(self.cfg.delta_p["L1"], self.cfg.delta_m10["L1"], self.cfg.delta_s["L1"],
-                             ave_temp, stage_ages)
-        num_to_move = min(self.cfg.rng.poisson(np.sum(l1_to_l2)), num_lice)
-        new_L2 = num_to_move
-
-        lice_dist["L2"] = num_to_move
+        new_L2 = lice_dist["L2"] = evolve_next_stage("L1", ave_temp)
 
         logger.debug("\t\t\tdistribution of new lice lifecycle stages on farm {}/cage {} = {}"
                      .format(self.farm_id, self.id, lice_dist))
@@ -506,6 +499,7 @@ class Cage(LoggableMixin):
         :param days: the amount of time it takes
         :returns a pair (Einf, num_avail_lice)
         """
+        # Based on Aldrin et al.
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease)./
         age_distrib = self.get_stage_ages_distrib("L2")
@@ -521,7 +515,7 @@ class Cage(LoggableMixin):
 
         return 0.0, num_avail_lice
 
-    def do_infection_events(self, cur_date: dt.datetime, days: int) -> int:
+    def do_infection_events(self, days: int) -> int:
         """Infect fish in this cage if the sea lice are in stage L2 and at least 1 day old
 
         :param cur_date: current date of simulation
