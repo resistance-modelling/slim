@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Optional, Dict, TYPE_CHECKING, List
+from typing import Optional, Dict, TYPE_CHECKING, List, cast
 
 import numpy as np
 import pandas as pd
 import pyqtgraph as pg
 import scipy
+import scipy.ndimage
+from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox, QSpinBox, QLabel
 from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget
@@ -20,27 +21,105 @@ if TYPE_CHECKING:
 
 
 class SmoothedPlotItemWrap:
-    def __init__(self, plot_item: PlotItem, smoothing_widget: QSpinBox):
+    """
+    A replacement for PlotItem that also implements convolution and averaging
+    """
+
+    def __init__(self, plot_item: PlotItem, smoothing_size: int, average_factor: int, method="linear"):
         self.plot_item = plot_item
-        self.smoothing_widget_kernel_size = smoothing_widget
+        self.kernel_size = smoothing_size
+        self.average_factor = average_factor
+        self.method = method
 
     def plot(self, signal, **kwargs) -> PlotDataItem:
-        kernel_size = self.smoothing_widget_kernel_size.value()
         # TODO: support multiple rolling averages
-        kernel = np.full(kernel_size, 1 / kernel_size)
-        return self.plot_item.plot(scipy.ndimage.convolve(signal, kernel, mode="nearest"), **kwargs)
+        if self.method == "linear":
+            kernel = np.full(self.kernel_size, 1 / self.kernel_size)
+        else:
+            kernel = np.array([1])
+        return self.plot_item.plot(scipy.ndimage.convolve(signal / self.average_factor, kernel, mode="nearest"), **kwargs)
+
+    def setSmoothingFactor(self, kernel_size: int):
+        self.kernel_size = kernel_size
+
+    def setAverageFactor(self, average_factor: int):
+        self.kernel_size = average_factor
 
     def __getattr__(self, item):
         return getattr(self.plot_item, item)
 
 class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
-    def __init__(self, smoothing_widget: QSpinBox, parent: Optional[QWidget] = None):
-        super().__init__(parent)
-        self.smoothing_kernel_size_widget = smoothing_widget
+    # TODO these names are terrible
+    newKernelSize = pyqtSignal()
+    newAverageFactor = pyqtSignal()
 
-    def addSmoothedPlot(self, **kwargs) -> SmoothedPlotItemWrap:
+    def __init__(self, parent: SingleRunPlotPane):
+        super().__init__(parent)
+        self.coord_to_plot = {}
+
+        smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
+        averaging_widget = parent.normaliseByCageCheckbox
+
+        # TODO: this will spam *A LOT* of signals. The best thing would be to put these callbacks in the init
+        # Note: because of the capturing lambda we cannot apply the typical eta-rule
+        smoothing_kernel_size_widget.valueChanged.connect(self._setSmoothingFactor)
+        averaging_widget.stateChanged.connect(self._setAverageFactor)
+
+
+    def getParent(self):
+        return cast(SingleRunPlotPane, self.parent())
+
+    def _getAverageFactor(self, farm_idx, checkbox_state: int):
+        parent = self.getParent()
+
+        state = parent.state
+        if state:
+            num_cages = len(state.states[0].organisation.farms[farm_idx].cages)
+            average_factor = num_cages if checkbox_state == 2 else 1
+            return average_factor
+        return 1
+
+    def _setSmoothingFactor(self, value, plot_item):
+        plot_item.setSmoothingFactor(value)
+        self.newKernelSize.emit()
+
+    def _setAverageFactor(self, value, plot_item, farm_idx):
+        average_factor = self._getAverageFactor(farm_idx, value)
+        plot_item.setSmoothingFactor(average_factor)
+        self.newAverageFactor.emit()
+
+    def _setSmoothingFactor(self, value):
+        for plot_item in self.coord_to_plot.values():
+            plot_item.setSmoothingFactor(value)
+
+        self.newKernelSize.emit()
+
+    def _setAverageFactor(self, value):
+        for (_, farm_idx), plot_item in self.coord_to_plot.items():
+            average_factor = self._getAverageFactor(farm_idx, value)
+            plot_item.setSmoothingFactor(average_factor)
+        self.newAverageFactor.emit()
+
+    def addSmoothedPlot(self, exclude_from_averaging = False, **kwargs) -> SmoothedPlotItemWrap:
         plot = self.addPlot(**kwargs)
-        return SmoothedPlotItemWrap(plot, self.smoothing_kernel_size_widget)
+        parent = self.getParent()
+
+        smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
+        averaging_widget = parent.normaliseByCageCheckbox
+
+        row = kwargs["row"]
+        farm_idx = kwargs["col"]
+
+        smoothing_kernel_size = smoothing_kernel_size_widget.value()
+        average = self._getAverageFactor(farm_idx, averaging_widget.isChecked())
+
+        smoothed_plot_item = SmoothedPlotItemWrap(plot, smoothing_kernel_size, average)
+
+        if not exclude_from_averaging:
+            self.coord_to_plot[(row, farm_idx)] = smoothed_plot_item
+
+
+        return smoothed_plot_item
 
 
 class LightModeMixin:
@@ -120,7 +199,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
     def _createPlots(self):
         num_farms = len(self._uniqueFarms)
 
-        self.pqgPlotContainer = SmoothedGraphicsLayoutWidget(self.convolutionKernelSizeBox, self)
+        self.pqgPlotContainer = SmoothedGraphicsLayoutWidget(self)
+        self.pqgPlotContainer.newAverageFactor.connect(self._updatePlot)
+        self.pqgPlotContainer.newKernelSize.connect(self._updatePlot)
 
         self.licePopulationPlots = [self.pqgPlotContainer.addSmoothedPlot(title=f"Lice Population of farm {i}", row=0, col=i)
                                     for i in range(num_farms)]
@@ -129,7 +210,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.aggregationRatePlot = [self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", row=2, col=i)
                                     for i in range(num_farms)]
 
-        self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(title="Cumulated payoff", row=3, col=0)
+        self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(exclude_from_averaging=True,
+                                                                title="Cumulated payoff", row=3, col=0)
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
@@ -155,12 +237,12 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.plotButtonGroupLayout = QVBoxLayout()
         self.showDetailedGenotypeCheckBox = QCheckBox("S&how detailed genotype information", self)
         self.showOffspringDistribution = QCheckBox("Sh&ow offspring distribution", self)
+        self.normaliseByCageCheckbox = QCheckBox("Show average cage population", self)
         self.showFishPopulationDx = QCheckBox("Show fish population mortality rates", self)
         self.convolutionKernelSizeLabel = QLabel("Kernel size")
         self.convolutionKernelSizeBox = QSpinBox(self)
         self.convolutionKernelSizeBox.setRange(1, 10)
         self.convolutionKernelSizeBox.setValue(3)
-        self.convolutionKernelSizeBox.valueChanged.connect(lambda _: self._updatePlot())
 
         self.showDetailedGenotypeCheckBox.stateChanged.connect(lambda _: self._updatePlot())
         self.showOffspringDistribution.stateChanged.connect(lambda _: self._updatePlot())
@@ -171,6 +253,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.plotButtonGroupLayout.addWidget(self.showFishPopulationDx)
         self.plotButtonGroupLayout.addWidget(self.convolutionKernelSizeLabel)
         self.plotButtonGroupLayout.addWidget(self.convolutionKernelSizeBox)
+        self.plotButtonGroupLayout.addWidget(self.normaliseByCageCheckbox)
 
         self.plotButtonGroup.setLayout(self.plotButtonGroupLayout)
 
@@ -222,11 +305,13 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         farm_list = self._uniqueFarms
         df = self.state.states_as_df.reset_index()
 
+
         for farm_idx, farm_name in enumerate(farm_list):
             farm_df = df[df["farm_name"] == farm_name]
 
             # Show fish population
             num_fish = farm_df["num_fish"].to_numpy()
+
             if self.showFishPopulationDx.isChecked():
                 num_fish_dx = -np.diff(num_fish)
                 self.fishPopulationPlots[farm_idx].plot(num_fish_dx, pen=self._colorPalette[0])
