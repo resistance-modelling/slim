@@ -297,7 +297,7 @@ class Farm(LoggableMixin):
         # assume equal chances for each cage
         probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
 
-        return list(self.cfg.rng.multinomial(self.cfg.ext_pressure,
+        return list(self.cfg.rng.multinomial(self.cfg.ext_pressure*len(self.cages),
                                              probs_per_cage,
                                              size=1)[0])
 
