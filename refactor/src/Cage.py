@@ -9,7 +9,6 @@ from queue import PriorityQueue
 from typing import Union, Optional, Tuple, cast, TYPE_CHECKING
 
 import numpy as np
-from scipy import stats
 
 from src import logger, LoggableMixin
 from src.Config import Config
@@ -25,6 +24,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 OptionalDamBatch = Optional[DamAvailabilityBatch]
 OptionalEggBatch = Optional[EggBatch]
+
+from line_profiler_pycharm import profile
 
 class Cage(LoggableMixin):
     """
@@ -129,7 +130,9 @@ class Cage(LoggableMixin):
         logger.debug("\t\tinitial lice population = {}".format(self.lice_population))
 
         # Background lice mortality events
+        # TODO: debug
         dead_lice_dist = self.get_background_lice_mortality()
+        # dead_lice_dist = {stage: 0 for stage in self.lice_population}
 
         # Development events
         new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date.month)
@@ -377,12 +380,15 @@ class Cage(LoggableMixin):
                 return 0
             max_dev_time = self.cfg.stage_age_evolutions[stage]
             ages_distrib = self.get_stage_ages_distrib(stage, temp_c)
-            ages = self.cfg.rng.choice(np.arange(max_dev_time), num_lice, p=ages_distrib)
+            # let us sample from 1000 lice
+            ages = self.cfg.rng.choice(np.arange(max_dev_time), 1000, p=ages_distrib)
 
-            evolution_rates = self._dev_rates(del_p, del_s, del_m10, temp_c, ages)
+            evolution_rates = self._dev_rates(del_p, del_m10, del_s, temp_c, ages)
             average_rates = np.mean(evolution_rates)
 
-            return int(min(self.cfg.rng.poisson(num_lice * average_rates), num_lice))
+            # print(f"Stage {stage} -> {average_rates}")
+
+            return round(num_lice * average_rates) #int(min(self.cfg.rng.poisson(num_lice * average_rates), num_lice))
 
         lice_dist = {}
         ave_temp = self.farm.year_temperatures[cur_month - 1]
@@ -555,13 +561,14 @@ class Cage(LoggableMixin):
     def get_variance_infected_fish(self, n: int, k: int) -> float:
         # Rationale: assuming that we generate N bins that sum to K, we can model this as a multinomial distribution
         # where all p_i are the same. Therefore, the variance of each bin is k*(n-1)/(n**2)
-        # This is still incorrect but the error should be relatively small for now
+        # Because we are considering the total variance of k events at the same time we need to multiply by k,
+        # thus yielding k**2*(n-1)/(n**2).
 
-        probs = np.full(n, 1 / n)
-        bins = self.cfg.rng.multinomial(k, probs)
+        if n == 0:
+            return 0.0
+        return k**2 * (n - 1) / (n ** 2)
 
-        return float(np.var(bins) * k)
-
+    @profile
     def get_num_matings(self) -> int:
         """
         Get the number of matings. Implement Cox's approach assuming an unbiased sex distribution
@@ -572,7 +579,7 @@ class Cage(LoggableMixin):
         # least_ one AM on the same fish.
 
         males = self.lice_population["L5m"]
-        females = sum(self.lice_population.available_dams.values())
+        females = self.lice_population.available_dams.gross
 
         if males == 0 or females == 0:
             return 0
@@ -592,6 +599,7 @@ class Cage(LoggableMixin):
         # TODO: using a poisson distribution can lead to a high std for high prob*females
         return int(np.clip(self.cfg.rng.poisson(prob_matching * females), np.int32(0), np.int32(min(males, females))))
 
+    @profile
     def do_mating_events(self) -> Tuple[GenoDistrib, GenoDistrib]:
         """
         will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
@@ -765,30 +773,29 @@ class Cage(LoggableMixin):
         :param num_dams: the wished number of dams to sample
         """
         # TODO: this function is flexible enough to be renamed and used elsewhere
-        delta_dams_selected = GenoDistrib()
-        copy_dams_avail = copy.deepcopy(distrib_dams_available)
         if sum(distrib_dams_available.values()) <= num_dams:
-            return copy_dams_avail
+            return distrib_dams_available.copy()
 
-        # TODO: make choose_from_distrib sample N elements without replacement at once rather than looping
-        # Use the same trick used in treatment mortality, or otherwise use a hypergeometric distrib?
-
-        for _ in range(num_dams):
-            this_dam = self.choose_from_distrib(copy_dams_avail)
-            copy_dams_avail[this_dam] -= 1
-            if this_dam not in delta_dams_selected:
-                delta_dams_selected[this_dam] = 0
-            delta_dams_selected[this_dam] += 1
+        # "we need to select k lice from the given population broken down into different allele
+        # bins and subtract" -> "select n balls from the following N_1, ..., N_k bins without
+        # replacement -> use a multivariate hypergeometric distribution
+        delta_dams_as_list = self.cfg.rng.multivariate_hypergeometric(
+            list(distrib_dams_available.values()), num_dams)
+        delta_dams_selected = GenoDistrib(dict(zip(distrib_dams_available.keys(),
+                                                   delta_dams_as_list)))
 
         return delta_dams_selected
 
     def choose_from_distrib(self, distrib: GenoDistrib) -> Alleles:
+        keys = list(distrib.keys())
         distrib_values = np.array(list(distrib.values()))
         keys = list(distrib.keys())
-        choice_ix = self.cfg.rng.choice(range(len(keys)), p=distrib_values / np.sum(distrib_values))
+        keys_range = np.arange(len(keys))
+        choice_ix = self.cfg.rng.choice(keys_range, p=distrib_values / np.sum(distrib_values))
 
         return tuple(keys[choice_ix])
 
+    @profile
     def get_num_eggs(self, mated_females) -> int:
         """
         Get the number of new eggs
@@ -1051,18 +1058,43 @@ class Cage(LoggableMixin):
         pre-adult female 0.05, pre-adult male ... Stien et al 2005)
 
         :returns the current background mortality. The return value is genotype-agnostic
+
         """
+        # TODO: this is dumb
         lice_mortality_rates = self.cfg.background_lice_mortality_rates
         lice_population = self.lice_population
 
         dead_lice_dist = {}
         for stage in lice_population:
-            mortality_rate = lice_population[stage] * lice_mortality_rates[stage]
-            mortality: int = min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
+            mortality_rate = lice_population[stage] * lice_mortality_rates[stage] # some exp / different mortalities - but this gets quickly unwieldly
+            mortality: int = round(mortality_rate)#min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
             dead_lice_dist[stage] = mortality
 
         logger.debug("\t\tbackground mortality distribution of dead lice = {}".format(dead_lice_dist))
         return dead_lice_dist
+
+    def get_background_lice_mortality_aldrin(self) -> GrossLiceDistrib:
+        """
+        Background death in a stage (remove entry) -> rate = number of
+        individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,
+        pre-adult female 0.05, pre-adult male ... Stien et al 2005)
+
+        :returns the current background mortality. The return value is genotype-agnostic
+
+        """
+        # TODO: this is dumb
+        lice_mortality_rates = self.cfg.background_lice_mortality_rates
+        lice_population = self.lice_population
+
+        dead_lice_dist = {}
+        for stage in lice_population:
+            mortality_rate = lice_population[stage] * lice_mortality_rates[stage] # some exp / different mortalities - but this gets quickly unwieldly
+            mortality: int = round(mortality_rate)#min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
+            dead_lice_dist[stage] = mortality
+
+        logger.debug("\t\tbackground mortality distribution of dead lice = {}".format(dead_lice_dist))
+        return dead_lice_dist
+
 
     def average_fish_mass(self, days):
         """
