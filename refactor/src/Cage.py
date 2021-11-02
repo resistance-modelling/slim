@@ -604,7 +604,7 @@ class Cage(LoggableMixin):
         """
         will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
         assume males don't become unavailable? in this case we don't need a delta for sires
-        :returns a pair (delta_dams, new_eggs)
+        :returns a pair (mating_dams, new_eggs)
 
         TODO: deal properly with fewer individuals than matings required
         TODO: current date is required by get_num_eggs as of now, but the relationship between extrusion and temperature is not clear
@@ -616,20 +616,23 @@ class Cage(LoggableMixin):
         distrib_sire_available = self.lice_population.geno_by_lifestage["L5m"]
         distrib_dam_available = self.lice_population.available_dams
 
-        delta_dams = self.select_dams(distrib_dam_available, num_matings)
+        mating_dams = self.select_lice(distrib_dam_available, num_matings)
+        mating_sires = self.select_lice(distrib_sire_available, num_matings)
 
-        if sum(distrib_sire_available.values()) == 0 or sum(distrib_dam_available.values()) == 0:
+        if distrib_sire_available.gross == 0 or distrib_dam_available.gross == 0:
             return GenoDistrib(), GenoDistrib()
 
         # TODO - need to add dealing with fewer males/females than the number of matings
 
-        for dam_geno in delta_dams:
-            for _ in range(int(delta_dams[dam_geno])):
-                sire_geno = self.choose_from_distrib(distrib_sire_available)
-                new_eggs = self.generate_eggs(sire_geno, dam_geno, num_matings)
-                delta_eggs += new_eggs
+        num_eggs = self.get_num_eggs(num_matings)
+        if self.genetic_mechanism == GeneticMechanism.discrete:
+            delta_eggs = self.generate_eggs_discrete_batch(distrib_sire_available, distrib_dam_available, num_eggs)
+        elif self.genetic_mechanism == GeneticMechanism.maternal:
+            delta_eggs = self.generate_eggs_maternal_batch(distrib_dam_available, num_eggs)
 
-        return delta_dams, delta_eggs
+        delta_eggs = self.mutate(delta_eggs, mutation_rate=self.cfg.geno_mutation_rate)
+
+        return mating_dams, delta_eggs
 
     def generate_eggs(
             self,
@@ -700,6 +703,54 @@ class Cage(LoggableMixin):
 
         return eggs_generated
 
+    def generate_eggs_discrete_batch(self, sire_distrib: GenoDistrib, dam_distrib: GenoDistrib,
+                                     number_eggs: int) -> GenoDistrib:
+        """
+        Get number of eggs based on discrete genetic mechanism.
+
+        The algorithm emulates the following scenario: each sire s_i is sampled from sire_distrib
+        and will have a given genomic g_s_i and similarly a dam $d_i$ will have a genotype $g_d_i$.
+        Because the genomic of a lice can only be dominant, recessive or partial dominant then
+        the mating will result in one of these happening depending on the usual Mendelevian
+        mechanism.
+        The algorithm terminates when all sires and dams have been mated.
+        Here we emulate such sampling strategy via a O(1) algorithm as follows: we compute
+        the probabilities of each combination arising and adopt a multinomial distribution
+        in order to achieve a given number of eggs.
+        The rationale for the formulae used here is the following:
+        - to get an A (dominant) one needs a combination of dominant and dominant allele, or
+        dominant and the right half of partially dominant genes
+        - to get an a (recessive) one does the same as above, but with fully recessive alleles
+        instead
+        - to get a partially dominant one, we use the inclusion-exclusion principle and subtract
+        the cases above from all the possible pairings.
+
+        Together with being fast, this approach naturally models statistical uncertainty compared
+        to a perfect Mendelevian split. Unfortunately it does not naturally include mutation
+        to non-existent strains (e.g. a mating between pure dominant lice distributions can never
+        yield partial dominance or recessive genomics in the offspring).
+
+        :param sire_distrib: the genotype distribution of the sires
+        :param dam_distrib: the genotype distribution of the eggs
+        :param number_eggs: the total number of eggs
+        """
+
+        assert sire_distrib.gross == dam_distrib.gross
+
+        keys = [('A',), ('a',), ('A', 'a')]
+        x1, y1, z1 = tuple(sire_distrib[k] for k in keys)
+        x2, y2, z2 = tuple(dam_distrib[k] for k in keys)
+
+        N_A = (x1 + 1/2*z1)*(x2+1/2*z2)
+        N_a = (y1 + 1/2*z1)*(y2+1/2*z2)
+        denom = sire_distrib.gross * dam_distrib.gross
+        N_Aa = denom - N_A - N_a
+
+        p = np.array([N_A, N_a, N_Aa]) / denom
+        egg_distrib = self.cfg.rng.multimonial(number_eggs, p)
+
+        return GenoDistrib(dict(zip(keys, egg_distrib)))
+
     def get_geno_name(self, sire_geno: Allele, dam_geno: Allele) -> Alleles:
         """Create name of the genotype based on parents alleles.
 
@@ -720,6 +771,18 @@ class Cage(LoggableMixin):
         :return: genomics distribution of eggs produced
         """
         return GenoDistrib({dam: number_eggs})
+
+    @staticmethod
+    def generate_eggs_maternal_batch(dams: GenoDistrib, number_eggs: int) -> GenoDistrib:
+        """Get number of eggs based on maternal genetic mechanism.
+
+        Maternal-only inheritance - all eggs have mother's genotype.
+
+        :param dam: the genomics of the dams
+        :param number_eggs: the number of eggs produced
+        :return: genomics distribution of eggs produced
+        """
+        return dams.normalise_to(number_eggs)
 
     def mutate(self, eggs: GenoDistrib, mutation_rate: float) -> GenoDistrib:
         """
@@ -765,26 +828,31 @@ class Cage(LoggableMixin):
 
         return result
 
-    def select_dams(self, distrib_dams_available: GenoDistrib, num_dams: int) -> GenoDistrib:
+    def select_lice(self, distrib_lice_available: GenoDistrib, num_lice: int) -> GenoDistrib:
         """
-        From a geno distribution of eligible dams sample a given number of dams.
+        From a geno distribution of eligible lice sample a given Genotype distribution
 
-        :param distrib_dams_available: the starting dam genomic distribution
-        :param num_dams: the wished number of dams to sample
+        Note: this is very similar to GenoDistrib.normalise_to() but performs an explicit
+        sampling.
+
+        TODO: should we integrate this into GenoDistrib class
+
+        :param distrib_lice_available: the starting dam genomic distribution
+        :param num_lice: the wished number of dams to sample
         """
         # TODO: this function is flexible enough to be renamed and used elsewhere
-        if sum(distrib_dams_available.values()) <= num_dams:
-            return distrib_dams_available.copy()
+        if sum(distrib_lice_available.values()) <= num_lice:
+            return distrib_lice_available.copy()
 
         # "we need to select k lice from the given population broken down into different allele
         # bins and subtract" -> "select n balls from the following N_1, ..., N_k bins without
         # replacement -> use a multivariate hypergeometric distribution
-        delta_dams_as_list = self.cfg.rng.multivariate_hypergeometric(
-            list(distrib_dams_available.values()), num_dams)
-        delta_dams_selected = GenoDistrib(dict(zip(distrib_dams_available.keys(),
-                                                   delta_dams_as_list)))
+        lice_as_list = self.cfg.rng.multivariate_hypergeometric(
+            list(distrib_lice_available.values()), num_lice)
+        selected_lice = GenoDistrib(dict(zip(distrib_lice_available.keys(),
+                                                   lice_as_list)))
 
-        return delta_dams_selected
+        return selected_lice
 
     def choose_from_distrib(self, distrib: GenoDistrib) -> Alleles:
         keys = list(distrib.keys())

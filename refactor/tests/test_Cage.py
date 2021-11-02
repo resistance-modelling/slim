@@ -421,7 +421,7 @@ class TestCage:
         total_dams = sum(distrib_dams_available.values())
         num_dams = 2*total_dams
 
-        delta_dams = first_cage.select_dams(distrib_dams_available, num_dams)
+        delta_dams = first_cage.select_lice(distrib_dams_available, num_dams)
         for key in delta_dams:
             assert delta_dams[key] == distrib_dams_available[key]
         for key in delta_dams:
