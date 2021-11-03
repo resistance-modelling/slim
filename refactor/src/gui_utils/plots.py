@@ -8,7 +8,8 @@ import pyqtgraph as pg
 import scipy
 import scipy.ndimage
 from PyQt5.QtCore import QObject, pyqtSignal
-from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox, QSpinBox, QLabel
+from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox, QSpinBox, QLabel, QScrollArea, \
+    QSizePolicy
 from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
@@ -45,6 +46,9 @@ class SmoothedPlotItemWrap:
     def setAverageFactor(self, average_factor: int):
         self.average_factor = average_factor
 
+    def heightForWidth(self, width):
+        return int(width * 1.5)
+
     def __getattr__(self, item):
         return getattr(self.plot_item, item)
 
@@ -55,19 +59,22 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
 
     def __init__(self, parent: SingleRunPlotPane):
         super().__init__(parent)
+        self.pane = parent
         self.coord_to_plot = {}
 
         smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
         averaging_widget = parent.normaliseByCageCheckbox
 
-        # TODO: this will spam *A LOT* of signals. The best thing would be to put these callbacks in the init
-        # Note: because of the capturing lambda we cannot apply the typical eta-rule
         smoothing_kernel_size_widget.valueChanged.connect(self._setSmoothingFactor)
         averaging_widget.stateChanged.connect(self._setAverageFactor)
 
+        policy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
+
 
     def getParent(self):
-        return cast(SingleRunPlotPane, self.parent())
+        return self.pane # to inline
 
     def _getAverageFactor(self, farm_idx, checkbox_state: int):
         parent = self.getParent()
@@ -95,6 +102,13 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         plot = self.addPlot(**kwargs)
         parent = self.getParent()
 
+        """
+        sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        sizePolicy.setHeightForWidth(True)
+        plot.setSizePolicy(sizePolicy)
+        plot.
+        """
+
         smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
         averaging_widget = parent.normaliseByCageCheckbox
 
@@ -120,6 +134,10 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
 
         smoothing_kernel_size_widget.disconnect()
         averaging_widget.disconnect()
+
+    def deleteLater(self):
+        self.disconnectAll()
+        super().deleteLater()
 
 class LightModeMixin:
     def __init__(self):
@@ -170,13 +188,18 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self._createPlotOptionGroup()
         self._createPlots()
 
+        self.scrollArea = QScrollArea(self)
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setLayout(QVBoxLayout(self.scrollArea))
+        self.scrollArea.setWidget(self.pqgPlotContainer)
+
         # Properties used inside the plot pane
         self._showGenotype = False
 
         mainLayout = QGridLayout()
         self.setLayout(mainLayout)
 
-        mainLayout.addWidget(self.pqgPlotContainer, 0, 0, 3, 1)
+        mainLayout.addWidget(self.scrollArea, 0, 0)
         mainLayout.addWidget(self.plotButtonGroup, 3, 0)
 
         mainPane.loadedSimulatorState.connect(self._updateModel)
@@ -218,12 +241,14 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.stages_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
         self.fish_population: Dict[str, pg.PlotItem] = {}
 
+        # TODO: implement a fixed aspect ratio. Layouting in QT is complicated at times.
+        self.pqgPlotContainer.setFixedHeight(1000)
+
         # add grid, synchronise Y-range
-        # TODO: make this toggleable?
         for plot in self.licePopulationPlots + self.fishPopulationPlots:
             plot.showGrid(x=True, y=True)
 
-        for plotList in [self.licePopulationPlots, self.fishPopulationPlots]:
+        for plotList in [self.licePopulationPlots, self.fishPopulationPlots, self.aggregationRatePlot]:
             for idx in range(1, len(plotList)):
                 plotList[idx].setYLink(plotList[idx - 1])
                 plotList[idx].setXLink(plotList[idx - 1])
@@ -276,12 +301,11 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             self.licePopulationLegend.clear()
 
     def _remountPlot(self):
-        layout: QGridLayout = self.layout()
-        layout.removeWidget(self.pqgPlotContainer)
+        self.scrollArea.setWidget(None)
         # I need to know the exact number of farms right now
-        self.pqgPlotContainer.disconnectAll()
+        self.pqgPlotContainer.deleteLater()
         self._createPlots()
-        layout.addWidget(self.pqgPlotContainer, 0, 0, 3, 1)
+        self.scrollArea.setWidget(self.pqgPlotContainer)
         self._updatePlot()
 
     def _updateModel(self, model: SimulatorSingleRunState):
@@ -361,12 +385,12 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
         # because of the leaky scope, this is going to be something
         payoffs = farm_df["payoff"].to_numpy()
-        self.payoffPlot.plot(payoffs)
+        self.payoffPlot.plot(payoffs, pen=self._colorPalette[0])
 
         # keep ranges consistent
-        for plot in self.licePopulationPlots + self.licePopulationPlots:
+        for plot in self.licePopulationPlots + self.fishPopulationPlots + self.aggregationRatePlot:
             plot.setXRange(0, len(payoffs), padding=0)
-            plot.vb.setLimits(xMin=0, xMax=len(payoffs))
+            plot.vb.setLimits(xMin=0, xMax=len(payoffs), yMin=0)
         self.payoffPlot.setXRange(0, len(payoffs), padding=0)
         self.payoffPlot.vb.setLimits(xMin=0, xMax=len(payoffs))
 
