@@ -264,6 +264,7 @@ class Cage(LoggableMixin):
             trait = HeterozygousResistance.recessive
         return trait
 
+    @profile
     def get_lice_treatment_mortality(self, cur_date) -> Tuple[GenoLifeStageDistrib, Money]:
         """
         Calculate the number of lice in each stage killed by treatment.
@@ -287,6 +288,7 @@ class Cage(LoggableMixin):
                 #        now we need to find out which stages these lice are in by calculating the
                 #        cumulative sum of the lice in each stage and finding out how many of our
                 #        dead lice falls into this bin.
+                """
                 dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, replace=False).tolist()
                 total_so_far = 0
                 for stage in self.susceptible_stages:
@@ -296,6 +298,18 @@ class Cage(LoggableMixin):
                     total_so_far += available_in_stage
                     if num_dead > 0:
                         dead_lice_dist[stage][geno] = num_dead
+                """
+
+                # We emulate the top algorithm with a multivariate hypergeom distrib
+                population_by_stages = np.array([self.lice_population.geno_by_lifestage[stage][geno]
+                                                 for stage in self.susceptible_stages])
+
+                # TODO: why is num_dead_lice not clamped?
+                num_dead_lice = min(population_by_stages.sum(), num_dead_lice)
+                dead_lice_nums = self.cfg.rng.multivariate_hypergeometric(
+                    population_by_stages, num_dead_lice).tolist()
+                for stage, dead_lice_num in zip(self.susceptible_stages, dead_lice_nums):
+                    dead_lice_dist[stage] = dead_lice_num
 
                 logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
                              .format(self.farm_id, self.id, dead_lice_dist))
@@ -747,7 +761,7 @@ class Cage(LoggableMixin):
         N_Aa = denom - N_A - N_a
 
         p = np.array([N_A, N_a, N_Aa]) / denom
-        egg_distrib = self.cfg.rng.multimonial(number_eggs, p)
+        egg_distrib = self.cfg.rng.multinomial(number_eggs, p)
 
         return GenoDistrib(dict(zip(keys, egg_distrib)))
 
