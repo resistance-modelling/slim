@@ -43,7 +43,7 @@ class SmoothedPlotItemWrap:
         self.kernel_size = kernel_size
 
     def setAverageFactor(self, average_factor: int):
-        self.kernel_size = average_factor
+        self.average_factor = average_factor
 
     def __getattr__(self, item):
         return getattr(self.plot_item, item)
@@ -79,15 +79,6 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
             return average_factor
         return 1
 
-    def _setSmoothingFactor(self, value, plot_item):
-        plot_item.setSmoothingFactor(value)
-        self.newKernelSize.emit()
-
-    def _setAverageFactor(self, value, plot_item, farm_idx):
-        average_factor = self._getAverageFactor(farm_idx, value)
-        plot_item.setSmoothingFactor(average_factor)
-        self.newAverageFactor.emit()
-
     def _setSmoothingFactor(self, value):
         for plot_item in self.coord_to_plot.values():
             plot_item.setSmoothingFactor(value)
@@ -97,7 +88,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
     def _setAverageFactor(self, value):
         for (_, farm_idx), plot_item in self.coord_to_plot.items():
             average_factor = self._getAverageFactor(farm_idx, value)
-            plot_item.setSmoothingFactor(average_factor)
+            plot_item.setAverageFactor(average_factor)
         self.newAverageFactor.emit()
 
     def addSmoothedPlot(self, exclude_from_averaging = False, **kwargs) -> SmoothedPlotItemWrap:
@@ -121,6 +112,14 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
 
         return smoothed_plot_item
 
+    def disconnectAll(self):
+        parent = self.getParent()
+
+        smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
+        averaging_widget = parent.normaliseByCageCheckbox
+
+        smoothing_kernel_size_widget.disconnect()
+        averaging_widget.disconnect()
 
 class LightModeMixin:
     def __init__(self):
@@ -280,6 +279,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         layout: QGridLayout = self.layout()
         layout.removeWidget(self.pqgPlotContainer)
         # I need to know the exact number of farms right now
+        self.pqgPlotContainer.disconnectAll()
         self._createPlots()
         layout.addWidget(self.pqgPlotContainer, 0, 0, 3, 1)
         self._updatePlot()
@@ -450,7 +450,7 @@ class OptimiserPlotPane(QWidget, LightModeMixin):
     def _updatePlot(self):
         self._clearPlot()
 
-        if not self.optimiserState.states_as_df is not None:
+        if self.optimiserState is None:
             return
         df = self.optimiserState.states_as_df
 
