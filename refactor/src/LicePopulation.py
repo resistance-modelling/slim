@@ -137,7 +137,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
             keys = self.keys()
             values = [v * other for v in self.values()]
             if isinstance(other, float) and math.trunc(other) == other:
-                values = largest_remainder(np.array(values)).tolist()
+                values = map(int, largest_remainder(np.array(values)).tolist())
         else:
             # pairwise product
             # Sometimes it may be helpful to not round

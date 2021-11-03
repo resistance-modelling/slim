@@ -25,8 +25,6 @@ if TYPE_CHECKING:  # pragma: no cover
 OptionalDamBatch = Optional[DamAvailabilityBatch]
 OptionalEggBatch = Optional[EggBatch]
 
-from line_profiler_pycharm import profile
-
 class Cage(LoggableMixin):
     """
     Fish cages contain the fish.
@@ -130,9 +128,7 @@ class Cage(LoggableMixin):
         logger.debug("\t\tinitial lice population = {}".format(self.lice_population))
 
         # Background lice mortality events
-        # TODO: debug
         dead_lice_dist = self.get_background_lice_mortality()
-        # dead_lice_dist = {stage: 0 for stage in self.lice_population}
 
         # Development events
         new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date.month)
@@ -264,7 +260,6 @@ class Cage(LoggableMixin):
             trait = HeterozygousResistance.recessive
         return trait
 
-    @profile
     def get_lice_treatment_mortality(self, cur_date) -> Tuple[GenoLifeStageDistrib, Money]:
         """
         Calculate the number of lice in each stage killed by treatment.
@@ -309,7 +304,7 @@ class Cage(LoggableMixin):
                 dead_lice_nums = self.cfg.rng.multivariate_hypergeometric(
                     population_by_stages, num_dead_lice).tolist()
                 for stage, dead_lice_num in zip(self.susceptible_stages, dead_lice_nums):
-                    dead_lice_dist[stage] = dead_lice_num
+                    dead_lice_dist[stage][geno] = dead_lice_num
 
                 logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
                              .format(self.farm_id, self.id, dead_lice_dist))
@@ -582,7 +577,6 @@ class Cage(LoggableMixin):
             return 0.0
         return k**2 * (n - 1) / (n ** 2)
 
-    @profile
     def get_num_matings(self) -> int:
         """
         Get the number of matings. Implement Cox's approach assuming an unbiased sex distribution
@@ -613,7 +607,6 @@ class Cage(LoggableMixin):
         # TODO: using a poisson distribution can lead to a high std for high prob*females
         return int(np.clip(self.cfg.rng.poisson(prob_matching * females), np.int32(0), np.int32(min(males, females))))
 
-    @profile
     def do_mating_events(self) -> Tuple[GenoDistrib, GenoDistrib]:
         """
         will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
@@ -640,82 +633,13 @@ class Cage(LoggableMixin):
 
         num_eggs = self.get_num_eggs(num_matings)
         if self.genetic_mechanism == GeneticMechanism.discrete:
-            delta_eggs = self.generate_eggs_discrete_batch(distrib_sire_available, distrib_dam_available, num_eggs)
+            delta_eggs = self.generate_eggs_discrete_batch(mating_sires, mating_dams, num_eggs)
         elif self.genetic_mechanism == GeneticMechanism.maternal:
             delta_eggs = self.generate_eggs_maternal_batch(distrib_dam_available, num_eggs)
 
         delta_eggs = self.mutate(delta_eggs, mutation_rate=self.cfg.geno_mutation_rate)
 
         return mating_dams, delta_eggs
-
-    def generate_eggs(
-            self,
-            sire: Alleles,
-            dam: Alleles,
-            num_matings: int
-    ) -> GenoDistrib:
-        """
-        Generate the eggs with a given genomic distribution
-
-        TODO: doesn't do anything sensible re: integer/real numbers of offspring
-        TODO: do we still want to keep the mechanism?
-        :param sire the genomics of the sires
-        :param dam the genomics of the dams
-        :param num_matings the number of matings
-        :returns a distribution on the number of generated eggs according to the distribution
-        """
-
-        number_eggs = self.get_num_eggs(num_matings)
-
-        # TODO: since the genetic mechanism cannot change one could try to cache this
-
-        if self.genetic_mechanism == GeneticMechanism.discrete:
-            geno_eggs = self.generate_eggs_discrete(sire, dam, number_eggs)
-
-        elif self.genetic_mechanism == GeneticMechanism.maternal:
-            geno_eggs = self.generate_eggs_maternal(dam, number_eggs)
-
-        else:
-            raise Exception("Genetic mechanism must be 'maternal', or 'discrete' - '{}' given".format(
-                self.genetic_mechanism))
-
-        assert geno_eggs.is_positive()
-        geno_eggs = self.mutate(geno_eggs, mutation_rate=self.cfg.geno_mutation_rate)
-        assert geno_eggs.is_positive()
-        return geno_eggs
-
-    def generate_eggs_discrete(self, sire: Alleles, dam: Alleles, number_eggs: int) -> GenoDistrib:
-        """Get number of eggs based on discrete genetic mechanism.
-
-        If we're in the discrete 2-gene setting, assume for now that genotypes are tuples -
-        so in a A/a genetic system, genotypes could be ('A'), ('a'), or ('A', 'a')
-        right now number of offspring with each genotype are deterministic, and might be
-        missing one (we should update to add jitter in future, but this is a reasonable approx)
-
-        :param sire: the genomics of the sires
-        :param dam: the genomics of the dams
-        :param number_eggs: the number of eggs produced
-        :return: genomics distribution of eggs produced
-        """
-
-        eggs_generated = GenoDistrib()
-        if len(sire) == 1 and len(dam) == 1:
-            eggs_generated[self.get_geno_name(sire[0], dam[0])] = float(number_eggs)
-        elif len(sire) == 2 and len(dam) == 1:
-            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 2
-            eggs_generated[self.get_geno_name(sire[1], dam[0])] = number_eggs / 2
-        elif len(sire) == 1 and len(dam) == 2:
-            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 2
-            eggs_generated[self.get_geno_name(sire[0], dam[1])] = number_eggs / 2
-        else:
-            # drawing both from the sire in the first case ensures heterozygotes
-            # but is a bit hacky.
-            eggs_generated[self.get_geno_name(sire[0], sire[1])] = number_eggs / 2
-            # and the below gets us our two types of homozygotes
-            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 4
-            eggs_generated[self.get_geno_name(sire[1], dam[1])] = number_eggs / 4
-
-        return eggs_generated
 
     def generate_eggs_discrete_batch(self, sire_distrib: GenoDistrib, dam_distrib: GenoDistrib,
                                      number_eggs: int) -> GenoDistrib:
@@ -760,31 +684,13 @@ class Cage(LoggableMixin):
         denom = sire_distrib.gross * dam_distrib.gross
         N_Aa = denom - N_A - N_a
 
+        if denom == 0:
+            return GenoDistrib()
+
         p = np.array([N_A, N_a, N_Aa]) / denom
         egg_distrib = self.cfg.rng.multinomial(number_eggs, p)
 
         return GenoDistrib(dict(zip(keys, egg_distrib)))
-
-    def get_geno_name(self, sire_geno: Allele, dam_geno: Allele) -> Alleles:
-        """Create name of the genotype based on parents alleles.
-
-        :param sire_geno: the allele of the sires
-        :param dam_geno: the allele of the sires
-        :return: the genomics of the offspring
-        """
-        return tuple(sorted({sire_geno, dam_geno}))
-
-    @staticmethod
-    def generate_eggs_maternal(dam: Union[Alleles, np.ndarray], number_eggs: int) -> GenoDistrib:
-        """Get number of eggs based on maternal genetic mechanism.
-
-        Maternal-only inheritance - all eggs have mother's genotype.
-
-        :param dam: the genomics of the dams
-        :param number_eggs: the number of eggs produced
-        :return: genomics distribution of eggs produced
-        """
-        return GenoDistrib({dam: number_eggs})
 
     @staticmethod
     def generate_eggs_maternal_batch(dams: GenoDistrib, number_eggs: int) -> GenoDistrib:
@@ -868,16 +774,6 @@ class Cage(LoggableMixin):
 
         return selected_lice
 
-    def choose_from_distrib(self, distrib: GenoDistrib) -> Alleles:
-        keys = list(distrib.keys())
-        distrib_values = np.array(list(distrib.values()))
-        keys = list(distrib.keys())
-        keys_range = np.arange(len(keys))
-        choice_ix = self.cfg.rng.choice(keys_range, p=distrib_values / np.sum(distrib_values))
-
-        return tuple(keys[choice_ix])
-
-    @profile
     def get_num_eggs(self, mated_females) -> int:
         """
         Get the number of new eggs
@@ -1134,28 +1030,6 @@ class Cage(LoggableMixin):
             self.arrival_events.put(batch)
 
     def get_background_lice_mortality(self) -> GrossLiceDistrib:
-        """
-        Background death in a stage (remove entry) -> rate = number of
-        individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,
-        pre-adult female 0.05, pre-adult male ... Stien et al 2005)
-
-        :returns the current background mortality. The return value is genotype-agnostic
-
-        """
-        # TODO: this is dumb
-        lice_mortality_rates = self.cfg.background_lice_mortality_rates
-        lice_population = self.lice_population
-
-        dead_lice_dist = {}
-        for stage in lice_population:
-            mortality_rate = lice_population[stage] * lice_mortality_rates[stage] # some exp / different mortalities - but this gets quickly unwieldly
-            mortality: int = round(mortality_rate)#min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
-            dead_lice_dist[stage] = mortality
-
-        logger.debug("\t\tbackground mortality distribution of dead lice = {}".format(dead_lice_dist))
-        return dead_lice_dist
-
-    def get_background_lice_mortality_aldrin(self) -> GrossLiceDistrib:
         """
         Background death in a stage (remove entry) -> rate = number of
         individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,

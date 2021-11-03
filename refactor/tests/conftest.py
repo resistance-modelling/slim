@@ -22,7 +22,7 @@ def initial_lice_population():
 @pytest.fixture
 def farm_config():
     np.random.seed(0)
-    cfg = Config("config_data/config.json", "config_data/Fyne")
+    cfg = Config("config_data/config.json", "config_data/test_Fyne")
     return cfg
 
 

@@ -50,7 +50,7 @@ class TestFarm:
         pressures = first_farm.get_cage_pressures()
 
         assert len(pressures) == len(first_farm.cages)
-        assert sum(pressures) == first_farm.cfg.ext_pressure
+        assert sum(pressures) == first_farm.cfg.ext_pressure * 10
 
         for pressure in pressures:
             assert pressure >= 0
