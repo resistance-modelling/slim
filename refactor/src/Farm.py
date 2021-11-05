@@ -428,7 +428,7 @@ class Farm(LoggableMixin):
         """
         Get the current mass of fish that can be resold.
         """
-        mass_per_cage = [cage.average_fish_mass((cur_date - cage.start_date).days) for cage in self.cages]
+        mass_per_cage = [cage.average_fish_mass((cur_date - cage.start_date).days) / 1e3 for cage in self.cages]
         return self.cfg.gain_per_kg * Money(sum(mass_per_cage))
 
     def handle_events(self, cur_date: dt.datetime):

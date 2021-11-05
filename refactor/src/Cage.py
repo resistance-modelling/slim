@@ -314,7 +314,7 @@ class Cage(LoggableMixin):
             treatment_type = self.last_effective_treatment.treatment_type
             treatment_cfg = self.cfg.get_treatment(treatment_type)
             cage_days = (cur_date - self.start_date).days
-            cost = treatment_cfg.price_per_kg * int(self.average_fish_mass(cage_days))
+            cost = treatment_cfg.price_per_kg * int(self.average_fish_mass(cage_days) / 1e3)
 
         return dead_lice_dist, cost
 
@@ -431,6 +431,7 @@ class Cage(LoggableMixin):
         """
         Get fish mortality due to treatment. Mortality due to treatment is defined in terms of
         point percentage increases, thus we can only account for "excess deaths".
+        If treatment is not being applied the overall
 
         :param days_since_start the number of days since the beginning of the simulation
         :param fish_lice_deaths the number
@@ -440,15 +441,16 @@ class Cage(LoggableMixin):
 
         if mortality_events == 0:
             return 0
-        if self.last_effective_treatment is None:
+
+        cur_date = self.start_date + dt.timedelta(days=days_since_start)
+        if not self.is_treated(cur_date):
             return 0
 
         efficacy_window = self.last_effective_treatment.effectiveness_duration_days
 
-        cur_date = self.start_date + dt.timedelta(days=days_since_start)
         temperature = self.farm.year_temperatures[cur_date.month - 1]
         mortality_events_pp = 100 * mortality_events / self.num_fish
-        fish_mass = self.average_fish_mass(days_since_start)
+        fish_mass = self.average_fish_mass(days_since_start) / 1e3
 
         last_treatment_params = self.cfg.get_treatment(self.last_effective_treatment.treatment_type)
         predicted_pp_increase = last_treatment_params.get_mortality_pp_increase(temperature, fish_mass)
@@ -456,9 +458,9 @@ class Cage(LoggableMixin):
         predicted_deaths = (predicted_pp_increase + mortality_events_pp) * self.num_fish / 100 - mortality_events
         predicted_deaths /= efficacy_window
 
-        treatment_mortalities_occurrences = self.cfg.rng.poisson(predicted_deaths)
+        treatment_mortality_occurrences = self.cfg.rng.poisson(predicted_deaths)
 
-        return treatment_mortalities_occurrences
+        return treatment_mortality_occurrences
 
     def get_fish_growth(self, days_since_start) -> Tuple[int, int]:
         """
@@ -482,12 +484,13 @@ class Cage(LoggableMixin):
             :param days: number of days elapsed
             :return: fish background mortality rate
             """
-            return 0.00057  # (1000 + (days - 700)**2)/490000000
+            return 0.000057  # (1000 + (days - 700)**2)/490000000
 
         # Apply a sigmoid based on the number of lice per fish
         pathogenic_lice = sum([self.lice_population[stage] for stage in self.pathogenic_stages])
         if self.num_infected_fish > 0:
-            lice_per_host_mass = pathogenic_lice / (self.num_infected_fish * self.average_fish_mass(days_since_start))
+            lice_per_host_mass = pathogenic_lice / (self.num_infected_fish *
+                                                    (self.average_fish_mass(days_since_start) / 1e3))
         else:
             lice_per_host_mass = 0.0
         prob_lice_death = 1 / (1 + math.exp(-self.cfg.fish_mortality_k *
@@ -495,8 +498,8 @@ class Cage(LoggableMixin):
 
         ebf_death = fb_mort(days_since_start) * self.num_fish
         elf_death = self.num_infected_fish * prob_lice_death
-        fish_deaths_natural = self.cfg.rng.poisson(ebf_death)
-        fish_deaths_from_lice = self.cfg.rng.poisson(elf_death)
+        fish_deaths_natural = round(ebf_death) # self.cfg.rng.poisson(ebf_death)
+        fish_deaths_from_lice = round(elf_death) # self.cfg.rng.poisson(elf_death)
 
         logger.debug("\t\t\tnumber of background fish death {}, from lice {}"
                      .format(fish_deaths_natural, fish_deaths_from_lice))
@@ -504,8 +507,8 @@ class Cage(LoggableMixin):
         return fish_deaths_natural, fish_deaths_from_lice
 
     def compute_eta_aldrin(self, num_fish_in_farm, days):
-        return self.cfg.infection_main_delta + math.log(num_fish_in_farm) + self.cfg.infection_weight_delta * \
-               (math.log(self.average_fish_mass(days)) - self.cfg.delta_expectation_weight_log)
+        return self.cfg.infection_main_delta + math.log(num_fish_in_farm/1e5) + self.cfg.infection_weight_delta * \
+               (math.log(self.average_fish_mass(days)/1e3) - self.cfg.delta_expectation_weight_log)
 
     def get_infection_rates(self, days) -> Tuple[float, int]:
         """
@@ -901,7 +904,9 @@ class Cage(LoggableMixin):
 
         dying_lice = affected_lice - surviving_lice
 
-        return {k: int(v) for k, v in dying_lice.items() if v > 0}
+        dying_lice_distrib = {k: int(v) for k, v in dying_lice.items() if v > 0}
+        logger.debug(f"\t\tLice mortality due to fish mortality: {dying_lice_distrib}")
+        return dying_lice_distrib
 
     def promote_population(
             self,
@@ -970,7 +975,7 @@ class Cage(LoggableMixin):
 
         # Update dead_lice_dist to include fish-caused death as well
         dead_lice_by_fish_death = self.get_dying_lice_from_dead_fish(
-            fish_deaths_natural + fish_deaths_from_lice)
+            min(fish_deaths_natural + fish_deaths_from_lice, self.num_infected_fish))
         for affected_stage, reduction in dead_lice_by_fish_death.items():
             dead_lice_dist[affected_stage] += reduction
 
