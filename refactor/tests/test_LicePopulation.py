@@ -66,9 +66,9 @@ class TestLicePopulation:
         first_cage_population["L5m"] = 1000
         first_cage_population["L5f"] = 1000
         dams, _ = first_cage.do_mating_events()
-        target_dams = {('A',): 188,
-                       ('a',): 269,
-                       ('A', 'a'): 469}
+        target_dams = {('A',): 200,
+                       ('a',): 300,
+                       ('A', 'a'): 500}
 
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
         assert first_cage_population.free_dams(cur_day + dt.timedelta(days=1)) == target_dams

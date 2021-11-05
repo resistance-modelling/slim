@@ -9,14 +9,13 @@ from queue import PriorityQueue
 from typing import Union, Optional, Tuple, cast, TYPE_CHECKING
 
 import numpy as np
-from scipy import stats
 
 from src import logger, LoggableMixin
 from src.Config import Config
 from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money
 from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib,
-                                largest_remainder)
+                                largest_remainder, LifeStage)
 from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent, pop_from_queue
 from src.JSONEncoders import CustomFarmEncoder
 
@@ -165,7 +164,7 @@ class Cage(LoggableMixin):
             fish_deaths_natural, fish_deaths_from_lice = self.get_fish_growth(days_since_start)
 
             # Infection events
-            num_infection_events = self.do_infection_events(cur_date, days_since_start)
+            num_infection_events = self.do_infection_events(days_since_start)
 
             # Mating events that create eggs
             self.lice_population.free_dams(cur_date)
@@ -284,6 +283,7 @@ class Cage(LoggableMixin):
                 #        now we need to find out which stages these lice are in by calculating the
                 #        cumulative sum of the lice in each stage and finding out how many of our
                 #        dead lice falls into this bin.
+                """
                 dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, replace=False).tolist()
                 total_so_far = 0
                 for stage in self.susceptible_stages:
@@ -293,6 +293,18 @@ class Cage(LoggableMixin):
                     total_so_far += available_in_stage
                     if num_dead > 0:
                         dead_lice_dist[stage][geno] = num_dead
+                """
+
+                # We emulate the top algorithm with a multivariate hypergeom distrib
+                population_by_stages = np.array([self.lice_population.geno_by_lifestage[stage][geno]
+                                                 for stage in self.susceptible_stages])
+
+                # TODO: why is num_dead_lice not clamped?
+                num_dead_lice = min(population_by_stages.sum(), num_dead_lice)
+                dead_lice_nums = self.cfg.rng.multivariate_hypergeometric(
+                    population_by_stages, num_dead_lice).tolist()
+                for stage, dead_lice_num in zip(self.susceptible_stages, dead_lice_nums):
+                    dead_lice_dist[stage][geno] = dead_lice_num
 
                 logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
                              .format(self.farm_id, self.id, dead_lice_dist))
@@ -306,40 +318,56 @@ class Cage(LoggableMixin):
 
         return dead_lice_dist, cost
 
-    def get_stage_ages_distrib(self, stage: str, size=15, stage_age_max_days=None):
+    def get_stage_ages_distrib(self, stage: str, temp_c: float = 10.0):
         """
         Create an age distribution (in days) for the sea lice within a lifecycle stage.
-        In absence of further data or constraints, we simply assume it's a uniform distribution
+
+        This distribution is computed by using a simplified version of formulae (4), (6), (8)
+        in Aldrin et al.: we assume that all lice of a stage m-1 that evolve at stage m
+        will be put at a stage-age of 0, and that this is going to be a constant/stable
+        amount.
         """
 
-        # NOTE: no data is available for L5 stages. We assume for simplicity they die after 30-ish days
-        if stage_age_max_days is None:
-            stage_age_max_days = min(self.cfg.stage_age_evolutions[stage], size + 1)
-        p = np.zeros((size,))
-        p[:stage_age_max_days] = 1
-        return p / np.sum(p)
+        stage_age_max_days = int(self.cfg.stage_age_evolutions[stage])
 
-    def get_evolution_ages(self, size: int, minimum_age: int, mean: int, development_days=25):
+        if stage == "L2" or stage == "L5f":
+            # Bogus uniform distribution L5m/L5f follow different schemes.
+            # More realistically, this is an exponential/poisson distribution
+            return np.full(stage_age_max_days, 1/stage_age_max_days)
+
+        delta_p = self.cfg.delta_p[stage]
+        delta_m10 = self.cfg.delta_m10[stage]
+        delta_s = self.cfg.delta_s[stage]
+
+        ages = np.arange(stage_age_max_days)
+
+        weibull_median_rates = self._dev_rates(delta_p, delta_m10, delta_s, temp_c, ages)
+
+        probas = np.empty_like(ages, dtype=np.float64)
+        probas[0] = 1.0
+        for i in range(1, stage_age_max_days):
+            probas[i] = probas[i-1] * (1.0 - weibull_median_rates[i-1])
+
+        return probas / np.sum(probas)
+
+    @staticmethod
+    def _dev_rates(del_p: float, del_m10: float, del_s: float, temp_c: float, ages: np.ndarray):
         """
-        Create an age distribution (in days) for the sea lice within a lifecycle stage.
-        TODO: This actually computes the evolution ages.
-        :param size the number of lice to consider
-        :param minimum_age the minimum age before an evolution is allowed
-        :param mean the mean of the distribution. mean must be bigger than min.
-        :param development_days the maximum age to consider
-        :return a size-long array of ages (in days)
+        Probability of developing after n_days days in a stage as given by Aldrin et al 2017
+        See section 2.2.4 of Aldrin et al. (2017)
+        :param del_p: power transformation constant on temp_c
+        :param del_m10: 10 °C median reference value
+        :param del_s: fitted Weibull shape parameter
+        :param temp_c: average temperature in °C
+        :param ages: stage-age
+        :return: expected development rate
         """
+        epsilon = np.float64(1e-30)
+        del_m = del_m10 * (10 / temp_c) ** del_p
 
-        # Create a shifted poisson distribution,
-        k = mean - minimum_age
-        max_quantile = development_days - minimum_age
+        unbounded = np.clip(np.log(2) * del_s * ages ** (del_s - 1) * del_m ** (-del_s), epsilon, np.float64(1.0))
+        return unbounded
 
-        assert minimum_age > 0, "min must be positive"
-        assert k > 0, "mean must be greater than min."
-
-        p = stats.poisson.pmf(range(max_quantile), k)
-        p = p / np.sum(p)  # probs need to add up to one
-        return self.cfg.rng.choice(range(max_quantile), size, p=p) + minimum_age
 
     def get_lice_lifestage(self, cur_month) -> Tuple[int, int, int, int]:
         """
@@ -351,64 +379,44 @@ class Cage(LoggableMixin):
         """
         logger.debug("\t\tupdating lice lifecycle stages")
 
-        def dev_times(del_p: float, del_m10: float, del_s: float, temp_c: float, ages: np.ndarray):
-            """
-            Probability of developing after n_days days in a stage as given by Aldrin et al 2017
-            See section 2.2.4 of Aldrin et al. (2017)
-            :param ages: stage-age
-            :param del_p: power transformation constant on temp_c
-            :param del_m10: 10 °C median reference value
-            :param del_s: fitted Weibull shape parameter
-            :param temp_c: average temperature in °C
-            :return: expected development rate
-            """
-            epsilon = 1e-30
-            del_m = del_m10 * (10 / temp_c) ** del_p
+        def evolve_next_stage(stage: LifeStage, temp_c: float) -> int:
+            # weibull params
+            del_p = self.cfg.delta_p[stage]
+            del_m10 = self.cfg.delta_m10[stage]
+            del_s = self.cfg.delta_s[stage]
+            num_lice = self.lice_population[stage]
+            if num_lice == 0:
+                return 0
+            max_dev_time = self.cfg.stage_age_evolutions[stage]
+            ages_distrib = self.get_stage_ages_distrib(stage, temp_c)
+            # let us sample from 1000 lice
+            ages = self.cfg.rng.choice(np.arange(max_dev_time), 1000, p=ages_distrib)
 
-            unbounded = math.log(2) * del_s * ages ** (del_s - 1) * del_m ** (-del_s)
-            unbounded = np.clip(unbounded, np.float64(epsilon), np.float64(1.0))
-            return unbounded.astype(np.float64)
+            evolution_rates = self._dev_rates(del_p, del_m10, del_s, temp_c, ages)
+            average_rates = np.mean(evolution_rates)
+
+            # print(f"Stage {stage} -> {average_rates}")
+
+            return round(num_lice * average_rates) #int(min(self.cfg.rng.poisson(num_lice * average_rates), num_lice))
 
         lice_dist = {}
         ave_temp = self.farm.year_temperatures[cur_month - 1]
 
         # L4 -> L5
-        # TODO these blocks look like the same?
-
-        num_lice = self.lice_population["L4"]
-        stage_ages = self.get_evolution_ages(num_lice, minimum_age=10, mean=15)
-
-        l4_to_l5 = dev_times(self.cfg.delta_p["L4"], self.cfg.delta_m10["L4"], self.cfg.delta_s["L4"],
-                             ave_temp, stage_ages)
-        num_to_move = min(self.cfg.rng.poisson(np.sum(l4_to_l5)), num_lice)
-        new_females = int(self.cfg.rng.choice([math.floor(num_to_move / 2.0), math.ceil(num_to_move / 2.0)]))
-        new_males = (num_to_move - new_females)
+        l4_to_l5 = evolve_next_stage("L4", ave_temp)
+        new_females = int(self.cfg.rng.choice([math.floor(l4_to_l5 / 2.0), math.ceil(l4_to_l5 / 2.0)]))
+        new_males = (l4_to_l5 - new_females)
 
         lice_dist["L5f"] = new_females
-        lice_dist["L5m"] = (num_to_move - new_females)
+        lice_dist["L5m"] = new_males
 
         # L3 -> L4
-        num_lice = self.lice_population["L3"]
-        stage_ages = self.get_evolution_ages(num_lice, minimum_age=15, mean=18)
-        l3_to_l4 = dev_times(self.cfg.delta_p["L3"], self.cfg.delta_m10["L3"], self.cfg.delta_s["L3"],
-                             ave_temp, stage_ages)
-        num_to_move = min(self.cfg.rng.poisson(np.sum(l3_to_l4)), num_lice)
-        new_L4 = num_to_move
+        new_L4 = lice_dist["L4"] = evolve_next_stage("L3", ave_temp)
 
-        lice_dist["L4"] = num_to_move
-
-        # L2 -> L3
-        # This is done in do_infection_events()
+        # L2 -> L3 is done in do_infection_events(). Indeed, evolution from L2 to L3 is (virtually) age-independent
 
         # L1 -> L2
-        num_lice = self.lice_population["L2"]
-        stage_ages = self.get_evolution_ages(num_lice, minimum_age=3, mean=4)
-        l1_to_l2 = dev_times(self.cfg.delta_p["L1"], self.cfg.delta_m10["L1"], self.cfg.delta_s["L1"],
-                             ave_temp, stage_ages)
-        num_to_move = min(self.cfg.rng.poisson(np.sum(l1_to_l2)), num_lice)
-        new_L2 = num_to_move
-
-        lice_dist["L2"] = num_to_move
+        new_L2 = lice_dist["L2"] = evolve_next_stage("L1", ave_temp)
 
         logger.debug("\t\t\tdistribution of new lice lifecycle stages on farm {}/cage {} = {}"
                      .format(self.farm_id, self.id, lice_dist))
@@ -506,6 +514,7 @@ class Cage(LoggableMixin):
         :param days: the amount of time it takes
         :returns a pair (Einf, num_avail_lice)
         """
+        # Based on Aldrin et al.
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease)./
         age_distrib = self.get_stage_ages_distrib("L2")
@@ -521,7 +530,7 @@ class Cage(LoggableMixin):
 
         return 0.0, num_avail_lice
 
-    def do_infection_events(self, cur_date: dt.datetime, days: int) -> int:
+    def do_infection_events(self, days: int) -> int:
         """Infect fish in this cage if the sea lice are in stage L2 and at least 1 day old
 
         :param cur_date: current date of simulation
@@ -561,12 +570,12 @@ class Cage(LoggableMixin):
     def get_variance_infected_fish(self, n: int, k: int) -> float:
         # Rationale: assuming that we generate N bins that sum to K, we can model this as a multinomial distribution
         # where all p_i are the same. Therefore, the variance of each bin is k*(n-1)/(n**2)
-        # This is still incorrect but the error should be relatively small for now
+        # Because we are considering the total variance of k events at the same time we need to multiply by k,
+        # thus yielding k**2*(n-1)/(n**2).
 
-        probs = np.full(n, 1 / n)
-        bins = self.cfg.rng.multinomial(k, probs)
-
-        return float(np.var(bins) * k)
+        if n == 0:
+            return 0.0
+        return k**2 * (n - 1) / (n ** 2)
 
     def get_num_matings(self) -> int:
         """
@@ -578,7 +587,7 @@ class Cage(LoggableMixin):
         # least_ one AM on the same fish.
 
         males = self.lice_population["L5m"]
-        females = sum(self.lice_population.available_dams.values())
+        females = self.lice_population.available_dams.gross
 
         if males == 0 or females == 0:
             return 0
@@ -602,7 +611,7 @@ class Cage(LoggableMixin):
         """
         will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
         assume males don't become unavailable? in this case we don't need a delta for sires
-        :returns a pair (delta_dams, new_eggs)
+        :returns a pair (mating_dams, new_eggs)
 
         TODO: deal properly with fewer individuals than matings required
         TODO: current date is required by get_num_eggs as of now, but the relationship between extrusion and temperature is not clear
@@ -614,101 +623,77 @@ class Cage(LoggableMixin):
         distrib_sire_available = self.lice_population.geno_by_lifestage["L5m"]
         distrib_dam_available = self.lice_population.available_dams
 
-        delta_dams = self.select_dams(distrib_dam_available, num_matings)
+        mating_dams = self.select_lice(distrib_dam_available, num_matings)
+        mating_sires = self.select_lice(distrib_sire_available, num_matings)
 
-        if sum(distrib_sire_available.values()) == 0 or sum(distrib_dam_available.values()) == 0:
+        if distrib_sire_available.gross == 0 or distrib_dam_available.gross == 0:
             return GenoDistrib(), GenoDistrib()
 
         # TODO - need to add dealing with fewer males/females than the number of matings
 
-        for dam_geno in delta_dams:
-            for _ in range(int(delta_dams[dam_geno])):
-                sire_geno = self.choose_from_distrib(distrib_sire_available)
-                new_eggs = self.generate_eggs(sire_geno, dam_geno, num_matings)
-                delta_eggs += new_eggs
-
-        return delta_dams, delta_eggs
-
-    def generate_eggs(
-            self,
-            sire: Alleles,
-            dam: Alleles,
-            num_matings: int
-    ) -> GenoDistrib:
-        """
-        Generate the eggs with a given genomic distribution
-
-        TODO: doesn't do anything sensible re: integer/real numbers of offspring
-        TODO: do we still want to keep the mechanism?
-        :param sire the genomics of the sires
-        :param dam the genomics of the dams
-        :param num_matings the number of matings
-        :returns a distribution on the number of generated eggs according to the distribution
-        """
-
-        number_eggs = self.get_num_eggs(num_matings)
-
-        # TODO: since the genetic mechanism cannot change one could try to cache this
-
+        num_eggs = self.get_num_eggs(num_matings)
         if self.genetic_mechanism == GeneticMechanism.discrete:
-            geno_eggs = self.generate_eggs_discrete(sire, dam, number_eggs)
-
+            delta_eggs = self.generate_eggs_discrete_batch(mating_sires, mating_dams, num_eggs)
         elif self.genetic_mechanism == GeneticMechanism.maternal:
-            geno_eggs = self.generate_eggs_maternal(dam, number_eggs)
+            delta_eggs = self.generate_eggs_maternal_batch(distrib_dam_available, num_eggs)
 
-        else:
-            raise Exception("Genetic mechanism must be 'maternal', or 'discrete' - '{}' given".format(
-                self.genetic_mechanism))
+        delta_eggs = self.mutate(delta_eggs, mutation_rate=self.cfg.geno_mutation_rate)
 
-        assert geno_eggs.is_positive()
-        geno_eggs = self.mutate(geno_eggs, mutation_rate=self.cfg.geno_mutation_rate)
-        assert geno_eggs.is_positive()
-        return geno_eggs
+        return mating_dams, delta_eggs
 
-    def generate_eggs_discrete(self, sire: Alleles, dam: Alleles, number_eggs: int) -> GenoDistrib:
-        """Get number of eggs based on discrete genetic mechanism.
+    def generate_eggs_discrete_batch(self, sire_distrib: GenoDistrib, dam_distrib: GenoDistrib,
+                                     number_eggs: int) -> GenoDistrib:
+        """
+        Get number of eggs based on discrete genetic mechanism.
 
-        If we're in the discrete 2-gene setting, assume for now that genotypes are tuples -
-        so in a A/a genetic system, genotypes could be ('A'), ('a'), or ('A', 'a')
-        right now number of offspring with each genotype are deterministic, and might be
-        missing one (we should update to add jitter in future, but this is a reasonable approx)
+        The algorithm emulates the following scenario: each sire s_i is sampled from sire_distrib
+        and will have a given genomic g_s_i and similarly a dam $d_i$ will have a genotype $g_d_i$.
+        Because the genomic of a lice can only be dominant, recessive or partial dominant then
+        the mating will result in one of these happening depending on the usual Mendelevian
+        mechanism.
+        The algorithm terminates when all sires and dams have been mated.
+        Here we emulate such sampling strategy via a O(1) algorithm as follows: we compute
+        the probabilities of each combination arising and adopt a multinomial distribution
+        in order to achieve a given number of eggs.
+        The rationale for the formulae used here is the following:
+        - to get an A (dominant) one needs a combination of dominant and dominant allele, or
+        dominant and the right half of partially dominant genes
+        - to get an a (recessive) one does the same as above, but with fully recessive alleles
+        instead
+        - to get a partially dominant one, we use the inclusion-exclusion principle and subtract
+        the cases above from all the possible pairings.
 
-        :param sire: the genomics of the sires
-        :param dam: the genomics of the dams
-        :param number_eggs: the number of eggs produced
-        :return: genomics distribution of eggs produced
+        Together with being fast, this approach naturally models statistical uncertainty compared
+        to a perfect Mendelevian split. Unfortunately it does not naturally include mutation
+        to non-existent strains (e.g. a mating between pure dominant lice distributions can never
+        yield partial dominance or recessive genomics in the offspring).
+
+        :param sire_distrib: the genotype distribution of the sires
+        :param dam_distrib: the genotype distribution of the eggs
+        :param number_eggs: the total number of eggs
         """
 
-        eggs_generated = GenoDistrib()
-        if len(sire) == 1 and len(dam) == 1:
-            eggs_generated[self.get_geno_name(sire[0], dam[0])] = float(number_eggs)
-        elif len(sire) == 2 and len(dam) == 1:
-            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 2
-            eggs_generated[self.get_geno_name(sire[1], dam[0])] = number_eggs / 2
-        elif len(sire) == 1 and len(dam) == 2:
-            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 2
-            eggs_generated[self.get_geno_name(sire[0], dam[1])] = number_eggs / 2
-        else:
-            # drawing both from the sire in the first case ensures heterozygotes
-            # but is a bit hacky.
-            eggs_generated[self.get_geno_name(sire[0], sire[1])] = number_eggs / 2
-            # and the below gets us our two types of homozygotes
-            eggs_generated[self.get_geno_name(sire[0], dam[0])] = number_eggs / 4
-            eggs_generated[self.get_geno_name(sire[1], dam[1])] = number_eggs / 4
+        assert sire_distrib.gross == dam_distrib.gross
 
-        return eggs_generated
+        keys = [('A',), ('a',), ('A', 'a')]
+        x1, y1, z1 = tuple(sire_distrib[k] for k in keys)
+        x2, y2, z2 = tuple(dam_distrib[k] for k in keys)
 
-    def get_geno_name(self, sire_geno: Allele, dam_geno: Allele) -> Alleles:
-        """Create name of the genotype based on parents alleles.
+        N_A = (x1 + 1/2*z1)*(x2+1/2*z2)
+        N_a = (y1 + 1/2*z1)*(y2+1/2*z2)
+        denom = sire_distrib.gross * dam_distrib.gross
+        N_Aa = denom - N_A - N_a
 
-        :param sire_geno: the allele of the sires
-        :param dam_geno: the allele of the sires
-        :return: the genomics of the offspring
-        """
-        return tuple(sorted({sire_geno, dam_geno}))
+        if denom == 0:
+            return GenoDistrib()
+
+        p = np.array([N_A, N_a, N_Aa]) / denom
+        egg_distrib = self.cfg.rng.multinomial(number_eggs, p)
+
+        return GenoDistrib(dict(zip(keys, egg_distrib)))
 
     @staticmethod
-    def generate_eggs_maternal(dam: Union[Alleles, np.ndarray], number_eggs: int) -> GenoDistrib:
+    def generate_eggs_maternal_batch(dams: GenoDistrib, number_eggs: int) -> GenoDistrib:
         """Get number of eggs based on maternal genetic mechanism.
 
         Maternal-only inheritance - all eggs have mother's genotype.
@@ -717,7 +702,7 @@ class Cage(LoggableMixin):
         :param number_eggs: the number of eggs produced
         :return: genomics distribution of eggs produced
         """
-        return GenoDistrib({dam: number_eggs})
+        return dams.normalise_to(number_eggs)
 
     def mutate(self, eggs: GenoDistrib, mutation_rate: float) -> GenoDistrib:
         """
@@ -763,37 +748,31 @@ class Cage(LoggableMixin):
 
         return result
 
-    def select_dams(self, distrib_dams_available: GenoDistrib, num_dams: int) -> GenoDistrib:
+    def select_lice(self, distrib_lice_available: GenoDistrib, num_lice: int) -> GenoDistrib:
         """
-        From a geno distribution of eligible dams sample a given number of dams.
+        From a geno distribution of eligible lice sample a given Genotype distribution
 
-        :param distrib_dams_available: the starting dam genomic distribution
-        :param num_dams: the wished number of dams to sample
+        Note: this is very similar to GenoDistrib.normalise_to() but performs an explicit
+        sampling.
+
+        TODO: should we integrate this into GenoDistrib class
+
+        :param distrib_lice_available: the starting dam genomic distribution
+        :param num_lice: the wished number of dams to sample
         """
         # TODO: this function is flexible enough to be renamed and used elsewhere
-        delta_dams_selected = GenoDistrib()
-        copy_dams_avail = copy.deepcopy(distrib_dams_available)
-        if sum(distrib_dams_available.values()) <= num_dams:
-            return copy_dams_avail
+        if sum(distrib_lice_available.values()) <= num_lice:
+            return distrib_lice_available.copy()
 
-        # TODO: make choose_from_distrib sample N elements without replacement at once rather than looping
-        # Use the same trick used in treatment mortality, or otherwise use a hypergeometric distrib?
+        # "we need to select k lice from the given population broken down into different allele
+        # bins and subtract" -> "select n balls from the following N_1, ..., N_k bins without
+        # replacement -> use a multivariate hypergeometric distribution
+        lice_as_list = self.cfg.rng.multivariate_hypergeometric(
+            list(distrib_lice_available.values()), num_lice)
+        selected_lice = GenoDistrib(dict(zip(distrib_lice_available.keys(),
+                                                   lice_as_list)))
 
-        for _ in range(num_dams):
-            this_dam = self.choose_from_distrib(copy_dams_avail)
-            copy_dams_avail[this_dam] -= 1
-            if this_dam not in delta_dams_selected:
-                delta_dams_selected[this_dam] = 0
-            delta_dams_selected[this_dam] += 1
-
-        return delta_dams_selected
-
-    def choose_from_distrib(self, distrib: GenoDistrib) -> Alleles:
-        distrib_values = np.array(list(distrib.values()))
-        keys = list(distrib.keys())
-        choice_ix = self.cfg.rng.choice(range(len(keys)), p=distrib_values / np.sum(distrib_values))
-
-        return tuple(keys[choice_ix])
+        return selected_lice
 
     def get_num_eggs(self, mated_females) -> int:
         """
@@ -1057,18 +1036,21 @@ class Cage(LoggableMixin):
         pre-adult female 0.05, pre-adult male ... Stien et al 2005)
 
         :returns the current background mortality. The return value is genotype-agnostic
+
         """
+        # TODO: this is dumb
         lice_mortality_rates = self.cfg.background_lice_mortality_rates
         lice_population = self.lice_population
 
         dead_lice_dist = {}
         for stage in lice_population:
-            mortality_rate = lice_population[stage] * lice_mortality_rates[stage]
-            mortality: int = min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
+            mortality_rate = lice_population[stage] * lice_mortality_rates[stage] # some exp / different mortalities - but this gets quickly unwieldly
+            mortality: int = round(mortality_rate)#min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
             dead_lice_dist[stage] = mortality
 
         logger.debug("\t\tbackground mortality distribution of dead lice = {}".format(dead_lice_dist))
         return dead_lice_dist
+
 
     def average_fish_mass(self, days):
         """

@@ -155,7 +155,7 @@ class Config(RuntimeConfig):
         return [self.emb][treatment_type.value]
 
     @staticmethod
-    def generate_argparse_from_config(cfg_schema_path: str, simulation_schema_path: str):
+    def generate_argparse_from_config(cfg_schema_path: str, simulation_schema_path: str): # pragma: no cover
         parser = argparse.ArgumentParser(description="Sea lice simulation")
 
         # TODO: we are parsing the config twice.
