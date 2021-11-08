@@ -212,6 +212,8 @@ class Cage(LoggableMixin):
         return egg_distrib, hatch_date, cost
 
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
+        susceptible_populations = [self.lice_population.geno_by_lifestage[stage] for stage in self.susceptible_stages]
+        # susceptible_sum = GenoDistrib.batch_sum(susceptible_populations)
         num_susc_per_geno = sum(self.lice_population.geno_by_lifestage.values(), GenoDistrib())
 
         geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
@@ -275,25 +277,6 @@ class Cage(LoggableMixin):
             if mortality_rate > 0:
                 num_dead_lice = self.cfg.rng.poisson(mortality_rate * num_susc)
                 num_dead_lice = min(num_dead_lice, num_susc)
-
-                # Now we need to decide how many lice from each stage die,
-                #   the algorithm is to label each louse  1...num_susc
-                #   assign each of these a probability of dying as (phenoEMB)/np.sum(phenoEMB)
-                #   randomly pick lice according to this probability distribution
-                #        now we need to find out which stages these lice are in by calculating the
-                #        cumulative sum of the lice in each stage and finding out how many of our
-                #        dead lice falls into this bin.
-                """
-                dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, replace=False).tolist()
-                total_so_far = 0
-                for stage in self.susceptible_stages:
-                    available_in_stage = self.lice_population.geno_by_lifestage[stage][geno]
-                    num_dead = len([x for x in dead_lice if total_so_far <= x <
-                                    (total_so_far + available_in_stage)])
-                    total_so_far += available_in_stage
-                    if num_dead > 0:
-                        dead_lice_dist[stage][geno] = num_dead
-                """
 
                 # We emulate the top algorithm with a multivariate hypergeom distrib
                 population_by_stages = np.array([self.lice_population.geno_by_lifestage[stage][geno]
