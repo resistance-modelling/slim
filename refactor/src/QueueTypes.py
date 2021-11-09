@@ -171,9 +171,6 @@ def pop_from_queue(
         return arg.response_date <= _cur_time  # pragma: no cover
 
 
-    counter = 0
     while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
         event = queue.get()
-        counter += 1
         continuation(event)
-    logger.debug(f"\t\t\t\t{counter} events handled")

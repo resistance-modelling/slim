@@ -328,7 +328,8 @@ class Farm(LoggableMixin):
                 # NOTE: This works only when the travel probabilities are very low.
                 #       Otherwise there is possibility that total number of arrivals
                 #       would be higher than total number of offspring.
-                arrivals = self.cfg.rng.poisson(travel_prob * n)
+                arrivals = round(travel_prob * n)
+                #arrivals = self.cfg.rng.poisson(travel_prob * n)
 
                 # update the arrival dict
                 farm_allocation[hatch_date][genotype] = arrivals
@@ -385,9 +386,9 @@ class Farm(LoggableMixin):
 
         for farm in farms:
             if farm.name == self.name:
-                logger.debug("\t\tFarm {}:".format(farm.name))
-            else:
                 logger.debug("\t\tFarm {} (current):".format(farm.name))
+            else:
+                logger.debug("\t\tFarm {}:".format(farm.name))
 
             # allocate eggs to cages
             farm_arrivals = self.get_farm_allocation(farm, eggs_by_hatch_date)

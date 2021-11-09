@@ -127,6 +127,8 @@ class Cage(LoggableMixin):
 
         logger.debug("\t\tinitial lice population = {}".format(self.lice_population))
 
+        logger.debug(f"\t\tAdding {pressure} lice from external pressure")
+
         # Background lice mortality events
         dead_lice_dist = self.get_background_lice_mortality()
 
@@ -142,6 +144,7 @@ class Cage(LoggableMixin):
 
         # Lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure)
+        logger.debug(f"\t\tExternal pressure lice distribution = {lice_from_reservoir}")
 
         if cur_date < self.start_date or self.is_fallowing:
             # Values that are not used before the start date
@@ -213,8 +216,8 @@ class Cage(LoggableMixin):
 
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
         susceptible_populations = [self.lice_population.geno_by_lifestage[stage] for stage in self.susceptible_stages]
-        # susceptible_sum = GenoDistrib.batch_sum(susceptible_populations)
-        num_susc_per_geno = sum(self.lice_population.geno_by_lifestage.values(), GenoDistrib())
+        num_susc_per_geno = GenoDistrib.batch_sum(susceptible_populations)
+        #num_susc_per_geno = sum(self.lice_population.geno_by_lifestage.values(), GenoDistrib())
 
         geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
 
@@ -422,7 +425,7 @@ class Cage(LoggableMixin):
         # See surveys/overton_treatment_mortalities.py for an explanation on what is going on
         mortality_events = fish_lice_deaths + fish_backgroud_deaths
 
-        if mortality_events == 0:
+        if mortality_events == 0 or self.num_fish == 0:
             return 0
 
         cur_date = self.start_date + dt.timedelta(days=days_since_start)
@@ -547,6 +550,9 @@ class Cage(LoggableMixin):
         :param *args the stages to consider (optional, by default all stages from the third onward are taken into account)
         :returns the number of infected fish
         """
+        if self.num_fish == 0:
+            return 0
+
         attached_lice = self.get_infecting_population(*args)
 
         # see: https://stats.stackexchange.com/a/296053
