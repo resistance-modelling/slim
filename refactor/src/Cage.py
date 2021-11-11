@@ -30,10 +30,6 @@ class Cage(LoggableMixin):
     Fish cages contain the fish.
     """
 
-    lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
-    susceptible_stages = lice_stages[2:]
-    pathogenic_stages = lice_stages[2:]
-
     def __init__(self, cage_id: int, cfg: Config, farm: Farm,
                  initial_lice_pop: Optional[GrossLiceDistrib] = None):
         """
@@ -215,7 +211,7 @@ class Cage(LoggableMixin):
         return egg_distrib, hatch_date, cost
 
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
-        susceptible_populations = [self.lice_population.geno_by_lifestage[stage] for stage in self.susceptible_stages]
+        susceptible_populations = [self.lice_population.geno_by_lifestage[stage] for stage in LicePopulation.susceptible_stages]
         num_susc_per_geno = GenoDistrib.batch_sum(susceptible_populations)
         #num_susc_per_geno = sum(self.lice_population.geno_by_lifestage.values(), GenoDistrib())
 
@@ -283,13 +279,13 @@ class Cage(LoggableMixin):
 
                 # We emulate the top algorithm with a multivariate hypergeom distrib
                 population_by_stages = np.array([self.lice_population.geno_by_lifestage[stage][geno]
-                                                 for stage in self.susceptible_stages])
+                                                 for stage in LicePopulation.susceptible_stages])
 
                 # TODO: why is num_dead_lice not clamped?
                 num_dead_lice = min(population_by_stages.sum(), num_dead_lice)
                 dead_lice_nums = self.cfg.rng.multivariate_hypergeometric(
                     population_by_stages, num_dead_lice).tolist()
-                for stage, dead_lice_num in zip(self.susceptible_stages, dead_lice_nums):
+                for stage, dead_lice_num in zip(LicePopulation.susceptible_stages, dead_lice_nums):
                     dead_lice_dist[stage][geno] = dead_lice_num
 
                 logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
@@ -461,10 +457,15 @@ class Cage(LoggableMixin):
             """
             Fish background mortality rate, decreasing as in Soares et al 2011
 
-            Fish death rate: constant background daily rate 0.00057 based on
+            Fish death rate: constant background daily rate 0.00057 originally based on
             www.gov.scot/Resource/0052/00524803.pdf
-            multiplied by lice coefficient see surv.py (compare to threshold of 0.75 lice/g fish)
 
+            According to Volsett it should be higher (around 0.005) , but that's unlikely.
+            However the authors used a trick: assuming that a mortality event takes 5 days one can
+            divide the actual mortality rate by 5.
+            Thus, 0.005 / 5 ~~ 0.0009-0.001 . It is still quite higher than expected.
+
+            Therefore, we'll stick to this constant.
             TODO: what should we do with the formulae?
 
             :param days: number of days elapsed
@@ -473,13 +474,15 @@ class Cage(LoggableMixin):
             return 0.000057  # (1000 + (days - 700)**2)/490000000
 
         # Apply a sigmoid based on the number of lice per fish
-        pathogenic_lice = sum([self.lice_population[stage] for stage in self.pathogenic_stages])
+        pathogenic_lice = sum([self.lice_population[stage] for stage in LicePopulation.pathogenic_stages])
         if self.num_infected_fish > 0:
             lice_per_host_mass = pathogenic_lice / (self.num_infected_fish *
                                                     (self.average_fish_mass(days_since_start) / 1e3))
         else:
             lice_per_host_mass = 0.0
-        prob_lice_death = 1 / (1 + math.exp(-self.cfg.fish_mortality_k *
+
+        # The daily mortality rate also takes into account a mortality event takes days (in this case, 5).
+        prob_lice_death = 0.2 / (1 + math.exp(-self.cfg.fish_mortality_k *
                                             (lice_per_host_mass - self.cfg.fish_mortality_center)))
 
         ebf_death = fb_mort(days_since_start) * self.num_fish
@@ -878,10 +881,10 @@ class Cage(LoggableMixin):
         infecting_lice = self.get_infecting_population()
 
         affected_lice_quotas = np.array([self.lice_population[stage] / infecting_lice * affected_lice_gross
-                         for stage in self.susceptible_stages])
+                         for stage in LicePopulation.susceptible_stages])
         affected_lice_np = largest_remainder(affected_lice_quotas)
 
-        affected_lice = Counter(dict(zip(self.susceptible_stages, affected_lice_np.tolist())))
+        affected_lice = Counter(dict(zip(LicePopulation.susceptible_stages, affected_lice_np.tolist())))
 
         surviving_lice_quotas = np.rint(np.trunc([
             self.lice_population['L4'] / (2 * infecting_lice) *
@@ -1077,7 +1080,7 @@ class Cage(LoggableMixin):
         3. Dam waiting and treatment queues will be flushed.
         """
 
-        for stage in self.pathogenic_stages:
+        for stage in LicePopulation.pathogenic_stages:
             self.lice_population[stage] = 0
 
         self.num_infected_fish = self.num_fish = 0

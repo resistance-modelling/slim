@@ -99,10 +99,12 @@
     },
     "fish_mortality_center": {
       "description": "Fish mortality sigmoid center",
+      "source": "Vollset (2019) (standard value - see Appendix)",
       "type": "number"
     },
     "fish_mortality_k": {
       "description": "Fish mortality sigmoid steepness",
+      "source": "Vollset (2019) (standard value - see Appendix)",
       "type": "number"
     },
     "background_lice_mortality_rates": {

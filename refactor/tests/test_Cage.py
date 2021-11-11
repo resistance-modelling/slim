@@ -12,7 +12,7 @@ from src.Cage import Cage
 from src.Config import to_dt
 from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
 from src.TreatmentTypes import GeneticMechanism, Treatment, Money
-from src.LicePopulation import GenoDistrib
+from src.LicePopulation import GenoDistrib, LicePopulation
 
 
 class TestCage:
@@ -32,7 +32,7 @@ class TestCage:
 
         assert sum(first_cage.lice_population.available_dams.values()) == 10
 
-        for stage in first_cage.lice_stages:
+        for stage in LicePopulation.lice_stages:
             assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
 
     def test_cage_json(self, first_cage):
@@ -78,8 +78,8 @@ class TestCage:
         cur_day = treatment_dates[1] + dt.timedelta(days=5)
         mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
 
-        for stage in Cage.lice_stages:
-            if stage not in Cage.susceptible_stages:
+        for stage in LicePopulation.lice_stages:
+            if stage not in LicePopulation.susceptible_stages:
                 assert sum(mortality_updates[stage].values()) == 0
 
         assert first_cage.last_effective_treatment.affecting_date == cur_day
@@ -275,7 +275,7 @@ class TestCage:
         first_cage.lice_population["L5m"] = 0
         first_cage.lice_population["L5f"] = 0
 
-        for stage in first_cage.lice_stages:
+        for stage in LicePopulation.lice_stages:
             assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
 
         assert first_cage.get_mean_infected_fish() == 0
@@ -295,13 +295,13 @@ class TestCage:
         males = first_cage.lice_population["L5m"]
         first_cage.lice_population["L5m"] = 0
         assert first_cage.get_num_matings() == 0
-        for stage in first_cage.lice_stages:
+        for stage in LicePopulation.lice_stages:
             assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
         first_cage.lice_population["L5m"] = males
 
         first_cage.lice_population["L5f"] = 0
         assert first_cage.get_num_matings() == 0
-        for stage in first_cage.lice_stages:
+        for stage in LicePopulation.lice_stages:
             assert first_cage.lice_population[stage] == sum(first_cage.lice_population.geno_by_lifestage[stage].values())
 
     def test_get_num_matings(self, first_cage):
@@ -725,7 +725,7 @@ class TestCage:
         assert first_cage.get_dying_lice_from_dead_fish(0) == {}
 
     def test_dying_lice_from_dead_no_lice(self, first_cage):
-        for stage in Cage.susceptible_stages:
+        for stage in LicePopulation.susceptible_stages:
             first_cage.lice_population[stage] = 0
 
         for fish in [0, 1, 10, 1000]:
@@ -743,7 +743,7 @@ class TestCage:
         assert dead_lice == dead_lice_target
 
         # An increase in population should cause a proportional number of deaths
-        for stage in Cage.susceptible_stages:
+        for stage in LicePopulation.susceptible_stages:
             first_cage.lice_population[stage] *= 100
 
         dead_lice_target = {
@@ -758,7 +758,7 @@ class TestCage:
 
         # Similarly, an increase in dead_fish should cause the same effect
 
-        for stage in Cage.susceptible_stages:
+        for stage in LicePopulation.susceptible_stages:
             first_cage.lice_population[stage] //= 100
 
         dead_fish *= 100
@@ -780,7 +780,7 @@ class TestCage:
 
         assert offspring == {}
         assert hatch_date is None
-        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in Cage.susceptible_stages)
+        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in LicePopulation.susceptible_stages)
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
         assert first_cage.arrival_events.qsize() == 0
@@ -793,7 +793,7 @@ class TestCage:
 
         assert offspring == {}
         assert hatch_date is None
-        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in Cage.susceptible_stages)
+        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in LicePopulation.susceptible_stages)
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
         assert first_cage.arrival_events.qsize() == 0
@@ -819,7 +819,7 @@ class TestCage:
 
         assert offspring == {}
         assert hatch_date is None
-        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in Cage.susceptible_stages)
+        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in LicePopulation.susceptible_stages)
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
 
@@ -841,7 +841,7 @@ class TestCage:
 
         assert offspring == {}
         assert hatch_date is None
-        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in Cage.susceptible_stages)
+        assert all(first_cage.lice_population[susceptible_stage] == 0 for susceptible_stage in LicePopulation.susceptible_stages)
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
 

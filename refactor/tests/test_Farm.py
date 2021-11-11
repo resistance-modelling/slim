@@ -3,6 +3,8 @@ import json
 
 import numpy as np
 import pytest
+
+from LicePopulation import LicePopulation
 from src.Cage import Cage
 from src.Config import to_dt
 from src.TreatmentTypes import Treatment
@@ -206,7 +208,7 @@ class TestFarm:
     def test_update(self, sample_offspring_distrib, test_farm, expected_cost, request):
 
         # ensure number of matings
-        initial_lice_pop = {stage: 100 for stage in Cage.lice_stages}
+        initial_lice_pop = {stage: 100 for stage in LicePopulation.lice_stages}
 
         test_farm = request.getfixturevalue(test_farm)
 
