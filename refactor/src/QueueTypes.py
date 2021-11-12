@@ -11,13 +11,12 @@ from dataclasses import dataclass, field, asdict
 from functools import singledispatch
 from queue import PriorityQueue
 
-from src import logger
-from src.TreatmentTypes import Treatment
 
 from typing import Callable, TypeVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.LicePopulation import GenoDistrib
+    from src.TreatmentTypes import Treatment
 
 
 class Event:

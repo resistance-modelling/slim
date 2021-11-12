@@ -4,7 +4,7 @@ import json
 import numpy as np
 import pytest
 
-from LicePopulation import LicePopulation
+from src.LicePopulation import LicePopulation
 from src.Cage import Cage
 from src.Config import to_dt
 from src.TreatmentTypes import Treatment
@@ -238,12 +238,12 @@ class TestFarm:
         cur_day = first_farm.farm_cfg.treatment_starts[-1] + treatment_step_size
 
         for i in range(7):
-            assert first_farm.add_treatment(Treatment.emb, cur_day)
+            assert first_farm.add_treatment(Treatment.EMB, cur_day)
             assert first_cage.treatment_events.qsize() == 3 + i + 1  # the first treatment cannot be applied
             assert first_farm.available_treatments == 7 - i - 1
             cur_day += treatment_step_size
 
-        assert not first_farm.add_treatment(Treatment.emb, cur_day)
+        assert not first_farm.add_treatment(Treatment.EMB, cur_day)
         assert first_farm.available_treatments == 0
 
     def test_prescheduled_sampling_events(self, first_farm, cur_day):

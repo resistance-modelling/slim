@@ -17,13 +17,13 @@ from typing import Dict, List, Optional, Tuple, cast
 import numpy as np
 from mypy_extensions import TypedDict
 
-from src import LoggableMixin
+from src import LoggableMixin, logger
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 from src.LicePopulation import GrossLiceDistrib, GenoDistrib
 from src.QueueTypes import *
-from src.TreatmentTypes import Money
+from src.TreatmentTypes import Money, Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
@@ -328,8 +328,7 @@ class Farm(LoggableMixin):
                 # NOTE: This works only when the travel probabilities are very low.
                 #       Otherwise there is possibility that total number of arrivals
                 #       would be higher than total number of offspring.
-                arrivals = round(travel_prob * n)
-                #arrivals = self.cfg.rng.poisson(travel_prob * n)
+                arrivals = self.cfg.rng.poisson(travel_prob * n)
 
                 # update the arrival dict
                 farm_allocation[hatch_date][genotype] = arrivals

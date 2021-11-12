@@ -27,7 +27,8 @@ temperatures = np.array([0, 4, 7, 10, 13])
 
 
 def fit(data):
-    normalised_pp_increase = np.sum(data * pp_bins, axis=2).flatten()
+    normalised_pp_increase = np.nan_to_num((np.sum(data * pp_bins, axis=2) / np.sum(data, axis=2)) \
+        .flatten(), 0)
     mass_indicator = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
 
     X = np.c_[np.tile(temperatures, 2), mass_indicator]

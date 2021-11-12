@@ -64,7 +64,8 @@
                     "treatment_type": {
                         "description": "Type of applied treatment",
                         "enum": [
-                            "emb"
+                            "emb",
+                            "thermolicer"
                         ]
                     },
                     "treatment_dates": {

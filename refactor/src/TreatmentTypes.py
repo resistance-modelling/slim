@@ -8,7 +8,8 @@ from typing import Dict, cast
 import numpy as np
 
 # A few extra general types
-from src.LicePopulation import LicePopulation, GenoDistrib, GenoTreatmentValue, Alleles
+from src.LicePopulation import LicePopulation, GenoDistrib, GenoTreatmentValue,\
+    Alleles, GenoTreatmentDistrib
 
 Money = Decimal
 
@@ -18,25 +19,25 @@ class Treatment(Enum):
     A stub for treatment types
     TODO: add other treatments here
     """
-    emb = 0
-    thermolicer = 1
+    EMB = 0
+    THERMOLICER = 1
 
 
 class GeneticMechanism(Enum):
     """
     Genetic mechanism to be used when generating egg genotypes
     """
-    discrete = 1
-    maternal = 2
+    DISCRETE = 1
+    MATERNAL = 2
 
 
 class HeterozygousResistance(Enum):
     """
     Resistance in a monogenic, heterozygous setting.
     """
-    dominant = 1
-    incompletely_dominant = 2
-    recessive = 3
+    DOMINANT = 1
+    INCOMPLETELY_DOMINANT = 2
+    RECESSIVE = 3
 
 
 TreatmentResistance = Dict[HeterozygousResistance, float]
@@ -49,19 +50,13 @@ class TreatmentParams(ABC):
     name = ""
 
     def __init__(self, payload):
-        self.pheno_resistance = self.parse_pheno_resistance(payload["pheno_resistance"])
-        self.price_per_kg = Money(payload["price_per_kg"])
         self.quadratic_fish_mortality_coeffs = np.array(payload["quadratic_fish_mortality_coeffs"])
-
-        self.effect_delay: int = payload["effect_delay"]
-        self.durability_temp_ratio: float = payload["durability_temp_ratio"]
-        self.application_period: int = payload["application_period"]
 
     @staticmethod
     def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:
-        return {HeterozygousResistance[key]: val for key, val in pheno_resistance_dict.items()}
+        return {HeterozygousResistance[key.upper()]: val for key, val in pheno_resistance_dict.items()}
 
-    def get_mortality_pp_increase(self, temperature: float, fish_mass: float) -> float:
+    def __get_mortality_pp_increase(self, temperature: float, fish_mass: float) -> float:
         """Get the mortality percentage point difference increase.
 
         :param temperature: the temperature in Celsius
@@ -77,7 +72,9 @@ class TreatmentParams(ABC):
 
     @abstractmethod
     def delay(self, average_temperature: float):  # pragma: no cover
-        pass
+        """
+        Delay before treatment should have a noticeable effect
+        """
 
     @staticmethod
     def get_allele_heterozygous_trait(alleles: Alleles):
@@ -87,15 +84,72 @@ class TreatmentParams(ABC):
         # should we move this?
         if 'A' in alleles:
             if 'a' in alleles:
-                trait = HeterozygousResistance.incompletely_dominant
+                trait = HeterozygousResistance.INCOMPLETELY_DOMINANT
             else:
-                trait = HeterozygousResistance.dominant
+                trait = HeterozygousResistance.DOMINANT
         else:
-            trait = HeterozygousResistance.recessive
+            trait = HeterozygousResistance.RECESSIVE
         return trait
 
+    @abstractmethod
+    def get_lice_treatment_mortality_rate(
+            self, lice_population: LicePopulation, temperature: float) -> GenoTreatmentDistrib:
+        """
+        Calculate the mortality rates of this treatment
+        """
 
-class EMB(TreatmentParams):
+    def get_fish_mortality_occurrences(
+            self,
+            temperature: float,
+            fish_mass: float,
+            num_fish: float,
+            efficacy_window: float,
+            mortality_events: int
+    ):
+        """Get the number of fish that die due to treatment
+
+        :param temperature the temperature of the cage
+        :param num_fish the number of fish
+        :param fish_mass the average fish mass (in grams)
+        :param efficacy_window the length of the efficacy window
+        :param mortality_events the number of fish mortality events to subtract from
+        """
+        predicted_pp_increase = self.__get_mortality_pp_increase(temperature, fish_mass)
+
+        mortality_events_pp = 100 * mortality_events / num_fish
+        predicted_deaths = ((predicted_pp_increase + mortality_events_pp) * num_fish / 100) \
+                           - mortality_events
+        predicted_deaths /= efficacy_window
+
+        return predicted_deaths
+
+
+class ChemicalTreatment(TreatmentParams):
+    """Trait for all chemical treatments"""
+    def __init__(self, payload):
+        super().__init__(payload)
+        self.pheno_resistance = self.parse_pheno_resistance(payload["pheno_resistance"])
+        self.price_per_kg = Money(payload["price_per_kg"])
+
+        self.effect_delay: int = payload["effect_delay"]
+        self.durability_temp_ratio: float = payload["durability_temp_ratio"]
+        self.application_period: int = payload["application_period"]
+
+
+class ThermalTreatment(TreatmentParams):
+    """Trait for all thermal-based treatments"""
+    def __init__(self, payload):
+        super().__init__(payload)
+        self.price_per_application = Money(payload["price_per_application"])
+        self.effect_delay = 1
+        self.application_period = 1
+        # NOTE: these are currently unused
+        # self.exposure_temperature: float = payload["exposure_temperature"]
+        # self.exposure_length: float = payload["efficacy"]
+
+
+class EMB(ChemicalTreatment):
+    """Emamectin Benzoate"""
     name = "EMB"
 
     def delay(self, average_temperature: float):
@@ -116,11 +170,23 @@ class EMB(TreatmentParams):
         return geno_treatment_distrib
 
 
-class Thermolicer(TreatmentParams):
+class Thermolicer(ThermalTreatment):
     name = "Thermolicer"
 
     def delay(self, _):
-        return 0
+        return 1 # effects noticeable the next day
 
-    def get_lice_treatment_mortality_rate(self, lice_population: LicePopulation, temperature: float):
-        pass
+    def get_lice_treatment_mortality_rate(
+            self, lice_population: LicePopulation, temperature: float) -> GenoTreatmentDistrib:
+        if temperature >= 12:
+            efficacy = 0.8
+        else:
+            efficacy = 0.99
+
+        susceptible_populations = [lice_population.geno_by_lifestage[stage] for stage in
+                                   LicePopulation.susceptible_stages]
+        num_susc_per_geno = GenoDistrib.batch_sum(susceptible_populations)
+
+        geno_treatment_distrib = {geno: GenoTreatmentValue(efficacy, num_susc)
+                                  for geno, num_susc in num_susc_per_geno.items()}
+        return geno_treatment_distrib
