@@ -223,7 +223,7 @@ class Cage(LoggableMixin):
         :returns: the mortality rates broken down by geno data.
         """
         susceptible_populations = [self.lice_population.geno_by_lifestage[stage] for stage in LicePopulation.susceptible_stages]
-        num_susc_per_geno = GenoDistrib.batch_sum(susceptible_populations)
+        num_susc_per_geno = cast(GenoDistrib, GenoDistrib.batch_sum(susceptible_populations))
 
         geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
 

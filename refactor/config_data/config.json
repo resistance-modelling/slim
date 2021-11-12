@@ -115,6 +115,8 @@
         },
         {
             "treatment_name": "Thermolicer",
+            "effect_delay": 1,
+            "application_period": 1,
             "price_per_application": "10000",
             "treatment_type": "thermal",
             "quadratic_fish_mortality_coeffs": [

@@ -51,6 +51,8 @@ class TreatmentParams(ABC):
 
     def __init__(self, payload):
         self.quadratic_fish_mortality_coeffs = np.array(payload["quadratic_fish_mortality_coeffs"])
+        self.effect_delay: int = payload["effect_delay"]
+        self.application_period: int = payload["application_period"]
 
     @staticmethod
     def parse_pheno_resistance(pheno_resistance_dict: dict) -> TreatmentResistance:
@@ -131,9 +133,7 @@ class ChemicalTreatment(TreatmentParams):
         self.pheno_resistance = self.parse_pheno_resistance(payload["pheno_resistance"])
         self.price_per_kg = Money(payload["price_per_kg"])
 
-        self.effect_delay: int = payload["effect_delay"]
         self.durability_temp_ratio: float = payload["durability_temp_ratio"]
-        self.application_period: int = payload["application_period"]
 
 
 class ThermalTreatment(TreatmentParams):
@@ -141,8 +141,6 @@ class ThermalTreatment(TreatmentParams):
     def __init__(self, payload):
         super().__init__(payload)
         self.price_per_application = Money(payload["price_per_application"])
-        self.effect_delay = 1
-        self.application_period = 1
         # NOTE: these are currently unused
         # self.exposure_temperature: float = payload["exposure_temperature"]
         # self.exposure_length: float = payload["efficacy"]
@@ -185,8 +183,8 @@ class Thermolicer(ThermalTreatment):
 
         susceptible_populations = [lice_population.geno_by_lifestage[stage] for stage in
                                    LicePopulation.susceptible_stages]
-        num_susc_per_geno = GenoDistrib.batch_sum(susceptible_populations)
+        num_susc_per_geno = cast(GenoDistrib, GenoDistrib.batch_sum(susceptible_populations))
 
-        geno_treatment_distrib = {geno: GenoTreatmentValue(efficacy, num_susc)
+        geno_treatment_distrib = {geno: GenoTreatmentValue(efficacy, cast(int, num_susc))
                                   for geno, num_susc in num_susc_per_geno.items()}
         return geno_treatment_distrib
