@@ -12,11 +12,13 @@ import numpy as np
 
 from src import logger, LoggableMixin
 from src.Config import Config
-from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money
-from src.LicePopulation import (Allele, Alleles, GenoDistrib, GrossLiceDistrib,
-                                LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue, GenoLifeStageDistrib,
-                                largest_remainder, LifeStage)
-from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent, pop_from_queue
+from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money, ChemicalTreatment, \
+    ThermalTreatment
+from src.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
+                                LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue,
+                                GenoLifeStageDistrib, largest_remainder, LifeStage)
+from src.QueueTypes import (DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent,
+                            pop_from_queue)
 from src.JSONEncoders import CustomFarmEncoder
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -25,14 +27,11 @@ if TYPE_CHECKING:  # pragma: no cover
 OptionalDamBatch = Optional[DamAvailabilityBatch]
 OptionalEggBatch = Optional[EggBatch]
 
+
 class Cage(LoggableMixin):
     """
     Fish cages contain the fish.
     """
-
-    lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
-    susceptible_stages = lice_stages[2:]
-    pathogenic_stages = lice_stages[2:]
 
     def __init__(self, cage_id: int, cfg: Config, farm: Farm,
                  initial_lice_pop: Optional[GrossLiceDistrib] = None):
@@ -110,7 +109,9 @@ class Cage(LoggableMixin):
 
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
-    def update(self, cur_date: dt.datetime, pressure: int) -> Tuple[GenoDistrib, Optional[dt.datetime], Money]:
+    def update(
+            self, cur_date: dt.datetime, pressure: int
+    ) -> Tuple[GenoDistrib, Optional[dt.datetime], Money]:
         """Update the cage at the current time step.
         :param cur_date: Current date of simulation
         :param pressure: External pressure, planctonic lice coming from the reservoir
@@ -127,6 +128,8 @@ class Cage(LoggableMixin):
 
         logger.debug("\t\tinitial lice population = {}".format(self.lice_population))
 
+        logger.debug(f"\t\tAdding {pressure} lice from external pressure")
+
         # Background lice mortality events
         dead_lice_dist = self.get_background_lice_mortality()
 
@@ -142,6 +145,7 @@ class Cage(LoggableMixin):
 
         # Lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure)
+        logger.debug(f"\t\tExternal pressure lice distribution = {lice_from_reservoir}")
 
         if cur_date < self.start_date or self.is_fallowing:
             # Values that are not used before the start date
@@ -212,11 +216,16 @@ class Cage(LoggableMixin):
         return egg_distrib, hatch_date, cost
 
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
-        num_susc_per_geno = sum(self.lice_population.geno_by_lifestage.values(), GenoDistrib())
+        """Check if the cage is currently being treated. If yes, calculate the treatment rates.
+        Note: this method consumes the internal treatment event queue.
+
+        :param cur_date: the current date
+        :returns: the mortality rates broken down by geno data.
+        """
+        susceptible_populations = [self.lice_population.geno_by_lifestage[stage] for stage in LicePopulation.susceptible_stages]
+        num_susc_per_geno = cast(GenoDistrib, GenoDistrib.batch_sum(susceptible_populations))
 
         geno_treatment_distrib = {geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno}
-
-        # if no treatment has been applied check if the previous treatment is still effective
 
         def cts(event):
             nonlocal self
@@ -224,45 +233,29 @@ class Cage(LoggableMixin):
 
         pop_from_queue(self.treatment_events, cur_date, cts)
 
+        # if no treatment has been applied check if the previous treatment is still effective
         if self.last_effective_treatment is None or \
                 self.last_effective_treatment.affecting_date > cur_date or \
                 cur_date > self.last_effective_treatment.treatment_window:
             return geno_treatment_distrib
 
         treatment_type = self.last_effective_treatment.treatment_type
+        cur_month = cur_date.month
+        ave_temp = self.farm.year_temperatures[cur_month - 1]
 
         logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
                                                                       self.id, cur_date))
 
-        if treatment_type == Treatment.emb:
-            # For now, assume a simple heterozygous distribution with a mere geometric distribution
-            for geno, num_susc in num_susc_per_geno.items():
-                trait = self.get_allele_heterozygous_trait(geno)
-                susceptibility_factor = 1.0 - self.cfg.emb.pheno_resistance[trait]
-                geno_treatment_distrib[geno] = GenoTreatmentValue(susceptibility_factor, cast(int, num_susc))
-        else:
-            raise NotImplementedError("Only EMB treatment is supported")
+        geno_treatment_distrib = self.cfg.get_treatment(treatment_type).get_lice_treatment_mortality_rate(self.lice_population, ave_temp)
 
         return geno_treatment_distrib
-
-    @staticmethod
-    def get_allele_heterozygous_trait(alleles: Alleles):
-        """
-        Get the allele heterozygous type
-        """
-        # should we move this?
-        if 'A' in alleles:
-            if 'a' in alleles:
-                trait = HeterozygousResistance.incompletely_dominant
-            else:
-                trait = HeterozygousResistance.dominant
-        else:
-            trait = HeterozygousResistance.recessive
-        return trait
 
     def get_lice_treatment_mortality(self, cur_date) -> Tuple[GenoLifeStageDistrib, Money]:
         """
         Calculate the number of lice in each stage killed by treatment.
+
+        Note: this method consumes the internal event queue
+        :param cur_date the current date
         """
 
         dead_lice_dist = self.lice_population.get_empty_geno_distrib()
@@ -276,34 +269,15 @@ class Cage(LoggableMixin):
                 num_dead_lice = self.cfg.rng.poisson(mortality_rate * num_susc)
                 num_dead_lice = min(num_dead_lice, num_susc)
 
-                # Now we need to decide how many lice from each stage die,
-                #   the algorithm is to label each louse  1...num_susc
-                #   assign each of these a probability of dying as (phenoEMB)/np.sum(phenoEMB)
-                #   randomly pick lice according to this probability distribution
-                #        now we need to find out which stages these lice are in by calculating the
-                #        cumulative sum of the lice in each stage and finding out how many of our
-                #        dead lice falls into this bin.
-                """
-                dead_lice = self.cfg.rng.choice(range(num_susc), num_dead_lice, replace=False).tolist()
-                total_so_far = 0
-                for stage in self.susceptible_stages:
-                    available_in_stage = self.lice_population.geno_by_lifestage[stage][geno]
-                    num_dead = len([x for x in dead_lice if total_so_far <= x <
-                                    (total_so_far + available_in_stage)])
-                    total_so_far += available_in_stage
-                    if num_dead > 0:
-                        dead_lice_dist[stage][geno] = num_dead
-                """
-
                 # We emulate the top algorithm with a multivariate hypergeom distrib
                 population_by_stages = np.array([self.lice_population.geno_by_lifestage[stage][geno]
-                                                 for stage in self.susceptible_stages])
+                                                 for stage in LicePopulation.susceptible_stages])
 
                 # TODO: why is num_dead_lice not clamped?
                 num_dead_lice = min(population_by_stages.sum(), num_dead_lice)
                 dead_lice_nums = self.cfg.rng.multivariate_hypergeometric(
                     population_by_stages, num_dead_lice).tolist()
-                for stage, dead_lice_num in zip(self.susceptible_stages, dead_lice_nums):
+                for stage, dead_lice_num in zip(LicePopulation.susceptible_stages, dead_lice_nums):
                     dead_lice_dist[stage][geno] = dead_lice_num
 
                 logger.debug("\t\tdistribution of dead lice on farm {}/cage {} = {}"
@@ -314,7 +288,10 @@ class Cage(LoggableMixin):
             treatment_type = self.last_effective_treatment.treatment_type
             treatment_cfg = self.cfg.get_treatment(treatment_type)
             cage_days = (cur_date - self.start_date).days
-            cost = treatment_cfg.price_per_kg * int(self.average_fish_mass(cage_days))
+            if isinstance(treatment_cfg, ChemicalTreatment):
+                cost = treatment_cfg.price_per_kg * int(self.average_fish_mass(cage_days) / 1e3)
+            elif isinstance(treatment_cfg, ThermalTreatment):
+                cost = treatment_cfg.price_per_application
 
         return dead_lice_dist, cost
 
@@ -330,7 +307,7 @@ class Cage(LoggableMixin):
 
         stage_age_max_days = int(self.cfg.stage_age_evolutions[stage])
 
-        if stage == "L2" or stage == "L5f":
+        if stage in ("L2", "L5f"):
             # Bogus uniform distribution L5m/L5f follow different schemes.
             # More realistically, this is an exponential/poisson distribution
             return np.full(stage_age_max_days, 1/stage_age_max_days)
@@ -431,34 +408,34 @@ class Cage(LoggableMixin):
         """
         Get fish mortality due to treatment. Mortality due to treatment is defined in terms of
         point percentage increases, thus we can only account for "excess deaths".
+        If treatment is not being applied the overall
 
         :param days_since_start the number of days since the beginning of the simulation
-        :param fish_lice_deaths the number
+        :param fish_lice_deaths the number of fish dead by lice
+        :param fish_background_deaths the number of fish dead by natural reasons
         """
         # See surveys/overton_treatment_mortalities.py for an explanation on what is going on
         mortality_events = fish_lice_deaths + fish_backgroud_deaths
 
-        if mortality_events == 0:
+        if mortality_events == 0 or self.num_fish == 0:
             return 0
-        if self.last_effective_treatment is None:
+
+        cur_date = self.start_date + dt.timedelta(days=days_since_start)
+        if not self.is_treated(cur_date):
             return 0
 
         efficacy_window = self.last_effective_treatment.effectiveness_duration_days
 
-        cur_date = self.start_date + dt.timedelta(days=days_since_start)
         temperature = self.farm.year_temperatures[cur_date.month - 1]
-        mortality_events_pp = 100 * mortality_events / self.num_fish
         fish_mass = self.average_fish_mass(days_since_start)
 
         last_treatment_params = self.cfg.get_treatment(self.last_effective_treatment.treatment_type)
-        predicted_pp_increase = last_treatment_params.get_mortality_pp_increase(temperature, fish_mass)
+        predicted_deaths = last_treatment_params.get_fish_mortality_occurrences(
+            temperature, fish_mass, self.num_fish, efficacy_window, mortality_events)
 
-        predicted_deaths = (predicted_pp_increase + mortality_events_pp) * self.num_fish / 100 - mortality_events
-        predicted_deaths /= efficacy_window
+        treatment_mortality_occurrences = round(predicted_deaths)
 
-        treatment_mortalities_occurrences = self.cfg.rng.poisson(predicted_deaths)
-
-        return treatment_mortalities_occurrences
+        return treatment_mortality_occurrences
 
     def get_fish_growth(self, days_since_start) -> Tuple[int, int]:
         """
@@ -473,30 +450,38 @@ class Cage(LoggableMixin):
             """
             Fish background mortality rate, decreasing as in Soares et al 2011
 
-            Fish death rate: constant background daily rate 0.00057 based on
+            Fish death rate: constant background daily rate 0.00057 originally based on
             www.gov.scot/Resource/0052/00524803.pdf
-            multiplied by lice coefficient see surv.py (compare to threshold of 0.75 lice/g fish)
 
+            According to Volsett it should be higher (around 0.005) , but that's unlikely.
+            However the authors used a trick: assuming that a mortality event takes 5 days one can
+            divide the actual mortality rate by 5.
+            Thus, 0.005 / 5 ~~ 0.0009-0.001 . It is still quite higher than expected.
+
+            Therefore, we'll stick to this constant.
             TODO: what should we do with the formulae?
 
             :param days: number of days elapsed
             :return: fish background mortality rate
             """
-            return 0.00057  # (1000 + (days - 700)**2)/490000000
+            return 0.000057  # (1000 + (days - 700)**2)/490000000
 
         # Apply a sigmoid based on the number of lice per fish
-        pathogenic_lice = sum([self.lice_population[stage] for stage in self.pathogenic_stages])
+        pathogenic_lice = sum([self.lice_population[stage] for stage in LicePopulation.pathogenic_stages])
         if self.num_infected_fish > 0:
-            lice_per_host_mass = pathogenic_lice / (self.num_infected_fish * self.average_fish_mass(days_since_start))
+            lice_per_host_mass = pathogenic_lice / (self.num_infected_fish *
+                                                    (self.average_fish_mass(days_since_start) / 1e3))
         else:
             lice_per_host_mass = 0.0
-        prob_lice_death = 1 / (1 + math.exp(-self.cfg.fish_mortality_k *
+
+        # The daily mortality rate also takes into account a mortality event takes days (in this case, 5).
+        prob_lice_death = 0.2 / (1 + math.exp(-self.cfg.fish_mortality_k *
                                             (lice_per_host_mass - self.cfg.fish_mortality_center)))
 
         ebf_death = fb_mort(days_since_start) * self.num_fish
         elf_death = self.num_infected_fish * prob_lice_death
-        fish_deaths_natural = self.cfg.rng.poisson(ebf_death)
-        fish_deaths_from_lice = self.cfg.rng.poisson(elf_death)
+        fish_deaths_natural = round(ebf_death) # self.cfg.rng.poisson(ebf_death)
+        fish_deaths_from_lice = round(elf_death) # self.cfg.rng.poisson(elf_death)
 
         logger.debug("\t\t\tnumber of background fish death {}, from lice {}"
                      .format(fish_deaths_natural, fish_deaths_from_lice))
@@ -504,14 +489,14 @@ class Cage(LoggableMixin):
         return fish_deaths_natural, fish_deaths_from_lice
 
     def compute_eta_aldrin(self, num_fish_in_farm, days):
-        return self.cfg.infection_main_delta + math.log(num_fish_in_farm) + self.cfg.infection_weight_delta * \
-               (math.log(self.average_fish_mass(days)) - self.cfg.delta_expectation_weight_log)
+        return self.cfg.infection_main_delta + math.log(num_fish_in_farm/1e5) + self.cfg.infection_weight_delta * \
+               (math.log(self.average_fish_mass(days)/1e3) - self.cfg.delta_expectation_weight_log)
 
-    def get_infection_rates(self, days) -> Tuple[float, int]:
+    def get_infection_rates(self, days_since_start) -> Tuple[float, int]:
         """
         Compute the number of lice that can infect and what their infection rate (number per fish) is
 
-        :param days: the amount of time it takes
+        :param days_since_start: days since the cage has opened
         :returns a pair (Einf, num_avail_lice)
         """
         # Based on Aldrin et al.
@@ -523,7 +508,7 @@ class Cage(LoggableMixin):
             num_fish_in_farm = self.farm.num_fish
 
             # TODO: this has O(c^2) complexity
-            etas = np.array([c.compute_eta_aldrin(num_fish_in_farm, days) for c in self.farm.cages])
+            etas = np.array([c.compute_eta_aldrin(num_fish_in_farm, days_since_start) for c in self.farm.cages])
             Einf = math.exp(etas[self.id]) / (1 + np.sum(np.exp(etas)))
 
             return Einf, num_avail_lice
@@ -561,6 +546,9 @@ class Cage(LoggableMixin):
         :param *args the stages to consider (optional, by default all stages from the third onward are taken into account)
         :returns the number of infected fish
         """
+        if self.num_fish == 0:
+            return 0
+
         attached_lice = self.get_infecting_population(*args)
 
         # see: https://stats.stackexchange.com/a/296053
@@ -632,9 +620,9 @@ class Cage(LoggableMixin):
         # TODO - need to add dealing with fewer males/females than the number of matings
 
         num_eggs = self.get_num_eggs(num_matings)
-        if self.genetic_mechanism == GeneticMechanism.discrete:
+        if self.genetic_mechanism == GeneticMechanism.DISCRETE:
             delta_eggs = self.generate_eggs_discrete_batch(mating_sires, mating_dams, num_eggs)
-        elif self.genetic_mechanism == GeneticMechanism.maternal:
+        elif self.genetic_mechanism == GeneticMechanism.MATERNAL:
             delta_eggs = self.generate_eggs_maternal_batch(distrib_dam_available, num_eggs)
 
         delta_eggs = self.mutate(delta_eggs, mutation_rate=self.cfg.geno_mutation_rate)
@@ -886,10 +874,10 @@ class Cage(LoggableMixin):
         infecting_lice = self.get_infecting_population()
 
         affected_lice_quotas = np.array([self.lice_population[stage] / infecting_lice * affected_lice_gross
-                         for stage in self.susceptible_stages])
+                         for stage in LicePopulation.susceptible_stages])
         affected_lice_np = largest_remainder(affected_lice_quotas)
 
-        affected_lice = Counter(dict(zip(self.susceptible_stages, affected_lice_np.tolist())))
+        affected_lice = Counter(dict(zip(LicePopulation.susceptible_stages, affected_lice_np.tolist())))
 
         surviving_lice_quotas = np.rint(np.trunc([
             self.lice_population['L4'] / (2 * infecting_lice) *
@@ -901,7 +889,9 @@ class Cage(LoggableMixin):
 
         dying_lice = affected_lice - surviving_lice
 
-        return {k: int(v) for k, v in dying_lice.items() if v > 0}
+        dying_lice_distrib = {k: int(v) for k, v in dying_lice.items() if v > 0}
+        logger.debug(f"\t\tLice mortality due to fish mortality: {dying_lice_distrib}")
+        return dying_lice_distrib
 
     def promote_population(
             self,
@@ -970,7 +960,7 @@ class Cage(LoggableMixin):
 
         # Update dead_lice_dist to include fish-caused death as well
         dead_lice_by_fish_death = self.get_dying_lice_from_dead_fish(
-            fish_deaths_natural + fish_deaths_from_lice)
+            min(fish_deaths_natural + fish_deaths_from_lice, self.num_infected_fish))
         for affected_stage, reduction in dead_lice_by_fish_death.items():
             dead_lice_dist[affected_stage] += reduction
 
@@ -1083,7 +1073,7 @@ class Cage(LoggableMixin):
         3. Dam waiting and treatment queues will be flushed.
         """
 
-        for stage in self.pathogenic_stages:
+        for stage in LicePopulation.pathogenic_stages:
             self.lice_population[stage] = 0
 
         self.num_infected_fish = self.num_fish = 0

@@ -232,6 +232,8 @@ class LicePopulation(MutableMapping[LifeStage, int]):
     """
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
+    susceptible_stages = lice_stages[2:]
+    pathogenic_stages = lice_stages[3:]
 
     def __init__(self, geno_data: GenoLifeStageDistrib, generic_ratios: GenoDistribDict):
         """

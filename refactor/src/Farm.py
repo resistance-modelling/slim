@@ -17,13 +17,13 @@ from typing import Dict, List, Optional, Tuple, cast
 import numpy as np
 from mypy_extensions import TypedDict
 
-from src import LoggableMixin
+from src import LoggableMixin, logger
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
 from src.LicePopulation import GrossLiceDistrib, GenoDistrib
 from src.QueueTypes import *
-from src.TreatmentTypes import Money
+from src.TreatmentTypes import Money, Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
@@ -385,9 +385,9 @@ class Farm(LoggableMixin):
 
         for farm in farms:
             if farm.name == self.name:
-                logger.debug("\t\tFarm {}:".format(farm.name))
-            else:
                 logger.debug("\t\tFarm {} (current):".format(farm.name))
+            else:
+                logger.debug("\t\tFarm {}:".format(farm.name))
 
             # allocate eggs to cages
             farm_arrivals = self.get_farm_allocation(farm, eggs_by_hatch_date)
@@ -428,7 +428,7 @@ class Farm(LoggableMixin):
         """
         Get the current mass of fish that can be resold.
         """
-        mass_per_cage = [cage.average_fish_mass((cur_date - cage.start_date).days) for cage in self.cages]
+        mass_per_cage = [cage.average_fish_mass((cur_date - cage.start_date).days) / 1e3 for cage in self.cages]
         return self.cfg.gain_per_kg * Money(sum(mass_per_cage))
 
     def handle_events(self, cur_date: dt.datetime):

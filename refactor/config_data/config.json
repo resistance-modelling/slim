@@ -27,8 +27,8 @@
     "infection_main_delta": -2.576,
     "infection_weight_delta": 0.082,
     "delta_expectation_weight_log": -0.55,
-    "fish_mortality_center": 0.63,
-    "fish_mortality_k": 19,
+    "fish_mortality_center": 0.272,
+    "fish_mortality_k": 15.7,
     "background_lice_mortality_rates": {
         "L1": 0.17,
         "L2": 0.22,
@@ -93,10 +93,12 @@
     "aggregation_rate_threshold": 0.5,
     "treatments": [
         {
+            "treatment_name": "EMB",
             "effect_delay": 5,
             "durability_temp_ratio": 210,
             "price_per_kg": "341.20",
             "application_period": 7,
+            "treatment_type": "chemical",
             "pheno_resistance": {
                 "dominant": 0.95,
                 "incompletely_dominant": 0.85,
@@ -104,11 +106,26 @@
             },
             "quadratic_fish_mortality_coeffs": [
                 0.0,
-                0.72140707,
-                -3.57850456,
-                -0.02576944,
-                1.40270749,
-                -3.57850456
+                0.09524604,
+                -0.16264929,
+                -0.00731587,
+                0.08306807,
+               -0.16264929
+            ]
+        },
+        {
+            "treatment_name": "Thermolicer",
+            "effect_delay": 1,
+            "application_period": 1,
+            "price_per_application": "10000",
+            "treatment_type": "thermal",
+            "quadratic_fish_mortality_coeffs": [
+                0.0,
+                0.64650758,
+                -0.05129551,
+                -0.03602,
+                -0.02541716,
+                -0.05129551
             ]
         }
     ]

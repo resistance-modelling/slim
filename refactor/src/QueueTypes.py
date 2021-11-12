@@ -11,13 +11,12 @@ from dataclasses import dataclass, field, asdict
 from functools import singledispatch
 from queue import PriorityQueue
 
-from src import logger
-from src.TreatmentTypes import Treatment
 
 from typing import Callable, TypeVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.LicePopulation import GenoDistrib
+    from src.TreatmentTypes import Treatment
 
 
 class Event:
@@ -171,9 +170,6 @@ def pop_from_queue(
         return arg.response_date <= _cur_time  # pragma: no cover
 
 
-    counter = 0
     while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
         event = queue.get()
-        counter += 1
         continuation(event)
-    logger.debug(f"\t\t\t\t{counter} events handled")

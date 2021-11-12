@@ -9,7 +9,7 @@ from typing import Tuple, Dict, Optional, TYPE_CHECKING
 import jsonschema
 import numpy as np
 
-from src.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB, Money
+from src.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB, Money, Thermolicer
 
 if TYPE_CHECKING:
     from src.LicePopulation import LifeStage, GenoDistribDict
@@ -61,6 +61,7 @@ class RuntimeConfig:
 
         # Treatment constants
         self.emb = EMB(data["treatments"][0])
+        self.thermolicer = Thermolicer(data["treatments"][1])
 
         # Fish mortality constants
         self.fish_mortality_center: float = data["fish_mortality_center"] 
@@ -74,7 +75,7 @@ class RuntimeConfig:
         self.reproduction_eggs_first_extruded: int = data["reproduction_eggs_first_extruded"]
         self.reproduction_age_dependence: float = data["reproduction_age_dependence"]
         self.dam_unavailability: int = data["dam_unavailability"]
-        self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"]]
+        self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"].upper()]
         self.geno_mutation_rate: float = data["geno_mutation_rate"]
 
         # TODO: take into account processing of non-discrete keys
@@ -152,7 +153,7 @@ class Config(RuntimeConfig):
         self.save_rate = save_rate
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
-        return [self.emb][treatment_type.value]
+        return [self.emb, self.thermolicer][treatment_type.value]
 
     @staticmethod
     def generate_argparse_from_config(cfg_schema_path: str, simulation_schema_path: str): # pragma: no cover
@@ -228,7 +229,7 @@ class FarmConfig:
         self.sampling_spacing: int = data["sampling_spacing"] 
 
         # TODO: a farm may employ different chemicals
-        self.treatment_type = Treatment[data["treatment_type"]]
+        self.treatment_type = Treatment[data["treatment_type"].upper()]
 
         # Farm-specific capital
         self.start_capital = Money(data["start_capital"])
