@@ -432,7 +432,7 @@ class Cage(LoggableMixin):
 
         temperature = self.farm.year_temperatures[cur_date.month - 1]
         mortality_events_pp = 100 * mortality_events / self.num_fish
-        fish_mass = self.average_fish_mass(days_since_start) / 1e3
+        fish_mass = self.average_fish_mass(days_since_start)
 
         last_treatment_params = self.cfg.get_treatment(self.last_effective_treatment.treatment_type)
         predicted_pp_increase = last_treatment_params.get_mortality_pp_increase(temperature, fish_mass)

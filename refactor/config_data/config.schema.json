@@ -234,6 +234,15 @@
       "items": {
         "type": "object",
         "properties": {
+          "treatment_name": {
+            "description": "The name of the treatment",
+            "type": "string"
+          },
+          "treatment_type": {
+            "description": "The type of treatment",
+            "enum": ["chemical", "thermal", "mechanical"]
+          },
+          "pheno_resistance": {
           "effect_delay": {
             "description": "Delay between application and observation of noticeable effects of the Emamectin Benzoate (in days)",
             "type": "number"
@@ -244,14 +253,18 @@
           },
           "price_per_kg": {
             "description": "Cost per kg when applying treatment",
-            "comment": "Values taken from www.sigmaaldrich.com , rescaled to have a 1kg denominator",
+            "comment": "For EMB, Values taken from www.sigmaaldrich.com , rescaled to have a 1kg denominator",
+            "type": "string"
+          },
+          "price_per_applicatrion": {
+            "description": "Cost per application when applying treatment",
+            "comment": "TODO: for the thermolicer this is completely baseless",
             "type": "string"
           },
           "application_period": {
             "description": "For how long to apply the treatment (in days)",
             "type": "number"
           },
-          "pheno_resistance": {
             "description": "Lookup table to translate between genotype.",
             "type": "object",
             "parameters": {

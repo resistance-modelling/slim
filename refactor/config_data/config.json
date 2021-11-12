@@ -93,10 +93,12 @@
     "aggregation_rate_threshold": 0.5,
     "treatments": [
         {
+            "treatment_name": "EMB",
             "effect_delay": 5,
             "durability_temp_ratio": 210,
             "price_per_kg": "341.20",
             "application_period": 7,
+            "treatment_type": "chemical",
             "pheno_resistance": {
                 "dominant": 0.95,
                 "incompletely_dominant": 0.85,
@@ -109,6 +111,19 @@
                 -0.02576944,
                 1.40270749,
                 -3.57850456
+            ]
+        },
+        {
+            "treatment_name": "Thermolicer",
+            "price_per_application": "10000",
+            "treatment_type": "thermal",
+            "quadratic_fish_mortality_coeffs": [
+                0.0,
+                15.92088161,
+                -1.24087789,
+                -1.07508505,
+                2.7761922,
+                -1.24087789
             ]
         }
     ]
