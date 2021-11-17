@@ -508,6 +508,20 @@ class TestCage:
         matings = 6
         assert 2000 <= first_cage.get_num_eggs(matings) <= 2500
 
+    def test_get_num_eggs_v2(self, first_cage):
+        matings = 6
+        temperature = 10
+        assert 400 <= first_cage.get_num_eggs_v2(matings, temperature) <= 420
+
+        temperature = 15
+        assert 450 <= first_cage.get_num_eggs_v2(matings, temperature) <= 460
+
+        temperature = 8
+        assert 370 <= first_cage.get_num_eggs_v2(matings, temperature) <= 390
+
+        matings = 12
+        assert 740 <= first_cage.get_num_eggs_v2(matings, temperature) <= 760
+
     def test_egg_mutation(self, first_cage, sample_offspring_distrib):
         sample_offspring = copy.deepcopy(sample_offspring_distrib)
         mutations = 0.001

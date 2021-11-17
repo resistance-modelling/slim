@@ -773,7 +773,6 @@ class Cage(LoggableMixin):
         age_distrib = self.get_stage_ages_distrib("L5f")
         age_range = np.arange(1, len(age_distrib) + 1)
 
-        # TODO: keep track of free females before calculating mating
         mated_females_distrib = mated_females * age_distrib
         eggs = self.cfg.reproduction_eggs_first_extruded * \
                (age_range ** self.cfg.reproduction_age_dependence) * mated_females_distrib
@@ -787,6 +786,28 @@ class Cage(LoggableMixin):
         #                     (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1)
 
         # return self.cfg.rng.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
+
+    def get_num_eggs_v2(self, mated_females, temperature) -> int:
+        """
+        Get the number of new eggs
+        :param mated_females the number of mated females that reproduce
+        :returns the number of eggs produced
+        """
+
+        # See Aldrin et al. 2017, §2.2.6
+        age_distrib = self.get_stage_ages_distrib("L5f")
+        age_range = np.arange(1, len(age_distrib) + 1)
+
+        mated_females_distrib = mated_females * age_distrib
+        temperature_factor = self.cfg.delta_m10["L0"] * (10 / temperature) ** self.cfg.delta_p["L1"]
+
+        eggs = self.cfg.reproduction_eggs_first_extruded * \
+               (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1) * \
+               mated_females_distrib
+
+        #return self.cfg.rng.poisson(np.round(np.sum(eggs)))
+        return int(np.round(np.sum(eggs)))
+
 
     def get_egg_batch(self, cur_date: dt.datetime, egg_distrib: GenoDistrib) -> EggBatch:
         """
