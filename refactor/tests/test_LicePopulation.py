@@ -4,7 +4,9 @@ import numpy as np
 import pytest
 
 from src.QueueTypes import DamAvailabilityBatch
-from src.LicePopulation import largest_remainder
+from src.Simulator import OffspringAveragingQueue
+from src.LicePopulation import largest_remainder, GenoDistrib
+
 
 class TestLicePopulation:
     def test_largest_remainder(self):
@@ -54,8 +56,6 @@ class TestLicePopulation:
         x = np.array([-5, -8, -13])
         assert np.all(largest_remainder(x) == x)
 
-
-
     def test_avail_dams_freed_early(self, first_cage, first_cage_population, cur_day):
         dams, _ = first_cage.do_mating_events()
 
@@ -83,3 +83,38 @@ class TestLicePopulation:
         for i in range(3):
             first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams))
         assert first_cage_population.free_dams(cur_day + dt.timedelta(days=3)) == target_dams
+
+
+class TestOffspring:
+    def test_append_no_averaging(self, cur_day, sample_offspring_distrib):
+        queue = OffspringAveragingQueue(1)
+
+        offspring = {cur_day: sample_offspring_distrib}
+
+        assert queue.average == GenoDistrib()
+
+        queue.append(offspring_per_farm=[offspring])
+
+        assert len(queue) == 1
+        assert queue.average == sample_offspring_distrib
+
+        queue.append(offspring_per_farm=[offspring])
+
+        assert len(offspring) == 1
+        assert queue.average == sample_offspring_distrib
+
+    def test_append(self, cur_day, sample_offspring_distrib):
+        queue = OffspringAveragingQueue(10)
+
+        offspring = {cur_day: sample_offspring_distrib}
+        for i in range(10):
+            queue.append(offspring_per_farm=[offspring])
+            assert len(queue) == i+1
+
+        assert queue.average == sample_offspring_distrib
+        assert len(queue) == 10
+
+        queue.append(offspring_per_farm=[offspring])
+
+        assert len(queue) == 10
+        assert queue.average == sample_offspring_distrib

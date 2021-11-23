@@ -25,6 +25,7 @@ Alleles = Tuple[Allele, ...]
 GenoDistribSerialisable = Dict[str, float]
 GenoDistribDict = Dict[Alleles, float]
 
+
 def largest_remainder(nums: np.ndarray) -> np.ndarray:
     # a vectorised implementation of largest remainder
     assert np.all(nums >= 0) or np.all(nums <= 0)

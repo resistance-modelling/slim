@@ -11,7 +11,6 @@ from dataclasses import dataclass, field, asdict
 from functools import singledispatch
 from queue import PriorityQueue
 
-
 from typing import Callable, TypeVar, TYPE_CHECKING
 
 if TYPE_CHECKING:

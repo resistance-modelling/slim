@@ -2,7 +2,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple, Deque
 
 import dill as pickle
 import pandas as pd
@@ -10,9 +10,9 @@ import tqdm
 
 from src import logger
 from src.Config import Config
-from src.Farm import Farm
+from src.Farm import Farm, GenoDistribByHatchDate
 from src.JSONEncoders import CustomFarmEncoder
-from src.LicePopulation import GenoDistrib
+from src.LicePopulation import GenoDistrib, GenoDistribDict
 from src.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
 from src.TreatmentTypes import Money
 
@@ -26,10 +26,32 @@ class Organisation:
         self.name: str = cfg.name
         self.cfg = cfg
         self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
+        self.genetic_ratios = GenoDistrib(cfg.initial_genetic_ratios)
+        self.external_pressure_ratios = cfg.initial_genetic_ratios.copy()
+        self.offspring_queue = OffspringAveragingQueue(self.cfg.reservoir_offspring_average)
 
     @property
     def capital(self):
         return sum((farm.current_capital for farm in self.farms), Money())
+
+    def update_genetic_ratios(self, offspring: GenoDistrib):
+        """
+        Update the genetic ratios after an offspring update
+        """
+        # Because the Dirichlet distribution is the prior of the multinomial distribution
+        # (see: https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_discrete_distribution )
+        # we can use a simple bayesian approach
+        self.genetic_ratios = self.genetic_ratios + (offspring * (1/offspring.gross))
+        multinomial_probas = self.cfg.rng.dirichlet(tuple(self.genetic_ratios.values())).tolist()
+        keys = self.genetic_ratios.keys()
+        self.external_pressure_ratios = dict(zip(keys, multinomial_probas))
+
+    def get_external_pressure(self) -> Tuple[int, GenoDistribDict]:
+        number = self.offspring_queue.offspring_sum.gross * \
+                 self.cfg.reservoir_offspring_integration_ratio + self.cfg.min_ext_pressure
+        ratios = self.external_pressure_ratios
+
+        return number, ratios
 
     def step(self, cur_date) -> Money:
         # days = (cur_date - self.cfg.start_date).days
@@ -41,7 +63,7 @@ class Organisation:
         offspring_dict = {}
         payoff = Money()
         for farm in self.farms:
-            offspring, cost = farm.update(cur_date)
+            offspring, cost = farm.update(cur_date, *self.get_external_pressure())
             offspring_dict[farm.name] = offspring
             # TODO: take into account other types of disadvantages, not just the mere treatment cost
             # e.g. how are environmental factors measured? Are we supposed to add some coefficients here?
@@ -52,8 +74,14 @@ class Organisation:
         # it can be dispersed (interfarm and intercage movement)
         # note: this is done on organisation level because it requires access to
         # other farms - and will allow multiprocessing of the main update
+
         for farm_ix, offspring in offspring_dict.items():
             self.farms[farm_ix].disperse_offspring(offspring, self.farms, cur_date)
+
+        total_offspring = list(offspring_dict.values())
+        self.offspring_queue.append(total_offspring)
+
+        self.update_genetic_ratios(self.offspring_queue.average)
 
         return payoff
 
@@ -265,3 +293,32 @@ class Simulator:
 
         if not resume:
             data_file.close()
+
+
+class OffspringAveragingQueue(Deque[GenoDistrib]):
+    """Helper class to compute a rolling average"""
+    def __init__(self, rolling_average: int):
+        """
+        :param rolling_average the maximum length to consider
+        """
+        super().__init__(maxlen=rolling_average)
+        self.offspring_sum = GenoDistrib()
+
+    def append(self, offspring_per_farm: List[GenoDistribByHatchDate]):
+        """Add an element to our rolling average. This will automatically pop elements on the left."""
+        to_add = GenoDistrib()
+        for farm_offspring in offspring_per_farm:
+            to_add = to_add + GenoDistrib.batch_sum(list(farm_offspring.values()))
+        if len(self) == self.maxlen:
+            self.popleft()
+        super().append(to_add)
+        self.offspring_sum += to_add
+
+    def popleft(self) -> GenoDistrib:
+        element = super().popleft()
+        self.offspring_sum = self.offspring_sum - element
+        return element
+
+    @property
+    def average(self):
+        return self.offspring_sum * (1 / self.maxlen)

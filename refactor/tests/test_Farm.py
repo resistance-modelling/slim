@@ -44,39 +44,39 @@ class TestFarm:
         # TODO: test integration across **all** cages. Requires further refactoring.
         pass
 
-    def test_get_cage_pressures(self, first_farm):
+    def test_get_cage_pressures(self, first_farm, initial_external_inflow):
 
-        first_farm.cfg.ext_pressure = 100
+        first_farm.cfg.min_ext_pressure = 100
         first_farm.cages = [0] * 10
 
-        pressures = first_farm.get_cage_pressures()
+        pressures = first_farm.get_cage_pressures(100)
 
         assert len(pressures) == len(first_farm.cages)
-        assert sum(pressures) == first_farm.cfg.ext_pressure * 10
+        assert sum(pressures) == first_farm.cfg.min_ext_pressure * 10
 
         for pressure in pressures:
             assert pressure >= 0
 
     def test_get_cage_pressures_negative_pressure(self, first_farm):
 
-        first_farm.cfg.ext_pressure = -100
+        first_farm.cfg.min_ext_pressure = -100
         first_farm.cages = [0] * 10
 
         with pytest.raises(Exception):
             first_farm.get_cage_pressures()
 
     def test_get_cage_pressures_zero_pressure(self, first_farm):
-        first_farm.cfg.ext_pressure = 0
+        first_farm.cfg.min_ext_pressure = 0
         first_farm.cages = [0] * 10
 
-        pressures = first_farm.get_cage_pressures()
+        pressures = first_farm.get_cage_pressures(0)
 
         assert len(pressures) == len(first_farm.cages)
-        assert sum(pressures) == first_farm.cfg.ext_pressure
+        assert sum(pressures) == first_farm.cfg.min_ext_pressure
 
     def test_get_cage_pressures_no_cages(self, first_farm):
 
-        first_farm.cfg.ext_pressure = 100
+        first_farm.cfg.min_ext_pressure = 100
         first_farm.cages = []
 
         with pytest.raises(Exception):
@@ -195,9 +195,9 @@ class TestFarm:
         assert total == 105
         assert by_cage == [70, 35]
 
-    def test_farm_update_before_start(self, first_farm):
+    def test_farm_update_before_start(self, first_farm, initial_external_inflow, initial_external_ratios):
         cur_date = first_farm.start_date - dt.timedelta(1)
-        offspring, cost = first_farm.update(cur_date)
+        offspring, cost = first_farm.update(cur_date, initial_external_inflow, initial_external_ratios)
 
         assert offspring == {}
         assert cost > 0  # fallowing
@@ -205,7 +205,15 @@ class TestFarm:
     # Currently fixtures are not automatically loaded in the parametrisation, so they need to be manually invoked
     # See https://github.com/pytest-dev/pytest/issues/349
     @pytest.mark.parametrize("test_farm, expected_cost", [('first_farm', 0), ('second_farm', 0)])
-    def test_update(self, sample_offspring_distrib, test_farm, expected_cost, request):
+    def test_update(
+        self,
+        sample_offspring_distrib,
+        initial_external_ratios,
+            initial_external_inflow,
+        test_farm,
+        expected_cost,
+        request
+    ):
 
         # ensure number of matings
         initial_lice_pop = {stage: 100 for stage in LicePopulation.lice_stages}
@@ -216,7 +224,8 @@ class TestFarm:
         test_farm.cfg.farms[test_farm.name].cages_start = [test_farm.start_date for i in range(10)]
         test_farm.cages = [Cage(i, test_farm.cfg, test_farm, initial_lice_pop) for i in range(10)]
 
-        eggs_by_hatch_date, cost = test_farm.update(test_farm.start_date)
+        eggs_by_hatch_date, cost = test_farm.update(
+            test_farm.start_date, initial_external_inflow, initial_external_ratios)
 
         for hatch_date in eggs_by_hatch_date:
             assert hatch_date > test_farm.start_date
@@ -271,7 +280,7 @@ class TestFarm:
         first_farm.handle_events(cur_day)
         assert first_farm.farm_to_org.qsize() == 1
 
-    def test_ask_for_treatment_no_defection(self, no_prescheduled_farm, cur_day):
+    def test_ask_for_treatment_no_defection(self, no_prescheduled_farm, cur_day, initial_external_ratios):
         first_cage = no_prescheduled_farm.cages[0]
         assert first_cage.treatment_events.qsize() == 0
         first_available_day = cur_day + dt.timedelta(days=30)
@@ -279,7 +288,7 @@ class TestFarm:
         assert first_cage.treatment_events.qsize() == 1
 
         # Asking again will not work, but it requires some internal cage update
-        first_cage.update(first_available_day, 0)
+        first_cage.update(first_available_day, 0, initial_external_ratios)
         no_prescheduled_farm.ask_for_treatment(first_available_day, False)
         assert first_cage.treatment_events.qsize() == 0
 
