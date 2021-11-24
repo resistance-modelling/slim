@@ -828,9 +828,9 @@ class Cage(LoggableMixin):
         cur_month = cur_date.month
         ave_temp = self.farm.year_temperatures[cur_month - 1]
 
-        beta_1 = self.cfg.delta_m10["L0"]
+        beta_1 = self.cfg.delta_m10["L0_stien"]
         beta_2 = self.cfg.delta_p["L0"]
-        expected_time = (self.cfg.delta_m10["L0"] / (ave_temp - 10 + beta_1 * beta_2)) ** 2
+        expected_time = (beta_1 / (ave_temp - 10 + beta_1 * beta_2)) ** 2
         expected_hatching_date = cur_date + dt.timedelta(self.cfg.rng.poisson(expected_time))
         return EggBatch(expected_hatching_date, egg_distrib)
 
@@ -1013,8 +1013,8 @@ class Cage(LoggableMixin):
         self.lice_population.remove_negatives()
 
         # in absence of wildlife genotype, simply upgrade accordingly
-        self.lice_population["L2"] += lice_from_reservoir["L2"]
-        self.lice_population["L1"] += lice_from_reservoir["L1"]
+        self.lice_population.geno_by_lifestage["L2"] += lice_from_reservoir["L2"]
+        self.lice_population.geno_by_lifestage["L1"] += lice_from_reservoir["L1"]
 
         if delta_dams_batch:
             self.lice_population.add_busy_dams_batch(delta_dams_batch)
@@ -1088,10 +1088,10 @@ class Cage(LoggableMixin):
         new_L1_gross = self.cfg.rng.integers(low=0, high=pressure, size=1)[0]
         new_L2_gross = pressure - new_L1_gross
 
-        keys = external_pressure_ratios.keys()
-        probas = external_pressure_ratios.values()
-        new_L1 = GenoDistrib(zip(keys, self.cfg.rng.multinomial(new_L1_gross, probas).tolist()))
-        new_L2 = GenoDistrib(zip(keys, self.cfg.rng.multinomial(new_L2_gross, probas).tolist()))
+        keys = list(external_pressure_ratios.keys())
+        probas = list(external_pressure_ratios.values())
+        new_L1 = GenoDistrib(dict(zip(keys, self.cfg.rng.multinomial(new_L1_gross, probas).tolist())))
+        new_L2 = GenoDistrib(dict(zip(keys, self.cfg.rng.multinomial(new_L2_gross, probas).tolist())))
 
         new_lice_dist = {"L1": new_L1, "L2": new_L2}
         logger.debug("\t\tdistribution of new lice from reservoir = {}".format(new_lice_dist))

@@ -4,6 +4,7 @@ import datetime as dt
 import itertools
 import json
 from queue import PriorityQueue
+from typing import cast
 
 import numpy as np
 import pytest
@@ -484,8 +485,8 @@ class TestCage:
         for key in delta_dams:
             assert distrib_dams_available[key] == delta_dams[key]
 
-    def test_update_step(self, first_cage, cur_day):
-        first_cage.update(cur_day, 0)
+    def test_update_step(self, first_cage, cur_day, initial_external_ratios):
+        first_cage.update(cur_day, 0, initial_external_ratios)
 
     def test_get_stage_ages_distrib(self, first_cage):
         for stage in ["L1", "L3", "L4"]:
@@ -726,16 +727,17 @@ class TestCage:
 
         assert first_cage.arrival_events.qsize() == 0
 
-    def test_get_reservoir_lice(self, first_cage):
+    def test_get_reservoir_lice(self, first_cage, initial_external_ratios):
         pressure = 100
-        dist = first_cage.get_reservoir_lice(pressure)
+        dist = first_cage.get_reservoir_lice(pressure, initial_external_ratios)
 
-        assert sum(dist.values()) == pressure
+        assert cast(GenoDistrib, GenoDistrib.batch_sum(dist.values())).gross == pressure
         for value in dist.values():
-            assert value >= 0
+            assert value.is_positive()
 
-    def test_get_reservoir_lice_no_pressure(self, first_cage):
-        assert first_cage.get_reservoir_lice(0) == {"L1": 0, "L2": 0}
+    def test_get_reservoir_lice_no_pressure(self, first_cage, initial_external_ratios):
+        assert first_cage.get_reservoir_lice(0, initial_external_ratios) == \
+               {"L1": GenoDistrib(), "L2": GenoDistrib()}
 
     def test_dying_lice_from_dead_no_dead_fish(self, first_cage):
         assert first_cage.get_dying_lice_from_dead_fish(0) == {}
@@ -782,7 +784,8 @@ class TestCage:
         dead_lice = first_cage.get_dying_lice_from_dead_fish(dead_fish)
         assert dead_lice == dead_lice_target
 
-    def test_update_step_before_start_date_two_days(self, first_cage, planctonic_only_population):
+    def test_update_step_before_start_date_two_days(self, first_cage, planctonic_only_population,
+                                                    initial_external_ratios):
         cur_date = first_cage.start_date - dt.timedelta(5)
         first_cage.lice_population = planctonic_only_population
 
@@ -792,7 +795,7 @@ class TestCage:
 
         pressure = 10
 
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None
@@ -805,7 +808,7 @@ class TestCage:
         assert 150 <= cost <= 200
 
         cur_date += dt.timedelta(1)
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None
@@ -816,7 +819,8 @@ class TestCage:
         assert first_cage.hatching_events.qsize() == 0
         assert 150 <= cost <= 200
 
-    def test_update_step_before_start_date_no_deaths(self, first_cage, planctonic_only_population):
+    def test_update_step_before_start_date_no_deaths(self, first_cage, planctonic_only_population,
+                                                     initial_external_ratios):
         cur_date = first_cage.start_date - dt.timedelta(5)
         first_cage.lice_population = planctonic_only_population
 
@@ -831,7 +835,7 @@ class TestCage:
         # set mortality to 0
         first_cage.cfg.background_lice_mortality_rates = {key: 0 for key in first_cage.lice_population}
 
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None
@@ -843,7 +847,8 @@ class TestCage:
         assert current_population == population_before + inflow
         assert cost > 0
 
-    def test_update_step_before_start_date_only_deaths(self, first_cage, planctonic_only_population):
+    def test_update_step_before_start_date_only_deaths(self, first_cage, planctonic_only_population,
+                                                       initial_external_ratios):
         cur_date = first_cage.start_date - dt.timedelta(5)
         first_cage.lice_population = planctonic_only_population
 
@@ -853,7 +858,7 @@ class TestCage:
         first_cage.cfg.background_lice_mortality_rates = {key: 1 for key in first_cage.lice_population}
         pressure = 0
 
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None

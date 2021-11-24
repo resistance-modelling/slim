@@ -209,7 +209,7 @@ class TestFarm:
         self,
         sample_offspring_distrib,
         initial_external_ratios,
-            initial_external_inflow,
+        initial_external_inflow,
         test_farm,
         expected_cost,
         request

@@ -41,7 +41,8 @@ class Organisation:
         # Because the Dirichlet distribution is the prior of the multinomial distribution
         # (see: https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_discrete_distribution )
         # we can use a simple bayesian approach
-        self.genetic_ratios = self.genetic_ratios + (offspring * (1/offspring.gross))
+        if offspring.gross > 0:
+            self.genetic_ratios = self.genetic_ratios + (offspring * (1/offspring.gross))
         multinomial_probas = self.cfg.rng.dirichlet(tuple(self.genetic_ratios.values())).tolist()
         keys = self.genetic_ratios.keys()
         self.external_pressure_ratios = dict(zip(keys, multinomial_probas))
