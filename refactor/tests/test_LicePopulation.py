@@ -57,7 +57,7 @@ class TestLicePopulation:
         assert np.all(largest_remainder(x) == x)
 
     def test_avail_dams_freed_early(self, first_cage, first_cage_population, cur_day):
-        dams, _ = first_cage.do_mating_events()
+        dams, _ = first_cage.do_mating_events(cur_day)
 
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
         assert all(x == 0 for x in first_cage_population.free_dams(cur_day).values())
@@ -65,7 +65,7 @@ class TestLicePopulation:
     def test_avail_dams_freed_same_day_once(self, first_cage, first_cage_population, cur_day):
         first_cage_population["L5m"] = 1000
         first_cage_population["L5f"] = 1000
-        dams, _ = first_cage.do_mating_events()
+        dams, _ = first_cage.do_mating_events(cur_day)
         target_dams = {('A',): 200,
                        ('a',): 300,
                        ('A', 'a'): 500}
@@ -76,7 +76,7 @@ class TestLicePopulation:
     def test_avail_dams_freed_same_day_thrice(self, first_cage, first_cage_population, cur_day):
         first_cage_population["L5m"] = 1000
         first_cage_population["L5f"] = 1000
-        dams, _ = first_cage.do_mating_events()
+        dams, _ = first_cage.do_mating_events(cur_day)
         # After 3 days all the dams must have been freed.
         target_dams = first_cage_population.available_dams.copy()
 

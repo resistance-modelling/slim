@@ -138,7 +138,7 @@ class Cage(LoggableMixin):
         dead_lice_dist = self.get_background_lice_mortality()
 
         # Development events
-        new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date.month)
+        new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date)
 
         # Lice coming from other cages and farms
         # NOTE: arrivals first then hatching
@@ -176,7 +176,7 @@ class Cage(LoggableMixin):
 
             # Mating events that create eggs
             self.lice_population.free_dams(cur_date)
-            delta_avail_dams, delta_eggs = self.do_mating_events()
+            delta_avail_dams, delta_eggs = self.do_mating_events(cur_date)
             avail_dams_batch = DamAvailabilityBatch(cur_date + dt.timedelta(days=self.cfg.dam_unavailability),
                                                     delta_avail_dams)
 
@@ -218,6 +218,10 @@ class Cage(LoggableMixin):
         assert egg_distrib.is_positive()
         return egg_distrib, hatch_date, cost
 
+    def get_temperature(self, cur_date: dt.datetime) -> float:
+        cur_month = cur_date.month
+        return self.farm.year_temperatures[cur_month - 1]
+
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
         """Check if the cage is currently being treated. If yes, calculate the treatment rates.
         Note: this method consumes the internal treatment event queue.
@@ -243,8 +247,7 @@ class Cage(LoggableMixin):
             return geno_treatment_distrib
 
         treatment_type = self.last_effective_treatment.treatment_type
-        cur_month = cur_date.month
-        ave_temp = self.farm.year_temperatures[cur_month - 1]
+        ave_temp = self.get_temperature(cur_date)
 
         logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
                                                                       self.id, cur_date))
@@ -348,13 +351,12 @@ class Cage(LoggableMixin):
         unbounded = np.clip(np.log(2) * del_s * ages ** (del_s - 1) * del_m ** (-del_s), epsilon, np.float64(1.0))
         return unbounded
 
-
-    def get_lice_lifestage(self, cur_month) -> Tuple[int, int, int, int]:
+    def get_lice_lifestage(self, cur_date: dt.datetime) -> Tuple[int, int, int, int]:
         """
         Move lice between lifecycle stages.
         See Section 2.1 of Aldrin et al. (2017)
 
-        :param cur_month: the current month
+        :param cur_date: the current date
         :returns a tuple (new_l2, new_l4, new_l5f, new_l5m)
         """
         logger.debug("\t\tupdating lice lifecycle stages")
@@ -380,7 +382,7 @@ class Cage(LoggableMixin):
             return round(num_lice * average_rates) #int(min(self.cfg.rng.poisson(num_lice * average_rates), num_lice))
 
         lice_dist = {}
-        ave_temp = self.farm.year_temperatures[cur_month - 1]
+        ave_temp = self.get_temperature(cur_date)
 
         # L4 -> L5
         l4_to_l5 = evolve_next_stage("L4", ave_temp)
@@ -429,7 +431,7 @@ class Cage(LoggableMixin):
 
         efficacy_window = self.last_effective_treatment.effectiveness_duration_days
 
-        temperature = self.farm.year_temperatures[cur_date.month - 1]
+        temperature = self.get_temperature(cur_date)
         fish_mass = self.average_fish_mass(days_since_start)
 
         last_treatment_params = self.cfg.get_treatment(self.last_effective_treatment.treatment_type)
@@ -598,14 +600,13 @@ class Cage(LoggableMixin):
         # TODO: using a poisson distribution can lead to a high std for high prob*females
         return int(np.clip(self.cfg.rng.poisson(prob_matching * females), np.int32(0), np.int32(min(males, females))))
 
-    def do_mating_events(self) -> Tuple[GenoDistrib, GenoDistrib]:
+    def do_mating_events(self, cur_date) -> Tuple[GenoDistrib, GenoDistrib]:
         """
         will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
         assume males don't become unavailable? in this case we don't need a delta for sires
-        :returns a pair (mating_dams, new_eggs)
 
-        TODO: deal properly with fewer individuals than matings required
-        TODO: current date is required by get_num_eggs as of now, but the relationship between extrusion and temperature is not clear
+        :param cur_date the current date
+        :returns a pair (mating_dams, new_eggs)
         """
 
         delta_eggs = GenoDistrib()
@@ -620,9 +621,7 @@ class Cage(LoggableMixin):
         if distrib_sire_available.gross == 0 or distrib_dam_available.gross == 0:
             return GenoDistrib(), GenoDistrib()
 
-        # TODO - need to add dealing with fewer males/females than the number of matings
-
-        num_eggs = self.get_num_eggs(num_matings)
+        num_eggs = self.get_num_eggs(num_matings, self.get_temperature(cur_date))
         if self.genetic_mechanism == GeneticMechanism.DISCRETE:
             delta_eggs = self.generate_eggs_discrete_batch(mating_sires, mating_dams, num_eggs)
         elif self.genetic_mechanism == GeneticMechanism.MATERNAL:
@@ -765,32 +764,7 @@ class Cage(LoggableMixin):
 
         return selected_lice
 
-    def get_num_eggs(self, mated_females) -> int:
-        """
-        Get the number of new eggs
-        :param mated_females the number of mated females that reproduce
-        :returns the number of eggs produced
-        """
-
-        # See Aldrin et al. 2017, §2.2.6
-        age_distrib = self.get_stage_ages_distrib("L5f")
-        age_range = np.arange(1, len(age_distrib) + 1)
-
-        mated_females_distrib = mated_females * age_distrib
-        eggs = self.cfg.reproduction_eggs_first_extruded * \
-               (age_range ** self.cfg.reproduction_age_dependence) * mated_females_distrib
-
-        return self.cfg.rng.poisson(np.round(np.sum(eggs)))
-        # TODO: We are deprecating this. Need to investigate if temperature data is useful. See #46
-        # ave_temp = self.farm.year_temperatures[cur_month - 1]
-        # temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
-
-        # reproduction_rates = self.cfg.reproduction_eggs_first_extruded * \
-        #                     (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1)
-
-        # return self.cfg.rng.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
-
-    def get_num_eggs_v2(self, mated_females, temperature) -> int:
+    def get_num_eggs(self, mated_females, temperature) -> int:
         """
         Get the number of new eggs
         :param mated_females the number of mated females that reproduce
@@ -805,13 +779,12 @@ class Cage(LoggableMixin):
         mated_females_distrib = mated_females * age_distrib
         temperature_factor = self.cfg.delta_m10["L0"] * (10 / temperature) ** self.cfg.delta_p["L1"]
 
-        eggs = self.cfg.reproduction_eggs_first_extruded * \
+        eggs = 5*self.cfg.reproduction_eggs_first_extruded * \
                (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1) * \
                mated_females_distrib
 
         #return self.cfg.rng.poisson(np.round(np.sum(eggs)))
         return int(np.round(np.sum(eggs)))
-
 
     def get_egg_batch(self, cur_date: dt.datetime, egg_distrib: GenoDistrib) -> EggBatch:
         """
@@ -826,7 +799,7 @@ class Cage(LoggableMixin):
         # where β2**(-2) is the average temperature centered at around 10 degrees
         # and β1 is a shaping factor. This function is formally known as Belehrádek’s function
         cur_month = cur_date.month
-        ave_temp = self.farm.year_temperatures[cur_month - 1]
+        ave_temp = self.get_temperature(cur_date)
 
         beta_1 = self.cfg.delta_m10["L0_stien"]
         beta_2 = self.cfg.delta_p["L0"]

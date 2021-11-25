@@ -171,9 +171,9 @@ class TestCage:
         cage = first_farm.cages[2]
         pass
 
-    def test_get_lice_lifestage(self, first_cage, first_cage_population):
+    def test_get_lice_lifestage(self, first_cage, first_cage_population, cur_day):
 
-        new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(1)
+        new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(cur_day)
 
         # new_l2 should be around 8% of l1
         assert new_l2 >= 0
@@ -188,7 +188,7 @@ class TestCage:
         assert (new_males + new_females) / first_cage_population["L4"] >= 0.02
 
         # Let us consider august
-        new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(8)
+        new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(cur_day + dt.timedelta(days=8*30))
 
         assert new_l2 >= 0
         assert new_l4 >= 0
@@ -199,10 +199,10 @@ class TestCage:
 
         assert (new_males + new_females) / first_cage_population["L4"] >= 0.02
 
-    def test_get_lice_lifestage_planctonic_only(self, first_cage, planctonic_only_population):
+    def test_get_lice_lifestage_planctonic_only(self, first_cage, planctonic_only_population, cur_day):
         first_cage.lice_population = planctonic_only_population
 
-        _, new_l4, new_females, new_males = first_cage.get_lice_lifestage(1)
+        _, new_l4, new_females, new_males = first_cage.get_lice_lifestage(cur_day)
 
         assert new_l4 == 0
         assert new_females == 0
@@ -363,19 +363,19 @@ class TestCage:
         first_cage_population.clear_busy_dams()
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day, GenoDistrib({('A', 'a'): 15})))
 
-        target_eggs = {('A',): 251, ('a',): 224, ('A', 'a'): 599}
+        target_eggs = {('A',): 249, ('a',): 254, ('A', 'a'): 592}
         target_delta_dams = {('A',): 1, ('a',): 2, ('A', 'a'): 0}
 
-        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
         assert delta_eggs == target_eggs
         assert delta_avail_dams == target_delta_dams
 
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('A',): 648, ('a',): 276, ('A', 'a'): 830}
+        target_mutated_eggs = {('A',): 618, ('a',): 254, ('A', 'a'): 1318}
 
-        _, delta_mutated_eggs = first_cage.do_mating_events()
+        _, delta_mutated_eggs = first_cage.do_mating_events(cur_day)
         assert delta_mutated_eggs == target_mutated_eggs
 
     def test_do_mating_event_maternal(self, first_cage, first_cage_population, cur_day):
@@ -389,25 +389,25 @@ class TestCage:
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day, GenoDistrib({('A', 'a'): 15})))
 
         # No Aa lice left among the free ones, therefore no matter what L5m contains there can be no Aa.
-        target_eggs = {('A',): 537, ('a',): 537, ('A', 'a'): 0}
+        target_eggs = {('A',): 547, ('a',): 548, ('A', 'a'): 0}
         target_delta_dams = {('A',): 1, ('a',): 2, ('A', 'a'): 0}
 
-        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
         assert delta_eggs == target_eggs
         assert delta_avail_dams == target_delta_dams
 
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('A',): 1054, ('a',): 1054}
+        target_mutated_eggs = {('A',): 547, ('a',): 548}
 
-        _, delta_mutated_eggs = first_cage.do_mating_events()
+        _, delta_mutated_eggs = first_cage.do_mating_events(cur_day)
         assert delta_mutated_eggs == target_mutated_eggs
 
-    def test_no_available_sires_do_mating_events(self, first_cage):
+    def test_no_available_sires_do_mating_events(self, first_cage, cur_day):
         first_cage.lice_population.geno_by_lifestage["L5m"] = GenoDistrib({('A',): 0, ('a',): 0, ('A', 'a'): 0})
 
-        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
         assert not bool(delta_avail_dams)
         assert not bool(delta_eggs)
 
@@ -503,25 +503,22 @@ class TestCage:
 
     def test_get_num_eggs_no_females(self, first_cage):
         first_cage.lice_population["L5f"] = 0
-        assert first_cage.get_num_eggs(0) == 0
+        temp = 11
+        assert first_cage.get_num_eggs(0, temp) == 0
 
     def test_get_num_eggs(self, first_cage):
         matings = 6
-        assert 2000 <= first_cage.get_num_eggs(matings) <= 2500
-
-    def test_get_num_eggs_v2(self, first_cage):
-        matings = 6
         temperature = 10
-        assert 400 <= first_cage.get_num_eggs_v2(matings, temperature) <= 420
+        assert 2000 <= first_cage.get_num_eggs(matings, temperature) <= 2010
 
         temperature = 15
-        assert 450 <= first_cage.get_num_eggs_v2(matings, temperature) <= 460
+        assert 2200 <= first_cage.get_num_eggs(matings, temperature) <= 2300
 
         temperature = 8
-        assert 370 <= first_cage.get_num_eggs_v2(matings, temperature) <= 390
+        assert 1860 <= first_cage.get_num_eggs(matings, temperature) <= 1870
 
         matings = 12
-        assert 740 <= first_cage.get_num_eggs_v2(matings, temperature) <= 760
+        assert 3720 <= first_cage.get_num_eggs(matings, temperature) <= 3730
 
     def test_egg_mutation(self, first_cage, sample_offspring_distrib):
         sample_offspring = copy.deepcopy(sample_offspring_distrib)
@@ -557,12 +554,12 @@ class TestCage:
     def test_get_egg_batch(self, first_cage, first_cage_population, cur_day):
         first_cage_population["L5m"] *= 10
         first_cage_population["L5f"] *= 10
-        _, new_eggs = first_cage.do_mating_events()
-        target_egg_distrib = GenoDistrib({('A', 'a'): 4644.5, ('A',): 2698.25, ('a',): 1927.25})
+        _, new_eggs = first_cage.do_mating_events(cur_day)
+        target_egg_distrib = GenoDistrib({('A', 'a'): 15677, ('A',): 6054, ('a',): 10388})
 
         new_egg_batch = first_cage.get_egg_batch(cur_day, new_eggs)
         assert new_egg_batch == EggBatch(
-            hatch_date=datetime.datetime(2017, 10, 11, 0, 0),
+            hatch_date=datetime.datetime(2017, 10, 8, 0, 0),
             geno_distrib=target_egg_distrib)
 
     def test_avail_batch_lt(self, first_cage, null_offspring_distrib, cur_day):
@@ -890,7 +887,7 @@ class TestCage:
         first_cage_population["L5m"] = first_cage_population["L5m"] * 100
         sample_treatment_mortality["L5f"] = sample_treatment_mortality["L5f"] * 10
 
-        dams, _ = first_cage.do_mating_events()
+        dams, _ = first_cage.do_mating_events(cur_day)
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
 
         background_mortality = first_cage.get_background_lice_mortality()
