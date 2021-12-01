@@ -233,6 +233,10 @@ class LicePopulation(MutableMapping[LifeStage, int]):
     """
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
+    lice_stages_bio_labels = dict(zip(lice_stages, ["R", "CO", "CH", "PA", "AF", "AM"]))
+    lice_stages_bio_long_names = dict(zip(lice_stages, [
+        "Recruitment", "Copepopid", "Chalimus", "Preadult", "Adult Female", "Adult Male"]))
+
     susceptible_stages = lice_stages[2:]
     pathogenic_stages = lice_stages[3:]
 

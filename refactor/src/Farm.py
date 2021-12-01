@@ -259,6 +259,9 @@ class Farm(LoggableMixin):
         else:
             logger.debug("Updating farm {} (non-operational)".format(self.name))
 
+        self.log("\tAdding %r new lice from the reservoir", new_reservoir_lice=ext_influx)
+        self.log("\tReservoir lice genetic ratios: %s", new_reservoir_lice_ratios=ext_pressure_ratios)
+
         self.handle_events(cur_date)
 
         # get number of lice from reservoir to be put in each cage
@@ -267,7 +270,9 @@ class Farm(LoggableMixin):
         total_cost = Money("0.00")
 
         # collate egg batches by hatch time
-        eggs_by_hatch_date: GenoDistribByHatchDate = {} 
+        eggs_by_hatch_date: GenoDistribByHatchDate = {}
+        eggs_log = GenoDistrib()
+
         for cage in self.cages:
 
             # update the cage and collect the offspring info
@@ -282,8 +287,11 @@ class Farm(LoggableMixin):
                 else:
                     eggs_by_hatch_date[hatch_date] = egg_distrib
 
+                eggs_log += egg_distrib
+
             total_cost += cost
 
+        self.log("\t\tGenerated eggs by farm %d: %s", self.name, eggs=eggs_log)
         self.current_capital -= total_cost
 
         return eggs_by_hatch_date, total_cost

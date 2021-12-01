@@ -172,7 +172,7 @@ class Simulator:
                     **farm.logged_data,
                     "num_fish": farm.num_fish,
                     "is_treating": is_treating,
-                    "payoff": float(state.payoff)
+                    "payoff": float(state.payoff),
                 }
 
         dataframe = pd.DataFrame.from_dict(farm_data, orient='index')
@@ -183,6 +183,7 @@ class Simulator:
             return GenoDistrib.batch_sum(data_to_sum, True)
 
         aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
+        dataframe["eggs"] = dataframe["eggs"].apply(lambda x: x.gross)
 
         dataframe = dataframe.join(aggregate_geno_info)
 
@@ -296,30 +297,37 @@ class Simulator:
             data_file.close()
 
 
-class OffspringAveragingQueue(Deque[GenoDistrib]):
+class OffspringAveragingQueue:
     """Helper class to compute a rolling average"""
     def __init__(self, rolling_average: int):
         """
         :param rolling_average the maximum length to consider
         """
-        super().__init__(maxlen=rolling_average)
+        self._queue = Deque[GenoDistrib](maxlen=rolling_average)
         self.offspring_sum = GenoDistrib()
+    
+    def __len__(self):
+        return len(self._queue)
+    
+    @property
+    def rolling_average_factor(self):
+        return self._queue.maxlen
 
     def append(self, offspring_per_farm: List[GenoDistribByHatchDate]):
         """Add an element to our rolling average. This will automatically pop elements on the left."""
         to_add = GenoDistrib()
         for farm_offspring in offspring_per_farm:
             to_add = to_add + GenoDistrib.batch_sum(list(farm_offspring.values()))
-        if len(self) == self.maxlen:
+        if len(self) == self.rolling_average_factor:
             self.popleft()
-        super().append(to_add)
+        self._queue.append(to_add)
         self.offspring_sum += to_add
 
     def popleft(self) -> GenoDistrib:
-        element = super().popleft()
+        element = self._queue.popleft()
         self.offspring_sum = self.offspring_sum - element
         return element
 
     @property
     def average(self):
-        return self.offspring_sum * (1 / self.maxlen)
+        return self.offspring_sum * (1 / self.rolling_average_factor)
