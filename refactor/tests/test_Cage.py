@@ -363,7 +363,7 @@ class TestCage:
         first_cage_population.clear_busy_dams()
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day, GenoDistrib({('A', 'a'): 15})))
 
-        target_eggs = {('A',): 249, ('a',): 254, ('A', 'a'): 592}
+        target_eggs = {('A',): 237, ('a',): 242, ('A', 'a'): 562}
         target_delta_dams = {('A',): 1, ('a',): 2, ('A', 'a'): 0}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
@@ -373,7 +373,7 @@ class TestCage:
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('A',): 618, ('a',): 254, ('A', 'a'): 1318}
+        target_mutated_eggs = {('A',): 588, ('a',): 242, ('A', 'a'): 1253}
 
         _, delta_mutated_eggs = first_cage.do_mating_events(cur_day)
         assert delta_mutated_eggs == target_mutated_eggs
@@ -389,7 +389,7 @@ class TestCage:
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day, GenoDistrib({('A', 'a'): 15})))
 
         # No Aa lice left among the free ones, therefore no matter what L5m contains there can be no Aa.
-        target_eggs = {('A',): 547, ('a',): 548, ('A', 'a'): 0}
+        target_eggs = {('A',): 520, ('a',): 521, ('A', 'a'): 0}
         target_delta_dams = {('A',): 1, ('a',): 2, ('A', 'a'): 0}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
@@ -399,7 +399,7 @@ class TestCage:
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('A',): 547, ('a',): 548}
+        target_mutated_eggs = {('A',): 520, ('a',): 521}
 
         _, delta_mutated_eggs = first_cage.do_mating_events(cur_day)
         assert delta_mutated_eggs == target_mutated_eggs
@@ -504,21 +504,27 @@ class TestCage:
     def test_get_num_eggs_no_females(self, first_cage):
         first_cage.lice_population["L5f"] = 0
         temp = 11
-        assert first_cage.get_num_eggs(0, temp) == 0
+        assert first_cage.get_num_eggs(0) == 0
 
     def test_get_num_eggs(self, first_cage):
         matings = 6
+        assert 2000 <= first_cage.get_num_eggs(matings) <= 2500
+
+    """
+    def test_get_num_eggs(self, first_cage):
+        matings = 6
         temperature = 10
-        assert 2000 <= first_cage.get_num_eggs(matings, temperature) <= 2010
+        assert 2000 <= first_cage.get_num_eggs(matings) <= 2010
 
         temperature = 15
-        assert 2200 <= first_cage.get_num_eggs(matings, temperature) <= 2300
+        assert 2200 <= first_cage.get_num_eggs(matings) <= 2300
 
         temperature = 8
-        assert 1860 <= first_cage.get_num_eggs(matings, temperature) <= 1870
+        assert 1860 <= first_cage.get_num_eggs(matings) <= 1870
 
         matings = 12
-        assert 3720 <= first_cage.get_num_eggs(matings, temperature) <= 3730
+        assert 3720 <= first_cage.get_num_eggs(matings) <= 3730
+    """
 
     def test_egg_mutation(self, first_cage, sample_offspring_distrib):
         sample_offspring = copy.deepcopy(sample_offspring_distrib)

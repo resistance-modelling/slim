@@ -621,7 +621,7 @@ class Cage(LoggableMixin):
         if distrib_sire_available.gross == 0 or distrib_dam_available.gross == 0:
             return GenoDistrib(), GenoDistrib()
 
-        num_eggs = self.get_num_eggs(num_matings, self.get_temperature(cur_date))
+        num_eggs = self.get_num_eggs(num_matings)
         if self.genetic_mechanism == GeneticMechanism.DISCRETE:
             delta_eggs = self.generate_eggs_discrete_batch(mating_sires, mating_dams, num_eggs)
         elif self.genetic_mechanism == GeneticMechanism.MATERNAL:
@@ -764,11 +764,10 @@ class Cage(LoggableMixin):
 
         return selected_lice
 
-    def get_num_eggs(self, mated_females, temperature) -> int:
+    def get_num_eggs(self, mated_females) -> int:
         """
         Get the number of new eggs
         :param mated_females the number of mated females that reproduce
-        :param temperature the average temperature of the farm.
         :returns the number of eggs produced
         """
 
@@ -777,13 +776,11 @@ class Cage(LoggableMixin):
         age_range = np.arange(1, len(age_distrib) + 1)
 
         mated_females_distrib = mated_females * age_distrib
-        temperature_factor = self.cfg.delta_m10["L0"] * (10 / temperature) ** self.cfg.delta_p["L1"]
 
-        eggs = 5*self.cfg.reproduction_eggs_first_extruded * \
-               (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1) * \
-               mated_females_distrib
+        # Hatching time is already covered in get_egg_batch
+        eggs = self.cfg.reproduction_eggs_first_extruded * \
+               (age_range ** self.cfg.reproduction_age_dependence) * mated_females_distrib
 
-        #return self.cfg.rng.poisson(np.round(np.sum(eggs)))
         return int(np.round(np.sum(eggs)))
 
     def get_egg_batch(self, cur_date: dt.datetime, egg_distrib: GenoDistrib) -> EggBatch:
