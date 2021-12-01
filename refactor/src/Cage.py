@@ -777,7 +777,7 @@ class Cage(LoggableMixin):
 
         mated_females_distrib = mated_females * age_distrib
 
-        # Hatching time is already covered in get_egg_batch
+        # Hatching time is already covered in get_egg_batch0
         eggs = self.cfg.reproduction_eggs_first_extruded * \
                (age_range ** self.cfg.reproduction_age_dependence) * mated_females_distrib
 

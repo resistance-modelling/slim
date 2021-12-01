@@ -243,6 +243,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
         self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(exclude_from_averaging=True,
                                                                 title="Cumulated payoff", row=3, col=0)
+        self.extPressureRatios = self.pqgPlotContainer.addSmoothedPlot(title="External pressure ratios", row=3, col=1)
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
@@ -318,19 +319,10 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
     def cleanPlot(self):
         self.payoffPlot.clear()
+        self.extPressureRatios.clear()
+
         for plot in self.licePopulationPlots + self.aggregationRatePlot + self.fishPopulationPlots:
             plot.clear()
-
-
-        """
-        for curves in self.stages_to_curve.values():
-            for curve in curves.values():
-                curve.clear()
-
-        for curves in self.geno_to_curve.values():
-            for curve in curves.values():
-                curve.clear()
-        """
 
         if self.licePopulationLegend:
             self.licePopulationLegend.clear()
@@ -359,6 +351,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         elif len(self._uniqueFarms) != len(self.licePopulationPlots):
             self._remountPlot()
 
+        if len(self._uniqueFarms) == 0:
+            return
+
         self.licePopulationLegend = self.licePopulationPlots[0].addLegend()
 
         farm_list = self._uniqueFarms
@@ -379,16 +374,16 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             stages = farm_df[LicePopulation.lice_stages].applymap(
                 lambda geno_data: sum(geno_data.values()))
 
+            allele_names = GenoDistrib.allele_labels
+            allele_colours = dict(zip(allele_names, self._colorPalette[:len(allele_names)]))
+
             # Genotype information
             if self.showDetailedGenotypeCheckBox.isChecked():
-                allele_names = GenoDistrib.allele_labels
-                stages_colours = dict(zip(allele_names, self._colorPalette[:len(allele_names)]))
-
                 allele_data = {allele: farm_df[allele].to_numpy() for allele in allele_names}
 
                 for allele_name, stage_value in allele_data.items():
                     self.licePopulationPlots[farm_idx].plot(stage_value, name=allele_name,
-                                                            pen=stages_colours[allele_name])
+                                                            pen=allele_colours[allele_name])
 
             # Stage information
             else:
@@ -405,7 +400,11 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                                                                 name=bio_name, pen=stages_colours[stage])
 
                 if self.selected_curve.Eggs:
-                    self.licePopulationPlots[farm_idx].plot(farm_df["eggs"], name="Eggs", pen=egg_palette[0])
+                    self.licePopulationPlots[farm_idx].plot(farm_df["eggs"], name="External influx", pen=egg_palette[0])
+                if self.selected_curve.ExtP:
+                    self.licePopulationPlots[farm_idx].plot(farm_df["new_reservoir_lice"],
+                                                            name="Eggs", pen=egg_palette[0])
+
 
                 if self.showOffspringDistribution.isChecked():
                     # get gross arrivals
@@ -429,12 +428,23 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         payoffs = farm_df["payoff"].to_numpy()
         self.payoffPlot.plot(payoffs, pen=self._colorPalette[0])
 
+        # External pressure ratios
+        # TODO: fix this
+        external_pressure_ratios = {geno: farm_df["new_reservoir_lice_ratios"].apply(lambda x: x[geno])
+                                    for geno in GenoDistrib.alleles}
+        for geno, extp_ratios in external_pressure_ratios.items():
+            allele_name = "".join(geno)
+            self.extPressureRatios.plot(extp_ratios, title=str(geno), pen=allele_colours[allele_name])
+        self.extPressureRatios.addLegend()
+
         # keep ranges consistent
         for plot in self.licePopulationPlots + self.fishPopulationPlots + self.aggregationRatePlot:
             plot.setXRange(0, len(payoffs), padding=0)
             plot.vb.setLimits(xMin=0, xMax=len(payoffs), yMin=0)
-        self.payoffPlot.setXRange(0, len(payoffs), padding=0)
-        self.payoffPlot.vb.setLimits(xMin=0, xMax=len(payoffs))
+
+        for singlePlot in [self.payoffPlot, self.extPressureRatios]:
+            singlePlot.setXRange(0, len(payoffs), padding=0)
+            singlePlot.vb.setLimits(xMin=0, xMax=len(payoffs))
 
     def _convolve(self, signal):
         kernel_size = self.convolutionKernelSizeBox.value()
