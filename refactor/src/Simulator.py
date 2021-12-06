@@ -30,10 +30,6 @@ class Organisation:
         self.external_pressure_ratios = cfg.initial_genetic_ratios.copy()
         self.offspring_queue = OffspringAveragingQueue(self.cfg.reservoir_offspring_average)
 
-    @property
-    def capital(self):
-        return sum((farm.current_capital for farm in self.farms), Money())
-
     def update_genetic_ratios(self, offspring: GenoDistrib):
         """
         Update the genetic ratios after an offspring update

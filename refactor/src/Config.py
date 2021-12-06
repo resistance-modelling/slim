@@ -233,9 +233,6 @@ class FarmConfig:
         # TODO: a farm may employ different chemicals
         self.treatment_type = Treatment[data["treatment_type"].upper()]
 
-        # Farm-specific capital
-        self.start_capital = Money(data["start_capital"])
-
         # Defection probability
         self.defection_proba: float = data["defection_proba"]
 

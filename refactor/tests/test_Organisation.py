@@ -11,7 +11,6 @@ class TestOrganisation:
     def test_organisation_loads(self, organisation):
         assert organisation.name == "Loch Fyne ACME Ltd."
         assert len(organisation.farms) == 2
-        assert organisation.capital == Money("180000.00")
 
     def test_json(self, organisation):
         json_str = organisation.to_json()

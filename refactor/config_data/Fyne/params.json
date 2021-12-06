@@ -24,7 +24,6 @@
             "treatment_type": "emb",
             "treatment_dates": [
             ],
-            "start_capital": "100000.00",
             "max_num_treatments": 10,
             "sampling_spacing": 14,
             "defection_proba": 0.2
@@ -45,7 +44,6 @@
             "treatment_type": "emb",
             "treatment_dates": [
             ],
-            "start_capital": "80000.00",
             "max_num_treatments": 8,
             "sampling_spacing": 7,
             "defection_proba": 0.2

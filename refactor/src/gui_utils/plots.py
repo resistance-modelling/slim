@@ -91,7 +91,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         self.newKernelSize.emit()
 
     def _setAverageFactor(self, value):
-        for (_, farm_idx), plot_item in self.coord_to_plot.items():
+        for (farm_idx, _), plot_item in self.coord_to_plot.items():
             average_factor = self._getAverageFactor(farm_idx, value)
             plot_item.setAverageFactor(average_factor)
         self.newAverageFactor.emit()
@@ -110,8 +110,8 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
         averaging_widget = parent.normaliseByCageCheckbox
 
-        row = kwargs["row"]
-        farm_idx = kwargs["col"]
+        col = kwargs["col"]
+        farm_idx = kwargs["row"]
 
         smoothing_kernel_size = smoothing_kernel_size_widget.value()
         average = self._getAverageFactor(farm_idx, averaging_widget.isChecked())
@@ -119,7 +119,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         smoothed_plot_item = SmoothedPlotItemWrap(plot, smoothing_kernel_size, average)
 
         if not exclude_from_averaging:
-            self.coord_to_plot[(row, farm_idx)] = smoothed_plot_item
+            self.coord_to_plot[(farm_idx, col)] = smoothed_plot_item
 
         return smoothed_plot_item
 
@@ -234,24 +234,22 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.pqgPlotContainer.newAverageFactor.connect(self._updatePlot)
         self.pqgPlotContainer.newKernelSize.connect(self._updatePlot)
 
-        self.licePopulationPlots = [self.pqgPlotContainer.addSmoothedPlot(title=f"Lice Population of farm {i}", row=0, col=i)
+        self.licePopulationPlots = [self.pqgPlotContainer.addSmoothedPlot(title=f"Lice population of farm {i}", row=i, col=0)
                                     for i in range(num_farms)]
-        self.fishPopulationPlots = [self.pqgPlotContainer.addSmoothedPlot(title=f"Fish Population of farm {i}", row=1, col=i)
+        self.fishPopulationPlots = [self.pqgPlotContainer.addSmoothedPlot(title=f"Fish population of farm {i}", row=i, col=1)
                                     for i in range(num_farms)]
-        self.aggregationRatePlot = [self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", row=2, col=i)
+        self.aggregationRatePlot = [self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", row=i, col=2)
                                     for i in range(num_farms)]
 
-        self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(exclude_from_averaging=True,
-                                                                title="Cumulated payoff", row=3, col=0)
-        self.extPressureRatios = self.pqgPlotContainer.addSmoothedPlot(title="External pressure ratios", row=3, col=1)
+        self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(
+            exclude_from_averaging=True, title="Cumulated payoff", row=0, col=3)
+        self.extPressureRatios = self.pqgPlotContainer.addSmoothedPlot(
+            title="External pressure ratios", row=1, col=3)
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
-        #self.geno_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
-        #self.stages_to_curve: Dict[str, Dict[str, pg.PlotItem]] = {}
-
         # TODO: implement a fixed aspect ratio. Layouting in QT is complicated at times.
-        self.pqgPlotContainer.setFixedHeight(1000)
+        self.pqgPlotContainer.setFixedHeight(250 * num_farms)
 
         # add grid, synchronise Y-range
         for plot in self.licePopulationPlots + self.fishPopulationPlots:

@@ -54,7 +54,6 @@ class Farm(LoggableMixin):
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.available_treatments = farm_cfg.max_num_treatments
-        self.current_capital = self.farm_cfg.start_capital
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
         self.year_temperatures = self.initialise_temperatures(cfg.farm_data)
@@ -292,7 +291,6 @@ class Farm(LoggableMixin):
             total_cost += cost
 
         self.log("\t\tGenerated eggs by farm %d: %s", self.name, eggs=eggs_log)
-        self.current_capital -= total_cost
 
         return eggs_by_hatch_date, total_cost
 
