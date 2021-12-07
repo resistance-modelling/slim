@@ -6,7 +6,7 @@ import datetime as dt
 import json
 import math
 from queue import PriorityQueue
-from typing import Union, Optional, Tuple, cast, TYPE_CHECKING
+from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict
 
 import numpy as np
 
@@ -16,7 +16,7 @@ from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistan
     ThermalTreatment
 from src.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue,
-                                GenoLifeStageDistrib, largest_remainder, LifeStage)
+                                GenoLifeStageDistrib, largest_remainder, LifeStage, GenoDistribDict)
 from src.QueueTypes import (DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent,
                             pop_from_queue)
 from src.JSONEncoders import CustomFarmEncoder
@@ -53,7 +53,7 @@ class Cage(LoggableMixin):
 
         # TODO: update with calculations
         if initial_lice_pop is None:
-            lice_population = {"L1": cfg.ext_pressure, "L2": 0, "L3": 0, "L4": 0, "L5f": 0,
+            lice_population = {"L1": cfg.min_ext_pressure, "L2": 0, "L3": 0, "L4": 0, "L5f": 0,
                                "L5m": 0}
         else:
             lice_population = initial_lice_pop
@@ -66,10 +66,10 @@ class Cage(LoggableMixin):
         # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
         self.genetic_mechanism = self.cfg.genetic_mechanism
 
-        geno_by_lifestage = {stage: GenoDistrib(self.cfg.genetic_ratios).normalise_to(lice_population[stage])
+        geno_by_lifestage = {stage: GenoDistrib(self.cfg.initial_genetic_ratios).normalise_to(lice_population[stage])
                              for stage in lice_population}
 
-        self.lice_population = LicePopulation(geno_by_lifestage, self.cfg.genetic_ratios)
+        self.lice_population = LicePopulation(geno_by_lifestage, self.cfg.initial_genetic_ratios)
 
         self.num_fish = cfg.farms[self.farm_id].num_fish
         self.num_infected_fish = self.get_mean_infected_fish()
@@ -110,11 +110,15 @@ class Cage(LoggableMixin):
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
     def update(
-            self, cur_date: dt.datetime, pressure: int
+        self,
+        cur_date: dt.datetime,
+        pressure: int,
+        ext_pressure_ratio: GenoDistribDict
     ) -> Tuple[GenoDistrib, Optional[dt.datetime], Money]:
         """Update the cage at the current time step.
         :param cur_date: Current date of simulation
         :param pressure: External pressure, planctonic lice coming from the reservoir
+        :param ext_pressure_ratio: The genotype ratio to use for the external pressure
         :return: Tuple (egg genotype distribution, hatching date, cost)
         """
 
@@ -134,7 +138,7 @@ class Cage(LoggableMixin):
         dead_lice_dist = self.get_background_lice_mortality()
 
         # Development events
-        new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date.month)
+        new_L2, new_L4, new_females, new_males = self.get_lice_lifestage(cur_date)
 
         # Lice coming from other cages and farms
         # NOTE: arrivals first then hatching
@@ -144,7 +148,7 @@ class Cage(LoggableMixin):
         new_offspring_distrib = self.create_offspring(cur_date)
 
         # Lice coming from reservoir
-        lice_from_reservoir = self.get_reservoir_lice(pressure)
+        lice_from_reservoir = self.get_reservoir_lice(pressure, ext_pressure_ratio)
         logger.debug(f"\t\tExternal pressure lice distribution = {lice_from_reservoir}")
 
         if cur_date < self.start_date or self.is_fallowing:
@@ -172,10 +176,9 @@ class Cage(LoggableMixin):
 
             # Mating events that create eggs
             self.lice_population.free_dams(cur_date)
-            delta_avail_dams, delta_eggs = self.do_mating_events()
+            delta_avail_dams, delta_eggs = self.do_mating_events(cur_date)
             avail_dams_batch = DamAvailabilityBatch(cur_date + dt.timedelta(days=self.cfg.dam_unavailability),
                                                     delta_avail_dams)
-
 
             new_egg_batch = self.get_egg_batch(cur_date, delta_eggs)
 
@@ -199,7 +202,7 @@ class Cage(LoggableMixin):
             lice_from_reservoir,
             avail_dams_batch,
             new_offspring_distrib,
-            hatched_arrivals_dist
+            hatched_arrivals_dist,
         )
 
         logger.debug("\t\tfinal lice population= {}".format(self.lice_population))
@@ -214,6 +217,10 @@ class Cage(LoggableMixin):
 
         assert egg_distrib.is_positive()
         return egg_distrib, hatch_date, cost
+
+    def get_temperature(self, cur_date: dt.datetime) -> float:
+        cur_month = cur_date.month
+        return self.farm.year_temperatures[cur_month - 1]
 
     def get_lice_treatment_mortality_rate(self, cur_date: dt.datetime) -> GenoTreatmentDistrib:
         """Check if the cage is currently being treated. If yes, calculate the treatment rates.
@@ -240,8 +247,7 @@ class Cage(LoggableMixin):
             return geno_treatment_distrib
 
         treatment_type = self.last_effective_treatment.treatment_type
-        cur_month = cur_date.month
-        ave_temp = self.farm.year_temperatures[cur_month - 1]
+        ave_temp = self.get_temperature(cur_date)
 
         logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
                                                                       self.id, cur_date))
@@ -345,13 +351,12 @@ class Cage(LoggableMixin):
         unbounded = np.clip(np.log(2) * del_s * ages ** (del_s - 1) * del_m ** (-del_s), epsilon, np.float64(1.0))
         return unbounded
 
-
-    def get_lice_lifestage(self, cur_month) -> Tuple[int, int, int, int]:
+    def get_lice_lifestage(self, cur_date: dt.datetime) -> Tuple[int, int, int, int]:
         """
         Move lice between lifecycle stages.
         See Section 2.1 of Aldrin et al. (2017)
 
-        :param cur_month: the current month
+        :param cur_date: the current date
         :returns a tuple (new_l2, new_l4, new_l5f, new_l5m)
         """
         logger.debug("\t\tupdating lice lifecycle stages")
@@ -377,7 +382,7 @@ class Cage(LoggableMixin):
             return round(num_lice * average_rates) #int(min(self.cfg.rng.poisson(num_lice * average_rates), num_lice))
 
         lice_dist = {}
-        ave_temp = self.farm.year_temperatures[cur_month - 1]
+        ave_temp = self.get_temperature(cur_date)
 
         # L4 -> L5
         l4_to_l5 = evolve_next_stage("L4", ave_temp)
@@ -426,7 +431,7 @@ class Cage(LoggableMixin):
 
         efficacy_window = self.last_effective_treatment.effectiveness_duration_days
 
-        temperature = self.farm.year_temperatures[cur_date.month - 1]
+        temperature = self.get_temperature(cur_date)
         fish_mass = self.average_fish_mass(days_since_start)
 
         last_treatment_params = self.cfg.get_treatment(self.last_effective_treatment.treatment_type)
@@ -595,14 +600,13 @@ class Cage(LoggableMixin):
         # TODO: using a poisson distribution can lead to a high std for high prob*females
         return int(np.clip(self.cfg.rng.poisson(prob_matching * females), np.int32(0), np.int32(min(males, females))))
 
-    def do_mating_events(self) -> Tuple[GenoDistrib, GenoDistrib]:
+    def do_mating_events(self, cur_date) -> Tuple[GenoDistrib, GenoDistrib]:
         """
         will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
         assume males don't become unavailable? in this case we don't need a delta for sires
-        :returns a pair (mating_dams, new_eggs)
 
-        TODO: deal properly with fewer individuals than matings required
-        TODO: current date is required by get_num_eggs as of now, but the relationship between extrusion and temperature is not clear
+        :param cur_date the current date
+        :returns a pair (mating_dams, new_eggs)
         """
 
         delta_eggs = GenoDistrib()
@@ -616,8 +620,6 @@ class Cage(LoggableMixin):
 
         if distrib_sire_available.gross == 0 or distrib_dam_available.gross == 0:
             return GenoDistrib(), GenoDistrib()
-
-        # TODO - need to add dealing with fewer males/females than the number of matings
 
         num_eggs = self.get_num_eggs(num_matings)
         if self.genetic_mechanism == GeneticMechanism.DISCRETE:
@@ -773,20 +775,13 @@ class Cage(LoggableMixin):
         age_distrib = self.get_stage_ages_distrib("L5f")
         age_range = np.arange(1, len(age_distrib) + 1)
 
-        # TODO: keep track of free females before calculating mating
         mated_females_distrib = mated_females * age_distrib
+
+        # Hatching time is already covered in get_egg_batch0
         eggs = self.cfg.reproduction_eggs_first_extruded * \
                (age_range ** self.cfg.reproduction_age_dependence) * mated_females_distrib
 
-        return self.cfg.rng.poisson(np.round(np.sum(eggs)))
-        # TODO: We are deprecating this. Need to investigate if temperature data is useful. See #46
-        # ave_temp = self.farm.year_temperatures[cur_month - 1]
-        # temperature_factor = self.cfg.delta_m10["L0"] * (10 / ave_temp) ** self.cfg.delta_p["L0"]
-
-        # reproduction_rates = self.cfg.reproduction_eggs_first_extruded * \
-        #                     (age_range ** self.cfg.reproduction_age_dependence) / (temperature_factor + 1)
-
-        # return self.cfg.rng.poisson(np.round(np.sum(reproduction_rates * mated_females_distrib)))
+        return int(np.round(np.sum(eggs)))
 
     def get_egg_batch(self, cur_date: dt.datetime, egg_distrib: GenoDistrib) -> EggBatch:
         """
@@ -801,11 +796,11 @@ class Cage(LoggableMixin):
         # where β2**(-2) is the average temperature centered at around 10 degrees
         # and β1 is a shaping factor. This function is formally known as Belehrádek’s function
         cur_month = cur_date.month
-        ave_temp = self.farm.year_temperatures[cur_month - 1]
+        ave_temp = self.get_temperature(cur_date)
 
-        beta_1 = self.cfg.delta_m10["L0"]
+        beta_1 = self.cfg.delta_m10["L0_stien"]
         beta_2 = self.cfg.delta_p["L0"]
-        expected_time = (self.cfg.delta_m10["L0"] / (ave_temp - 10 + beta_1 * beta_2)) ** 2
+        expected_time = (beta_1 / (ave_temp - 10 + beta_1 * beta_2)) ** 2
         expected_hatching_date = cur_date + dt.timedelta(self.cfg.rng.poisson(expected_time))
         return EggBatch(expected_hatching_date, egg_distrib)
 
@@ -816,7 +811,7 @@ class Cage(LoggableMixin):
         :returns a delta egg genomics
         """
 
-        delta_egg_offspring = GenoDistrib({geno: 0 for geno in self.cfg.genetic_ratios})
+        delta_egg_offspring = GenoDistrib({geno: 0 for geno in self.cfg.initial_genetic_ratios})
 
         def cts(hatching_event: EggBatch):
             nonlocal delta_egg_offspring
@@ -936,10 +931,10 @@ class Cage(LoggableMixin):
             new_females: int,
             new_males: int,
             new_infections: int,
-            lice_from_reservoir: GrossLiceDistrib,
+            lice_from_reservoir: Dict[LifeStage, GenoDistrib],
             delta_dams_batch: OptionalDamBatch,
             new_offspring_distrib: GenoDistrib,
-            hatched_arrivals_dist: GenoDistrib
+            hatched_arrivals_dist: GenoDistrib,
     ):
         """Update the number of fish and the lice in each life stage
         :param dead_lice_dist the number of dead lice due to background death (as a distribution)
@@ -980,7 +975,7 @@ class Cage(LoggableMixin):
         self.promote_population("L4", "L5f", 0, new_females)
         self.promote_population("L3", "L4", new_males + new_females, new_L4)
         self.promote_population("L2", "L3", new_L4, new_infections)
-        self.promote_population("L1", "L2", new_infections, new_L2 + lice_from_reservoir["L2"])
+        self.promote_population("L1", "L2", new_infections, new_L2)
 
         self.promote_population(new_offspring_distrib, "L1", new_L2, None)
         self.promote_population(hatched_arrivals_dist, "L1", 0, None)
@@ -988,8 +983,8 @@ class Cage(LoggableMixin):
         self.lice_population.remove_negatives()
 
         # in absence of wildlife genotype, simply upgrade accordingly
-        # TODO: switch to generic genotype distribs?
-        self.lice_population["L1"] += lice_from_reservoir["L1"]
+        self.lice_population.geno_by_lifestage["L2"] += lice_from_reservoir["L2"]
+        self.lice_population.geno_by_lifestage["L1"] += lice_from_reservoir["L1"]
 
         if delta_dams_batch:
             self.lice_population.add_busy_dams_batch(delta_dams_batch)
@@ -1049,18 +1044,26 @@ class Cage(LoggableMixin):
         smolt_params = self.cfg.smolt_mass_params
         return smolt_params.max_mass / (1 + math.exp(smolt_params.skewness * (days - smolt_params.x_shift)))
 
-    def get_reservoir_lice(self, pressure: int) -> GrossLiceDistrib:
+    def get_reservoir_lice(self, pressure: int, external_pressure_ratios: GenoDistribDict) -> Dict[LifeStage, GenoDistrib]:
         """Get distribution of lice coming from the reservoir
 
         :param pressure: External pressure
+        :param external_pressure_ratios the external pressure ratios to sample from
         :return: Distribution of lice in L1 and L2
         """
 
         if pressure == 0:
-            return {"L1": 0, "L2": 0}
+            return {"L1": GenoDistrib(), "L2": GenoDistrib()}
 
-        num_L1 = self.cfg.rng.integers(low=0, high=pressure, size=1)[0]
-        new_lice_dist = {"L1": num_L1, "L2": pressure - num_L1}
+        new_L1_gross = self.cfg.rng.integers(low=0, high=pressure, size=1)[0]
+        new_L2_gross = pressure - new_L1_gross
+
+        keys = list(external_pressure_ratios.keys())
+        probas = list(external_pressure_ratios.values())
+        new_L1 = GenoDistrib(dict(zip(keys, self.cfg.rng.multinomial(new_L1_gross, probas).tolist())))
+        new_L2 = GenoDistrib(dict(zip(keys, self.cfg.rng.multinomial(new_L2_gross, probas).tolist())))
+
+        new_lice_dist = {"L1": new_L1, "L2": new_L2}
         logger.debug("\t\tdistribution of new lice from reservoir = {}".format(new_lice_dist))
         return new_lice_dist
 

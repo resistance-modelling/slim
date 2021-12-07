@@ -79,7 +79,8 @@ class RuntimeConfig:
         self.geno_mutation_rate: float = data["geno_mutation_rate"]
 
         # TODO: take into account processing of non-discrete keys
-        self.genetic_ratios: GenoDistribDict = {tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"].items()}
+        self.reservoir_offspring_integration_ratio: float = data["reservoir_offspring_integration_ratio"]
+        self.reservoir_offspring_average: int = data["reservoir_offspring_average"]
 
         # Farm data
         self.farm_data = data["farm_data"]
@@ -135,11 +136,13 @@ class Config(RuntimeConfig):
         self.start_date = to_dt(data["start_date"])
         self.end_date = to_dt(data["end_date"])
 
-        # general parameters
-        self.ext_pressure = data["ext_pressure"]
+        # Experiment-specific genetic ratios
+        self.min_ext_pressure = data["ext_pressure"]
+        self.initial_genetic_ratios: GenoDistribDict = {
+            tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"].items()}
 
         self.monthly_cost = Money(data["monthly_cost"])
-        self.name: str = data["name"] 
+        self.name: str = data["name"]
 
         # farms
         self.farms = [FarmConfig(farm_data)
@@ -230,9 +233,6 @@ class FarmConfig:
 
         # TODO: a farm may employ different chemicals
         self.treatment_type = Treatment[data["treatment_type"].upper()]
-
-        # Farm-specific capital
-        self.start_capital = Money(data["start_capital"])
 
         # Defection probability
         self.defection_proba: float = data["defection_proba"]

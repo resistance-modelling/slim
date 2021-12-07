@@ -145,4 +145,14 @@ def planctonic_only_population(first_cage):
     geno = {stage: GenoDistrib({("a",): 0, ("A", "a"): 0, ("A",): 0}) for stage in lice_pop.keys()}
     geno["L1"][("a",)] = 100
     geno["L2"][("a",)] = 200
-    return LicePopulation(geno, first_cage.cfg.genetic_ratios)
+    return LicePopulation(geno, first_cage.cfg.initial_genetic_ratios)
+
+
+@pytest.fixture
+def initial_external_ratios(farm_config):
+    return farm_config.initial_genetic_ratios
+
+
+@pytest.fixture
+def initial_external_inflow(farm_config):
+    return farm_config.min_ext_pressure

@@ -21,7 +21,7 @@ from src import LoggableMixin, logger
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
-from src.LicePopulation import GrossLiceDistrib, GenoDistrib
+from src.LicePopulation import GrossLiceDistrib, GenoDistrib, GenoDistribDict
 from src.QueueTypes import *
 from src.TreatmentTypes import Money, Treatment
 
@@ -36,7 +36,7 @@ class Farm(LoggableMixin):
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None, ):
+    def __init__(self, name: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None):
         """
         Create a farm.
         :param name: the id of the farm.
@@ -54,7 +54,6 @@ class Farm(LoggableMixin):
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.available_treatments = farm_cfg.max_num_treatments
-        self.current_capital = self.farm_cfg.start_capital
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
         self.year_temperatures = self.initialise_temperatures(cfg.farm_data)
@@ -68,7 +67,6 @@ class Farm(LoggableMixin):
         self.__sampling_events: PriorityQueue[SamplingEvent] = PriorityQueue() 
 
         self.generate_sampling_events()
-
 
     def __str__(self):
         """
@@ -116,7 +114,6 @@ class Farm(LoggableMixin):
         for cage in self.cages:
             for stage, value in cage.lice_population.geno_by_lifestage.as_dict().items():
                 genomics[stage] = genomics[stage] + value
-
 
         return {k: v.to_json_dict() for k, v in genomics.items()}
 
@@ -241,11 +238,16 @@ class Farm(LoggableMixin):
 
         self.add_treatment(picked_treatment, cur_date)
 
-    def update(self, cur_date: dt.datetime) -> Tuple[GenoDistribByHatchDate, Money]:
+    def update(self,
+               cur_date: dt.datetime,
+               ext_influx: int,
+               ext_pressure_ratios: GenoDistribDict) -> Tuple[GenoDistribByHatchDate, Money]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites.
 
         :param cur_date: Current date
+        :param ext_influx the amount of lice that enter a cage
+        :param ext_pressure_ratios the ratio to use for the external pressure
         :return: pair of Dictionary of genotype distributions based on hatch date, and cost of the update
         """
 
@@ -256,20 +258,26 @@ class Farm(LoggableMixin):
         else:
             logger.debug("Updating farm {} (non-operational)".format(self.name))
 
+        self.log("\tAdding %r new lice from the reservoir", new_reservoir_lice=ext_influx)
+        self.log("\tReservoir lice genetic ratios: %s", new_reservoir_lice_ratios=ext_pressure_ratios)
+
         self.handle_events(cur_date)
 
         # get number of lice from reservoir to be put in each cage
-        pressures_per_cage = self.get_cage_pressures()
+        pressures_per_cage = self.get_cage_pressures(ext_influx)
 
         total_cost = Money("0.00")
 
         # collate egg batches by hatch time
-        eggs_by_hatch_date: GenoDistribByHatchDate = {} 
+        eggs_by_hatch_date: GenoDistribByHatchDate = {}
+        eggs_log = GenoDistrib()
+
         for cage in self.cages:
 
             # update the cage and collect the offspring info
             egg_distrib, hatch_date, cost = cage.update(cur_date,
-                                                        pressures_per_cage[cage.id])
+                                                        pressures_per_cage[cage.id],
+                                                        ext_pressure_ratios)
 
             if hatch_date:
                 # update the total offspring info
@@ -278,26 +286,26 @@ class Farm(LoggableMixin):
                 else:
                     eggs_by_hatch_date[hatch_date] = egg_distrib
 
+                eggs_log += egg_distrib
+
             total_cost += cost
 
-        self.current_capital -= total_cost
+        self.log("\t\tGenerated eggs by farm %d: %s", self.name, eggs=eggs_log)
 
         return eggs_by_hatch_date, total_cost
 
-    def get_cage_pressures(self) -> List[int]:
+    def get_cage_pressures(self, external_inflow: int) -> List[int]:
         """Get external pressure divided into cages
-:return: List of values of external pressure for each cage
+        :return: List of values of external pressure for each cage
         """
 
-        if len(self.cages) < 1:
-            raise Exception("Farm must have at least one cage.")
-        if self.cfg.ext_pressure < 0:
-            raise Exception("External pressure cannot be negative.")
+        assert len(self.cages) >= 1, "Farm must have at least one cage."
+        assert external_inflow >= 0, "External pressure cannot be negative."
 
         # assume equal chances for each cage
         probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
 
-        return list(self.cfg.rng.multinomial(self.cfg.ext_pressure*len(self.cages),
+        return list(self.cfg.rng.multinomial(external_inflow * len(self.cages),
                                              probs_per_cage,
                                              size=1)[0])
 

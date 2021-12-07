@@ -1,9 +1,6 @@
-import datetime as dt
 import sys
 from pathlib import Path
-from typing import List, Optional, Dict
 
-import pandas as pd
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QSettings

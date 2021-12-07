@@ -19,7 +19,8 @@
         "L4": 1.643
     },
     "delta_m10": {
-        "L0": 41.98,
+        "L0": 4.198,
+        "L0_stien": 41.98,
         "L1": 8.814,
         "L3": 18.934,
         "L4": 10.742
@@ -82,11 +83,8 @@
         "x_shift": 475
     },
     "gain_per_kg": "4.39",
-    "genetic_ratios": {
-        "A": 0.25,
-        "a": 0.25,
-        "A,a": 0.5
-    },
+    "reservoir_offspring_integration_ratio": 0.001,
+    "reservoir_offspring_average": 30,
     "genetic_mechanism": "discrete",
     "geno_mutation_rate": 1e-5,
     "male_detachment_rate": 0.7,

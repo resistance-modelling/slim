@@ -4,6 +4,7 @@ import datetime as dt
 import itertools
 import json
 from queue import PriorityQueue
+from typing import cast
 
 import numpy as np
 import pytest
@@ -170,9 +171,9 @@ class TestCage:
         cage = first_farm.cages[2]
         pass
 
-    def test_get_lice_lifestage(self, first_cage, first_cage_population):
+    def test_get_lice_lifestage(self, first_cage, first_cage_population, cur_day):
 
-        new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(1)
+        new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(cur_day)
 
         # new_l2 should be around 8% of l1
         assert new_l2 >= 0
@@ -187,7 +188,7 @@ class TestCage:
         assert (new_males + new_females) / first_cage_population["L4"] >= 0.02
 
         # Let us consider august
-        new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(8)
+        new_l2, new_l4, new_females, new_males = first_cage.get_lice_lifestage(cur_day + dt.timedelta(days=8*30))
 
         assert new_l2 >= 0
         assert new_l4 >= 0
@@ -198,10 +199,10 @@ class TestCage:
 
         assert (new_males + new_females) / first_cage_population["L4"] >= 0.02
 
-    def test_get_lice_lifestage_planctonic_only(self, first_cage, planctonic_only_population):
+    def test_get_lice_lifestage_planctonic_only(self, first_cage, planctonic_only_population, cur_day):
         first_cage.lice_population = planctonic_only_population
 
-        _, new_l4, new_females, new_males = first_cage.get_lice_lifestage(1)
+        _, new_l4, new_females, new_males = first_cage.get_lice_lifestage(cur_day)
 
         assert new_l4 == 0
         assert new_females == 0
@@ -362,19 +363,19 @@ class TestCage:
         first_cage_population.clear_busy_dams()
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day, GenoDistrib({('A', 'a'): 15})))
 
-        target_eggs = {('A',): 251, ('a',): 224, ('A', 'a'): 599}
+        target_eggs = {('A',): 237, ('a',): 242, ('A', 'a'): 562}
         target_delta_dams = {('A',): 1, ('a',): 2, ('A', 'a'): 0}
 
-        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
         assert delta_eggs == target_eggs
         assert delta_avail_dams == target_delta_dams
 
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('A',): 648, ('a',): 276, ('A', 'a'): 830}
+        target_mutated_eggs = {('A',): 588, ('a',): 242, ('A', 'a'): 1253}
 
-        _, delta_mutated_eggs = first_cage.do_mating_events()
+        _, delta_mutated_eggs = first_cage.do_mating_events(cur_day)
         assert delta_mutated_eggs == target_mutated_eggs
 
     def test_do_mating_event_maternal(self, first_cage, first_cage_population, cur_day):
@@ -388,25 +389,25 @@ class TestCage:
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day, GenoDistrib({('A', 'a'): 15})))
 
         # No Aa lice left among the free ones, therefore no matter what L5m contains there can be no Aa.
-        target_eggs = {('A',): 537, ('a',): 537, ('A', 'a'): 0}
+        target_eggs = {('A',): 520, ('a',): 521, ('A', 'a'): 0}
         target_delta_dams = {('A',): 1, ('a',): 2, ('A', 'a'): 0}
 
-        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
         assert delta_eggs == target_eggs
         assert delta_avail_dams == target_delta_dams
 
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('A',): 1054, ('a',): 1054}
+        target_mutated_eggs = {('A',): 520, ('a',): 521}
 
-        _, delta_mutated_eggs = first_cage.do_mating_events()
+        _, delta_mutated_eggs = first_cage.do_mating_events(cur_day)
         assert delta_mutated_eggs == target_mutated_eggs
 
-    def test_no_available_sires_do_mating_events(self, first_cage):
+    def test_no_available_sires_do_mating_events(self, first_cage, cur_day):
         first_cage.lice_population.geno_by_lifestage["L5m"] = GenoDistrib({('A',): 0, ('a',): 0, ('A', 'a'): 0})
 
-        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
         assert not bool(delta_avail_dams)
         assert not bool(delta_eggs)
 
@@ -484,8 +485,8 @@ class TestCage:
         for key in delta_dams:
             assert distrib_dams_available[key] == delta_dams[key]
 
-    def test_update_step(self, first_cage, cur_day):
-        first_cage.update(cur_day, 0)
+    def test_update_step(self, first_cage, cur_day, initial_external_ratios):
+        first_cage.update(cur_day, 0, initial_external_ratios)
 
     def test_get_stage_ages_distrib(self, first_cage):
         for stage in ["L1", "L3", "L4"]:
@@ -502,6 +503,7 @@ class TestCage:
 
     def test_get_num_eggs_no_females(self, first_cage):
         first_cage.lice_population["L5f"] = 0
+        temp = 11
         assert first_cage.get_num_eggs(0) == 0
 
     def test_get_num_eggs(self, first_cage):
@@ -542,12 +544,12 @@ class TestCage:
     def test_get_egg_batch(self, first_cage, first_cage_population, cur_day):
         first_cage_population["L5m"] *= 10
         first_cage_population["L5f"] *= 10
-        _, new_eggs = first_cage.do_mating_events()
-        target_egg_distrib = GenoDistrib({('A', 'a'): 4644.5, ('A',): 2698.25, ('a',): 1927.25})
+        _, new_eggs = first_cage.do_mating_events(cur_day)
+        target_egg_distrib = GenoDistrib({('A', 'a'): 15677, ('A',): 6054, ('a',): 10388})
 
         new_egg_batch = first_cage.get_egg_batch(cur_day, new_eggs)
         assert new_egg_batch == EggBatch(
-            hatch_date=datetime.datetime(2017, 10, 11, 0, 0),
+            hatch_date=datetime.datetime(2017, 10, 8, 0, 0),
             geno_distrib=target_egg_distrib)
 
     def test_avail_batch_lt(self, first_cage, null_offspring_distrib, cur_day):
@@ -712,16 +714,17 @@ class TestCage:
 
         assert first_cage.arrival_events.qsize() == 0
 
-    def test_get_reservoir_lice(self, first_cage):
+    def test_get_reservoir_lice(self, first_cage, initial_external_ratios):
         pressure = 100
-        dist = first_cage.get_reservoir_lice(pressure)
+        dist = first_cage.get_reservoir_lice(pressure, initial_external_ratios)
 
-        assert sum(dist.values()) == pressure
+        assert cast(GenoDistrib, GenoDistrib.batch_sum(dist.values())).gross == pressure
         for value in dist.values():
-            assert value >= 0
+            assert value.is_positive()
 
-    def test_get_reservoir_lice_no_pressure(self, first_cage):
-        assert first_cage.get_reservoir_lice(0) == {"L1": 0, "L2": 0}
+    def test_get_reservoir_lice_no_pressure(self, first_cage, initial_external_ratios):
+        assert first_cage.get_reservoir_lice(0, initial_external_ratios) == \
+               {"L1": GenoDistrib(), "L2": GenoDistrib()}
 
     def test_dying_lice_from_dead_no_dead_fish(self, first_cage):
         assert first_cage.get_dying_lice_from_dead_fish(0) == {}
@@ -768,7 +771,8 @@ class TestCage:
         dead_lice = first_cage.get_dying_lice_from_dead_fish(dead_fish)
         assert dead_lice == dead_lice_target
 
-    def test_update_step_before_start_date_two_days(self, first_cage, planctonic_only_population):
+    def test_update_step_before_start_date_two_days(self, first_cage, planctonic_only_population,
+                                                    initial_external_ratios):
         cur_date = first_cage.start_date - dt.timedelta(5)
         first_cage.lice_population = planctonic_only_population
 
@@ -778,7 +782,7 @@ class TestCage:
 
         pressure = 10
 
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None
@@ -791,7 +795,7 @@ class TestCage:
         assert 150 <= cost <= 200
 
         cur_date += dt.timedelta(1)
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None
@@ -802,7 +806,8 @@ class TestCage:
         assert first_cage.hatching_events.qsize() == 0
         assert 150 <= cost <= 200
 
-    def test_update_step_before_start_date_no_deaths(self, first_cage, planctonic_only_population):
+    def test_update_step_before_start_date_no_deaths(self, first_cage, planctonic_only_population,
+                                                     initial_external_ratios):
         cur_date = first_cage.start_date - dt.timedelta(5)
         first_cage.lice_population = planctonic_only_population
 
@@ -817,7 +822,7 @@ class TestCage:
         # set mortality to 0
         first_cage.cfg.background_lice_mortality_rates = {key: 0 for key in first_cage.lice_population}
 
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None
@@ -829,7 +834,8 @@ class TestCage:
         assert current_population == population_before + inflow
         assert cost > 0
 
-    def test_update_step_before_start_date_only_deaths(self, first_cage, planctonic_only_population):
+    def test_update_step_before_start_date_only_deaths(self, first_cage, planctonic_only_population,
+                                                       initial_external_ratios):
         cur_date = first_cage.start_date - dt.timedelta(5)
         first_cage.lice_population = planctonic_only_population
 
@@ -839,7 +845,7 @@ class TestCage:
         first_cage.cfg.background_lice_mortality_rates = {key: 1 for key in first_cage.lice_population}
         pressure = 0
 
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure)
+        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None
@@ -871,7 +877,7 @@ class TestCage:
         first_cage_population["L5m"] = first_cage_population["L5m"] * 100
         sample_treatment_mortality["L5f"] = sample_treatment_mortality["L5f"] * 10
 
-        dams, _ = first_cage.do_mating_events()
+        dams, _ = first_cage.do_mating_events(cur_day)
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
 
         background_mortality = first_cage.get_background_lice_mortality()
