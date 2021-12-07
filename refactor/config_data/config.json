@@ -83,12 +83,7 @@
         "x_shift": 475
     },
     "gain_per_kg": "4.39",
-    "genetic_ratios": {
-        "A": 0.01,
-        "a": 0.99,
-        "A,a": 0.01
-    },
-    "reservoir_offspring_integration_ratio": 1e-5,
+    "reservoir_offspring_integration_ratio": 0.001,
     "reservoir_offspring_average": 30,
     "genetic_mechanism": "discrete",
     "geno_mutation_rate": 1e-5,

@@ -4,6 +4,11 @@
     "end_date": "2018-10-01 00:00:00",
     "ext_pressure": 150,
     "monthly_cost": "5000.00",
+    "genetic_ratios": {
+        "A": 0.25,
+        "a": 0.25,
+        "A,a": 0.5
+    },
     "farms": [
         {
             "ncages": 6,
