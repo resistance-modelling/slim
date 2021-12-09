@@ -82,9 +82,6 @@ class RuntimeConfig:
         self.reservoir_offspring_integration_ratio: float = data["reservoir_offspring_integration_ratio"]
         self.reservoir_offspring_average: int = data["reservoir_offspring_average"]
 
-        # Farm data
-        self.farm_data = data["farm_data"]
-
         # Other reward/payoff constants
         self.gain_per_kg = Money(data["gain_per_kg"])
 
