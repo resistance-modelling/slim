@@ -5,6 +5,7 @@ Entry point for our optimisation framework
 import argparse
 import json
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 import sys
 
@@ -15,84 +16,90 @@ from src import logger, create_logger
 from src.Simulator import Simulator
 from src.Config import Config
 
-def get_simulator_from_probas(starting_cfg, probas, out_path: Path, sim_name: str, rng):
-    current_cfg = deepcopy(starting_cfg)
-    for farm, defection_proba in zip(current_cfg.farms, probas):
-        farm.defection_proba = defection_proba
+@dataclass
+class Optimiser:
+    starting_cfg: Config
+    iterations: int
+    repeat_experiment: int
+    optimiser_seed: int
 
-    current_cfg.seed = rng.integers(1<<32)
-    current_cfg.rng = np.random.default_rng(current_cfg.seed)
+    def get_neighbour(self, probas, rng, steps):
+        temp = 1 - (steps + 1) / self.iterations
+        return np.clip(rng.normal(probas, temp), 0, 1)
 
-    return Simulator(out_path, sim_name, current_cfg)
+    def get_simulator_from_probas(
+        self,
+        probas,
+        out_path: Path,
+        sim_name: str,
+        rng
+    ):
+        current_cfg = deepcopy(self.starting_cfg)
+        for farm, defection_proba in zip(current_cfg.farms, probas):
+            farm.defection_proba = defection_proba
 
-def get_neighbour(probas, rng):
-    return np.clip(rng.normal(probas, 0.1), 0, 1)
+        current_cfg.seed = rng.integers(1<<32)
+        current_cfg.rng = np.random.default_rng(current_cfg.seed)
 
-def save_settings(method, output_path: Path, **kwargs):
-    output_path.mkdir(parents=True, exist_ok=True)
+        return Simulator(out_path, sim_name, current_cfg)
 
-    param_path = output_path / "params.json"
+    def save(self, method, output_path):
+        output_path.mkdir(parents=True, exist_ok=True)
 
-    if method == "annealing":
-        payload = {
-            "average_iterations": kwargs["repeat_experiment"],
-            "walk_iterations": kwargs["iterations"]
-        }
-    else:
-        # other methods
-        raise NotImplementedError("Only annealing is supported")
+        param_path = output_path / "params.json"
 
-    with param_path.open("w") as f:
-        json.dump({"method": method, **payload}, f, indent=4)
+        if method == "annealing":
+            payload = {
+                "average_iterations": self.repeat_experiment,
+                "walk_iterations": self.iterations
+            }
+        else:
+            # other methods
+            raise NotImplementedError("Only annealing is supported")
 
-def annealing(starting_cfg: Config,
-              iterations: int,
-              repeat_experiment: int,
-              output_path: Path,
-              optimiser_seed: int,
-              **kwargs):
-   # TODO: logging + tqdm would be nice to have
-    farm_no = len(starting_cfg.farms)
-    output_path = Path(output_path)
-    optimiser_rng =  np.random.default_rng(optimiser_seed)
-    current_state = np.clip(optimiser_rng.normal(0.5, 0.5, farm_no), 0, 1)
-    current_state_sol = 1e-6
-    best_sol = current_state.copy()
-    best_payoff = -np.inf
+        with param_path.open("w") as f:
+            json.dump({"method": method, **payload}, f, indent=4)
 
-    save_settings("annealing", output_path,
-                  iterations=iterations, repeat_experiment=repeat_experiment)
+    def annealing(self, output_path: Path):
+        # TODO: logging + tqdm would be nice to have
+        farm_no = len(self.starting_cfg.farms)
+        output_path = Path(output_path)
+        optimiser_rng =  np.random.default_rng(self.optimiser_seed)
+        current_state = np.clip(optimiser_rng.normal(0.5, 0.5, farm_no), 0, 1)
+        current_state_sol = 1e-6
+        best_sol = current_state.copy()
+        best_payoff = -np.inf
 
-    for i in tqdm.trange(iterations):
-        logger.debug(f"Started iteration {i}")
-        candidate_state = get_neighbour(current_state, optimiser_rng)
-        logger.debug(f"Chosen candidate state {candidate_state}")
-        payoff_sum = 0.0
-        for t in tqdm.trange(repeat_experiment):
-            sim_name = f"optimisation_{i}_{t}"
-            sim = get_simulator_from_probas(
-                starting_cfg,
-                candidate_state,
-                output_path,
-                sim_name,
-                optimiser_rng
-            )
-            sim.run_model()
-            payoff_sum += float(sim.payoff)
+        self.save("annealing", output_path)
 
+        for i in tqdm.trange(self.iterations):
+            logger.debug(f"Started iteration {i}")
+            candidate_state = self.get_neighbour(current_state, optimiser_rng, i)
+            logger.debug(f"Chosen candidate state {candidate_state}")
+            payoff_sum = 0.0
+            for t in tqdm.trange(self.repeat_experiment):
+                sim_name = f"optimisation_{i}_{t}"
+                sim = self.get_simulator_from_probas(
+                    candidate_state,
+                    output_path,
+                    sim_name,
+                    optimiser_rng
+                )
+                sim.run_model()
+                payoff_sum += float(sim.payoff)
 
-        candidate_payoff = payoff_sum / repeat_experiment
-        candidate_payoff = max(candidate_payoff, 0)
+            candidate_payoff = payoff_sum / self.repeat_experiment
+            candidate_payoff = max(candidate_payoff, 0)
 
-        if candidate_payoff / current_state_sol > optimiser_rng.uniform(0, 1):
-            current_state = candidate_state
-            current_state_sol = candidate_payoff
+            if candidate_payoff / current_state_sol > optimiser_rng.uniform(0, 1):
+                current_state = candidate_state
+                current_state_sol = candidate_payoff
 
-        if best_payoff < candidate_payoff:
-            best_payoff = candidate_payoff
-            best_sol = candidate_state
+            if best_payoff < candidate_payoff:
+                best_payoff = candidate_payoff
+                best_sol = candidate_state
 
-    return best_sol
+        return best_sol
 
 
 if __name__ == "__main__":
@@ -158,4 +165,9 @@ if __name__ == "__main__":
     # create the basic config object
     cfg = Config(cfg_path, args.param_dir, vars(config_args))
 
-    print(annealing(cfg, **vars(args)))
+    optimiser = Optimiser(
+        cfg, args.iterations,
+        args.repeat_experiment,
+        args.optimiser_seed
+    )
+    print(optimiser.annealing(args.output_path))
