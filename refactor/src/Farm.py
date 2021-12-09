@@ -56,7 +56,7 @@ class Farm(LoggableMixin):
         self.available_treatments = farm_cfg.max_num_treatments
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
-        self.year_temperatures = self.initialise_temperatures(cfg.farm_data)
+        self.year_temperatures = self.initialise_temperatures(cfg.loch_temperatures)
 
         # TODO: only for testing purposes
         self.preemptively_assign_treatments(self.farm_cfg.treatment_starts)
@@ -124,16 +124,16 @@ class Farm(LoggableMixin):
         www.seatemperature.org
         """
 
-        # TODO: move this in a separate file, e.g. Lake? See #96
-        ardrishaig_data = temperatures["ardrishaig"]
-        ardrishaig_temps, ardrishaig_northing = np.array(ardrishaig_data["temperatures"]), ardrishaig_data["northing"]
-        tarbert_data = temperatures["tarbert"]
-        tarbert_temps, tarbert_northing = np.array(tarbert_data["temperatures"]), tarbert_data["northing"]
+        # Schema: 2 rows, first column = northing, remaining 12 columns: temperature starting from Jan
+        # We assume the first row has the highest northing
 
-        degs = (tarbert_temps - ardrishaig_temps) / abs(tarbert_northing - ardrishaig_northing)
+        x_northing, x_temps = temperatures[0][0], temperatures[0][1:]
+        y_northing, y_temps = temperatures[1][0], temperatures[1][1:]
 
-        Ndiff = self.loc_y - tarbert_northing
-        return np.round(tarbert_temps - Ndiff * degs, 1)
+        degs = (y_temps - x_temps) / abs(y_northing - x_northing)
+
+        Ndiff = self.loc_y - y_northing
+        return np.round(y_temps - Ndiff * degs, 1)
 
     def generate_treatment_event(self, treatment_type: Treatment, cur_date: dt.datetime
                                  ) -> TreatmentEvent:

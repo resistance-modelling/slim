@@ -142,45 +142,6 @@
       "description": "Female unavailability time after mating (in days)",
       "type": "integer"
     },
-    "farm_data": {
-      "description": "Average temperatures at known farm locations. Farm temperatures will be interpolated from them.",
-      "comment": "Data taken from www.seatemperature.org",
-      "type": "object",
-      "properties": {
-        "ardrishaig": {
-          "type": "object",
-          "properties": {
-            "northing": {
-              "type": "integer"
-            },
-            "temperatures": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "maxLength": 12,
-              "minLength": 12
-            }
-          }
-        },
-        "tarbert": {
-          "type": "object",
-          "properties": {
-            "northing": {
-              "type": "integer"
-            },
-            "temperatures": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "maxLength": 12,
-              "minLength": 12
-            }
-          }
-        }
-      }
-    },
     "smolt_mass_params": {
       "description": "Sigmoid parameters that pilot the average smolt-to-adult average weight development",
       "comment": "FAO - http://www.fao.org/fishery/affris/species-profiles/atlantic-salmon/growth/en/ . See figure 5. These constants were manually fitted on the given figure.",

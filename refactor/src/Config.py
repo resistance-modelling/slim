@@ -151,6 +151,7 @@ class Config(RuntimeConfig):
 
         self.interfarm_times = np.loadtxt(os.path.join(simulation_dir, "interfarm_time.csv"), delimiter=",")
         self.interfarm_probs = np.loadtxt(os.path.join(simulation_dir, "interfarm_prob.csv"), delimiter=",")
+        self.loch_temperatures = np.loadtxt(os.path.join(simulation_dir, "temperatures.csv"), delimiter=",")
 
         # driver-specific settings
         self.save_rate = save_rate
