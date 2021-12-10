@@ -23,8 +23,8 @@ class OrganisationActor:
     def __init__(self, organisation: Organisation):
         self.organisation = organisation
 
-    def update(self, farm: Farm, cur_date: dt.datetime, ext_pressure: GenoDistribDict):
-        offspring, cost = farm.update(cur_date, ext_pressure)
+    def update(self, farm: Farm, cur_date: dt.datetime, ext_pressure: GenoDistribDict, ext_pressure_ratios):
+        offspring, cost = farm.update(cur_date, ext_pressure, ext_pressure_ratios)
         payoff = farm.get_profit(cur_date) - cost
         return offspring, payoff
 
@@ -75,15 +75,20 @@ class Organisation:
         for farm in self.farms:
             self.handle_farm_messages(cur_date, farm)
 
-
-        """
-        def update(actor: OrganisationActor, farm, cur_date=cur_date, ext_pressure=self.get_external_pressure()):
-            return actor.update.remote(farm, cur_date, ext_pressure)
+        ext_pressure_influx, ext_pressure_ratios = self.get_external_pressure()
+        def update(
+                actor: OrganisationActor,
+                farm,
+                cur_date=cur_date,
+                ext_pressure=ext_pressure_influx,
+                ext_pressure_ratios = ext_pressure_ratios
+        ):
+            return actor.update.remote(farm, cur_date, ext_pressure, ext_pressure_ratios)
 
         offspring_per_farm, payoffs = tuple(zip(*self.actor_pool.map(update, self.farms)))
         payoff = sum(payoffs, Money())
-        """
 
+        """
         offspring_dict = {}
         payoff = Money()
         for farm in self.farms:
@@ -93,19 +98,20 @@ class Organisation:
             # e.g. how are environmental factors measured? Are we supposed to add some coefficients here?
             # TODO: if we take current fish population into account then what happens to the infrastructure cost?
             payoff += farm.get_profit(cur_date) - cost
+        """
 
         # once all of the offspring is collected
         # it can be dispersed (interfarm and intercage movement)
         # note: this is done on organisation level because it requires access to
         # other farms - and will allow multiprocessing of the main update
 
-        #for farm_ix, offspring in enumerate(offspring_per_farm):
-        for farm_ix, offspring in offspring_dict.items():
+        for farm_ix, offspring in enumerate(offspring_per_farm):
+        #for farm_ix, offspring in offspring_dict.items():
             self.farms[farm_ix].disperse_offspring(offspring, self.farms, cur_date)
 
-        #total_offspring = list(offspring_per_farm.values())
-        total_offspring = list(offspring_dict.values())
-        self.offspring_queue.append(total_offspring)
+        #total_offspring = list(offspring_dict.values())
+        #self.offspring_queue.append(total_offspring)
+        self.offspring_queue.append(offspring_per_farm)
 
         self.update_genetic_ratios(self.offspring_queue.average)
 
