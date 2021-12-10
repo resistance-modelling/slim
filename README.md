@@ -113,6 +113,11 @@ For type checking, install pytype and run (from the root folder):
 
 ```pytype --config pytype.cfg refactor```
 
+## Profiling
+
+This project relies on `cProfile` for profiling. To profile an execution pass the `--profile` option. To visualise the final profiling artifact (released as `{output_folder}/profile_{sim_name}`) one could use [`snakeviz`](https://jiffyclub.github.io/snakeviz/) or any other tooling of choice.
+
+Note that `cProfile` does not provide line coverage. For that one could use the [`line-profiler`](https://github.com/pyutils/line_profiler) package or some IDE-specific tools if any.
 
 ## Deprecated: run the original model
 
