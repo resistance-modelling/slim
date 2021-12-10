@@ -9,14 +9,43 @@ import abc
 import datetime as dt
 from dataclasses import dataclass, field, asdict
 from functools import singledispatch
-from queue import PriorityQueue
+from queue import Empty
 
-from typing import Callable, TypeVar, TYPE_CHECKING
+from typing import Callable, TypeVar, TYPE_CHECKING, Generic
 
 if TYPE_CHECKING:
     from src.LicePopulation import GenoDistrib
     from src.TreatmentTypes import Treatment
 
+from heapq import heapify, heappush, heappop
+
+T = TypeVar("T")
+class PriorityQueue(Generic[T]):
+    """A lock-less priority queue.
+    It is not thread-safe and is non-blocking for the purposes of easier serialisation.
+    """
+    def __init__(self):
+        self.queue = []
+
+    def qsize(self) -> int:
+        return len(self.queue)
+
+    def empty(self):
+        return self.qsize() == 0
+
+    def peek(self) -> T:
+        if self.qsize() == 0:
+            raise Empty
+        return self.queue[0]
+
+    def put(self, item: T):
+        heappush(self.queue, item)
+
+    def get(self) -> T:
+        return heappop(self.queue)
+
+    def heapify(self):
+        heapify(self.queue)
 
 class Event:
     """An empty parent class for all the events with a default serialiser."""
@@ -169,6 +198,6 @@ def pop_from_queue(
         return arg.response_date <= _cur_time  # pragma: no cover
 
 
-    while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
+    while not queue.empty() and access_time_lt(queue.peek(), cur_time):
         event = queue.get()
         continuation(event)

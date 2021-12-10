@@ -6,7 +6,9 @@ from typing import List, Optional, Tuple, Deque
 
 import dill as pickle
 import pandas as pd
+import ray
 import tqdm
+from ray.util import ActorPool
 
 from src import logger
 from src.Config import Config
@@ -16,16 +18,32 @@ from src.LicePopulation import GenoDistrib, GenoDistribDict
 from src.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
 from src.TreatmentTypes import Money
 
+@ray.remote
+class OrganisationActor:
+    def __init__(self, organisation: Organisation):
+        self.organisation = organisation
+
+    def update(self, farm: Farm, cur_date: dt.datetime, ext_pressure: GenoDistribDict):
+        offspring, cost = farm.update(cur_date, ext_pressure)
+        payoff = farm.get_profit(cur_date) - cost
+        return offspring, payoff
+
+    def handle_messages(self, farm: Farm, cur_date: dt.datetime):
+        # TODO
+        self.organisation.handle_farm_messages(cur_date, farm)
+        pass
+
 
 class Organisation:
     """
     An organisation is a cooperative of `Farm`s.
     """
 
-    def __init__(self, cfg: Config, *args):
+    def __init__(self, cfg: Config, num_workers=10, *args):
         self.name: str = cfg.name
         self.cfg = cfg
         self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
+        self.actor_pool = ActorPool([OrganisationActor.remote(self) for _ in range(num_workers)])
         self.genetic_ratios = GenoDistrib(cfg.initial_genetic_ratios)
         self.external_pressure_ratios = cfg.initial_genetic_ratios.copy()
         self.offspring_queue = OffspringAveragingQueue(self.cfg.reservoir_offspring_average)
@@ -57,6 +75,15 @@ class Organisation:
         for farm in self.farms:
             self.handle_farm_messages(cur_date, farm)
 
+
+        """
+        def update(actor: OrganisationActor, farm, cur_date=cur_date, ext_pressure=self.get_external_pressure()):
+            return actor.update.remote(farm, cur_date, ext_pressure)
+
+        offspring_per_farm, payoffs = tuple(zip(*self.actor_pool.map(update, self.farms)))
+        payoff = sum(payoffs, Money())
+        """
+
         offspring_dict = {}
         payoff = Money()
         for farm in self.farms:
@@ -72,9 +99,11 @@ class Organisation:
         # note: this is done on organisation level because it requires access to
         # other farms - and will allow multiprocessing of the main update
 
+        #for farm_ix, offspring in enumerate(offspring_per_farm):
         for farm_ix, offspring in offspring_dict.items():
             self.farms[farm_ix].disperse_offspring(offspring, self.farms, cur_date)
 
+        #total_offspring = list(offspring_per_farm.values())
         total_offspring = list(offspring_dict.values())
         self.offspring_queue.append(total_offspring)
 

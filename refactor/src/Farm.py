@@ -29,7 +29,6 @@ GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
 LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
 
-
 class Farm(LoggableMixin):
     """
     Define a salmon farm containing salmon cages. Over time the salmon in the cages grow and are
@@ -39,9 +38,10 @@ class Farm(LoggableMixin):
     def __init__(self, name: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None):
         """
         Create a farm.
+
         :param name: the id of the farm.
         :param cfg: the farm configuration
-        ::param initial_lice_pop: if provided, overrides default generated lice population
+        :param initial_lice_pop: if provided, overrides default generated lice population
         """
         super().__init__()
 

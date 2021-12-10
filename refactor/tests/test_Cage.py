@@ -3,15 +3,13 @@ import datetime
 import datetime as dt
 import itertools
 import json
-from queue import PriorityQueue
 from typing import cast
 
 import numpy as np
 import pytest
 
-from src.Cage import Cage
 from src.Config import to_dt
-from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
+from src.QueueTypes import PriorityQueue, DamAvailabilityBatch, EggBatch, TravellingEggBatch
 from src.TreatmentTypes import GeneticMechanism, Treatment, Money
 from src.LicePopulation import GenoDistrib, LicePopulation
 
@@ -118,54 +116,6 @@ class TestCage:
 
         assert all(geno_rate == 0.0 for rate in mortality_updates.values() for geno_rate in rate.values())
         assert cost == 0
-
-    """
-    # TODO FIX THESE
-    def test_get_stage_ages_respects_constraints(self, first_cage):
-        test_num_lice = 1000
-        development_days = 15
-        min_development_stage = 4
-        mean_development_stage = 8
-
-        for _ in range(100):
-            stage_ages = first_cage.get_evolution_ages(
-                test_num_lice,
-                minimum_age=min_development_stage,
-                mean=mean_development_stage,
-                development_days=development_days
-            )
-
-            assert len(stage_ages) == test_num_lice
-
-            assert np.min(stage_ages) >= min_development_stage
-            assert np.max(stage_ages) < development_days
-
-            # This test luckily doesn't fail
-            assert abs(np.mean(stage_ages) - mean_development_stage) < 1
-
-    def test_get_stage_ages_edge_cases(self, first_cage):
-        test_num_lice = 1000
-        development_days = 15
-        min_development_stages = list(range(10))
-        mean_development_stages = list(range(10))
-
-        for minimum, mean in itertools.product(min_development_stages, mean_development_stages):
-            if mean <= minimum or minimum == 0:
-                with pytest.raises(AssertionError):
-                    first_cage.get_evolution_ages(
-                        test_num_lice,
-                        minimum_age=minimum,
-                        mean=mean,
-                        development_days=development_days
-                    )
-            else:
-                first_cage.get_evolution_ages(
-                    test_num_lice,
-                    minimum_age=minimum,
-                    mean=mean,
-                    development_days=development_days
-                )
-    """
 
     def test_thermolicer_treatment(self, first_farm):
         cage = first_farm.cages[2]

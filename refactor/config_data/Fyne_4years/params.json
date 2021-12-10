@@ -1,0 +1,54 @@
+{
+    "name": "Loch Fyne ACME Ltd.",
+    "start_date": "2017-10-01 00:00:00",
+    "end_date": "2021-10-01 00:00:00",
+    "ext_pressure": 150,
+    "monthly_cost": "5000.00",
+    "farms": [
+        {
+            "ncages": 6,
+            "location": [
+                190300,
+                665300
+            ],
+            "num_fish": 40000,
+            "start_date": "2017-10-01 00:00:00",
+            "cages_start_dates": [
+                "2017-10-01 00:00:00",
+                "2017-10-08 00:00:00",
+                "2017-10-15 00:00:00",
+                "2017-10-22 00:00:00",
+                "2017-10-29 00:00:00",
+                "2017-11-05 00:00:00"
+            ],
+            "treatment_type": "emb",
+            "treatment_dates": [
+            ],
+            "start_capital": "100000.00",
+            "max_num_treatments": 10,
+            "sampling_spacing": 14,
+            "defection_proba": 0.2
+        },
+        {
+            "ncages": 3,
+            "location": [
+                190300,
+                665300
+            ],
+            "num_fish": 40000,
+            "start_date": "2017-10-05 00:00:00",
+            "cages_start_dates": [
+                "2017-10-09 00:00:00",
+                "2017-10-16 00:00:00",
+                "2017-10-23 00:00:00"
+            ],
+            "treatment_type": "emb",
+            "treatment_dates": [
+            ],
+            "start_capital": "80000.00",
+            "max_num_treatments": 8,
+            "sampling_spacing": 7,
+            "defection_proba": 0.2
+        }
+    ]
+}
