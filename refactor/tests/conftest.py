@@ -11,7 +11,14 @@ from src.Config import Config
 from src.Simulator import Organisation
 from src.QueueTypes import EggBatch, DamAvailabilityBatch
 from src.LicePopulation import LicePopulation, GenoDistrib
+import ray
 
+
+@pytest.fixture(autouse=True, scope="session")
+def run_destroy():
+    ray.init(local_mode=True, num_cpus=1, num_gpus=0)
+    yield
+    ray.shutdown()
 
 
 @pytest.fixture
@@ -34,7 +41,7 @@ def no_prescheduled_config(farm_config):
 
 @pytest.fixture
 def no_prescheduled_organisation(no_prescheduled_config, initial_lice_population):
-    return Organisation(no_prescheduled_config, initial_lice_population)
+    return Organisation(no_prescheduled_config, 1, initial_lice_population)
 
 
 @pytest.fixture
@@ -49,7 +56,7 @@ def no_prescheduled_cage(no_prescheduled_farm):
 
 @pytest.fixture
 def organisation(farm_config, initial_lice_population):
-    return Organisation(farm_config, initial_lice_population)
+    return Organisation(farm_config, 1, initial_lice_population)
 
 
 @pytest.fixture

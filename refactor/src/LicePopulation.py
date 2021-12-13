@@ -4,7 +4,6 @@ import math
 from abc import ABC
 import datetime as dt
 from heapq import heapify
-from queue import PriorityQueue
 from types import GeneratorType
 from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, Optional, \
     Iterable, TYPE_CHECKING, List, cast, Iterator
@@ -12,7 +11,7 @@ from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, Optional, \
 import numpy as np
 
 from src import logger
-from src.QueueTypes import pop_from_queue
+from src.QueueTypes import PriorityQueue, pop_from_queue
 
 if TYPE_CHECKING:  # pragma: no cover
     from src.QueueTypes import DamAvailabilityBatch

@@ -10,11 +10,18 @@ from pathlib import Path
 
 # This needs to be done before import src.
 # Maybe a cleaner approach would be to use an env var?
+import ray
 
 from src import logger, create_logger
 from src.Config import Config, to_dt
 from src.Simulator import Simulator
 
+def debugger_is_active() -> bool:
+    """Return if the debugger is currently active
+    Taken from: https://stackoverflow.com/a/67065084
+    """
+    gettrace = getattr(sys, 'gettrace', lambda : None) 
+    return gettrace() is not None
 
 if __name__ == "__main__":
     # NOTE: missing_ok argument of unlink is only supported from Python 3.8
@@ -85,6 +92,9 @@ if __name__ == "__main__":
 
     # create the config object
     cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate, args.buffer_rate)
+
+    # Debug mode: make ray spawn only one process
+    ray.init(local_mode=debugger_is_active())
 
     # run the simulation
     resume = True

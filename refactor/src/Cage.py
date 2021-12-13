@@ -5,7 +5,6 @@ import copy
 import datetime as dt
 import json
 import math
-from queue import PriorityQueue
 from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict
 
 import numpy as np
@@ -18,7 +17,7 @@ from src.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue,
                                 GenoLifeStageDistrib, largest_remainder, LifeStage, GenoDistribDict)
 from src.QueueTypes import (DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent,
-                            pop_from_queue)
+                            PriorityQueue, pop_from_queue)
 from src.JSONEncoders import CustomFarmEncoder
 
 if TYPE_CHECKING:  # pragma: no cover

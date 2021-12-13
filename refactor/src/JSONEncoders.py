@@ -3,11 +3,11 @@ from dataclasses import is_dataclass, asdict
 from enum import Enum
 import datetime as dt
 import json
-from queue import PriorityQueue
 
 import numpy as np
 
 from src.TreatmentTypes import Money
+from src.QueueTypes import PriorityQueue
 
 
 class CustomFarmEncoder(json.JSONEncoder):
