@@ -15,7 +15,9 @@ from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Tuple, cast
 
 import numpy as np
+import ray
 from mypy_extensions import TypedDict
+from ray.util import ActorPool
 
 from src import LoggableMixin, logger
 from src.Cage import Cage
@@ -28,6 +30,27 @@ from src.TreatmentTypes import Money, Treatment
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
 LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
+
+
+@ray.remote
+class FarmActor:
+    def __init__(self, farm: Farm):
+        self.farm = farm
+
+    def update_cage(
+            self,
+            cage_pressure: Tuple[Cage, int],
+            cur_date: dt.datetime,
+            ext_pressure_ratios: GenoDistribDict
+    ):
+        # update the cage and collect the offspring info
+        cage, pressure_per_cage = cage_pressure
+        egg_distrib, hatch_date, cost = cage.update(cur_date,
+                                                    pressure_per_cage,
+                                                    ext_pressure_ratios)
+
+        return egg_distrib, hatch_date, cost
+
 
 class Farm(LoggableMixin):
     """
@@ -55,6 +78,7 @@ class Farm(LoggableMixin):
         self.start_date = farm_cfg.farm_start
         self.available_treatments = farm_cfg.max_num_treatments
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
+        self.actor_pool = ActorPool([FarmActor.remote(self) for _ in range(cfg.num_workers)])
 
         self.year_temperatures = self.initialise_temperatures(cfg.loch_temperatures)
 
@@ -79,6 +103,8 @@ class Farm(LoggableMixin):
     def to_json_dict(self, **kwargs):
         filtered_vars = vars(self).copy()
         del filtered_vars["farm_cfg"]
+        if "actor_pool" in filtered_vars:
+            del filtered_vars["actor_pool"]
         del filtered_vars["cfg"]
         del filtered_vars["logged_data"]
 
@@ -266,33 +292,27 @@ class Farm(LoggableMixin):
         # get number of lice from reservoir to be put in each cage
         pressures_per_cage = self.get_cage_pressures(ext_influx)
 
-        total_cost = Money("0.00")
-
         # collate egg batches by hatch time
-        eggs_by_hatch_date: GenoDistribByHatchDate = {}
         eggs_log = GenoDistrib()
 
-        for cage in self.cages:
+        def update_step(actor: FarmActor,
+                        cage_pressure,
+                        cur_date=cur_date,
+                        ext_pressure_ratios=ext_pressure_ratios):
+            return actor.update_cage.remote(cage_pressure, cur_date, ext_pressure_ratios)
 
-            # update the cage and collect the offspring info
-            egg_distrib, hatch_date, cost = cage.update(cur_date,
-                                                        pressures_per_cage[cage.id],
-                                                        ext_pressure_ratios)
+        cage_pressures = list(zip(self.cages, pressures_per_cage))
 
-            if hatch_date:
-                # update the total offspring info
-                if hatch_date in eggs_by_hatch_date:
-                    eggs_by_hatch_date[hatch_date] += egg_distrib
-                else:
-                    eggs_by_hatch_date[hatch_date] = egg_distrib
+        eggs, hatch_dates, costs = zip(*self.actor_pool.map(update_step, cage_pressures))
 
-                eggs_log += egg_distrib
-
-            total_cost += cost
+        total_cost = sum(costs, Money())
+        eggs_by_hatch_date = Counter()
+        for egg_distrib, hatch_date in zip(eggs, hatch_dates):
+            eggs_by_hatch_date.update({hatch_date: egg_distrib})
 
         self.log("\t\tGenerated eggs by farm %d: %s", self.name, eggs=eggs_log)
 
-        return eggs_by_hatch_date, total_cost
+        return dict(eggs_by_hatch_date), total_cost
 
     def get_cage_pressures(self, external_inflow: int) -> List[int]:
         """Get external pressure divided into cages
