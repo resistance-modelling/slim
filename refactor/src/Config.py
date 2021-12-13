@@ -102,8 +102,9 @@ class Config(RuntimeConfig):
         self,
         config_file: str,
         simulation_dir: str,
-        override_params: Optional[dict]= None,
-        save_rate: Optional[int] = None
+        override_params: Optional[dict] = None,
+        save_rate: Optional[int] = None,
+        buffer_rate: int = 100
     ):
         """Read the configuration from files
 
@@ -111,7 +112,8 @@ class Config(RuntimeConfig):
         :type config_file: string
         :param simulation_dir: path to the simulator parameters JSON file
         :param override_params: options that override the config
-        :param save_rate if True
+        :param save_rate: how often to save the result of a simulation
+        :param buffer_rate: how many days to save in a buffer before flushing
         """
 
         if override_params is None:
@@ -152,6 +154,7 @@ class Config(RuntimeConfig):
 
         # driver-specific settings
         self.save_rate = save_rate
+        self.buffer_rate = buffer_rate
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
         return [self.emb, self.thermolicer][treatment_type.value]

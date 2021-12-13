@@ -1,6 +1,7 @@
 from __future__ import annotations
 import datetime as dt
 import json
+from io import BytesIO
 from pathlib import Path
 from typing import List, Optional, Tuple, Deque
 
@@ -277,6 +278,9 @@ class Simulator:
         if not resume:
             data_file = self.output_dump_path.open(mode="wb")
 
+        write_buffer = BytesIO()
+        ring_length = 100
+
         num_days = (self.cfg.end_date - self.cur_day).days
         for day in tqdm.trange(num_days):
             logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
@@ -284,9 +288,16 @@ class Simulator:
 
             # Save the model snapshot either when checkpointing or during the last iteration
             if not resume:
-                if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0) \
+                days_since_start = (self.cur_day - self.cfg.start_date).days
+                days_since_flush = days_since_start % ring_length
+                days_since_save = days_since_start % self.cfg.save_rate
+
+                if (self.cfg.save_rate and days_since_save == 0) \
                         or day == num_days - 1:
-                    pickle.dump(self, data_file)
+                    pickle.dump(self, write_buffer)
+                    if day == num_days - 1 or days_since_flush == 0:
+                        data_file.write(write_buffer.getvalue())
+                        write_buffer = BytesIO()
             self.cur_day += dt.timedelta(days=1)
 
         if not resume:

@@ -52,8 +52,12 @@ if __name__ == "__main__":
                               help="Interval to dump the simulation state. Useful for visualisation and debugging." + \
                                    "Warning: saving a run is a slow operation. Saving and resuming at the same time" + \
                                    "is forbidden. If this is not provided, only the last timestep is serialised",
-                              type=int,
-                              required=False)
+                              type=int)
+    resume_group.add_argument("--buffer-rate",
+                              help="Number of dumped farm \"days\" to keep in memory before flusing. " + \
+                                   "Ignored if --save-rate is not set",
+                              default=100,
+                              type=int)
 
     args, unknown = parser.parse_known_args()
 
@@ -80,7 +84,7 @@ if __name__ == "__main__":
     config_args = config_parser.parse_args(unknown)
 
     # create the config object
-    cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate)
+    cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate, args.buffer_rate)
 
     # run the simulation
     resume = True
