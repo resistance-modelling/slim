@@ -197,7 +197,7 @@ class TestFarm:
 
     def test_farm_update_before_start(self, first_farm, initial_external_inflow, initial_external_ratios):
         cur_date = first_farm.start_date - dt.timedelta(1)
-        offspring, cost = first_farm.update(cur_date, initial_external_inflow, initial_external_ratios)
+        offspring, cost = first_farm.update_farm(cur_date, initial_external_inflow, initial_external_ratios)
 
         assert offspring == {}
         assert cost > 0  # fallowing
@@ -224,7 +224,7 @@ class TestFarm:
         test_farm.cfg.farms[test_farm.name].cages_start = [test_farm.start_date for i in range(10)]
         test_farm.cages = [Cage(i, test_farm.cfg, test_farm, initial_lice_pop) for i in range(10)]
 
-        eggs_by_hatch_date, cost = test_farm.update(
+        eggs_by_hatch_date, cost = test_farm.update_farm(
             test_farm.start_date, initial_external_inflow, initial_external_ratios)
 
         for hatch_date in eggs_by_hatch_date:
@@ -288,7 +288,7 @@ class TestFarm:
         assert first_cage.treatment_events.qsize() == 1
 
         # Asking again will not work, but it requires some internal cage update
-        first_cage.update(first_available_day, 0, initial_external_ratios)
+        first_cage.update_farm(first_available_day, 0, initial_external_ratios)
         no_prescheduled_farm.ask_for_treatment(first_available_day, False)
         assert first_cage.treatment_events.qsize() == 0
 

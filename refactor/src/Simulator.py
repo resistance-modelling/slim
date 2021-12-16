@@ -44,7 +44,7 @@ class FarmActor(LoggingActor):
     ):
         offspring, cost = farm.update(cur_date, ext_pressure, ext_pressure_ratios, self.pool)
         payoff = farm.get_profit(cur_date) - cost
-        return offspring, payoff
+        return farm, offspring, payoff
 
     def update_cage(
         self,
@@ -58,7 +58,7 @@ class FarmActor(LoggingActor):
                                                     pressure_per_cage,
                                                     ext_pressure_ratios)
 
-        return egg_distrib, hatch_date, cost
+        return cage, egg_distrib, hatch_date, cost
 
 
 
@@ -115,7 +115,8 @@ class Organisation:
             return actor.update_farm.remote(farm, cur_date, ext_pressure, ext_pressure_ratios)
 
         res = list(self.simulator.farm_pool.map(update, self.farms))
-        offspring_per_farm, payoffs = tuple(zip(*res))
+        farms, offspring_per_farm, payoffs = tuple(zip(*res))
+        self.farms = farms
         payoff = sum(payoffs, Money())
 
         """

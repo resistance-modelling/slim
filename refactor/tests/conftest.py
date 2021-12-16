@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 import datetime
@@ -8,7 +10,7 @@ import builtins
 builtins.__dict__['profile'] = lambda x: x
 
 from src.Config import Config
-from src.Simulator import Organisation
+from src.Simulator import Organisation, Simulator
 from src.QueueTypes import EggBatch, DamAvailabilityBatch
 from src.LicePopulation import LicePopulation, GenoDistrib
 import ray
@@ -41,7 +43,7 @@ def no_prescheduled_config(farm_config):
 
 @pytest.fixture
 def no_prescheduled_organisation(no_prescheduled_config, initial_lice_population):
-    return Organisation(no_prescheduled_config, 1, initial_lice_population)
+    return Organisation(no_prescheduled_config, initial_lice_population)
 
 
 @pytest.fixture

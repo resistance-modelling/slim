@@ -436,7 +436,7 @@ class TestCage:
             assert distrib_dams_available[key] == delta_dams[key]
 
     def test_update_step(self, first_cage, cur_day, initial_external_ratios):
-        first_cage.update(cur_day, 0, initial_external_ratios)
+        first_cage.update_farm(cur_day, 0, initial_external_ratios)
 
     def test_get_stage_ages_distrib(self, first_cage):
         for stage in ["L1", "L3", "L4"]:
@@ -732,7 +732,7 @@ class TestCage:
 
         pressure = 10
 
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
+        offspring, hatch_date, cost = first_cage.update_farm(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None
@@ -745,7 +745,7 @@ class TestCage:
         assert 150 <= cost <= 200
 
         cur_date += dt.timedelta(1)
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
+        offspring, hatch_date, cost = first_cage.update_farm(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None
@@ -772,7 +772,7 @@ class TestCage:
         # set mortality to 0
         first_cage.cfg.background_lice_mortality_rates = {key: 0 for key in first_cage.lice_population}
 
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
+        offspring, hatch_date, cost = first_cage.update_farm(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None
@@ -795,7 +795,7 @@ class TestCage:
         first_cage.cfg.background_lice_mortality_rates = {key: 1 for key in first_cage.lice_population}
         pressure = 0
 
-        offspring, hatch_date, cost = first_cage.update(cur_date, pressure, initial_external_ratios)
+        offspring, hatch_date, cost = first_cage.update_farm(cur_date, pressure, initial_external_ratios)
 
         assert offspring == {}
         assert hatch_date is None

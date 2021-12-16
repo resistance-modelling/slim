@@ -285,7 +285,8 @@ class Farm(LoggableMixin):
 
         cage_pressures = list(zip(self.cages, pressures_per_cage))
 
-        eggs, hatch_dates, costs = zip(*cage_actor_pool.map(update_step, cage_pressures))
+        cages, eggs, hatch_dates, costs = zip(*cage_actor_pool.map(update_step, cage_pressures))
+        self.cages = cages
 
         total_cost = sum(costs, Money())
         eggs_by_hatch_date = Counter()
