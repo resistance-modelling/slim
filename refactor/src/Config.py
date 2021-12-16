@@ -156,7 +156,7 @@ class Config(RuntimeConfig):
         # driver-specific settings
         self.save_rate: Optional[int] = override_params.get("save_rate")
         self.buffer_rate = override_params.get("buffer_rate", 100)
-        self.num_workers = override_params.get("num_workers", 10)
+        self.num_workers = override_params.get("num_workers", 12)
 
         # log-level and miscellanea
         self.log_level = override_params.get("log_level", logging.INFO)

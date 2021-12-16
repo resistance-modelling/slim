@@ -14,7 +14,6 @@ class LoggingActor:
     def __init__(self, log_level):
         create_logger(log_level)
 
-
 def setup_workers(farm_type, cfg: Config) -> ActorPool:
     """
     Create workers.

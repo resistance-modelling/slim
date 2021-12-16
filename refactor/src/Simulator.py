@@ -104,12 +104,13 @@ class Organisation:
             self.handle_farm_messages(cur_date, farm)
 
         ext_pressure_influx, ext_pressure_ratios = self.get_external_pressure()
+
         def update(
                 actor: FarmActor,
                 farm,
                 cur_date=cur_date,
                 ext_pressure=ext_pressure_influx,
-                ext_pressure_ratios = ext_pressure_ratios
+                ext_pressure_ratios=ext_pressure_ratios
         ):
             return actor.update_farm.remote(farm, cur_date, ext_pressure, ext_pressure_ratios)
 
@@ -135,11 +136,8 @@ class Organisation:
         # other farms - and will allow multiprocessing of the main update
 
         for farm_ix, offspring in enumerate(offspring_per_farm):
-        #for farm_ix, offspring in offspring_dict.items():
             self.farms[farm_ix].disperse_offspring(offspring, self.farms, cur_date)
 
-        #total_offspring = list(offspring_dict.values())
-        #self.offspring_queue.append(total_offspring)
         self.offspring_queue.append(offspring_per_farm)
 
         self.update_genetic_ratios(self.offspring_queue.average)
@@ -367,6 +365,16 @@ class Simulator:
         if not resume:
             data_file.close()
 
+    def __getstate__(self):
+        # Required for dill
+        state = self.__dict__.copy()
+        del state["farm_pool"]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+        self.farm_pool = None #setup_workers(FarmActor, self.cfg)
 
 class OffspringAveragingQueue:
     """Helper class to compute a rolling average"""
