@@ -117,7 +117,7 @@ class Farm(LoggableMixin):
 
         return {k: v.to_json_dict() for k, v in genomics.items()}
 
-    def initialise_temperatures(self, temperatures: Dict[str, LocationTemps]) -> np.ndarray:
+    def initialise_temperatures(self, temperatures: np.ndarray) -> np.ndarray:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at
         month c_month interpolating data taken from
