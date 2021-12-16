@@ -5,14 +5,15 @@ See README.md for details.
 """
 import argparse
 import cProfile
-import sys
+import logging
 from pathlib import Path
+import sys
 
 # This needs to be done before import src.
 # Maybe a cleaner approach would be to use an env var?
 import ray
 
-from src import logger, create_logger
+from src import create_logger
 from src.Config import Config, to_dt
 from src.Simulator import Simulator
 
@@ -38,15 +39,14 @@ if __name__ == "__main__":
     parser.add_argument("param_dir",
                         type=str,
                         help="Directory of simulation parameters files.")
-    parser.add_argument("--quiet",
-                        help="Don't log to console or file.",
-                        default=False,
-                        action="store_true")
     parser.add_argument("--profile",
                         help="(DEBUG) Dump cProfile stats. The output path is your_simulation_path/profile.bin.",
                         default=False,
                         action="store_true"
                         )
+    parser.add_argument('--verbose', '-v',
+                        help="Verbosity level (the more 'v', the more verbose)",
+                        action='count', default=1)
 
     resume_group = parser.add_mutually_exclusive_group()
     resume_group.add_argument("--resume",
@@ -68,8 +68,6 @@ if __name__ == "__main__":
 
     args, unknown = parser.parse_known_args()
 
-    # set up config class and logger (logging to file and screen.)
-    create_logger()
 
     # set up the data folders
     output_path = Path(args.simulation_path)
@@ -83,15 +81,25 @@ if __name__ == "__main__":
     cfg_path = str(cfg_basename / "config.json")
     cfg_schema_path = str(cfg_basename / "config.schema.json")
 
-    # silence if needed
-    if args.quiet:
-        logger.addFilter(lambda record: False)
 
     config_parser = Config.generate_argparse_from_config(cfg_schema_path, str(cfg_basename / "params.schema.json"))
     config_args = config_parser.parse_args(unknown)
 
-    # create the config object
-    cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate, args.buffer_rate)
+    # Set up config class and logger for the main driver (i.e. spawning ray process)
+    # use https://gist.github.com/ms5/9f6df9c42a5f5435be0e for the -v flag counting trick
+    log_level = logging.ERROR - (10*args.verbose) if args.verbose > 0 else 0
+    create_logger(log_level)
+
+    cfg = Config(
+        cfg_path,
+        args.param_dir,
+        **{
+            **vars(config_args),
+            "save_rate": args.save_rate,
+            "buffer_rate": args.buffer_rate,
+            "log_level": log_level
+        }
+    )
 
     # Debug mode: make ray spawn only one process
     ray.init(local_mode=debugger_is_active())

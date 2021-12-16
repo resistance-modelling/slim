@@ -4,13 +4,13 @@ import math
 from abc import ABC
 import datetime as dt
 from heapq import heapify
+import logging
 from types import GeneratorType
 from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, Optional, \
     Iterable, TYPE_CHECKING, List, cast, Iterator
 
 import numpy as np
 
-from src import logger
 from src.QueueTypes import PriorityQueue, pop_from_queue
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -258,12 +258,12 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         old_value = self._cache[stage]
         if old_value == 0:
             if value > 0:
-                logger.warning(
+                logging.warning(
                     f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information.")
             self.geno_by_lifestage[stage] = GenoDistrib(self.genetic_ratios).normalise_to(value)
         else:
             if value < 0:
-                logger.warning(
+                logging.warning(
                     f"Trying to assign population stage {stage} a negative value. It will be truncated to zero, but this probably means an invariant was broken.")
             elif value == old_value:
                 return
@@ -321,7 +321,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
             delta_avail_dams += event.geno_distrib
             self._busy_dams_cache = self._busy_dams_cache - event.geno_distrib
 
-        logger.debug(f"\t\t\t\tIn free dams: self._busy_dams has {self._busy_dams.qsize()} events")
+        logging.debug(f"\t\t\t\tIn free dams: self._busy_dams has {self._busy_dams.qsize()} events")
         pop_from_queue(self._busy_dams, cur_time, cts)
 
         return delta_avail_dams
@@ -383,7 +383,7 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         busy_sum = self.busy_dams
         offset = busy_sum - self.geno_by_lifestage["L5f"]
 
-        #logger.debug(f"\t\t\t In _clip_dams_to_stage: L5f is {self.geno_by_lifestage['L5f']}")
+        #logging.debug(f"\t\t\t In _clip_dams_to_stage: L5f is {self.geno_by_lifestage['L5f']}")
 
         for allele in offset:
             off = offset[allele]

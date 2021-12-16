@@ -1,4 +1,5 @@
 import argparse
+import logging
 from dataclasses import dataclass
 import datetime as dt
 import json
@@ -102,10 +103,7 @@ class Config(RuntimeConfig):
         self,
         config_file: str,
         simulation_dir: str,
-        override_params: Optional[dict] = None,
-        save_rate: Optional[int] = None,
-        buffer_rate: int = 100,
-        num_workers: int = 10
+        **override_params
     ):
         """Read the configuration from files
 
@@ -113,9 +111,10 @@ class Config(RuntimeConfig):
         :type config_file: string
         :param simulation_dir: path to the simulator parameters JSON file
         :param override_params: options that override the config
-        :param save_rate: how often to save the result of a simulation
-        :param buffer_rate: how many days to save in a buffer before flushing
-        :param num_workers: number of Ray actors created in a worker pool
+        :keyword int save_rate: how often to save the result of a simulation
+        :keyword int buffer_rate: how many days to save in a buffer before flushing
+        :keyword int num_workers: number of Ray actors created in a worker pool
+        :keyword int log_level: the log level
         """
 
         if override_params is None:
@@ -155,9 +154,12 @@ class Config(RuntimeConfig):
         self.loch_temperatures = np.loadtxt(os.path.join(simulation_dir, "temperatures.csv"), delimiter=",")
 
         # driver-specific settings
-        self.save_rate = save_rate
-        self.buffer_rate = buffer_rate
-        self.num_workers = num_workers
+        self.save_rate: Optional[int] = override_params.get("save_rate")
+        self.buffer_rate = override_params.get("buffer_rate", 100)
+        self.num_workers = override_params.get("num_workers", 10)
+
+        # log-level and miscellanea
+        self.log_level = override_params.get("log_level", logging.INFO)
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
         return [self.emb, self.thermolicer][treatment_type.value]

@@ -3,22 +3,20 @@ import logging
 # one-stop entry point for logging
 from typing import Any, Dict
 
-logger = logging.getLogger("SeaLiceManagementGame")
 
-def create_logger():
+def create_logger(level: int = logging.INFO):
     """
     Create a logger that logs to both file (in debug mode) and terminal (info).
+
+    Note: this should be called inside a Ray actor. A logging actor has to create an instance
+    of a logger (created by default by the logging singleton) within its python process. Making one earlier
+    will not make the logs distributed and cause bottlenecks.
+
+    See https://docs.ray.io/en/master/ray-logging.html#how-to-set-up-loggers for details.
+
     """
-    logger.setLevel(logging.DEBUG)
-    file_handler = logging.FileHandler("SeaLiceManagementGame.log", mode="w")
-    file_handler.setLevel(logging.DEBUG)
-    term_handler = logging.StreamHandler()
-    term_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    term_handler.setFormatter(formatter)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(term_handler)
-    logger.addHandler(file_handler)
+    logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=level)
+
 
 class LoggableMixin:
     """A mixin to store variables when recording log entries."""
@@ -28,7 +26,7 @@ class LoggableMixin:
     def log(self, log_message: str, *args, **kwargs):
         """Wrapper on the logger function that logs a message and saves these for visualisation purposes"""
         self.logged_data.update(kwargs)
-        logger.debug(log_message, *args, *(kwargs.values()))
+        logging.debug(log_message, *args, *(kwargs.values()))
 
     def clear_log(self):
         self.logged_data.clear()

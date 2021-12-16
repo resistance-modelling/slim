@@ -11,15 +11,15 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Tuple, cast
 
 import numpy as np
-import ray
 from mypy_extensions import TypedDict
 from ray.util import ActorPool
 
-from src import LoggableMixin, logger
+from src import LoggableMixin
 from src.Cage import Cage
 from src.Config import Config
 from src.JSONEncoders import CustomFarmEncoder
@@ -31,25 +31,8 @@ GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
 LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
 
-
-@ray.remote
-class FarmActor:
-    def __init__(self, farm: Farm):
-        self.farm = farm
-
-    def update_cage(
-            self,
-            cage_pressure: Tuple[Cage, int],
-            cur_date: dt.datetime,
-            ext_pressure_ratios: GenoDistribDict
-    ):
-        # update the cage and collect the offspring info
-        cage, pressure_per_cage = cage_pressure
-        egg_distrib, hatch_date, cost = cage.update(cur_date,
-                                                    pressure_per_cage,
-                                                    ext_pressure_ratios)
-
-        return egg_distrib, hatch_date, cost
+if TYPE_CHECKING:
+    from src.Simulator import FarmActor
 
 
 class Farm(LoggableMixin):
@@ -78,8 +61,6 @@ class Farm(LoggableMixin):
         self.start_date = farm_cfg.farm_start
         self.available_treatments = farm_cfg.max_num_treatments
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
-        self.actor_pool = ActorPool([FarmActor.remote(self) for _ in range(cfg.num_workers)])
-
         self.year_temperatures = self.initialise_temperatures(cfg.loch_temperatures)
 
         # TODO: only for testing purposes
@@ -215,7 +196,7 @@ class Farm(LoggableMixin):
         :returns: whether the treatment has been added to at least one cage or not.
         """
 
-        logger.debug("\t\tFarm {} requests treatment {}".format(self.name, str(treatment_type)))
+        logging.debug("\t\tFarm {} requests treatment {}".format(self.name, str(treatment_type)))
         if self.available_treatments <= 0:
             return False
 
@@ -224,7 +205,7 @@ class Farm(LoggableMixin):
                           (cage.start_date > day or cage.is_fallowing or cage.is_treated(day))]
 
         if len(eligible_cages) == 0:
-            logger.debug("\t\tTreatment not scheduled as no cages were eligible")
+            logging.debug("\t\tTreatment not scheduled as no cages were eligible")
             return False
 
         event = self.generate_treatment_event(treatment_type, day)
@@ -247,7 +228,7 @@ class Farm(LoggableMixin):
         :param can_defect if True, the farm has a choice to not apply treatment
         """
 
-        logger.debug("Asking farm {} to treat".format(self.name))
+        logging.debug("Asking farm {} to treat".format(self.name))
 
         # TODO: this is extremely simple.
         p = [self.farm_cfg.defection_proba, 1 - self.farm_cfg.defection_proba]
@@ -255,7 +236,7 @@ class Farm(LoggableMixin):
         self.log("Outcome of the vote: %r", is_treating=want_to_treat)
 
         if not want_to_treat:
-            logger.debug("\tFarm {} refuses to treat".format(self.name))
+            logging.debug("\tFarm {} refuses to treat".format(self.name))
             return
 
         # TODO: implement a strategy to pick a treatment of choice
@@ -267,7 +248,8 @@ class Farm(LoggableMixin):
     def update(self,
                cur_date: dt.datetime,
                ext_influx: int,
-               ext_pressure_ratios: GenoDistribDict) -> Tuple[GenoDistribByHatchDate, Money]:
+               ext_pressure_ratios: GenoDistribDict,
+               cage_actor_pool: ActorPool) -> Tuple[GenoDistribByHatchDate, Money]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites.
 
@@ -280,9 +262,9 @@ class Farm(LoggableMixin):
         self.clear_log()
 
         if cur_date >= self.start_date:
-            logger.debug("Updating farm {}".format(self.name))
+            logging.debug("Updating farm {}".format(self.name))
         else:
-            logger.debug("Updating farm {} (non-operational)".format(self.name))
+            logging.debug("Updating farm {} (non-operational)".format(self.name))
 
         self.log("\tAdding %r new lice from the reservoir", new_reservoir_lice=ext_influx)
         self.log("\tReservoir lice genetic ratios: %s", new_reservoir_lice_ratios=ext_pressure_ratios)
@@ -303,7 +285,7 @@ class Farm(LoggableMixin):
 
         cage_pressures = list(zip(self.cages, pressures_per_cage))
 
-        eggs, hatch_dates, costs = zip(*self.actor_pool.map(update_step, cage_pressures))
+        eggs, hatch_dates, costs = zip(*cage_actor_pool.map(update_step, cage_pressures))
 
         total_cost = sum(costs, Money())
         eggs_by_hatch_date = Counter()
@@ -409,21 +391,21 @@ class Farm(LoggableMixin):
         :param cur_date: Current date of the simulation
         """
 
-        logger.debug("\tDispersing total offspring Farm {}".format(self.name))
+        logging.debug("\tDispersing total offspring Farm {}".format(self.name))
 
         for farm in farms:
             if farm.name == self.name:
-                logger.debug("\t\tFarm {} (current):".format(farm.name))
+                logging.debug("\t\tFarm {} (current):".format(farm.name))
             else:
-                logger.debug("\t\tFarm {}:".format(farm.name))
+                logging.debug("\t\tFarm {}:".format(farm.name))
 
             # allocate eggs to cages
             farm_arrivals = self.get_farm_allocation(farm, eggs_by_hatch_date)
             arrivals_per_cage = self.get_cage_allocation(len(farm.cages), farm_arrivals)
 
             total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
-            logger.debug("\t\t\tTotal new eggs = {}".format(total))
-            logger.debug("\t\t\tPer cage distribution = {}".format(by_cage))
+            logging.debug("\t\t\tTotal new eggs = {}".format(total))
+            logging.debug("\t\t\tPer cage distribution = {}".format(by_cage))
             self.log("\t\t\tPer cage distribution (as geno) = %s", arrivals_per_cage=by_geno_cage)
 
             # get the arrival time of the egg batch at the allocated

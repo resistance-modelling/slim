@@ -11,28 +11,55 @@ import ray
 import tqdm
 from ray.util import ActorPool
 
-from src import logger
+import logging
+
 from src.Config import Config
 from src.Farm import Farm, GenoDistribByHatchDate
+from src.Cage import Cage
 from src.JSONEncoders import CustomFarmEncoder
 from src.LicePopulation import GenoDistrib, GenoDistribDict
 from src.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
 from src.TreatmentTypes import Money
+from src.ray_utils import setup_workers, LoggingActor
 
+
+# TODO: move these in ray_utils?
+# TODO: given that these two actors are similar why not merging them?
 @ray.remote
-class OrganisationActor:
-    def __init__(self, organisation: Organisation):
-        self.organisation = organisation
+class FarmActor(LoggingActor):
+    def __init__(self, log_level: int, cage_pool: Optional[ActorPool] = None):
+        """
+        Note: cage_pool should be passed when this class acts like a cage
+        :TODO why not splitting the class into two?
+        """
+        super().__init__(log_level)
+        self.pool = cage_pool
 
-    def update(self, farm: Farm, cur_date: dt.datetime, ext_pressure: GenoDistribDict, ext_pressure_ratios):
-        offspring, cost = farm.update(cur_date, ext_pressure, ext_pressure_ratios)
+    def update_farm(
+        self,
+        farm: Farm,
+        cur_date: dt.datetime,
+        ext_pressure: int,
+        ext_pressure_ratios: GenoDistribDict
+    ):
+        offspring, cost = farm.update(cur_date, ext_pressure, ext_pressure_ratios, self.pool)
         payoff = farm.get_profit(cur_date) - cost
         return offspring, payoff
 
-    def handle_messages(self, farm: Farm, cur_date: dt.datetime):
-        # TODO
-        self.organisation.handle_farm_messages(cur_date, farm)
-        pass
+    def update_cage(
+        self,
+        cage_pressure: Tuple[Cage, int],
+        cur_date: dt.datetime,
+        ext_pressure_ratios: GenoDistribDict
+    ):
+        # update the cage and collect the offspring info
+        cage, pressure_per_cage = cage_pressure
+        egg_distrib, hatch_date, cost = cage.update(cur_date,
+                                                    pressure_per_cage,
+                                                    ext_pressure_ratios)
+
+        return egg_distrib, hatch_date, cost
+
 
 
 class Organisation:
@@ -40,14 +67,14 @@ class Organisation:
     An organisation is a cooperative of `Farm`s.
     """
 
-    def __init__(self, cfg: Config, num_workers=10, *args):
+    def __init__(self, cfg: Config, simulator: Simulator, *args):
         self.name: str = cfg.name
         self.cfg = cfg
         self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
-        self.actor_pool = ActorPool([OrganisationActor.remote(self) for _ in range(num_workers)])
         self.genetic_ratios = GenoDistrib(cfg.initial_genetic_ratios)
         self.external_pressure_ratios = cfg.initial_genetic_ratios.copy()
         self.offspring_queue = OffspringAveragingQueue(self.cfg.reservoir_offspring_average)
+        self.simulator = simulator
 
     def update_genetic_ratios(self, offspring: GenoDistrib):
         """
@@ -78,15 +105,16 @@ class Organisation:
 
         ext_pressure_influx, ext_pressure_ratios = self.get_external_pressure()
         def update(
-                actor: OrganisationActor,
+                actor: FarmActor,
                 farm,
                 cur_date=cur_date,
                 ext_pressure=ext_pressure_influx,
                 ext_pressure_ratios = ext_pressure_ratios
         ):
-            return actor.update.remote(farm, cur_date, ext_pressure, ext_pressure_ratios)
+            return actor.update_farm.remote(farm, cur_date, ext_pressure, ext_pressure_ratios)
 
-        offspring_per_farm, payoffs = tuple(zip(*self.actor_pool.map(update, self.farms)))
+        res = list(self.simulator.farm_pool.map(update, self.farms))
+        offspring_per_farm, payoffs = tuple(zip(*res))
         payoff = sum(payoffs, Money())
 
         """
@@ -144,15 +172,16 @@ class Organisation:
 
 
 class Simulator:
-
-    def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
+    def __init__(self, output_dir: Path, sim_id: str, cfg: Config, *args):
         self.output_dir = output_dir
         self.sim_id = sim_id
         self.cfg = cfg
         self.output_dump_path = self.get_simulation_path(output_dir, sim_id)
         self.cur_day = cfg.start_date
-        self.organisation = Organisation(cfg)
+        self.organisation = Organisation(cfg, self, *args)
         self.payoff = Money()
+
+        self.farm_pool = setup_workers(FarmActor, cfg)
 
     @staticmethod
     def get_simulation_path(path: Path, sim_id: str):
@@ -164,7 +193,7 @@ class Simulator:
     @staticmethod
     def reload_all_dump(path: Path, sim_id: str):
         """Reload a simulator"""
-        logger.info("Loading from a dump...")
+        logging.info("Loading from a dump...")
         data_file = Simulator.get_simulation_path(path, sim_id)
         states = []
         times = []
@@ -175,7 +204,7 @@ class Simulator:
                     states.append(sim_state)
                     times.append(sim_state.cur_day)
                 except EOFError:
-                    logger.debug("Loaded %d states from the dump", len(states))
+                    logging.debug("Loaded %d states from the dump", len(states))
                     break
 
         return states, times
@@ -304,11 +333,11 @@ class Simulator:
         :param cfg: Configuration object holding parameter information.
         :param Organisation: the organisation to work on.
         """
-        logger.info("running simulation, saving to %s", self.output_dir)
+        logging.info("running simulation, saving to %s", self.output_dir)
 
         # create a file to store the population data from our simulation
         if resume and not self.output_dump_path.exists():
-            logger.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")
+            logging.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")
 
         if not resume:
             data_file = self.output_dump_path.open(mode="wb")
@@ -318,14 +347,14 @@ class Simulator:
 
         num_days = (self.cfg.end_date - self.cur_day).days
         for day in tqdm.trange(num_days):
-            logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
+            logging.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
             self.payoff += self.organisation.step(self.cur_day)
 
             # Save the model snapshot either when checkpointing or during the last iteration
             if not resume:
                 days_since_start = (self.cur_day - self.cfg.start_date).days
                 days_since_flush = days_since_start % ring_length
-                days_since_save = days_since_start % self.cfg.save_rate
+                days_since_save = days_since_start % self.cfg.save_rate if self.cfg.save_rate else -1
 
                 if (self.cfg.save_rate and days_since_save == 0) \
                         or day == num_days - 1:

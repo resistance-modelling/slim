@@ -3,16 +3,17 @@ Entry point for our optimisation framework
 """
 
 import argparse
-import json
 from copy import deepcopy
+import json
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 import sys
 
 import numpy as np
 import tqdm
 
-from src import logger, create_logger
+from src import create_logger
 from src.Simulator import Simulator
 from src.Config import Config
 
@@ -73,9 +74,9 @@ class Optimiser:
         self.save("annealing", output_path)
 
         for i in tqdm.trange(self.iterations):
-            logger.debug(f"Started iteration {i}")
+            logging.debug(f"Started iteration {i}")
             candidate_state = self.get_neighbour(current_state, optimiser_rng, i)
-            logger.debug(f"Chosen candidate state {candidate_state}")
+            logging.debug(f"Chosen candidate state {candidate_state}")
             payoff_sum = 0.0
             for t in tqdm.trange(self.repeat_experiment):
                 sim_name = f"optimisation_{i}_{t}"
@@ -117,10 +118,6 @@ if __name__ == "__main__":
     parser.add_argument("param_dir",
                         type=str,
                         help="Directory of simulation parameters files.")
-    parser.add_argument("--quiet",
-                        help="Don't log to console or file.",
-                        default=False,
-                        action="store_true")
     parser.add_argument("--iterations",
                         help="Number of iterations to run in the optimiser",
                         type=int,
@@ -154,10 +151,6 @@ if __name__ == "__main__":
     cfg_basename = Path(args.param_dir).parent
     cfg_path = str(cfg_basename / "config.json")
     cfg_schema_path = str(cfg_basename / "config.schema.json")
-
-    # silence if needed
-    if args.quiet:
-        logger.addFilter(lambda record: False)
 
     config_parser = Config.generate_argparse_from_config(cfg_schema_path, str(cfg_basename / "params.schema.json"))
     config_args = config_parser.parse_args(unknown)
