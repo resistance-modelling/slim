@@ -82,9 +82,6 @@ class RuntimeConfig:
         self.reservoir_offspring_integration_ratio: float = data["reservoir_offspring_integration_ratio"]
         self.reservoir_offspring_average: int = data["reservoir_offspring_average"]
 
-        # Farm data
-        self.farm_data = data["farm_data"]
-
         # Other reward/payoff constants
         self.gain_per_kg = Money(data["gain_per_kg"])
 
@@ -151,6 +148,7 @@ class Config(RuntimeConfig):
 
         self.interfarm_times = np.loadtxt(os.path.join(simulation_dir, "interfarm_time.csv"), delimiter=",")
         self.interfarm_probs = np.loadtxt(os.path.join(simulation_dir, "interfarm_prob.csv"), delimiter=",")
+        self.loch_temperatures = np.loadtxt(os.path.join(simulation_dir, "temperatures.csv"), delimiter=",")
 
         # driver-specific settings
         self.save_rate = save_rate

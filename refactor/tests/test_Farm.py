@@ -32,8 +32,8 @@ class TestFarm:
         assert isinstance(loaded_farm_data, dict)
 
     def test_year_temperatures(self, first_farm):
-        tarbert = first_farm.cfg.farm_data["tarbert"]["temperatures"]
-        ardrishaig = first_farm.cfg.farm_data["ardrishaig"]["temperatures"]
+        tarbert = first_farm.cfg.loch_temperatures[1][1:]
+        ardrishaig = first_farm.cfg.loch_temperatures[0][1:]
         temps = np.stack([tarbert, ardrishaig])
         min_temps = np.round(np.min(temps, axis=0), 1)
         max_temps = np.round(np.max(temps, axis=0), 1)
