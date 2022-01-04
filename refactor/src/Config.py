@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 def to_dt(string_date) -> dt.datetime:
     """Convert from string date to datetime date
 
-    :param string_date: Date as string timestamp
+    :param string_date:: Date as string timestamp
     :type string_date: str
     :return: Date as Datetime
     :rtype: [type]
@@ -107,11 +107,11 @@ class Config(RuntimeConfig):
     ):
         """Read the configuration from files
 
-        :param config_file: Path to the environment JSON file
+        :param config_file:: Path to the environment JSON file
         :type config_file: string
-        :param simulation_dir: path to the simulator parameters JSON file
-        :param override_params: options that override the config
-        :param save_rate if True
+        :param simulation_dir:: path to the simulator parameters JSON file
+        :param override_params:: options that override the config
+        :param save_rate: if True
         """
 
         if override_params is None:
@@ -216,7 +216,7 @@ class FarmConfig:
     def __init__(self, data: dict):
         """Create farm configuration
 
-        :param data: Dictionary with farm data
+        :param data:: Dictionary with farm data
         """
 
         # set params

@@ -39,9 +39,10 @@ class Farm(LoggableMixin):
     def __init__(self, name: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None):
         """
         Create a farm.
+
         :param name: the id of the farm.
         :param cfg: the farm configuration
-        ::param initial_lice_pop: if provided, overrides default generated lice population
+        :param initial_lice_pop: if provided, overrides default generated lice population
         """
         super().__init__()
 
@@ -71,6 +72,7 @@ class Farm(LoggableMixin):
     def __str__(self):
         """
         Get a human readable string representation of the farm.
+
         :return: a description of the cage
         """
         cages = ", ".join(str(a) for a in self.cages)
@@ -122,6 +124,8 @@ class Farm(LoggableMixin):
         Calculate the mean sea temperature at the northing coordinate of the farm at
         month c_month interpolating data taken from
         www.seatemperature.org
+
+        :param temperatures: the array of temperatures from January till december. The expected shape is :math:`(2, n)`.
         """
 
         # Schema: 2 rows, first column = northing, remaining 12 columns: temperature starting from Jan
@@ -182,7 +186,7 @@ class Farm(LoggableMixin):
         of chemical treatment applied. Furthermore, no treatment should be applied on cages that are already
         undergoing a treatment of the same type. This usually means the actual treatment application period
         plus a variable delay period. If no cages are available no treatment can be applied and the function returns
-        False.
+        _False_.
 
         :param treatment_type: the treatment type to apply
         :param day: the day when to start applying the treatment
@@ -213,12 +217,14 @@ class Farm(LoggableMixin):
         """
         Ask the farm to perform treatment.
         The farm will thus respond in the following way:
-        - choose whether to apply treatment or not (regardless of the actual cage eligibility)
-        - if yes, which treatment to apply (according to internal evaluations, e.g. increased lice resistance)
+
+        - choose whether to apply treatment or not (regardless of the actual cage eligibility).
+        - if yes, which treatment to apply (according to internal evaluations, e.g. increased lice resistance).
+
         The farm is not obliged to tell the organisation whether treatment is being performed.
 
-        :param cur_date the current date
-        :param can_defect if True, the farm has a choice to not apply treatment
+        :param cur_date: the current date
+        :param can_defect: if True, the farm has a choice to not apply treatment
         """
 
         logger.debug("Asking farm {} to treat".format(self.name))
@@ -246,8 +252,9 @@ class Farm(LoggableMixin):
         in population of parasites.
 
         :param cur_date: Current date
-        :param ext_influx the amount of lice that enter a cage
-        :param ext_pressure_ratios the ratio to use for the external pressure
+        :param ext_influx: the amount of lice that enter a cage
+        :param ext_pressure_ratios: the ratio to use for the external pressure
+
         :return: pair of Dictionary of genotype distributions based on hatch date, and cost of the update
         """
 
@@ -296,6 +303,7 @@ class Farm(LoggableMixin):
 
     def get_cage_pressures(self, external_inflow: int) -> List[int]:
         """Get external pressure divided into cages
+
         :return: List of values of external pressure for each cage
         """
 
@@ -316,10 +324,9 @@ class Farm(LoggableMixin):
         The probability accounts for interfarm water movement (currents) as well as lice egg survival.
 
         :param target_farm: Farm the eggs are travelling to
-        :param eggs_by_hatch_date: Dictionary of genotype distributions based
-        on hatch date
-        :return: Updated dictionary of genotype distributions based
-        on hatch date
+        :param eggs_by_hatch_date: Dictionary of genotype distributions based on hatch date
+
+        :return: Updated dictionary of genotype distributions based on hatch date
         """
 
         # base the new survived arrival dictionary on the offspring one
@@ -348,6 +355,7 @@ class Farm(LoggableMixin):
 
         :param ncages: Number of bins to allocate to
         :param eggs_by_hatch_date: Dictionary of genotype distributions based on hatch date
+
         :return: List of dictionaries of genotype distributions based on hatch date per bin
         """
 
@@ -383,8 +391,7 @@ class Farm(LoggableMixin):
 
         NOTE: This method is not multiprocessing safe. (why?)
 
-        :param eggs_by_hatch_date: Dictionary of genotype distributions based
-        on hatch date
+        :param eggs_by_hatch_date: Dictionary of genotype distributions based on hatch date
         :param farms: List of Farm objects
         :param cur_date: Current date of the simulation
         """
@@ -419,10 +426,9 @@ class Farm(LoggableMixin):
     def get_cage_arrivals_stats(cage_arrivals: CageAllocation) -> Tuple[int, List[int], List[GenoDistrib]]:
         """Get stats about the cage arrivals for logging
 
-        :param cage_arrivals: List of Dictionaries of genotype distributions based
-        on hatch date.
-        :return: Tuple representing total number of arrivals, arrival
-        distribution and genotype distribution by cage
+        :param cage_arrivals: List of Dictionaries of genotype distributions based on hatch date.
+
+        :return: Tuple representing total number of arrivals, arrival, distribution and genotype distribution by cage
         """
 
         # Basically ignore the hatch dates and sum up the batches
@@ -435,6 +441,8 @@ class Farm(LoggableMixin):
     def get_profit(self, cur_date: dt.datetime):
         """
         Get the current mass of fish that can be resold.
+
+        :param cur_date: the current day
         """
         mass_per_cage = [cage.average_fish_mass((cur_date - cage.start_date).days) / 1e3 for cage in self.cages]
         return self.cfg.gain_per_kg * Money(sum(mass_per_cage))

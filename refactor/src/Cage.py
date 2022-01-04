@@ -116,6 +116,7 @@ class Cage(LoggableMixin):
         ext_pressure_ratio: GenoDistribDict
     ) -> Tuple[GenoDistrib, Optional[dt.datetime], Money]:
         """Update the cage at the current time step.
+
         :param cur_date: Current date of simulation
         :param pressure: External pressure, planctonic lice coming from the reservoir
         :param ext_pressure_ratio: The genotype ratio to use for the external pressure
@@ -261,7 +262,8 @@ class Cage(LoggableMixin):
         Calculate the number of lice in each stage killed by treatment.
 
         Note: this method consumes the internal event queue
-        :param cur_date the current date
+
+        :param cur_date: the current date
         """
 
         dead_lice_dist = self.lice_population.get_empty_geno_distrib()
@@ -357,7 +359,7 @@ class Cage(LoggableMixin):
         See Section 2.1 of Aldrin et al. (2017)
 
         :param cur_date: the current date
-        :returns a tuple (new_l2, new_l4, new_l5f, new_l5m)
+        :returns: a tuple (new_l2, new_l4, new_l5f, new_l5m)
         """
         logger.debug("\t\tupdating lice lifecycle stages")
 
@@ -415,9 +417,11 @@ class Cage(LoggableMixin):
         point percentage increases, thus we can only account for "excess deaths".
         If treatment is not being applied the overall
 
-        :param days_since_start the number of days since the beginning of the simulation
-        :param fish_lice_deaths the number of fish dead by lice
-        :param fish_background_deaths the number of fish dead by natural reasons
+        :param days_since_start: the number of days since the beginning of the simulation
+        :param fish_lice_deaths: the number of fish dead by lice
+        :param fish_background_deaths: the number of fish dead by natural reasons
+
+        :returns: number of fish death events
         """
         # See surveys/overton_treatment_mortalities.py for an explanation on what is going on
         mortality_events = fish_lice_deaths + fish_backgroud_deaths
@@ -445,8 +449,9 @@ class Cage(LoggableMixin):
     def get_fish_growth(self, days_since_start) -> Tuple[int, int]:
         """
         Get the number of fish that get killed either naturally or by lice.
-        :param days_since_start: the number of days since the beginning.
-        :returns a tuple (natural_deaths, lice_induced_deaths, lice_deaths)
+
+        :param: days_since_start: the number of days since the beginning.
+        :returns: a tuple (natural_deaths, lice_induced_deaths, lice_deaths)
         """
 
         logger.debug("\t\tupdating fish population")
@@ -502,8 +507,10 @@ class Cage(LoggableMixin):
         Compute the number of lice that can infect and what their infection rate (number per fish) is
 
         :param days_since_start: days since the cage has opened
-        :returns a pair (Einf, num_avail_lice)
+
+        :returns: a pair (Einf, num_avail_lice)
         """
+
         # Based on Aldrin et al.
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease)./
@@ -525,6 +532,7 @@ class Cage(LoggableMixin):
 
         :param cur_date: current date of simulation
         :param days: days the number of days elapsed
+
         :return: number of evolving lice, or equivalently the new number of infections
         """
         Einf, num_avail_lice = self.get_infection_rates(days)
@@ -547,9 +555,11 @@ class Cage(LoggableMixin):
 
     def get_mean_infected_fish(self, *args) -> int:
         """
-        Get the average number of infected fish
-        :param *args the stages to consider (optional, by default all stages from the third onward are taken into account)
-        :returns the number of infected fish
+        Get the average number of infected fish.
+
+        :param \*args: the stages to consider (optional, by default all stages from the third onward are taken into account)
+
+        :returns: the number of infected fish
         """
         if self.num_fish == 0:
             return 0
@@ -602,11 +612,12 @@ class Cage(LoggableMixin):
 
     def do_mating_events(self, cur_date) -> Tuple[GenoDistrib, GenoDistrib]:
         """
-        will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
-        assume males don't become unavailable? in this case we don't need a delta for sires
+        Will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
+        Assume males don't become unavailable? in this case we don't need a delta for sires
 
-        :param cur_date the current date
-        :returns a pair (mating_dams, new_eggs)
+        :param cur_date: the current date
+
+        :returns: a pair (mating_dams, new_eggs)
         """
 
         delta_eggs = GenoDistrib()
@@ -637,7 +648,7 @@ class Cage(LoggableMixin):
         Get number of eggs based on discrete genetic mechanism.
 
         The algorithm emulates the following scenario: each sire s_i is sampled from sire_distrib
-        and will have a given genomic g_s_i and similarly a dam $d_i$ will have a genotype $g_d_i$.
+        and will have a given genomic :math:`g_{s_i}` and similarly a dam :math:`d_i` will have a genotype :math:`g_{d_i}`.
         Because the genomic of a lice can only be dominant, recessive or partial dominant then
         the mating will result in one of these happening depending on the usual Mendelevian
         mechanism.
@@ -646,12 +657,12 @@ class Cage(LoggableMixin):
         the probabilities of each combination arising and adopt a multinomial distribution
         in order to achieve a given number of eggs.
         The rationale for the formulae used here is the following:
-        - to get an A (dominant) one needs a combination of dominant and dominant allele, or
-        dominant and the right half of partially dominant genes
-        - to get an a (recessive) one does the same as above, but with fully recessive alleles
-        instead
-        - to get a partially dominant one, we use the inclusion-exclusion principle and subtract
-        the cases above from all the possible pairings.
+
+        - to get an A (dominant) one needs a combination of dominant and dominant allele, or dominant and the right half of partially dominant genes;
+
+        - to get an a (recessive) one does the same as above, but with fully recessive alleles instead;
+
+        - to get a partially dominant one, we use the inclusion-exclusion principle and subtract the cases above from all the possible pairings.
 
         Together with being fast, this approach naturally models statistical uncertainty compared
         to a perfect Mendelevian split. Unfortunately it does not naturally include mutation
@@ -661,6 +672,8 @@ class Cage(LoggableMixin):
         :param sire_distrib: the genotype distribution of the sires
         :param dam_distrib: the genotype distribution of the eggs
         :param number_eggs: the total number of eggs
+
+        :returns: the newly sampled eggs as a :class:`GenoDistrib`.
         """
 
         assert sire_distrib.gross == dam_distrib.gross
@@ -755,7 +768,7 @@ class Cage(LoggableMixin):
             return distrib_lice_available.copy()
 
         # "we need to select k lice from the given population broken down into different allele
-        # bins and subtract" -> "select n balls from the following N_1, ..., N_k bins without
+        # bins and subtract" -> "select :math:`n` balls from the following :math`N_1, ..., N_k` bins without
         # replacement -> use a multivariate hypergeometric distribution
         lice_as_list = self.cfg.rng.multivariate_hypergeometric(
             list(distrib_lice_available.values()), num_lice)
@@ -767,8 +780,10 @@ class Cage(LoggableMixin):
     def get_num_eggs(self, mated_females) -> int:
         """
         Get the number of new eggs
-        :param mated_females the number of mated females that reproduce
-        :returns the number of eggs produced
+
+        :param mated_females: the number of mated females that reproduce
+
+        :returns: the number of eggs produced
         """
 
         # See Aldrin et al. 2017, §2.2.6
@@ -777,7 +792,7 @@ class Cage(LoggableMixin):
 
         mated_females_distrib = mated_females * age_distrib
 
-        # Hatching time is already covered in get_egg_batch0
+        # Hatching time is already covered in get_egg_batch
         eggs = self.cfg.reproduction_eggs_first_extruded * \
                (age_range ** self.cfg.reproduction_age_dependence) * mated_females_distrib
 
@@ -786,9 +801,11 @@ class Cage(LoggableMixin):
     def get_egg_batch(self, cur_date: dt.datetime, egg_distrib: GenoDistrib) -> EggBatch:
         """
         Get the expected arrival date of an egg batch
-        :param cur_date the current time
-        :param egg_distrib the egg distribution
-        :returns EggBatch representing egg distribution and expected hatching date
+
+        :param cur_date: the current time
+        :param egg_distrib: the egg distribution
+
+        :returns: EggBatch representing egg distribution and expected hatching date
         """
 
         # We use Stien et al (2005)'s regressed formula
@@ -807,8 +824,10 @@ class Cage(LoggableMixin):
     def create_offspring(self, cur_time: dt.datetime) -> GenoDistrib:
         """
         Hatch the eggs from the event queue
-        :param cur_time the current time
-        :returns a delta egg genomics
+
+        :param cur_time: the current time
+
+        :returns: a delta egg genomics
         """
 
         delta_egg_offspring = GenoDistrib({geno: 0 for geno in self.cfg.initial_genetic_ratios})
@@ -822,8 +841,10 @@ class Cage(LoggableMixin):
 
     def get_arrivals(self, cur_date: dt.datetime) -> GenoDistrib:
         """Process the arrivals queue.
+
         :param cur_date: Current date of simulation
-        :return: Genotype distribution of eggs hatched in travel
+
+        :returns: Genotype distribution of eggs hatched in travel
         """
 
         hatched_dist = GenoDistrib()
@@ -851,8 +872,9 @@ class Cage(LoggableMixin):
     def get_dying_lice_from_dead_fish(self, num_dead_fish: int) -> GrossLiceDistrib:
         """
         Get the number of lice that die when fish die.
+
         :param num_dead_fish: the number of dead fish
-        :returns a gross distribution
+        :returns: a gross distribution
         """
 
         # Note: no paper actually provides a clear guidance on this.
@@ -897,11 +919,11 @@ class Cage(LoggableMixin):
     ):
         """
         Promote the population by stage and respect the genotypes
-        :param prev_stage the lice stage from which cur_stage evolves
-        :param cur_stage the lice stage that is about to evolve
-        :param leaving_lice the number of lice in the cur_stage=>next_stage progression
-        :param entering_lice the number of lice in the prev_stage=>cur_stage progression.
-               If prev_stage is a a string, entering_lice must be an int
+
+        :param prev_stage: the lice stage from which cur_stage evolves
+        :param cur_stage: the lice stage that is about to evolve
+        :param leaving_lice: the number of lice in the _cur_stage=>next_stage_ progression
+        :param entering_lice: the number of lice in the _prev_stage=>cur_stage_ progression. If _prev_stage_ is a a string, _entering_lice_ must be an _int_
         """
         if isinstance(prev_stage, str):
             if entering_lice is not None:
@@ -937,19 +959,20 @@ class Cage(LoggableMixin):
             hatched_arrivals_dist: GenoDistrib,
     ):
         """Update the number of fish and the lice in each life stage
-        :param dead_lice_dist the number of dead lice due to background death (as a distribution)
-        :param treatment_mortality the distribution of genotypes being affected by treatment
-        :param fish_deaths_natural the number of natural fish death events
-        :param fish_deaths_from_lice the number of lice-induced fish death events
-        :param fish_deaths_from_treatment the number of treatment-induced fish death events
-        :param new_L2 number of new L2 fish
-        :param new_L4 number of new L4 fish
-        :param new_females number of new adult females
-        :param new_males number of new adult males
-        :param new_infections the number of new infections (i.e. progressions from L2 to L3)
-        :param lice_from_reservoir the number of lice taken from the reservoir
-        :param delta_dams_batch the genotypes of now-unavailable females in batch events
-        :param new_offspring_distrib the new offspring obtained from hatching and migrations
+
+        :param dead_lice_dist: the number of dead lice due to background death (as a distribution)
+        :param treatment_mortality: the distribution of genotypes being affected by treatment
+        :param fish_deaths_natural: the number of natural fish death events
+        :param fish_deaths_from_lice: the number of lice-induced fish death events
+        :param fish_deaths_from_treatment: the number of treatment-induced fish death events
+        :param new_L2: number of new L2 fish
+        :param new_L4: number of new L4 fish
+        :param new_females: number of new adult females
+        :param new_males: number of new adult males
+        :param new_infections: the number of new infections (i.e. progressions from L2 to L3)
+        :param lice_from_reservoir: the number of lice taken from the reservoir
+        :param delta_dams_batch: the genotypes of now-unavailable females in batch events
+        :param new_offspring_distrib: the new offspring obtained from hatching and migrations
         :param hatched_arrivals_dist: new offspring obtained from arrivals
         """
 
@@ -1020,7 +1043,7 @@ class Cage(LoggableMixin):
         individuals in stage*stage rate (nauplii 0.17/d, copepods 0.22/d,
         pre-adult female 0.05, pre-adult male ... Stien et al 2005)
 
-        :returns the current background mortality. The return value is genotype-agnostic
+        :returns: the current background mortality. The return value is genotype-agnostic
 
         """
         # TODO: this is dumb
@@ -1040,6 +1063,9 @@ class Cage(LoggableMixin):
     def average_fish_mass(self, days):
         """
         Average fish mass.
+
+        :params days: number of elapsed days
+        :returns: the average fish mass (in grams).
         """
         smolt_params = self.cfg.smolt_mass_params
         return smolt_params.max_mass / (1 + math.exp(smolt_params.skewness * (days - smolt_params.x_shift)))
@@ -1048,7 +1074,8 @@ class Cage(LoggableMixin):
         """Get distribution of lice coming from the reservoir
 
         :param pressure: External pressure
-        :param external_pressure_ratios the external pressure ratios to sample from
+        :param external_pressure_ratios: the external pressure ratios to sample from
+
         :return: Distribution of lice in L1 and L2
         """
 
@@ -1071,6 +1098,7 @@ class Cage(LoggableMixin):
         """Put the cage in a fallowing state.
 
         Implications:
+
         1. All the fish would be removed.
         2. L3/L4/L5 would therefore disappear as they are attached to fish.
         3. Dam waiting and treatment queues will be flushed.
@@ -1099,5 +1127,5 @@ class Cage(LoggableMixin):
         """The aggregation rate is the number of lice over the total number of fish.
         Elsewhere it is referred to as infection rate, but here "infection rate" only refers to host fish.
 
-        :returns the aggregation rate"""
+        :returns: the aggregation rate"""
         return self.lice_population["L5f"] / self.num_fish if self.num_fish > 0 else 0.0

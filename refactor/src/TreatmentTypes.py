@@ -63,7 +63,7 @@ class TreatmentParams(ABC):
 
         :param temperature: the temperature in Celsius
         :param fish_mass: the fish mass (in grams)
-        :returns Mortality percentage point difference increase
+        :returns: Mortality percentage point difference increase
         """
         # TODO: is this the right way to solve this?
         fish_mass_indicator = 1 if fish_mass > 2000 else 0
@@ -110,11 +110,11 @@ class TreatmentParams(ABC):
     ):
         """Get the number of fish that die due to treatment
 
-        :param temperature the temperature of the cage
-        :param num_fish the number of fish
-        :param fish_mass the average fish mass (in grams)
-        :param efficacy_window the length of the efficacy window
-        :param mortality_events the number of fish mortality events to subtract from
+        :param temperature: the temperature of the cage
+        :param num_fish: the number of fish
+        :param fish_mass: the average fish mass (in grams)
+        :param efficacy_window: the length of the efficacy window
+        :param mortality_events: the number of fish mortality events to subtract from
         """
         predicted_pp_increase = self.__get_mortality_pp_increase(temperature, fish_mass)
 

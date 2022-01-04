@@ -242,8 +242,8 @@ class LicePopulation(MutableMapping[LifeStage, int]):
 
     def __init__(self, geno_data: GenoLifeStageDistrib, generic_ratios: GenoDistribDict):
         """
-        :param geno_data a Genotype distribution
-        :param generic_ratios a config to use
+        :param geno_data: a Genotype distribution
+        :param generic_ratios: a config to use
         """
         self._cache: Dict[LifeStage, int] = {}
         self.geno_by_lifestage = GenotypePopulation(self, geno_data)
@@ -312,8 +312,8 @@ class LicePopulation(MutableMapping[LifeStage, int]):
         """
         Return the number of available dams
 
-        :param cur_time the current time
-        :returns the genotype population of dams that return available today
+        :param cur_time: the current time
+        :returns: the genotype population of dams that return available today
         """
         delta_avail_dams = GenoDistrib()
 

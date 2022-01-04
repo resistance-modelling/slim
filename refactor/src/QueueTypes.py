@@ -137,10 +137,10 @@ def pop_from_queue(
     """
     Pops an event from a queue and call a continuation function
 
-    :param queue the queue to process
-    :param cur_time the current time to compare the events with. Only events past cur_time will be popped
-    :param continuation the function to call for each event in the queue
-    :param peek whether to consume the event or not. If peek is True then `continuation` will be invoked at most once.
+    :param queue: the queue to process
+    :param cur_time: the current time to compare the events with. Only events past cur_time will be popped
+    :param continuation: the function to call for each event in the queue
+    :param peek: whether to consume the event or not. If peek is True then `continuation` will be invoked at most once.
     """
     @singledispatch
     def access_time_lt(_peek_element, _cur_time: dt.datetime):
