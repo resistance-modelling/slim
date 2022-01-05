@@ -4,11 +4,11 @@ import json
 import numpy as np
 import pytest
 
-from src.LicePopulation import LicePopulation
-from src.Cage import Cage
-from src.Config import to_dt
-from src.TreatmentTypes import Treatment
-from src.QueueTypes import SampleRequestCommand
+from slim.LicePopulation import LicePopulation
+from slim.Cage import Cage
+from slim.Config import to_dt
+from slim.TreatmentTypes import Treatment
+from slim.QueueTypes import SampleRequestCommand
 
 
 class TestFarm:

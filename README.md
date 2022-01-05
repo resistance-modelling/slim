@@ -1,7 +1,7 @@
 [![codecov](https://codecov.io/gh/resistance-modelling/slim/branch/master/graph/badge.svg?token=ykA9vESc7B)](https://codecov.io/gh/resistance-modelling/slim)
 
 <p align="center">
-<img src = "https://user-images.githubusercontent.com/6224231/126653948-4d698656-b22f-4dbd-9bee-e919b56407aa.png" width="60%"/>
+<img slim = "https://user-images.githubusercontent.com/6224231/126653948-4d698656-b22f-4dbd-9bee-e919b56407aa.png" width="60%"/>
 </p>
 
 
@@ -33,22 +33,28 @@ This project thus includes the following components:
 - [ ] policy searching strategies
 - [ ] a game theoretic optimisation framework
 
-## Requirements to run
+## Installation
+
 Details on required packages and versions can be found in ```environment.yml``` which can be used to create a
 [conda](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) environment for the project.
-In short, all you need to do is install a conda distribution (see earlier link) and run `conda env update`.
+
+```bash
+git clone https://github.com/resistance-modelling/slim
+cd slim
+# make sure conda is installed and the command is available at this point
+conda env update
+```
 
 ## Usage
 
-It is estimated that our refactored model has fully reimplemented the original model under `original`.
-Until a final QA  decision is released, please use the source code under `refactor`.
+To run the model run the following from the root folder:
 
-To run the refactored model, enter the ```refactor``` directory and run:
-
-```python -m src.SeaLiceMgmt output_folder/simulation_name simulation_params_directory```
+```python -m slim.SeaLiceMgmt output_folder/simulation_name simulation_params_directory```
 
 For example:
-```python -m src.SeaLiceMgmt out/0 config_data/Fyne```
+```python -m slim.SeaLiceMgmt out/0 config_data/Fyne```
+
+Please check our [quickstart](https://slim.readthedocs.io/en/stable/getting-started.html) guide for more information.
 
 ### Simulation parameters and CLI override
 
@@ -70,7 +76,7 @@ If one wishes to modify a runtime option without modifying those files an extra 
 In general, for  each key in the format `a_b_c` an automatic parameter in the format "--a-b-c" will be generated.
 For example:
 
-```python -m src.SeaLiceMgmt out/0 config_data/Fyne --seed=0 --genetic-mechanism=discrete```
+```python -m slim.SeaLiceMgmt out/0 config_data/Fyne --seed=0 --genetic-mechanism=discrete```
 
 For now, nested and list properties are not yet supported.
 
@@ -83,7 +89,7 @@ a dump every `n` days add the `--save-rate=n` option.
 
 To _resume_ a session one can instead pass the `--resume` parameter, e.g. 
 
-`python -m src.SeaLiceMgmt outputs/sim_1 config_data/Fyne --end-date "2018-01-01 00:00:00" --resume="2017-12-05 00:00:00"`
+`python -m slim.SeaLiceMgmt outputs/sim_1 config_data/Fyne --end-date "2018-01-01 00:00:00" --resume="2017-12-05 00:00:00"`
 
 If you only know `n` days have elapsed since the start use the `--resume-after=n` option.
 
@@ -91,7 +97,7 @@ If you only know `n` days have elapsed since the start use the `--resume-after=n
 We also provide a GUI for debugging and visualisation. Its support is still heavily experimental so please
 use with caution.
 
-You can launch it via `python -m src.SeaLiceMgmtGUI` and provide your run data (generated via the `--save-rate` option mentioned
+You can launch it via `python -m slim.SeaLiceMgmtGUI` and provide your run data (generated via the `--save-rate` option mentioned
 above) from the given menu.
 
 ## Testing
@@ -105,7 +111,7 @@ To test, also from ```refactor``` directory, run:
 
 To enable coverage reporting, run:
 
-```pytest --cov=src/ --cov-config=.coveragerc  --cov-report html --cov-context=test```
+```pytest --cov=slim/ --cov-config=.coveragerc  --cov-report html --cov-context=test```
 
 The last two parameters generate a human-friendly report.
 

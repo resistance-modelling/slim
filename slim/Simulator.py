@@ -8,13 +8,13 @@ import dill as pickle
 import pandas as pd
 import tqdm
 
-from src import logger
-from src.Config import Config
-from src.Farm import Farm, GenoDistribByHatchDate
-from src.JSONEncoders import CustomFarmEncoder
-from src.LicePopulation import GenoDistrib, GenoDistribDict
-from src.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
-from src.TreatmentTypes import Money
+from slim import logger
+from slim.Config import Config
+from slim.Farm import Farm, GenoDistribByHatchDate
+from slim.JSONEncoders import CustomFarmEncoder
+from slim.LicePopulation import GenoDistrib, GenoDistribDict
+from slim.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
+from slim.TreatmentTypes import Money
 
 
 class Organisation:

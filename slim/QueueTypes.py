@@ -14,8 +14,8 @@ from queue import PriorityQueue
 from typing import Callable, TypeVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.LicePopulation import GenoDistrib
-    from src.TreatmentTypes import Treatment
+    from slim.LicePopulation import GenoDistrib
+    from slim.TreatmentTypes import Treatment
 
 
 class Event:

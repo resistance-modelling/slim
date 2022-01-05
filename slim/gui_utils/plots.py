@@ -15,11 +15,11 @@ from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
 
-from src.LicePopulation import LicePopulation, GenoDistrib
-from src.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState, CurveListState
+from slim.LicePopulation import LicePopulation, GenoDistrib
+from slim.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState, CurveListState
 
 if TYPE_CHECKING:
-    from src.SeaLiceMgmtGUI import Window
+    from slim.SeaLiceMgmtGUI import Window
 
 
 class SmoothedPlotItemWrap:

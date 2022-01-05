@@ -9,11 +9,11 @@ from typing import cast
 import numpy as np
 import pytest
 
-from src.Cage import Cage
-from src.Config import to_dt
-from src.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
-from src.TreatmentTypes import GeneticMechanism, Treatment, Money
-from src.LicePopulation import GenoDistrib, LicePopulation
+from slim.Cage import Cage
+from slim.Config import to_dt
+from slim.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
+from slim.TreatmentTypes import GeneticMechanism, Treatment, Money
+from slim.LicePopulation import GenoDistrib, LicePopulation
 
 
 class TestCage:

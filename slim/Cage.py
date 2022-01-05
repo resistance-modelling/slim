@@ -10,19 +10,19 @@ from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict
 
 import numpy as np
 
-from src import logger, LoggableMixin
-from src.Config import Config
-from src.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money, ChemicalTreatment, \
+from slim import logger, LoggableMixin
+from slim.Config import Config
+from slim.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money, ChemicalTreatment, \
     ThermalTreatment
-from src.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
-                                LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue,
-                                GenoLifeStageDistrib, largest_remainder, LifeStage, GenoDistribDict)
-from src.QueueTypes import (DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent,
-                            pop_from_queue)
-from src.JSONEncoders import CustomFarmEncoder
+from slim.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
+                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue,
+                                 GenoLifeStageDistrib, largest_remainder, LifeStage, GenoDistribDict)
+from slim.QueueTypes import (DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent,
+                             pop_from_queue)
+from slim.JSONEncoders import CustomFarmEncoder
 
 if TYPE_CHECKING:  # pragma: no cover
-    from src.Farm import Farm, GenoDistribByHatchDate
+    from slim.Farm import Farm, GenoDistribByHatchDate
 
 OptionalDamBatch = Optional[DamAvailabilityBatch]
 OptionalEggBatch = Optional[EggBatch]

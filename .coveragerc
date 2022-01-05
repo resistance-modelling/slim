@@ -1,10 +1,10 @@
 [run]
 omit =
     tests/*
-    src/SeaLiceMgmt.py
-    src/SeaLiceMgmtGUI.py
-    src/__init__.py
-    src/surveys/*
+    slim/SeaLiceMgmt.py
+    slim/SeaLiceMgmtGUI.py
+    slim/__init__.py
+    slim/surveys/*
 
 branch=True
 dynamic_context = test_function

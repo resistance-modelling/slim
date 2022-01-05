@@ -12,9 +12,9 @@ import sys
 import numpy as np
 import tqdm
 
-from src import logger, create_logger
-from src.Simulator import Simulator
-from src.Config import Config
+from slim import logger, create_logger
+from slim.Simulator import Simulator
+from slim.Config import Config
 
 @dataclass
 class Optimiser:

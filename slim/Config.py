@@ -9,10 +9,10 @@ from typing import Tuple, Dict, Optional, TYPE_CHECKING
 import jsonschema
 import numpy as np
 
-from src.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB, Money, Thermolicer
+from slim.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB, Money, Thermolicer
 
 if TYPE_CHECKING:
-    from src.LicePopulation import LifeStage, GenoDistribDict
+    from slim.LicePopulation import LifeStage, GenoDistribDict
 
 
 def to_dt(string_date) -> dt.datetime:

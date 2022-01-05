@@ -11,6 +11,8 @@ Welcome to SLIM's documentation!
    :caption: Contents:
 
    intro
+   getting-started
+   model
    modules
 
 

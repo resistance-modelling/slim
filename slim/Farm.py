@@ -17,13 +17,13 @@ from typing import Dict, List, Optional, Tuple, cast
 import numpy as np
 from mypy_extensions import TypedDict
 
-from src import LoggableMixin, logger
-from src.Cage import Cage
-from src.Config import Config
-from src.JSONEncoders import CustomFarmEncoder
-from src.LicePopulation import GrossLiceDistrib, GenoDistrib, GenoDistribDict
-from src.QueueTypes import *
-from src.TreatmentTypes import Money, Treatment
+from slim import LoggableMixin, logger
+from slim.Cage import Cage
+from slim.Config import Config
+from slim.JSONEncoders import CustomFarmEncoder
+from slim.LicePopulation import GrossLiceDistrib, GenoDistrib, GenoDistribDict
+from slim.QueueTypes import *
+from slim.TreatmentTypes import Money, Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]

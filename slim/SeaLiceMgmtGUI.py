@@ -7,11 +7,11 @@ from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QSettings
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
                              QAction, QFileDialog, QMessageBox, QProgressBar,
                              QVBoxLayout, QTabWidget)
-from src.Simulator import Simulator
-from src.gui_utils.configuration import ConfigurationPane
-from src.gui_utils.console import ConsoleWidget
-from src.gui_utils.plots import SingleRunPlotPane, OptimiserPlotPane
-from src.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState
+from slim.Simulator import Simulator
+from slim.gui_utils.configuration import ConfigurationPane
+from slim.gui_utils.console import ConsoleWidget
+from slim.gui_utils.plots import SingleRunPlotPane, OptimiserPlotPane
+from slim.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState
 
 
 class Window(QMainWindow):

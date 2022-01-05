@@ -7,10 +7,10 @@ import datetime
 import builtins
 builtins.__dict__['profile'] = lambda x: x
 
-from src.Config import Config
-from src.Simulator import Organisation
-from src.QueueTypes import EggBatch, DamAvailabilityBatch
-from src.LicePopulation import LicePopulation, GenoDistrib
+from slim.Config import Config
+from slim.Simulator import Organisation
+from slim.QueueTypes import EggBatch, DamAvailabilityBatch
+from slim.LicePopulation import LicePopulation, GenoDistrib
 
 
 

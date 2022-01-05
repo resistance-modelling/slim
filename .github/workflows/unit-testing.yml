@@ -22,10 +22,10 @@ jobs:
         conda list
     - name: Perform Unit testing
       # TODO: as soon as refactoring is done the refactor/ source folder will
-      # move to src/. Not sure whether tests should be under refactor or in
+      # move to slim/. Not sure whether tests should be under refactor or in
       # a different folder...
       shell: bash -l {0}
-      run: pytest --cov=src/ --cov-config=.coveragerc  --cov-context=test --cov-report=xml
+      run: pytest --cov=slim/ --cov-config=.coveragerc  --cov-context=test --cov-report=xml
       working-directory: ./refactor
 
     - name: Type-check

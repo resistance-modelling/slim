@@ -8,12 +8,12 @@ import cProfile
 import sys
 from pathlib import Path
 
-# This needs to be done before import src.
+# This needs to be done before import slim.
 # Maybe a cleaner approach would be to use an env var?
 
-from src import logger, create_logger
-from src.Config import Config, to_dt
-from src.Simulator import Simulator
+from slim import logger, create_logger
+from slim.Config import Config, to_dt
+from slim.Simulator import Simulator
 
 
 if __name__ == "__main__":
