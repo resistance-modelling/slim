@@ -8,7 +8,7 @@ Run the simulator
 *****************
 
 .. tabs::
-    .. group-tab :: Command Line
+    .. group-tab:: Command Line
 
         The easiest way to run this project is from the command line.
 
@@ -25,7 +25,7 @@ Run the simulator
 
             python -m slim.SeaLiceMgmt output/Loch_Fyne config_data/Fyne
 
-    .. group-tab :: Python
+    .. group-tab:: Python
 
         The entry point of this program is the :py:class:`slim.Simulator.Simulator` class.
 
@@ -34,8 +34,8 @@ Run the simulator
 
         .. code-block:: python
 
-            from slim.Config import Config
-            from slim.Simulator import Simulator
+            from slim.simulation.config import Config
+            from slim.simulation.Simulator import Simulator
 
             cfg = Config("config_data/config.json", "config_data/Fyne")
             sim = Simulator("output", "Fyne_foobar", cfg)
@@ -147,8 +147,8 @@ This has two uses:
 
         .. code-block:: python
 
-            from slim.Config import Config
-            from slim.Simulator import Simulator
+            from slim.simulation.Config import Config
+            from slim.simulation.Simulator import Simulator
 
             n = 10 # every 10 days
 
@@ -163,13 +163,12 @@ This has two uses:
 
         .. code-block:: python
 
-            from slim.Config import Config, to_dt
-            from slim.Simulator import Simulator
+            from slim.simulation.config import Config, to_dt
+            from slim.simulation.simulator import Simulator
 
-            timestamp = to_dt("2017-12-05 00:00:00")
+            timestamp = to_dt("2018-12-05 00:00:00")
             sim = Simulator.reload("output", "Fyne_foobar", timestamp=timestamp)
             # or alternatively
-
             sim = Simulator.reload("output", "Fyne_foobar", resume_after=365)
             sim.run_model()
 

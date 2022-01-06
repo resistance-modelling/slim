@@ -18,9 +18,9 @@ traits to proliferate and thus make the former less and less effective at each c
    This section assumes you have some basic knowledge of salmon aquaculture. If
    you don't we suggest having a look at :ref:`Rationale` or [1]_ first.
 
-The project models an environment in which an :py:class:`slim.Simulator.Organisation` of salmon farmers - which reside
-and operate on the same *loch* - run their own :py:class:`slim.Farm.Farm` s which are in turn divided into
-:py:class:`slim.Cage.Cage` s.
+The project models an environment in which an :py:class:`slim.simulation.simulator.Organisation` of salmon farmers - which reside
+and operate on the same *loch* - run their own :py:class:`slim.simulation.farm.Farm` s which are in turn divided into
+:py:class:`slim.simulation.cage.Cage` s.
 
 A *cage* is the physical location of salmons. Initially all cages within the same farm are filled
 with *smolts* which are then left to grow up and harvested after 1.5-2 years.
@@ -53,11 +53,11 @@ Just like in [#Aldrin17]_, we model the lice lifecycle as a compartmentalised mo
 *copepopids* (CO), *chalimus* (CH), *preadults* (PA) and *adults*, the latter divided in males (AM) and females (AF).
 Differently from [#Aldrin17]_ we omit the explicit age encoding but rather explicitly group the population
 by its genotype. Nevertheless, the age distribution can be simulated at will via
-:py:meth:`slim.Cage.Cage.get_stage_ages_distrib`.
+:py:meth:`slim.simulation.cage.Cage.get_stage_ages_distrib`.
 
-This is modelled by the :py:class:`slim.LicePopulation.GenoDistrib` class. A genotype distribution
+This is modelled by the :py:class:`slim.simulation.lice_population.GenoDistrib` class. A genotype distribution
 is, ultimately, a discretised dictionary with where the keys are allele combinations (see
-:py:class:`slim.LicePopulation.GenoDistrib.Alleles`) and the values are the actual number of lice in that group.
+:py:attr:`slim.simulation.lice_population.GenoDistrib.alleles`) and the values are the actual number of lice in that group.
 
 In a similar way to [#Aldrin17]_, each day we estimate how many lice die or evolve at every stage.
 
@@ -73,8 +73,6 @@ In all stages but AM or AF lice can evolve. Evolution from PA will result in rou
 
 Treatment
 *********
-
-TODO: explain the treatments used.
 
 Reproduction
 ************

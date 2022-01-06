@@ -1,7 +1,6 @@
 import copy
 import datetime
 import datetime as dt
-import itertools
 import json
 from queue import PriorityQueue
 from typing import cast
@@ -9,11 +8,10 @@ from typing import cast
 import numpy as np
 import pytest
 
-from slim.Cage import Cage
-from slim.Config import to_dt
-from slim.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
-from slim.TreatmentTypes import GeneticMechanism, Treatment, Money
-from slim.LicePopulation import GenoDistrib, LicePopulation
+from slim.simulation.config import to_dt
+from slim.types.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch
+from slim.types.TreatmentTypes import GeneticMechanism, Treatment, Money
+from slim.simulation.lice_population import GenoDistrib, LicePopulation
 
 
 class TestCage:

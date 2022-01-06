@@ -5,7 +5,7 @@ import datetime as dt
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from slim.Simulator import Simulator
+    from slim.simulation.simulator import Simulator
     import pandas as pd
 
 

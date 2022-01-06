@@ -1,5 +1,4 @@
-import pytest
-from slim.TreatmentTypes import TreatmentParams, EMB, Thermolicer, Treatment
+from slim.types.TreatmentTypes import EMB, Thermolicer, Treatment
 
 
 class TestTreatmentType:

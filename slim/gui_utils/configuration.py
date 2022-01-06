@@ -8,7 +8,7 @@ from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTableView, QLabel
 
-from slim.Config import Config
+from slim.simulation.config import Config
 
 
 class ConfigurationPane(QWidget):

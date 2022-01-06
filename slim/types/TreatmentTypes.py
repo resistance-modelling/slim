@@ -8,7 +8,7 @@ from typing import Dict, cast
 import numpy as np
 
 # A few extra general types
-from slim.LicePopulation import LicePopulation, GenoDistrib, GenoTreatmentValue,\
+from slim.simulation.lice_population import LicePopulation, GenoDistrib, GenoTreatmentValue,\
     Alleles, GenoTreatmentDistrib
 
 Money = Decimal

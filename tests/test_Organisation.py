@@ -3,8 +3,7 @@ import json
 
 import numpy as np
 
-from slim.LicePopulation import GenoDistrib
-from slim.TreatmentTypes import Money
+from slim.simulation.lice_population import GenoDistrib
 
 
 class TestOrganisation:

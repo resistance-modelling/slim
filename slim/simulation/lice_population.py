@@ -12,10 +12,10 @@ from typing import Dict, MutableMapping, Tuple, Union, NamedTuple, Optional, \
 import numpy as np
 
 from slim import logger
-from slim.QueueTypes import pop_from_queue
+from slim.types.QueueTypes import pop_from_queue
 
 if TYPE_CHECKING:  # pragma: no cover
-    from slim.QueueTypes import DamAvailabilityBatch
+    from slim.types.QueueTypes import DamAvailabilityBatch
 
 ################ Basic type aliases #####################
 LifeStage = str

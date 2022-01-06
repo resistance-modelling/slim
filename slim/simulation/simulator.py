@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+__all__ = ['Organisation', 'Simulator']
+
 import datetime as dt
 import json
 from pathlib import Path
@@ -9,12 +12,12 @@ import pandas as pd
 import tqdm
 
 from slim import logger
-from slim.Config import Config
-from slim.Farm import Farm, GenoDistribByHatchDate
+from slim.simulation.config import Config
+from slim.simulation.farm import Farm, GenoDistribByHatchDate
 from slim.JSONEncoders import CustomFarmEncoder
-from slim.LicePopulation import GenoDistrib, GenoDistribDict
-from slim.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
-from slim.TreatmentTypes import Money
+from slim.simulation.lice_population import GenoDistrib, GenoDistribDict
+from slim.types.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
+from slim.types.TreatmentTypes import Money
 
 
 class Organisation:
@@ -108,7 +111,7 @@ class Organisation:
 
 
 class Simulator:
-
+    """The main entry point of the simulator."""
     def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
         self.output_dir = output_dir
         self.sim_id = sim_id

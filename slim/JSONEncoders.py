@@ -1,5 +1,3 @@
-from collections import Counter
-from dataclasses import is_dataclass, asdict
 from enum import Enum
 import datetime as dt
 import json
@@ -7,7 +5,7 @@ from queue import PriorityQueue
 
 import numpy as np
 
-from slim.TreatmentTypes import Money
+from slim.types.TreatmentTypes import Money
 
 
 class CustomFarmEncoder(json.JSONEncoder):

@@ -7,7 +7,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QSettings
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
                              QAction, QFileDialog, QMessageBox, QProgressBar,
                              QVBoxLayout, QTabWidget)
-from slim.Simulator import Simulator
+from slim.simulation.simulator import Simulator
 from slim.gui_utils.configuration import ConfigurationPane
 from slim.gui_utils.console import ConsoleWidget
 from slim.gui_utils.plots import SingleRunPlotPane, OptimiserPlotPane

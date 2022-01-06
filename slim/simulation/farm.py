@@ -18,12 +18,12 @@ import numpy as np
 from mypy_extensions import TypedDict
 
 from slim import LoggableMixin, logger
-from slim.Cage import Cage
-from slim.Config import Config
+from slim.simulation.cage import Cage
+from slim.simulation.config import Config
 from slim.JSONEncoders import CustomFarmEncoder
-from slim.LicePopulation import GrossLiceDistrib, GenoDistrib, GenoDistribDict
-from slim.QueueTypes import *
-from slim.TreatmentTypes import Money, Treatment
+from slim.simulation.lice_population import GrossLiceDistrib, GenoDistrib, GenoDistribDict
+from slim.types.QueueTypes import *
+from slim.types.TreatmentTypes import Money, Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]

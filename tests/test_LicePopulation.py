@@ -3,9 +3,9 @@ import datetime as dt
 import numpy as np
 import pytest
 
-from slim.QueueTypes import DamAvailabilityBatch
-from slim.Simulator import OffspringAveragingQueue
-from slim.LicePopulation import largest_remainder, GenoDistrib
+from slim.types.QueueTypes import DamAvailabilityBatch
+from slim.simulation.simulator import OffspringAveragingQueue
+from slim.simulation.lice_population import largest_remainder, GenoDistrib
 
 
 class TestLicePopulation:

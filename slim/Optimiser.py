@@ -13,8 +13,8 @@ import numpy as np
 import tqdm
 
 from slim import logger, create_logger
-from slim.Simulator import Simulator
-from slim.Config import Config
+from slim.simulation.simulator import Simulator
+from slim.simulation.config import Config
 
 @dataclass
 class Optimiser:

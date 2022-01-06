@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Dict, TYPE_CHECKING, List, cast
+from typing import Optional, TYPE_CHECKING, List
 
 import numpy as np
 import pandas as pd
@@ -15,7 +15,7 @@ from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
 
-from slim.LicePopulation import LicePopulation, GenoDistrib
+from slim.simulation.lice_population import LicePopulation, GenoDistrib
 from slim.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState, CurveListState
 
 if TYPE_CHECKING:

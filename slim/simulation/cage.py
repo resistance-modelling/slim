@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+
 from collections import Counter
-import copy
 import datetime as dt
 import json
 import math
@@ -11,22 +11,21 @@ from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict
 import numpy as np
 
 from slim import logger, LoggableMixin
-from slim.Config import Config
-from slim.TreatmentTypes import Treatment, GeneticMechanism, HeterozygousResistance, Money, ChemicalTreatment, \
+from slim.simulation.config import Config
+from slim.types.TreatmentTypes import GeneticMechanism, Money, ChemicalTreatment, \
     ThermalTreatment
-from slim.LicePopulation import (Alleles, GenoDistrib, GrossLiceDistrib,
-                                 LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue,
-                                 GenoLifeStageDistrib, largest_remainder, LifeStage, GenoDistribDict)
-from slim.QueueTypes import (DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent,
-                             pop_from_queue)
+from slim.simulation.lice_population import (GenoDistrib, GrossLiceDistrib,
+                                             LicePopulation, GenoTreatmentDistrib, GenoTreatmentValue,
+                                             GenoLifeStageDistrib, largest_remainder, LifeStage, GenoDistribDict)
+from slim.types.QueueTypes import (DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent,
+                                   pop_from_queue)
 from slim.JSONEncoders import CustomFarmEncoder
 
 if TYPE_CHECKING:  # pragma: no cover
-    from slim.Farm import Farm, GenoDistribByHatchDate
+    from slim.simulation.farm import Farm, GenoDistribByHatchDate
 
 OptionalDamBatch = Optional[DamAvailabilityBatch]
 OptionalEggBatch = Optional[EggBatch]
-
 
 class Cage(LoggableMixin):
     """

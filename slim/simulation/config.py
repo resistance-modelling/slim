@@ -1,3 +1,5 @@
+__all__ = ['to_dt', 'Config']
+
 import argparse
 from dataclasses import dataclass
 import datetime as dt
@@ -9,10 +11,10 @@ from typing import Tuple, Dict, Optional, TYPE_CHECKING
 import jsonschema
 import numpy as np
 
-from slim.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB, Money, Thermolicer
+from slim.types.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB, Money, Thermolicer
 
 if TYPE_CHECKING:
-    from slim.LicePopulation import LifeStage, GenoDistribDict
+    from slim.simulation.lice_population import LifeStage, GenoDistribDict
 
 
 def to_dt(string_date) -> dt.datetime:
@@ -27,6 +29,12 @@ def to_dt(string_date) -> dt.datetime:
     return dt.datetime.strptime(string_date, dt_format)
 
 
+def override(data, override_options: dict):
+    for k, v in override_options.items():
+        if k in data and v is not None:
+            data[k] = v
+
+
 class RuntimeConfig:
     """Simulation parameters and constants"""
 
@@ -34,7 +42,7 @@ class RuntimeConfig:
         with open(hyperparam_file) as f:
             data = json.load(f)
 
-        data.update(_override_options)
+        override(data, _override_options)
         hyperparam_dir = Path(hyperparam_file).parent
         with (hyperparam_dir / "config.schema.json").open() as f:
             schema = json.load(f)
@@ -116,7 +124,7 @@ class Config(RuntimeConfig):
         with open(os.path.join(simulation_dir, "params.json")) as f:
             data = json.load(f)
 
-        data.update(override_params)
+        override(data, override_params)
 
         with open(os.path.join(simulation_dir, "../params.schema.json")) as f:
             schema = json.load(f)

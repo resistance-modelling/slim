@@ -12,8 +12,8 @@ from pathlib import Path
 # Maybe a cleaner approach would be to use an env var?
 
 from slim import logger, create_logger
-from slim.Config import Config, to_dt
-from slim.Simulator import Simulator
+from slim.simulation.simulator import Simulator
+from slim.simulation.config import Config, to_dt
 
 
 if __name__ == "__main__":
