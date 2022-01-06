@@ -21,12 +21,8 @@ jobs:
         conda info
         conda list
     - name: Perform Unit testing
-      # TODO: as soon as refactoring is done the refactor/ source folder will
-      # move to slim/. Not sure whether tests should be under refactor or in
-      # a different folder...
       shell: bash -l {0}
       run: pytest --cov=slim/ --cov-config=.coveragerc  --cov-context=test --cov-report=xml
-      working-directory: ./refactor
 
     - name: Type-check
       shell: bash -l {0}
@@ -35,7 +31,7 @@ jobs:
       # compared to the 2021 one. Unfortunately there is no clear changelog across versions :(
       run: |
         pytype --version
-        pytype --config pytype.cfg refactor
+        pytype --config pytype.cfg .
     - name: Install git
       shell: bash -l {0}
       run: |
@@ -44,7 +40,6 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1
       with:
-        directory: ./refactor/
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: true

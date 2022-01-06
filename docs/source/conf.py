@@ -33,7 +33,8 @@ release = '0.4.0'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
-    'sphinx.ext.mathjax'
+    'sphinx.ext.mathjax',
+    'sphinx_tabs.tabs'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -56,3 +57,10 @@ html_theme = 'sphinx_rtd_theme'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+html_logo = '../../res/logo_transparent.png'
+html_favicon = '../../res/logo.png'
+
+html_theme_options = {
+    'style_nav_header_background': 'black'
+}

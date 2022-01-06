@@ -23,6 +23,7 @@ dependencies:
   - mypy_extensions=0.4.3
   - sphinx=4.2.0
   - scikit-learn=1.0.1
+  - sphinx-tabs=3.2.0
   - pip:
       - pytype==2021.07.19
       - dill==0.3.4

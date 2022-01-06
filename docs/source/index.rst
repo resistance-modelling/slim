@@ -13,6 +13,12 @@ Welcome to SLIM's documentation!
    intro
    getting-started
    model
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Development guide:
+
+   testing
    modules
 
 

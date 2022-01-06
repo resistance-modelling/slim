@@ -27,12 +27,6 @@ def to_dt(string_date) -> dt.datetime:
     return dt.datetime.strptime(string_date, dt_format)
 
 
-def override(data, override_options: dict):
-    for k, v in override_options.items():
-        if k in data and v is not None:
-            data[k] = v
-
-
 class RuntimeConfig:
     """Simulation parameters and constants"""
 
@@ -40,7 +34,7 @@ class RuntimeConfig:
         with open(hyperparam_file) as f:
             data = json.load(f)
 
-        override(data, _override_options)
+        data.update(_override_options)
         hyperparam_dir = Path(hyperparam_file).parent
         with (hyperparam_dir / "config.schema.json").open() as f:
             schema = json.load(f)
@@ -107,11 +101,11 @@ class Config(RuntimeConfig):
     ):
         """Read the configuration from files
 
-        :param config_file:: Path to the environment JSON file
+        :param config_file: Path to the environment JSON file
         :type config_file: string
-        :param simulation_dir:: path to the simulator parameters JSON file
-        :param override_params:: options that override the config
-        :param save_rate: if True
+        :param simulation_dir: path to the simulator parameters JSON file
+        :param override_params: options that override the config
+        :param save_rate: if not null it determines how often (in terms of days) the simulator saves the state.
         """
 
         if override_params is None:
@@ -122,7 +116,7 @@ class Config(RuntimeConfig):
         with open(os.path.join(simulation_dir, "params.json")) as f:
             data = json.load(f)
 
-        override(data, override_params)
+        data.update(override_params)
 
         with open(os.path.join(simulation_dir, "../params.schema.json")) as f:
             schema = json.load(f)
