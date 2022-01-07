@@ -126,7 +126,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
                 self._store.update(params._store)
 
     @staticmethod
-    def from_ratios(n: int, p: np.ndarray, rng: np.random.Generator) -> GenoDistrib:
+    def from_ratios(n: int, p: Union[np.ndarray, List[float]], rng: np.random.Generator) -> GenoDistrib:
         """
         Create a :class:`GenoDistrib` with a given number of lice and a probability distribution
 
@@ -142,7 +142,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         :returns: the new GenoDistrib
         """
 
-        assert np.sum(p) == 1.0, "p must be a probability distribution"
+        assert np.isclose(np.sum(p), 1.0), "p must be a probability distribution"
 
         keys = GenoDistrib.alleles
         values = rng.multinomial(n, p).tolist()

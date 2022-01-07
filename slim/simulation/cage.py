@@ -690,10 +690,10 @@ class Cage(LoggableMixin):
         if denom == 0:
             return GenoDistrib()
 
-        p = np.array([N_A, N_a, N_Aa]) / denom
-        egg_distrib = self.cfg.rng.multinomial(number_eggs, p)
+        # We need to follow GenoDistrib's ordering now
+        p = np.array([N_a, N_Aa, N_A]) / denom
 
-        return GenoDistrib(dict(zip(keys, egg_distrib)))
+        return GenoDistrib.from_ratios(number_eggs, p, self.cfg.rng)
 
     @staticmethod
     def generate_eggs_maternal_batch(dams: GenoDistrib, number_eggs: int) -> GenoDistrib:
@@ -1087,8 +1087,10 @@ class Cage(LoggableMixin):
 
         keys = list(external_pressure_ratios.keys())
         probas = list(external_pressure_ratios.values())
-        new_L1 = GenoDistrib(dict(zip(keys, self.cfg.rng.multinomial(new_L1_gross, probas).tolist())))
-        new_L2 = GenoDistrib(dict(zip(keys, self.cfg.rng.multinomial(new_L2_gross, probas).tolist())))
+        new_L1 = GenoDistrib.from_ratios(new_L1_gross, probas, self.cfg.rng)
+        new_L2 = GenoDistrib.from_ratios(new_L2_gross, probas, self.cfg.rng)
+        #new_L1 = GenoDistrib(dict(zip(keys, self.cfg.rng.multinomial(new_L1_gross, probas).tolist())))
+        #new_L2 = GenoDistrib(dict(zip(keys, self.cfg.rng.multinomial(new_L2_gross, probas).tolist())))
 
         new_lice_dist = {"L1": new_L1, "L2": new_L2}
         logger.debug("\t\tdistribution of new lice from reservoir = {}".format(new_lice_dist))

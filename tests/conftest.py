@@ -132,9 +132,7 @@ def sample_treatment_mortality(first_cage, first_cage_population, null_offspring
     target_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 5, "L5f": 5}
 
     for stage, target in target_mortality.items():
-        bins = rng.multinomial(min(target, first_cage_population[stage]), probs).tolist()
-        alleles = null_offspring_distrib.keys()
-        mortality[stage] = GenoDistrib(dict(zip(alleles, bins)))
+        mortality[stage] = GenoDistrib.from_ratios(min(target, first_cage_population[stage]), probs, rng)
 
     return mortality
 

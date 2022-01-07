@@ -361,7 +361,7 @@ class TestCage:
         first_cage_population.clear_busy_dams()
         first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day, GenoDistrib({('A', 'a'): 15})))
 
-        target_eggs = {('A',): 237, ('a',): 242, ('A', 'a'): 562}
+        target_eggs = {('A',): 242, ('a',): 237, ('A', 'a'): 562}
         target_delta_dams = {('A',): 1, ('a',): 2, ('A', 'a'): 0}
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
@@ -371,7 +371,7 @@ class TestCage:
         # Reconsider mutation effects...
         first_cage.cfg.geno_mutation_rate = old_mutation_rate
 
-        target_mutated_eggs = {('A',): 588, ('a',): 242, ('A', 'a'): 1253}
+        target_mutated_eggs = {('A',): 572, ('a',): 244, ('A', 'a'): 1267}
 
         _, delta_mutated_eggs = first_cage.do_mating_events(cur_day)
         assert delta_mutated_eggs == target_mutated_eggs
@@ -433,7 +433,7 @@ class TestCage:
         assert result.gross == num_eggs
         assert result[('A', 'a')] == max(result.values())
 
-        assert result == {('A','a'): 4989, ('a',): 2507, ('A',): 2504}
+        assert result == {('A','a'): 5048, ('a',): 2530, ('A',): 2422}
 
         # Aa + A -> an even split between A and Aa
         sires = GenoDistrib({('A',): 100})
@@ -443,7 +443,7 @@ class TestCage:
         assert result.gross == num_eggs
         assert result[('a',)] == 0
 
-        assert result == {('A',): 4978, ('a',): 0, ('A', 'a'): 5022}
+        assert result == {('A',): 4954, ('a',): 0, ('A', 'a'): 5046}
 
         # Aa + a -> an even split between a and Aa
         sires = GenoDistrib({('a',): 100})
@@ -453,7 +453,7 @@ class TestCage:
         assert result.gross == num_eggs
         assert result[('A',)] == 0
 
-        assert result == {('a',): 4963, ('A',): 0, ('A', 'a'): 5037}
+        assert result == {('a',): 4908, ('A',): 0, ('A', 'a'): 5092}
 
         # Empty case
         assert first_cage.generate_eggs_discrete_batch(GenoDistrib(), GenoDistrib(), num_eggs) == {}
