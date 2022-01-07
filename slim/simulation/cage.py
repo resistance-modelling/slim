@@ -35,7 +35,8 @@ class Cage(LoggableMixin):
     def __init__(self, cage_id: int, cfg: Config, farm: Farm,
                  initial_lice_pop: Optional[GrossLiceDistrib] = None):
         """
-        Create a cage on a farm
+        Create a cage on a farm.
+
         :param cage_id: the label (id) of the cage within the farm
         :param cfg: the farm configuration
         :param farm: a Farm object

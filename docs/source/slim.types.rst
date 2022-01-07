@@ -4,21 +4,11 @@ slim.types package
 Submodules
 ----------
 
-slim.types.QueueTypes module
-----------------------------
+.. toctree::
+   :maxdepth: 4
 
-.. automodule:: slim.types.QueueTypes
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-slim.types.TreatmentTypes module
---------------------------------
-
-.. automodule:: slim.types.TreatmentTypes
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   slim.types.QueueTypes
+   slim.types.TreatmentTypes
 
 Module contents
 ---------------

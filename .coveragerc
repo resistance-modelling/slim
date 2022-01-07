@@ -3,6 +3,7 @@ omit =
     tests/*
     slim/SeaLiceMgmt.py
     slim/SeaLiceMgmtGUI.py
+    slim/Optimiser.py
     slim/__init__.py
     slim/surveys/*
 

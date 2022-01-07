@@ -14,37 +14,13 @@ Subpackages
 Submodules
 ----------
 
-slim.JSONEncoders module
-------------------------
+.. toctree::
+   :maxdepth: 4
 
-.. automodule:: slim.JSONEncoders
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-slim.Optimiser module
----------------------
-
-.. automodule:: slim.Optimiser
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-slim.SeaLiceMgmt module
------------------------
-
-.. automodule:: slim.SeaLiceMgmt
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-slim.SeaLiceMgmtGUI module
---------------------------
-
-.. automodule:: slim.SeaLiceMgmtGUI
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   slim.JSONEncoders
+   slim.Optimiser
+   slim.SeaLiceMgmt
+   slim.SeaLiceMgmtGUI
 
 Module contents
 ---------------

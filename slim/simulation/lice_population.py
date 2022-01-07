@@ -1,5 +1,18 @@
 from __future__ import annotations
 
+__all__ = [
+    "largest_remainder",
+    "Allele",
+    "Alleles",
+    "GenoDistribDict",
+    "GenoDistribSerialisable",
+    "GenoDistrib",
+    "GenoLifeStageDistrib",
+    "GenoTreatmentValue",
+    "GrossLiceDistrib",
+    "LicePopulation"
+]
+
 import math
 from abc import ABC
 import datetime as dt
@@ -27,6 +40,15 @@ GenoDistribDict = Dict[Alleles, float]
 
 
 def largest_remainder(nums: np.ndarray) -> np.ndarray:
+    """
+    An implementation of the Largest Remainder method.
+    The aim of this function is to round an array so that the integer sum
+    is preserved.
+
+    :param nums: the number to truncate
+    :returns: an array of numbers such that the integer sum is preserved
+    """
+
     # a vectorised implementation of largest remainder
     assert np.all(nums >= 0) or np.all(nums <= 0)
 
@@ -58,7 +80,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
     Each GenoDistrib provides custom operator overloading operations and suitable
     rescaling operations.
     Internally, this is built to mimic the Counter type but implements smarter move semantics
-    when possible
+    when possible.
     """
 
     alleles: List[Alleles] = [('a',), ('A', 'a'), ('A',)]
@@ -69,6 +91,26 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         Dict[Alleles, float],
         Iterable[Tuple[Alleles, float]]
     ]] = None):
+        """A :class:`GenoDistrib` can be built in the following ways:
+
+        * Empty
+
+          >>> a = GenoDistrib()
+
+        * From a dictionary. The keys must be the same in alleles
+
+          >>> b = GenoDistrib({('A',): 10})
+        * From a generator
+
+          >>> c = GenoDistrib(zip(GenoDistrib.alleles, [1, 2, 3]))
+        * From another :class:`GenoDistrib`. This will create a distinct copy of keys and values.
+
+          >>> d = GenoDistrib(c)
+          >>> assert c != d
+
+        Note that the class does not enforce any type as this job is left to the type checker of choice
+        for efficiency reasons.
+        """
         # asdict() will call this constructor with a stream of tuples (Alleles, v)
         # to prevent the default behaviour (Counter counts all the instances of the elements) we have to check
         # for generators
@@ -83,7 +125,38 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
             elif isinstance(params, GenoDistrib):
                 self._store.update(params._store)
 
+    @staticmethod
+    def from_ratios(n: int, p: np.ndarray, rng: np.random.Generator) -> GenoDistrib:
+        """
+        Create a :class:`GenoDistrib` with a given number of lice and a probability distribution
+
+        Note that this function uses a *statistical* approach to building such distribution.
+        If you prefer a faster but deterministic alternative you could do this:
+
+        >>> GenoDistrib(dict(zip(GenoDistrib.alleles), p)).normalise_to(n)
+
+        :param n: the number of lice
+        :param p: the probability of each genotype
+        :param rng: the random number generator to use for sampling.
+
+        :returns: the new GenoDistrib
+        """
+
+        assert np.sum(p) == 1.0, "p must be a probability distribution"
+
+        keys = GenoDistrib.alleles
+        values = rng.multinomial(n, p).tolist()
+        return GenoDistrib(dict(zip(keys, values)))
+
     def normalise_to(self, population: int) -> GenoDistrib:
+        """
+        Transform the distribution so that the overall sum changes to the given number
+        but the ratios are preserved.
+
+        :param population: the new population
+        :returns: the new distribution
+        """
+
         assert np.rint(population) == population, f"{population} is not an integer"
         keys = self.keys()
         values = list(self.values())
@@ -98,15 +171,21 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         return GenoDistrib(dict(zip(keys, map(int, rounded_values))))
 
     def set(self, other: int):
+        """This is the inplace version of :meth:`normalise_to`.
+
+        :param other: the new population
+        """
         result = self.normalise_to(other)
         self._store.clear()
         self._store.update(result)
 
     @property
     def gross(self) -> int:
+        """Return the gross number of lice, i.e. the distribution sum."""
         return int(sum(self.values()))
 
-    def copy(self: GenoDistrib) -> GenoDistrib:
+    def copy(self) -> GenoDistrib:
+        """Create a copy"""
         return GenoDistrib(self._store.copy())
 
     def __add__(self, other: Union[GenoDistrib, int]) -> GenoDistrib:
@@ -133,7 +212,17 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
             return self.normalise_to(self.gross - other)
 
     def __mul__(self, other: Union[float, GenoDistrib]) -> GenoDistrib:
-        """Multiply a distribution."""
+        """Multiply a distribution by either a scalar or another distribution.
+
+        In the first case, the multiplication by a scalar will multiply each bin
+        by the scalar. If the new sum is expected to be an integer a rounding step
+        is applied.
+
+        In the second case it is simply a pairwise product.
+
+        :param other: either a float or a similar distribution
+        :returns: the new genotype distribution
+        """
         if isinstance(other, float) or isinstance(other, int):
             keys = self.keys()
             values = [v * other for v in self.values()]
@@ -147,6 +236,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         return GenoDistrib(dict(zip(keys, values)))
 
     def __eq__(self, other: Union[GenoDistrib, Dict[Alleles, int]]) -> bool:
+        """Overloaded eq operator"""
         # Make equality checks a bit more flexible
         if isinstance(other, dict):
             other = GenoDistrib(other)
@@ -163,6 +253,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         return all(self[k] <= other[k] for k in merged_keys)
 
     def is_positive(self) -> bool:
+        """:returns True if all the bins are positive."""
         return all(v >= 0 for v in self.values())
 
     def __getitem__(self, key) -> float:
@@ -189,14 +280,25 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
     def to_json_dict(self) -> Dict[str, float]:
         return {"".join(k): v for k, v in self.items()}
 
-    def truncate_negatives(self):
+    def _truncate_negatives(self):
         for k in self:
             self[k] = max(self[k], 0)
 
     @staticmethod
     def batch_sum(batches: Union[List[GenoDistrib], List[Dict[str, float]]],
                   as_pure_dict=False) -> Union[GenoDistrib, GenoDistribSerialisable]:
+        """
+        Calculate the sum of multiple :class:`GenoDistrib` instances.
+        This function is a bit faster than manually invoking a folding operation
+        due to reduced overhead.
+
+        :param batches: either a list of distribution or a list of dictionaries (useful for pandas)
+        :param as_pure_dict: if True return the final distribution as a dictionary rather than a :class:`GenoDistrib`
+        :returns: either a dictionary or a :class:`GenoDistrib`
+        """
+
         # this function is ugly but it's a hotspot.
+        # TODO: automatically generate these from the class attrib
         alleles_to_idx = {('a',): 0, ('a'): 0,
                           ('A', 'a'): 1,
                           ('Aa'): 1,
@@ -428,7 +530,7 @@ class GenotypePopulation(MutableMapping[LifeStage, GenoDistrib]):
 
     def __setitem__(self, stage: LifeStage, value: GenoDistrib):
         # update the value and the gross population accordingly
-        value.truncate_negatives()
+        value._truncate_negatives()
         old_value = self[stage]
         old_value_sum = self._lice_population[stage]
         delta = value - old_value
