@@ -257,7 +257,7 @@ class TestFarm:
 
     def test_prescheduled_sampling_events(self, first_farm, cur_day):
         assert first_farm.farm_to_org.qsize() == 0
-        first_farm.report_sample(cur_day)
+        first_farm._report_sample(cur_day)
         assert first_farm.farm_to_org.qsize() == 1
         assert first_farm.farm_to_org.queue[0].detected_rate <= 0.1
 
@@ -265,19 +265,19 @@ class TestFarm:
 
         # One test today, one test in 14 days, another test in 28 days
         # The first has already been consumed
-        first_farm.report_sample(cur_day + dt.timedelta(days=21))
+        first_farm._report_sample(cur_day + dt.timedelta(days=21))
         assert first_farm.farm_to_org.qsize() == 1
         first_farm.farm_to_org.get()
 
         # The second too
-        first_farm.report_sample(cur_day + dt.timedelta(days=28))
+        first_farm._report_sample(cur_day + dt.timedelta(days=28))
         assert first_farm.farm_to_org.qsize() == 1
 
     def test_handle_reporting_event(self, first_farm, cur_day):
         first_farm._Farm__sampling_events.queue = []
         assert first_farm.farm_to_org.qsize() == 0
         first_farm.command_queue.put(SampleRequestCommand(cur_day))
-        first_farm.handle_events(cur_day)
+        first_farm._handle_events(cur_day)
         assert first_farm.farm_to_org.qsize() == 1
 
     def test_ask_for_treatment_no_defection(self, no_prescheduled_farm, cur_day, initial_external_ratios):

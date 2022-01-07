@@ -101,6 +101,7 @@ class Farm(LoggableMixin):
 
     @property
     def num_fish(self):
+        """Return the number of fish across all cages"""
         return sum(cage.num_fish for cage in self.cages)
 
     @property
@@ -126,6 +127,7 @@ class Farm(LoggableMixin):
         www.seatemperature.org
 
         :param temperatures: the array of temperatures from January till december. The expected shape is :math:`(2, n)`.
+        :returns the estimated temperature at this farm location.
         """
 
         # Schema: 2 rows, first column = northing, remaining 12 columns: temperature starting from Jan
@@ -141,6 +143,14 @@ class Farm(LoggableMixin):
 
     def generate_treatment_event(self, treatment_type: Treatment, cur_date: dt.datetime
                                  ) -> TreatmentEvent:
+        """
+        Generate a new treatment event with the correct efficacy based on the given day
+        and type.
+
+        :param treatment_type: the type of treatment
+        :param cur_date: the current date
+        :returns: the treatment event
+        """
         cur_month = cur_date.month
         ave_temp = self.year_temperatures[cur_month - 1]
 
@@ -249,13 +259,13 @@ class Farm(LoggableMixin):
                ext_influx: int,
                ext_pressure_ratios: GenoDistribDict) -> Tuple[GenoDistribByHatchDate, Money]:
         """Update the status of the farm given the growth of fish and change
-        in population of parasites.
+        in population of parasites. Also distribute the offspring across cages.
 
         :param cur_date: Current date
         :param ext_influx: the amount of lice that enter a cage
         :param ext_pressure_ratios: the ratio to use for the external pressure
 
-        :return: pair of Dictionary of genotype distributions based on hatch date, and cost of the update
+        :returns: pair of (dictionary of genotype distributions based on hatch date, cost of the update)
         """
 
         self.clear_log()
@@ -268,7 +278,7 @@ class Farm(LoggableMixin):
         self.log("\tAdding %r new lice from the reservoir", new_reservoir_lice=ext_influx)
         self.log("\tReservoir lice genetic ratios: %s", new_reservoir_lice_ratios=ext_pressure_ratios)
 
-        self.handle_events(cur_date)
+        self._handle_events(cur_date)
 
         # get number of lice from reservoir to be put in each cage
         pressures_per_cage = self.get_cage_pressures(ext_influx)
@@ -304,6 +314,7 @@ class Farm(LoggableMixin):
     def get_cage_pressures(self, external_inflow: int) -> List[int]:
         """Get external pressure divided into cages
 
+        :param external_inflow: the total external pressure
         :return: List of values of external pressure for each cage
         """
 
@@ -447,16 +458,16 @@ class Farm(LoggableMixin):
         mass_per_cage = [cage.average_fish_mass((cur_date - cage.start_date).days) / 1e3 for cage in self.cages]
         return self.cfg.gain_per_kg * Money(sum(mass_per_cage))
 
-    def handle_events(self, cur_date: dt.datetime):
+    def _handle_events(self, cur_date: dt.datetime):
         def cts_command_queue(command):
             if isinstance(command, SampleRequestCommand):
                 self.__sampling_events.put(SamplingEvent(command.request_date))
 
         pop_from_queue(self.command_queue, cur_date, cts_command_queue)
 
-        self.report_sample(cur_date)
+        self._report_sample(cur_date)
 
-    def report_sample(self, cur_date):
+    def _report_sample(self, cur_date):
         def cts(_):
             # report the worst across cages
             rate = max(cage.aggregation_rate for cage in self.cages)
