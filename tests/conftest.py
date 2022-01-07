@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 import datetime
@@ -22,7 +24,15 @@ def initial_lice_population():
 @pytest.fixture
 def farm_config():
     np.random.seed(0)
-    cfg = Config("config_data/config.json", "config_data/test_Fyne")
+
+    # Make PyCharm (which believes your working directory must be in tests/) happy
+
+    path = Path.cwd() /  "config_data"
+    if not path.exists():
+        path = Path.cwd().parent / "config_data"
+
+    cfg = Config(str(path / "config.json"), str(path / "test_Fyne"))
+
     return cfg
 
 
