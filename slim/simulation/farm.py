@@ -57,10 +57,10 @@ class Farm(LoggableMixin):
         self.available_treatments = farm_cfg.max_num_treatments
         self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
 
-        self.year_temperatures = self.initialise_temperatures(cfg.loch_temperatures)
+        self.year_temperatures = self._initialise_temperatures(cfg.loch_temperatures)
 
         # TODO: only for testing purposes
-        self.preemptively_assign_treatments(self.farm_cfg.treatment_starts)
+        self._preemptively_assign_treatments(self.farm_cfg.treatment_starts)
 
         # Queues
         self.command_queue: PriorityQueue[FarmCommand] = PriorityQueue() 
@@ -120,14 +120,14 @@ class Farm(LoggableMixin):
 
         return {k: v.to_json_dict() for k, v in genomics.items()}
 
-    def initialise_temperatures(self, temperatures: np.ndarray) -> np.ndarray:
+    def _initialise_temperatures(self, temperatures: np.ndarray) -> np.ndarray:
         """
         Calculate the mean sea temperature at the northing coordinate of the farm at
         month c_month interpolating data taken from
         www.seatemperature.org
 
         :param temperatures: the array of temperatures from January till december. The expected shape is :math:`(2, n)`.
-        :returns the estimated temperature at this farm location.
+        :returns: the estimated temperature at this farm location.
         """
 
         # Schema: 2 rows, first column = northing, remaining 12 columns: temperature starting from Jan
@@ -175,7 +175,7 @@ class Farm(LoggableMixin):
             sampling_event = SamplingEvent(start_date + dt.timedelta(days=days))
             self.__sampling_events.put(sampling_event)
 
-    def preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
+    def _preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
         """
         Assign a few treatment dates to cages.
         NOTE: Mainly used for testing. May be deprecated when a proper strategy mechanism is in place
@@ -265,7 +265,7 @@ class Farm(LoggableMixin):
         :param ext_influx: the amount of lice that enter a cage
         :param ext_pressure_ratios: the ratio to use for the external pressure
 
-        :returns: pair of (dictionary of genotype distributions based on hatch date, cost of the update)
+        :returns: a pair of (dictionary of genotype distributions based on hatch date, cost of the update)
         """
 
         self.clear_log()
@@ -449,11 +449,12 @@ class Farm(LoggableMixin):
         gross_by_cage = [geno.gross for geno in geno_by_cage]
         return sum(gross_by_cage), gross_by_cage, geno_by_cage
 
-    def get_profit(self, cur_date: dt.datetime):
+    def get_profit(self, cur_date: dt.datetime) -> Money:
         """
         Get the current mass of fish that can be resold.
 
         :param cur_date: the current day
+        :returns: the total profit that can be earned from this farm at the current time
         """
         mass_per_cage = [cage.average_fish_mass((cur_date - cage.start_date).days) / 1e3 for cage in self.cages]
         return self.cfg.gain_per_kg * Money(sum(mass_per_cage))

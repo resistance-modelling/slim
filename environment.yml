@@ -27,3 +27,4 @@ dependencies:
   - pip:
       - pytype==2021.07.19
       - dill==0.3.4
+      - sphinx_rtd_theme==1.0.0
