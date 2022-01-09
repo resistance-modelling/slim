@@ -6,6 +6,7 @@ omit =
     slim/Optimiser.py
     slim/__init__.py
     slim/surveys/*
+    slim/gui_utils/*
     docs/*
 
 branch=True
