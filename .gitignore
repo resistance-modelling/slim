@@ -60,3 +60,6 @@ venv/
 
 # Mac specific annoyances
 .DS_Store
+
+# Sphinx artifacts
+docs/build/
