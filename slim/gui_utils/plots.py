@@ -39,7 +39,8 @@ class SmoothedPlotItemWrap:
             kernel = np.full(self.kernel_size, 1 / self.kernel_size)
         else:
             kernel = np.array([1])
-        return self.plot_item.plot(scipy.ndimage.convolve(signal / self.average_factor, kernel, mode="nearest"), **kwargs)
+        return self.plot_item.plot(scipy.ndimage.convolve(signal / self.average_factor, kernel, mode="nearest"),
+                                   **kwargs)
 
     def setSmoothingFactor(self, kernel_size: int):
         self.kernel_size = kernel_size
@@ -96,7 +97,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
             plot_item.setAverageFactor(average_factor)
         self.newAverageFactor.emit()
 
-    def addSmoothedPlot(self, exclude_from_averaging = False, **kwargs) -> SmoothedPlotItemWrap:
+    def addSmoothedPlot(self, exclude_from_averaging=False, **kwargs) -> SmoothedPlotItemWrap:
         plot = self.addPlot(**kwargs)
         parent = self.pane
 
@@ -144,8 +145,8 @@ class LightModeMixin:
     @property
     def _colorPalette(self):
         if self._paperMode:
-            return glasbey_light
-        return glasbey_dark
+            return glasbey_dark
+        return glasbey_light
 
     @property
     def paperMode(self):
@@ -188,7 +189,6 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         # SingleRunPlotPane -> VBoxLayout[Splitter] -> (QGridLayout[Plots, QGroup], QListView)
         self._createPlotOptionGroup()
         self._createPlots()
-        self._createCurveList()
 
         self.scrollArea = QScrollArea(self)
         self.scrollArea.setWidgetResizable(True)
@@ -201,14 +201,13 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         plotLayout = QGridLayout()
 
         plotLayout.addWidget(self.scrollArea, 0, 0)
-        plotLayout.addWidget(self.plotButtonGroup, 3, 0)
 
         mainLayout = QVBoxLayout()
         mainLayout.addWidget(self.splitter)
         plotPane = QWidget()
         plotPane.setLayout(plotLayout)
         self.splitter.addWidget(plotPane)
-        self.splitter.addWidget(self.curveListWidget)
+        self.splitter.addWidget(self.plotButtonGroup)
         self.setLayout(mainLayout)
 
         mainPane.loadedSimulatorState.connect(self._updateModel)
@@ -234,12 +233,15 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.pqgPlotContainer.newAverageFactor.connect(self._updatePlot)
         self.pqgPlotContainer.newKernelSize.connect(self._updatePlot)
 
-        self.licePopulationPlots = [self.pqgPlotContainer.addSmoothedPlot(title=f"Lice population of farm {i}", row=i, col=0)
-                                    for i in range(num_farms)]
-        self.fishPopulationPlots = [self.pqgPlotContainer.addSmoothedPlot(title=f"Fish population of farm {i}", row=i, col=1)
-                                    for i in range(num_farms)]
-        self.aggregationRatePlot = [self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", row=i, col=2)
-                                    for i in range(num_farms)]
+        self.licePopulationPlots = [
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice population of farm {i}", row=i, col=0)
+            for i in range(num_farms)]
+        self.fishPopulationPlots = [
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Fish population of farm {i}", row=i, col=1)
+            for i in range(num_farms)]
+        self.aggregationRatePlot = [
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", row=i, col=2)
+            for i in range(num_farms)]
 
         self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(
             exclude_from_averaging=True, title="Cumulated payoff", row=0, col=3)
@@ -275,6 +277,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.convolutionKernelSizeBox.setRange(1, 10)
         self.convolutionKernelSizeBox.setValue(3)
 
+
+        self._createCurveList()
+
         self.showDetailedGenotypeCheckBox.stateChanged.connect(lambda _: self._updatePlot())
         self.showOffspringDistribution.stateChanged.connect(lambda _: self._updatePlot())
         self.showFishPopulationDx.stateChanged.connect(lambda _: self._updatePlot())
@@ -285,8 +290,10 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.plotButtonGroupLayout.addWidget(self.convolutionKernelSizeLabel)
         self.plotButtonGroupLayout.addWidget(self.convolutionKernelSizeBox)
         self.plotButtonGroupLayout.addWidget(self.normaliseByCageCheckbox)
+        self.plotButtonGroupLayout.addWidget(self.curveListWidget)
 
         self.plotButtonGroup.setLayout(self.plotButtonGroupLayout)
+
 
     def _createCurveList(self):
         self.splitter = QSplitter(self)
@@ -295,13 +302,12 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         # TODO: bogus
         self.selected_curve = CurveListState()
 
-        curves = [("Recruitment", "L1"), ("Copepopids", "L2"), ("Chalimus", "L3"),
-                  ("Preadults", "L4"), ("Adults Male", "L5m"), ("Adults Female", "L5f"),
-                  ("External pressure", "ExtP"), ("Produced eggs", "Eggs")]
+        curves = {v: k for (k, v) in LicePopulation.lice_stages_bio_long_names.items()}
+        curves.update({"External pressure": "ExtP", "Produced eggs": "Eggs"})
 
         self._curves_to_member = dict(curves)
 
-        for curve_label, curve_id in curves:
+        for curve_label, curve_id in curves.items():
             item = QListWidgetItem(curve_label, curveListWidget, QtCore.Qt.ItemIsUserCheckable)
             item.setCheckState(QtCore.Qt.Checked)
             curveListWidget.addItem(item)
@@ -387,7 +393,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             else:
                 # render per stage
                 stages_num = len(LicePopulation.lice_stages)
-                stages_palette, egg_palette = self._colorPalette[:stages_num],\
+                stages_palette, egg_palette = self._colorPalette[:stages_num], \
                                               self._colorPalette[stages_num:]
                 stages_colours = dict(zip(LicePopulation.lice_stages, stages_palette))
 
@@ -403,7 +409,6 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                     self.licePopulationPlots[farm_idx].plot(farm_df["new_reservoir_lice"],
                                                             name="Eggs", pen=egg_palette[0])
 
-
                 if self.showOffspringDistribution.isChecked():
                     # get gross arrivals
                     if self.selected_curve.ExtP:
@@ -417,10 +422,16 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
             # Plot treatments
             # note: PG does not allow to reuse the same
-            treatment_lri = self._getTreatmentRegions(farm_df, 2)
-            for lri in treatment_lri:
-                self.licePopulationPlots[farm_idx].addItem(lri[0])
-                self.fishPopulationPlots[farm_idx].addItem(lri[1])
+            treatment_lri = self._getTreatmentRegions(farm_df, 5)
+            if len(treatment_lri) > 0:
+                for lri in treatment_lri:
+                    self.licePopulationPlots[farm_idx].addItem(lri[0])
+                    self.fishPopulationPlots[farm_idx].addItem(lri[1])
+                    self.aggregationRatePlot[farm_idx].addItem(lri[2])
+
+                    # Multiple treatment regions may overlap this way, is this okay?
+                    self.payoffPlot.addItem(lri[3])
+                    self.extPressureRatios.addItem(lri[4])
 
         # because of the leaky scope, this is going to be something
         payoffs = farm_df["payoff"].to_numpy()
@@ -459,7 +470,6 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         # Generate treatment regions by looking for the first non-consecutive treatment blocks.
         # There may be a chance where multiple treatments happen consecutively, on which case
         # we simply consider them as a unique case.
-        # TODO: move this in another function
         # TODO: we are not keeping tracks of all the PlotItem's - clear events may not delete them
         if len(treatment_days) > 0:
             treatment_ranges = []
