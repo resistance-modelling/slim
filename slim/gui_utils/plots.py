@@ -1,3 +1,7 @@
+"""
+This module provides plotting widgets and utils.
+"""
+
 from __future__ import annotations
 
 from typing import Optional, TYPE_CHECKING, List
@@ -8,7 +12,7 @@ import pyqtgraph as pg
 import scipy
 import scipy.ndimage
 from PyQt5 import QtCore
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox, QSpinBox, QLabel, QScrollArea, \
     QSizePolicy, QListWidget, QSplitter, QListWidgetItem
 from colorcet import glasbey_light, glasbey_dark
@@ -56,6 +60,7 @@ class SmoothedPlotItemWrap:
 
 
 class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
+    """A wrapper for a GraphicsLayoutWidget that supports smoothing."""
     # TODO these names are terrible
     newKernelSize = pyqtSignal()
     newAverageFactor = pyqtSignal()
@@ -71,9 +76,10 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         smoothing_kernel_size_widget.valueChanged.connect(self._setSmoothingFactor)
         averaging_widget.stateChanged.connect(self._setAverageFactor)
 
-        policy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self._policy = policy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         policy.setHeightForWidth(True)
-        self.setSizePolicy(policy)
+        self.ci.setSizePolicy(policy)
+        # I think I should also
 
     def _getAverageFactor(self, farm_idx, checkbox_state: int):
         parent = self.pane
@@ -100,13 +106,6 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
     def addSmoothedPlot(self, exclude_from_averaging=False, **kwargs) -> SmoothedPlotItemWrap:
         plot = self.addPlot(**kwargs)
         parent = self.pane
-
-        """
-        sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        sizePolicy.setHeightForWidth(True)
-        plot.setSizePolicy(sizePolicy)
-        plot.
-        """
 
         smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
         averaging_widget = parent.normaliseByCageCheckbox
@@ -137,6 +136,14 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         self.disconnectAll()
         super().deleteLater()
 
+    def enforceAspectRatio(self):
+        # For some reason size policies are ignored, even when setting the internal GraphicsLayout policy.
+        # Maybe there is something else that has to be changed? Need to investigate...
+        # This is a hack that works half of the time. Expect flickering.
+        size: QSize = self.size()
+        num_farms = len(self.pane._uniqueFarms)
+        # 9/60 is not the real aspect ratio but it takes into account padding
+        self.setFixedHeight(num_farms * size.width() * 9/60)
 
 class LightModeMixin:
     def __init__(self):
@@ -185,8 +192,14 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         # Alternatively, one could break the relationship between this and the QSpinBox object, but it may cause
         # synchronisation issues.
 
-        # Hierarchy:
-        # SingleRunPlotPane -> VBoxLayout[Splitter] -> (QGridLayout[Plots, QGroup], QListView)
+        # The overall layout is the following
+        # ---------------------------------
+        # |                     |         |
+        # |  PLOTS              | Options |
+        # ...                   | ...     |
+        # |                     | ----    |
+        # |                     | Curves  |
+        # ---------------------------------
         self._createPlotOptionGroup()
         self._createPlots()
 
@@ -226,6 +239,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self._showGenotype = value
         self._updatePlot()
 
+
     def _createPlots(self):
         num_farms = len(self._uniqueFarms)
 
@@ -250,9 +264,6 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
-        # TODO: implement a fixed aspect ratio. Layouting in QT is complicated at times.
-        self.pqgPlotContainer.setFixedHeight(250 * num_farms)
-
         # add grid, synchronise Y-range
         for plot in self.licePopulationPlots + self.fishPopulationPlots:
             plot.showGrid(x=True, y=True)
@@ -263,6 +274,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                 plotList[idx].setXLink(plotList[idx - 1])
 
         self.payoffPlot.showGrid(x=True, y=True)
+
+        self.splitter.splitterMoved.connect(self.pqgPlotContainer.enforceAspectRatio)
 
     def _createPlotOptionGroup(self):
         # Panel in the bottom
@@ -276,7 +289,6 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.convolutionKernelSizeBox = QSpinBox(self)
         self.convolutionKernelSizeBox.setRange(1, 10)
         self.convolutionKernelSizeBox.setValue(3)
-
 
         self._createCurveList()
 
@@ -294,12 +306,10 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
         self.plotButtonGroup.setLayout(self.plotButtonGroupLayout)
 
-
     def _createCurveList(self):
         self.splitter = QSplitter(self)
         curveListWidget = self.curveListWidget = QListWidget()
 
-        # TODO: bogus
         self.selected_curve = CurveListState()
 
         curves = {v: k for (k, v) in LicePopulation.lice_stages_bio_long_names.items()}
@@ -354,6 +364,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         # if the number of farms has changed
         elif len(self._uniqueFarms) != len(self.licePopulationPlots):
             self._remountPlot()
+            self.pqgPlotContainer.enforceAspectRatio()
 
         if len(self._uniqueFarms) == 0:
             return
