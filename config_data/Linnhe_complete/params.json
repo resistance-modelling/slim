@@ -5,9 +5,9 @@
     "ext_pressure": 150,
     "monthly_cost": "5000.00",
     "genetic_ratios": {
-        "A": 0.001,
-        "a": 0.099,
-        "A,a": 0.001
+        "A": 0.005,
+        "a": 0.99,
+        "A,a": 0.005
     },
     "farms": [
         {
