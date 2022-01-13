@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 import pyqtgraph as pg
-from PyQt5 import QtGui, QtWidgets
+from PyQt5 import QtGui, QtWidgets, QtCore
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QSettings
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
                              QAction, QFileDialog, QMessageBox, QProgressBar,
@@ -276,14 +276,10 @@ class OptimiserLoadingWorker(QThread):
             self.failed.emit()
 
 
+app = QApplication(sys.argv)
+win = Window()
+win.show()
+
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    win = Window()
-    win.show()
-
-    # KeyboardInterrupt trick
-    timer = QTimer()
-    timer.timeout.connect(lambda: None)
-    timer.start(100)
-
-    sys.exit(app.exec_())
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

@@ -4,6 +4,7 @@ This module provides plotting widgets and utils.
 
 from __future__ import annotations
 
+from itertools import repeat
 from typing import Optional, TYPE_CHECKING, List
 
 import numpy as np
@@ -31,20 +32,45 @@ class SmoothedPlotItemWrap:
     A replacement for PlotItem that also implements convolution and averaging
     """
 
+    color_palette = glasbey_light
     def __init__(self, plot_item: PlotItem, smoothing_size: int, average_factor: int, method="linear"):
         self.plot_item = plot_item
         self.kernel_size = smoothing_size
         self.average_factor = average_factor
         self.method = method
 
-    def plot(self, signal, **kwargs) -> PlotDataItem:
+    def plot(self, signal, stage: Optional[str] = None, **kwargs) -> PlotDataItem:
+        # compute the signal
         # TODO: support multiple rolling averages
         if self.method == "linear":
             kernel = np.full(self.kernel_size, 1 / self.kernel_size)
         else:
             kernel = np.array([1])
+
+        if stage:
+            # determine the strokes to use
+            stages_num = len(LicePopulation.lice_stages)
+            stages_palette, egg_palette = SmoothedPlotItemWrap.color_palette[:stages_num], \
+                                          SmoothedPlotItemWrap.color_palette[stages_num:]
+            stages_styles = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6]  # enums from Qt.PenStyle
+
+            stages_colours = dict(zip(LicePopulation.lice_stages, stages_palette))
+            stages_styles_dict = dict(zip(LicePopulation.lice_stages, stages_styles))
+
+            stage_colour = stages_colours[stage]
+            stage_style = stages_styles_dict[stage]
+            stage_bio_name = LicePopulation.lice_stages_bio_labels[stage]
+
+            _kwargs = {
+                "name": stage_bio_name,
+                "pen": {"style": stage_style, "color": stage_colour},
+                **kwargs
+            }
+        else:
+            _kwargs = kwargs
+
         return self.plot_item.plot(scipy.ndimage.convolve(signal / self.average_factor, kernel, mode="nearest"),
-                                   **kwargs)
+                                   **_kwargs)
 
     def setSmoothingFactor(self, kernel_size: int):
         self.kernel_size = kernel_size
@@ -76,10 +102,12 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         smoothing_kernel_size_widget.valueChanged.connect(self._setSmoothingFactor)
         averaging_widget.stateChanged.connect(self._setAverageFactor)
 
+        """
         self._policy = policy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         policy.setHeightForWidth(True)
         self.ci.setSizePolicy(policy)
         # I think I should also
+        """
 
     def _getAverageFactor(self, farm_idx, checkbox_state: int):
         parent = self.pane
@@ -168,6 +196,10 @@ class LightModeMixin:
 
         pg.setConfigOption('background', background)
         pg.setConfigOption('foreground', foreground)
+
+        # TODO: that's a terrible idea. Why is a class attribute set to an instance's attribute?
+        # That's okay because everything is global (and it shouldn't...)
+        SmoothedPlotItemWrap.color_palette = self._colorPalette
 
         self._remountPlot()
 
@@ -402,17 +434,14 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
             # Stage information
             else:
+                # TODO: move the palette selection logic into SmoothedPlotItem
                 # render per stage
                 stages_num = len(LicePopulation.lice_stages)
-                stages_palette, egg_palette = self._colorPalette[:stages_num], \
-                                              self._colorPalette[stages_num:]
-                stages_colours = dict(zip(LicePopulation.lice_stages, stages_palette))
+                egg_palette = self._colorPalette[stages_num:]
 
                 for stage, series in stages.items():
-                    bio_name = LicePopulation.lice_stages_bio_labels[stage]
                     if getattr(self.selected_curve, stage):
-                        self.licePopulationPlots[farm_idx].plot(series.to_numpy(),
-                                                                name=bio_name, pen=stages_colours[stage])
+                        self.licePopulationPlots[farm_idx].plot(series.to_numpy(), stage=stage)
 
                 if self.selected_curve.Eggs:
                     self.licePopulationPlots[farm_idx].plot(farm_df["eggs"], name="External influx", pen=egg_palette[0])
@@ -426,7 +455,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                         arrivals_gross = farm_df["arrivals_per_cage"].apply(
                             lambda cages: sum([sum(cage.values()) for cage in cages])).to_numpy()
                         self.licePopulationPlots[farm_idx].plot(arrivals_gross, name="Offspring (L1+L2)",
-                                                                pen=self._colorPalette[7])
+                                                                pen=egg_palette[1])
 
             aggregation_rate = stages["L5f"].to_numpy() / num_fish
             self.aggregationRatePlot[farm_idx].plot(aggregation_rate, pen=self._colorPalette[0])
@@ -468,7 +497,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
     def _convolve(self, signal):
         kernel_size = self.convolutionKernelSizeBox.value()
-        # TODO: support multiple rolling averages
+        # TODO: support multiple rolling averages?
         kernel = np.full(kernel_size, 1 / kernel_size)
         return scipy.ndimage.convolve(signal, kernel, mode="nearest")
 
