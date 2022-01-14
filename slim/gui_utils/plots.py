@@ -32,6 +32,7 @@ class SmoothedPlotItemWrap:
     """
 
     color_palette = glasbey_light
+
     def __init__(self, plot_item: PlotItem, smoothing_size: int, average_factor: int, method="linear"):
         self.plot_item = plot_item
         self.kernel_size = smoothing_size
@@ -87,15 +88,16 @@ class SmoothedPlotItemWrap:
 class NonScientificAxisItem(pg.AxisItem):
     """A non-scientific axis. See <https://stackoverflow.com/a/43782129>_"""
     def labelString(self):
+        """Remove the ugly label (starting unit) format"""
         s = self.labelText
 
         style = ';'.join(['%s: %s' % (k, self.labelStyle[k]) for k in self.labelStyle])
 
         return "<span style='%s'>%s</span>" % (style, s)
 
-    def tickStrings(self, values, scale, spacing):
+    def tickStrings(self, values, _scale, spacing):
         if self.logMode:
-            return self.logTickStrings(values, scale, spacing)
+            return self.logTickStrings(values, _scale, spacing)
 
         return [str(int(value*1)) for value in values]
 
@@ -116,13 +118,6 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
 
         smoothing_kernel_size_widget.valueChanged.connect(self._setSmoothingFactor)
         averaging_widget.stateChanged.connect(self._setAverageFactor)
-
-        """
-        self._policy = policy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        policy.setHeightForWidth(True)
-        self.ci.setSizePolicy(policy)
-        # I think I should also
-        """
 
     def _getAverageFactor(self, farm_idx, checkbox_state: int):
         parent = self.pane
@@ -155,7 +150,11 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
                 if isinstance(params, str):
                     params = {'text': params}
                 axis_dict[axis_param] = axis = NonScientificAxisItem(**{'orientation': axis_param, **params})
+                # By default, the axes miss the label and believe they are using SI measures, thus breaking
+                # the scaling altogether. In theory, it is not a bug but the behaviour was so horribly visualised
+                # it looked like one.
                 axis.showLabel(True)
+                axis.enableAutoSIPrefix(False)
                 del kwargs[axis_param]
 
         plot = self.addPlot(**kwargs, axisItems=axis_dict)
@@ -201,6 +200,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         num_farms = len(self.pane._uniqueFarms)
         # 9/60 is not the real aspect ratio but it takes into account padding
         self.setFixedHeight(num_farms * size.width() * 9/60)
+
 
 class LightModeMixin:
     def __init__(self):
@@ -459,7 +459,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
                 for allele_name, stage_value in allele_data.items():
                     self.licePopulationPlots[farm_idx].plot(stage_value, name=allele_name,
-                                                            pen=allele_colours[allele_name])
+                                                            pen={'colour': allele_colours[allele_name], 'width': 3})
 
             # Stage information
             else:
@@ -484,7 +484,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                         arrivals_gross = farm_df["arrivals_per_cage"].apply(
                             lambda cages: sum([sum(cage.values()) for cage in cages])).to_numpy()
                         self.licePopulationPlots[farm_idx].plot(arrivals_gross, name="Offspring (L1+L2)",
-                                                                pen=egg_palette[1])
+                                                                pen={'colour': egg_palette[1], 'width': 3})
 
             aggregation_rate = stages["L5f"].to_numpy() / num_fish
             self.aggregationRatePlot[farm_idx].plot(aggregation_rate, pen=self._colorPalette[0])
