@@ -63,7 +63,7 @@ class SmoothedPlotItemWrap:
 
             _kwargs = {
                 "name": stage_bio_name,
-                "pen": {"style": stage_style, "color": stage_colour},
+                "pen": {"style": stage_style, "color": stage_colour, 'width': 1.5},
                 **kwargs
             }
         else:
@@ -87,14 +87,6 @@ class SmoothedPlotItemWrap:
 
 class NonScientificAxisItem(pg.AxisItem):
     """A non-scientific axis. See <https://stackoverflow.com/a/43782129>_"""
-    def labelString(self):
-        """Remove the ugly label (starting unit) format"""
-        s = self.labelText
-
-        style = ';'.join(['%s: %s' % (k, self.labelStyle[k]) for k in self.labelStyle])
-
-        return "<span style='%s'>%s</span>" % (style, s)
-
     def tickStrings(self, values, _scale, spacing):
         if self.logMode:
             return self.logTickStrings(values, _scale, spacing)
@@ -441,11 +433,13 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             # Show fish population
             num_fish = farm_df["num_fish"].to_numpy()
 
+            monocolour_pen = {'colour': self._colorPalette[0], 'width': 1.5}
+
             if self.showFishPopulationDx.isChecked():
                 num_fish_dx = -np.diff(num_fish)
-                self.fishPopulationPlots[farm_idx].plot(num_fish_dx, pen=self._colorPalette[0])
+                self.fishPopulationPlots[farm_idx].plot(num_fish_dx, pen=monocolour_pen)
             else:
-                self.fishPopulationPlots[farm_idx].plot(num_fish, pen=self._colorPalette[0])
+                self.fishPopulationPlots[farm_idx].plot(num_fish, pen=monocolour_pen)
 
             stages = farm_df[LicePopulation.lice_stages].applymap(
                 lambda geno_data: sum(geno_data.values()))
@@ -457,9 +451,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             if self.showDetailedGenotypeCheckBox.isChecked():
                 allele_data = {allele: farm_df[allele].to_numpy() for allele in allele_names}
 
+                pen = {'color': allele_colours[allele_name], 'width': monocolour_pen['width']}
                 for allele_name, stage_value in allele_data.items():
-                    self.licePopulationPlots[farm_idx].plot(stage_value, name=allele_name,
-                                                            pen={'colour': allele_colours[allele_name], 'width': 3})
+                    self.licePopulationPlots[farm_idx].plot(stage_value, name=allele_name, pen=pen)
 
             # Stage information
             else:
@@ -473,18 +467,21 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                         self.licePopulationPlots[farm_idx].plot(series.to_numpy(), stage=stage)
 
                 if self.selected_curve.Eggs:
-                    self.licePopulationPlots[farm_idx].plot(farm_df["eggs"], name="External influx", pen=egg_palette[0])
+                    pen = {'color': egg_palette[0], 'width': monocolour_pen['width']}
+                    self.licePopulationPlots[farm_idx].plot(farm_df["eggs"], name="Eggs", pen=pen)
                 if self.selected_curve.ExtP:
+                    pen = {'color': egg_palette[1], 'width': monocolour_pen['width']}
                     self.licePopulationPlots[farm_idx].plot(farm_df["new_reservoir_lice"],
-                                                            name="Eggs", pen=egg_palette[0])
+                                                            name="External Pressure", pen=pen)
 
                 if self.showOffspringDistribution.isChecked():
                     # get gross arrivals
+                    pen = {**monocolour_pen, 'color': egg_palette[0]}
                     if self.selected_curve.ExtP:
                         arrivals_gross = farm_df["arrivals_per_cage"].apply(
                             lambda cages: sum([sum(cage.values()) for cage in cages])).to_numpy()
                         self.licePopulationPlots[farm_idx].plot(arrivals_gross, name="Offspring (L1+L2)",
-                                                                pen={'colour': egg_palette[1], 'width': 3})
+                                                                pen=pen)
 
             aggregation_rate = stages["L5f"].to_numpy() / num_fish
             self.aggregationRatePlot[farm_idx].plot(aggregation_rate, pen=self._colorPalette[0])
@@ -515,8 +512,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             self.extPressureRatios.plot(extp_ratios, title=str(geno), pen=allele_colours[allele_name])
         self.extPressureRatios.addLegend()
 
-        # TODO: axes are bugged
-        for plot in self.licePopulationPlots + self.fishPopulationPlots + self.aggregationRatePlot:
+        for plot in self.licePopulationPlots + self.fishPopulationPlots:
             plot.setLogMode(False, True)
 
         # keep ranges consistent
