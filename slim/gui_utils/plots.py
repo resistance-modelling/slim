@@ -85,15 +85,19 @@ class SmoothedPlotItemWrap:
 
 
 class NonScientificAxisItem(pg.AxisItem):
-    """A non-scientific Axis. See <https://stackoverflow.com/a/43782129>_"""
-    def __init__(self, *args, **kwargs):
-        super(NonScientificAxisItem, self).__init__(*args, **kwargs)
+    """A non-scientific axis. See <https://stackoverflow.com/a/43782129>_"""
+    def labelString(self):
+        s = self.labelText
+
+        style = ';'.join(['%s: %s' % (k, self.labelStyle[k]) for k in self.labelStyle])
+
+        return "<span style='%s'>%s</span>" % (style, s)
 
     def tickStrings(self, values, scale, spacing):
         if self.logMode:
             return self.logTickStrings(values, scale, spacing)
 
-        return [str(int(value*1)) for value in values] #This line return the NonScientific notation value
+        return [str(int(value*1)) for value in values]
 
 
 class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
@@ -150,10 +154,14 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
                 params = kwargs[axis_param]
                 if isinstance(params, str):
                     params = {'text': params}
-                axis_dict[axis_param] = NonScientificAxisItem(**{'orientation': axis_param, **params})
+                axis_dict[axis_param] = axis = NonScientificAxisItem(**{'orientation': axis_param, **params})
+                axis.showLabel(True)
                 del kwargs[axis_param]
 
         plot = self.addPlot(**kwargs, axisItems=axis_dict)
+        for axis_item in axis_dict.values():
+            axis_item.setParentItem(plot)
+
         parent = self.pane
 
         smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
