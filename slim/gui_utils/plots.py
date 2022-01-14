@@ -280,13 +280,13 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.pqgPlotContainer.newKernelSize.connect(self._updatePlot)
 
         self.licePopulationPlots = [
-            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice population of farm {i}", row=i, col=0)
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice population of farm {i}", left="population", bottom="days", row=i, col=0)
             for i in range(num_farms)]
         self.fishPopulationPlots = [
-            self.pqgPlotContainer.addSmoothedPlot(title=f"Fish population of farm {i}", row=i, col=1)
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Fish population of farm {i}", left="population", bottom="days", row=i, col=1)
             for i in range(num_farms)]
         self.aggregationRatePlot = [
-            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", row=i, col=2)
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", left="population", bottom="days", row=i, col=2)
             for i in range(num_farms)]
 
         self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(
@@ -485,6 +485,10 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             allele_name = "".join(geno)
             self.extPressureRatios.plot(extp_ratios, title=str(geno), pen=allele_colours[allele_name])
         self.extPressureRatios.addLegend()
+
+        # TODO: axes are bugged
+        #for plot in self.licePopulationPlots + self.fishPopulationPlots + self.aggregationRatePlot:
+        #    plot.setLogMode(False, True)
 
         # keep ranges consistent
         for plot in self.licePopulationPlots + self.fishPopulationPlots + self.aggregationRatePlot:
