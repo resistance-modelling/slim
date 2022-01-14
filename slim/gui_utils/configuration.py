@@ -1,5 +1,5 @@
 """
-Configuration pane
+Configuration pane. Useful to point out which panes we need.
 """
 import json
 from pathlib import Path
@@ -60,8 +60,6 @@ class ConfigurationPane(QWidget):
         for idx in range(rows):
             item = model.item(idx, 0)
             positions[item.text()] = idx
-
-        print(positions)
 
         for key, value in vars(config).items():
             if key not in positions:

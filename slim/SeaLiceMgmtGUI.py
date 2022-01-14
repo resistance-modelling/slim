@@ -1,8 +1,27 @@
+"""
+This script provides the GUI of this project.
+
+For a list of features check `this <https://github.com/resistance-modelling/slim/issues/103>`_
+
+The GUI is based on PyQt5 with PyQtgraphs so please make sure those are installed before launching the script.
+
+To launch the script, from the root folder: ``python -m slim.SeaLiceMgmtGUI``.
+
+Known bugs:
+
+* Expect some flickering when updating between dumps
+* There is some delay when closing the app.
+* Not all plots are accessible
+
+Before filing a new bug please check if your issue belongs to the
+`list of known issues <https://github.com/resistance-modelling/slim/issues?q=is%3Aopen+is%3Aissue+label%3Asimulator-glitch>`_.
+"""
+
 import sys
 from pathlib import Path
 
 import pyqtgraph as pg
-from PyQt5 import QtGui, QtWidgets
+from PyQt5 import QtGui, QtWidgets, QtCore
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QSettings
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
                              QAction, QFileDialog, QMessageBox, QProgressBar,
@@ -257,14 +276,10 @@ class OptimiserLoadingWorker(QThread):
             self.failed.emit()
 
 
+app = QApplication(sys.argv)
+win = Window()
+win.show()
+
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    win = Window()
-    win.show()
-
-    # KeyboardInterrupt trick
-    timer = QTimer()
-    timer.timeout.connect(lambda: None)
-    timer.start(100)
-
-    sys.exit(app.exec_())
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        pg.exec()

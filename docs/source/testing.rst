@@ -37,3 +37,12 @@ is available. Unfortunately it requires manual annotation of the source code.
 .. tip::
     It is recommended to minimise any I/O operation while profiling. Thus avoid
     using options like ``--save-rate``.
+
+
+Assertion failures
+******************
+
+Sometimes the simulation crashes due to some invariants being broken. If you believe that
+it shouldn't be concerning you could pass the ``-O`` option to the interpreter to ignore the assertion
+failures. That said, assertion failures are good indicators of simulation bug.
+Please report them via Github.
