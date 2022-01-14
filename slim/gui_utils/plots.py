@@ -4,7 +4,6 @@ This module provides plotting widgets and utils.
 
 from __future__ import annotations
 
-from itertools import repeat
 from typing import Optional, TYPE_CHECKING, List
 
 import numpy as np
@@ -15,7 +14,7 @@ import scipy.ndimage
 from PyQt5 import QtCore
 from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox, QSpinBox, QLabel, QScrollArea, \
-    QSizePolicy, QListWidget, QSplitter, QListWidgetItem
+    QListWidget, QSplitter, QListWidgetItem
 from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
@@ -85,6 +84,18 @@ class SmoothedPlotItemWrap:
         return getattr(self.plot_item, item)
 
 
+class NonScientificAxisItem(pg.AxisItem):
+    """A non-scientific Axis. See <https://stackoverflow.com/a/43782129>_"""
+    def __init__(self, *args, **kwargs):
+        super(NonScientificAxisItem, self).__init__(*args, **kwargs)
+
+    def tickStrings(self, values, scale, spacing):
+        if self.logMode:
+            return self.logTickStrings(values, scale, spacing)
+
+        return [str(int(value*1)) for value in values] #This line return the NonScientific notation value
+
+
 class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
     """A wrapper for a GraphicsLayoutWidget that supports smoothing."""
     # TODO these names are terrible
@@ -132,7 +143,17 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         self.newAverageFactor.emit()
 
     def addSmoothedPlot(self, exclude_from_averaging=False, **kwargs) -> SmoothedPlotItemWrap:
-        plot = self.addPlot(**kwargs)
+        axis_params = ["left", "right", "top", "bottom"]
+        axis_dict = {}
+        for axis_param in axis_params:
+            if axis_param in kwargs:
+                params = kwargs[axis_param]
+                if isinstance(params, str):
+                    params = {'text': params}
+                axis_dict[axis_param] = NonScientificAxisItem(**{'orientation': axis_param, **params})
+                del kwargs[axis_param]
+
+        plot = self.addPlot(**kwargs, axisItems=axis_dict)
         parent = self.pane
 
         smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
@@ -487,8 +508,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.extPressureRatios.addLegend()
 
         # TODO: axes are bugged
-        #for plot in self.licePopulationPlots + self.fishPopulationPlots + self.aggregationRatePlot:
-        #    plot.setLogMode(False, True)
+        for plot in self.licePopulationPlots + self.fishPopulationPlots + self.aggregationRatePlot:
+            plot.setLogMode(False, True)
 
         # keep ranges consistent
         for plot in self.licePopulationPlots + self.fishPopulationPlots + self.aggregationRatePlot:
