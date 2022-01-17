@@ -23,6 +23,7 @@ dependencies:
   - sphinx-tabs=3.2.0
   - sphinx_rtd_theme=1.0.0
   - dill=0.3.4
+  - lz4=3.1.10
   - pip:
     - pytype==2022.01.07
     - ninja==1.10.2

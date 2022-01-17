@@ -116,7 +116,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
 
         state = parent.state
         if state:
-            num_cages = len(state.states[0].organisation.farms[farm_idx].cages)
+            num_cages = state.cfg.farms[farm_idx].n_cages
             average_factor = num_cages if checkbox_state == 2 else 1
             return average_factor
         return 1
@@ -291,7 +291,6 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
     def setGenotype(self, value: bool):
         self._showGenotype = value
         self._updatePlot()
-
 
     def _createPlots(self):
         num_farms = len(self._uniqueFarms)

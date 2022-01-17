@@ -108,7 +108,7 @@ class Window(QMainWindow):
         self.loadOptimiserDumpAction.setEnabled(True)
 
     def _displaySimulatorData(self, simulator_data: SimulatorSingleRunState):
-        self.configurationPane.newConfig.emit(simulator_data.states[0].cfg)
+        self.configurationPane.newConfig.emit(simulator_data.cfg)
         self.console.push_vars(vars(simulator_data))
         self.loadedSimulatorState.emit(simulator_data)
 
@@ -206,7 +206,7 @@ class Window(QMainWindow):
 
     def openSimulatorDump(self):
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Load a dump", "", "Pickle file (*.pickle.xz)")
+            self, "Load a dump", "", "Pickle file (*.pickle.lz4)")
 
         if filename:
             recentFiles = self.recentFilesList
@@ -247,10 +247,10 @@ class SimulatorLoadingWorker(QThread):
     def run(self):
         try:
             parent_path = self.dump_path.parent
-            sim_name = self.dump_path.name[len("simulation_name_"):-len(".pickle")]
-            states, times = Simulator.reload_all_dump(parent_path, sim_name)
-            states_as_df = Simulator.dump_as_pd(states, times)
-            self.finished.emit(SimulatorSingleRunState(states, times, states_as_df))
+            sim_name = self.dump_path.name[len("simulation_name_"):-len(".pickle.lz4")]
+            states_times_it = Simulator.reload_all_dump(parent_path, sim_name)
+            states_as_df, times, cfg = Simulator.dump_as_dataframe(states_times_it)
+            self.finished.emit(SimulatorSingleRunState(times, states_as_df, cfg))
 
         except FileNotFoundError:
             self.failed.emit()

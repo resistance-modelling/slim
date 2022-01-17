@@ -16,8 +16,8 @@ lice_counts*.txt
 
 # outputs
 *.bin
-*.pickle
-*.pickle.xz
+*.pickle.*
+
 
 # Testing
 .pytest_cache/
