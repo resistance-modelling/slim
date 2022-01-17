@@ -4,7 +4,7 @@ This module provides plotting widgets and utils.
 
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING, List
+from typing import Optional, TYPE_CHECKING, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -116,6 +116,8 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
 
         state = parent.state
         if state:
+            if state.cfg.nfarms >= farm_idx:
+                return 1
             num_cages = state.cfg.farms[farm_idx].n_cages
             average_factor = num_cages if checkbox_state == 2 else 1
             return average_factor
@@ -133,7 +135,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
             plot_item.setAverageFactor(average_factor)
         self.newAverageFactor.emit()
 
-    def addSmoothedPlot(self, exclude_from_averaging=False, **kwargs) -> SmoothedPlotItemWrap:
+    def addSmoothedPlot(self, exclude_from_averaging=False, scientific=False, **kwargs) -> SmoothedPlotItemWrap:
         axis_params = ["left", "right", "top", "bottom"]
         axis_dict = {}
         for axis_param in axis_params:
@@ -141,7 +143,11 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
                 params = kwargs[axis_param]
                 if isinstance(params, str):
                     params = {'text': params}
-                axis_dict[axis_param] = axis = NonScientificAxisItem(**{'orientation': axis_param, **params})
+                if not scientific:
+                    axis_item_type = NonScientificAxisItem
+                else:
+                    axis_item_type = pg.AxisItem
+                axis_dict[axis_param] = axis = axis_item_type(**{'orientation': axis_param, **params})
                 # By default, the axes miss the label and believe they are using SI measures, thus breaking
                 # the scaling altogether. In theory, it is not a bug but the behaviour was so horribly visualised
                 # it looked like one.
@@ -191,7 +197,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         size: QSize = self.size()
         num_farms = len(self.pane._uniqueFarms)
         # 9/60 is not the real aspect ratio but it takes into account padding
-        self.setFixedHeight(num_farms * size.width() * 9/60)
+        self.setFixedHeight((num_farms + 1) * size.width() * 9/60)
 
 
 class LightModeMixin:
@@ -306,13 +312,13 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             self.pqgPlotContainer.addSmoothedPlot(title=f"Fish population of farm {i}", left="population", bottom="days", row=i, col=1)
             for i in range(num_farms)]
         self.aggregationRatePlot = [
-            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", left="population", bottom="days", row=i, col=2)
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", scientific=False, left="population", bottom="days", row=i, col=2)
             for i in range(num_farms)]
 
         self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(
-            exclude_from_averaging=True, title="Cumulated payoff", row=0, col=3)
+            exclude_from_averaging=True, title="Cumulated payoff", row=num_farms, col=0)
         self.extPressureRatios = self.pqgPlotContainer.addSmoothedPlot(
-            title="External pressure ratios", row=1, col=3)
+            title="External pressure ratios", row=num_farms, col=1)
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
@@ -538,7 +544,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         # Generate treatment regions by looking for the first non-consecutive treatment blocks.
         # There may be a chance where multiple treatments happen consecutively, on which case
         # we simply consider them as a unique case.
-        # TODO: we are not keeping tracks of all the PlotItem's - clear events may not delete them
+
         if len(treatment_days) > 0:
             treatment_ranges = []
             lo = 0
