@@ -451,13 +451,13 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             if self.showDetailedGenotypeCheckBox.isChecked():
                 allele_data = {allele: farm_df[allele].to_numpy() for allele in allele_names}
 
-                pen = {'color': allele_colours[allele_name], 'width': monocolour_pen['width']}
                 for allele_name, stage_value in allele_data.items():
+                    pen = {'color': allele_colours[allele_name], 'width': monocolour_pen['width']}
                     self.licePopulationPlots[farm_idx].plot(stage_value, name=allele_name, pen=pen)
 
             # Stage information
             else:
-                # TODO: move the palette selection logic into SmoothedPlotItem
+                # TODO: eggs and ExtP are not stages but graphically speaking they are.
                 # render per stage
                 stages_num = len(LicePopulation.lice_stages)
                 egg_palette = self._colorPalette[stages_num:]

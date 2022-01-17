@@ -206,7 +206,7 @@ class Window(QMainWindow):
 
     def openSimulatorDump(self):
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Load a dump", "", "Pickle file (*.pickle)")
+            self, "Load a dump", "", "Pickle file (*.pickle.xz)")
 
         if filename:
             recentFiles = self.recentFilesList

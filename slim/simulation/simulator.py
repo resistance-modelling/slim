@@ -8,6 +8,7 @@ __all__ = ['Organisation', 'Simulator']
 
 import datetime as dt
 import json
+import lzma
 from pathlib import Path
 from typing import List, Optional, Tuple, Deque
 
@@ -176,7 +177,7 @@ class Simulator: #pragma: no cover
         if not path.is_dir():
             path.mkdir(parents=True, exist_ok=True)
 
-        return path / f"simulation_data_{sim_id}.pickle"
+        return path / f"simulation_data_{sim_id}.pickle.xz"
 
     @staticmethod
     def reload_all_dump(path: Path, sim_id: str):
@@ -294,7 +295,7 @@ class Simulator: #pragma: no cover
                 new_step = []
                 for it in range(avg_iterations):
                     try:
-                        pickle_path = path / f"simulation_data_optimisation_{step}_{it}.pickle"
+                        pickle_path = path / f"simulation_data_optimisation_{step}_{it}.pickle.xz"
                         print(pickle_path)
                         with pickle_path.open("rb") as f:
                             new_step.append(pickle.load(f))
@@ -316,10 +317,10 @@ class Simulator: #pragma: no cover
     def run_model(self, resume=False):
         """Perform the simulation by running the model.
 
-        :param path:: Path to store the results in
-        :param sim_id:: Simulation name
-        :param cfg:: Configuration object holding parameter information.
-        :param Organisation:: the organisation to work on.
+        :param path: Path to store the results in
+        :param sim_id: Simulation name
+        :param cfg: Configuration object holding parameter information.
+        :param Organisation: the organisation to work on.
         """
         logger.info("running simulation, saving to %s", self.output_dir)
 
@@ -329,6 +330,7 @@ class Simulator: #pragma: no cover
 
         if not resume:
             data_file = self.output_dump_path.open(mode="wb")
+            lzf_stream = lzma.open(data_file, "wb")
 
         num_days = (self.cfg.end_date - self.cur_day).days
         for day in tqdm.trange(num_days):
@@ -339,10 +341,11 @@ class Simulator: #pragma: no cover
             if not resume:
                 if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0) \
                         or day == num_days - 1:
-                    pickle.dump(self, data_file)
+                    pickle.dump(self, lzf_stream)
             self.cur_day += dt.timedelta(days=1)
 
         if not resume:
+            lzf_stream.close()
             data_file.close()
 
 
