@@ -4,13 +4,13 @@ Model Overview
 ==============
 
 SLIM is a *probabilistic*, *statistical* epidemiological simulator. Compared to IBM approaches
-we simulate overall populations and perform statistical operations on top of them rather than
-emulating individual louse or fish.
+we simulate overall populations and associated distributions and perform statistical operations on them rather than
+emulating individual lice or fish.
 
 At the same time, SLIM is also a *game* simulator where each agent (farmers) seeks to maximise
 their own profit and may choose to collaborate or defect (more on this later), which treatment to apply and so on.
 
-So where does this agent differ from the others? The difference lies in the explicit encoding
+This simulation includes explicit encoding
 of genomic effects into the evolution of the pandemic. Treatments may encourage resistant
 traits to proliferate and thus make the former less and less effective at each cycle.
 
@@ -30,16 +30,16 @@ salmon cages. Once they find a host to attach to they evolve from *recruitment* 
 *chalimus* and beyond. SLIM models cage-specific, stage-specific lice populations and assumes concentration
 and pollution effects as farms are operative for long periods of time.
 
-As lice attach to fish they cause a number of diseases which incur in fish death.
+As lice attach to fish they cause a number of diseases which result in fish death.
 If the *lice aggregation* ratio exceeds a given threshold treatment must be performed. However,
-other farmers not reaching that threshold may be faring better and opt to defect.
+other managers not reaching that threshold may be faring better and opt to `defect` by failing to treat.
 
 Whether egoism backfires or not is not an easy question as it
 depends on the current stage of the epidemics, lake pollution and how water currents work in the specific simulation
 environment.
 
-Note that farmers are individual agents, meaning they have full freedom to open the cages in
-any season they prefer and whenever to treat, and also on which treatment to apply.
+Note that farm managers are individual agents, meaning they have full freedom to stock cages in
+any season they prefer and treat when needed, and also to decide which treatment to apply.
 
 .. note::
    The exact formulae behind this are documented in our paper. When it comes out please check it out!
@@ -51,11 +51,11 @@ Our model is built on 3 main papers [#Aldrin17]_ [#Cox17]_ [#Jensen17]_:
 
 Just like in [#Aldrin17]_, we model the lice lifecycle as a compartmentalised model of 6 stages: *recruitment* (R),
 *copepopids* (CO), *chalimus* (CH), *preadults* (PA) and *adults*, the latter divided in males (AM) and females (AF).
-Differently from [#Aldrin17]_ we omit the explicit age encoding but rather explicitly group the population
+Differently from [#Aldrin17]_ we omit the explicit age encoding but instead group the population
 by its genotype. Nevertheless, the age distribution can be simulated at will via
 :py:meth:`slim.simulation.cage.Cage.get_stage_ages_distrib`.
 
-This is modelled by the :py:class:`slim.simulation.lice_population.GenoDistrib` class. A genotype distribution
+A genotype distribution of the lice population as related to resistance to treatment is modelled by the :py:class:`slim.simulation.lice_population.GenoDistrib` class. A genotype distribution
 is, ultimately, a discretised dictionary with where the keys are allele combinations (see
 :py:attr:`slim.simulation.lice_population.GenoDistrib.alleles`) and the values are the actual number of lice in that group.
 
@@ -77,9 +77,9 @@ Treatment
 Reproduction
 ************
 
-During mating those alleles are recombined according to a Mendelian approach. The number of
+During mating alleles are recombined according to a Mendelian approach. The number of
 reproduction events is calculated on the *estimated* number of matings that can happen on a single
-host. We assume a monogamist scenario in which one female lice can mate with only one male lice
+host. We assume a scenario in which one female lice can mate with only one male lice
 before being fecundated. As in [#Cox17]_ we estimate such number via a negative multinomial
 distribution.
 
