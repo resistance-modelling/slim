@@ -2,10 +2,10 @@ Introduction
 ============
 
 SLIM is an FOSS sea lice lifecycle simulation tool.
-Its intended goal is to simulate sea lice pandemics
+Its intended goal is to simulate sea lice infestations
 in salmonid farms.
 
-However, it is much more than a simple epidemic simulator. The tool
+However, it is more than a simple epidemic simulator. The tool
 is intended to answer *What if?* questions in terms of treatment strategies.
 For example, *What will be our loss if we apply treatment as soon as the AF aggregation ratio reaches x?*
 *How long does it take before treatment resistance becomes significant? (regardless of what we mean by that)*
@@ -15,30 +15,26 @@ For example, *What will be our loss if we apply treatment as soon as the AF aggr
 Rationale
 *********
 
-**Sea lice** (singular *sea louse*) are a type of parasitic organisms that occur on salmonid species (salmon, trout, char).
+**Sea lice** (singular *sea louse*) are a type of parasitic organism that occurs on salmonid species (salmon, trout, char).
 We differentiate between **farm salmon** (in the sea cages) and **wild fish** (wild salmonid species in the *reservoir*,
-that is external environment). Salmon in sea cages can be infected when the sea lice crosses into the sea cage from the
-reservoir where it occurs on the wild fish.
+that is, external environment). Salmon in sea cages can be infected when the sea lice cross into the sea cage from the
+reservoir where it occurs on wild fish.
 
 Chemical or biological *treatment* can be applied to the sea cages against the sea lice. Currently, the only
 chemical treatment modelled in here is *Emamectin Benzoate* or *EMB*. Regardless of the adopted pesticide, there is
 extensive proof that **genetic resistance to treatment developed after a few years**,
-making each treatment cycle less and less effective. Therefore, farmers have resorted to a wide range of alternatives.
+making each treatment cycle less and less effective. Therefore, managers of salmon farms have resorted to a wide range of alternatives.
 
 In the past few years, biological treatment via *cleaner fish* (typically lumpfish and ballan wrasse) has been introduced
 with mixed results. Another solution deployed is a time break between the farming cycles, typically known as
-*fallowing*, in order to reduce the amount of lice surrounding the cages before repopulating them again.
+*fallowing*, in order to reduce the number of lice surrounding the cages before repopulating them again.
 
-All treatments have a nonnull cost both in economical terms, collateral damage (intoxication, increased stress
-levels etc.) or ecological impact on other cultures. While farmers typically belong to cooperatives or consortiums
-there are no obligations to apply treatment simultaneously to everyone else. Therefore, defection and egoistical
-behaviour are the norm.
+All treatments have a non-null cost both in economical terms, collateral damage (intoxication, increased stress
+levels etc.) and/or ecological impact on other cultures. While farmers and managers in Scotland typically belong to cooperatives or consortiums, and have cooperation agreements requiring treatment coordination, they agreements can lack legal force. Therefore, defection and non-coordination is possible.  
 
 SLIM is the Sea Lice Model associated with a funded BBSRC project on the evolution to resistance to treatment in sea
-lice (BBR009309). The project kicked off at the University of Stirling, Scotland and then is being co-developed by
-the University of Stirling and University of Glasgow. We reputed that a large number of sea lice models have been
-developed on geographical contests different from the Scottish one, and the lack of readily available open source
-models gave us a motivation to start this project.
+lice (BBR009309). The project kicked off at the University of Stirling, Scotland and is now co-developed by
+the University of Stirling and University of Glasgow. 
 
 Features of this Program
 ************************
