@@ -4,18 +4,19 @@ from dataclasses import dataclass, field
 import datetime as dt
 from typing import List, TYPE_CHECKING
 
+
 if TYPE_CHECKING:
     from slim.simulation.simulator import Simulator
+    from slim.simulation.config import Config
     import pandas as pd
 
 
 @dataclass
 class SimulatorSingleRunState:
     """State of the single simulator"""
-    # TODO: should I rather subclass from AbstractModel
-    states: List[Simulator]
     times: List[dt.datetime]
     states_as_df: pd.DataFrame
+    cfg: Config
 
 
 @dataclass

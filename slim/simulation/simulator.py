@@ -8,20 +8,26 @@ __all__ = ['Organisation', 'Simulator']
 
 import datetime as dt
 import json
+import lz4.frame
 from pathlib import Path
-from typing import List, Optional, Tuple, Deque
+from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator
 
 import dill as pickle
 import pandas as pd
 import tqdm
 
 from slim import logger
-from slim.simulation.config import Config
-from slim.simulation.farm import Farm, GenoDistribByHatchDate
+from .farm import Farm
 from slim.JSONEncoders import CustomFarmEncoder
-from slim.simulation.lice_population import GenoDistrib, GenoDistribDict
+from .lice_population import GenoDistrib
 from slim.types.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
 from slim.types.TreatmentTypes import Money
+
+
+if TYPE_CHECKING:
+    from .config import Config
+    from .lice_population import GenoDistribDict
+    from .farm import GenoDistribByHatchDate
 
 
 class Organisation:
@@ -176,43 +182,47 @@ class Simulator: #pragma: no cover
         if not path.is_dir():
             path.mkdir(parents=True, exist_ok=True)
 
-        return path / f"simulation_data_{sim_id}.pickle"
+        return path / f"simulation_data_{sim_id}.pickle.lz4"
 
     @staticmethod
-    def reload_all_dump(path: Path, sim_id: str):
-        """Reload a simulator"""
+    def reload_all_dump(path: Path, sim_id: str) -> Iterator[Tuple[Simulator, dt.datetime]]:
+        """Reload a simulator.
+        
+        :param path: the folder containing the artifact
+        :param sim_id: the simulation id
+        
+        :returns: an iterator of pairs (sim_state, time)
+        """
         logger.info("Loading from a dump...")
         data_file = Simulator.get_simulation_path(path, sim_id)
-        states = []
-        times = []
-        with open(data_file, "rb") as fp:
+        with lz4.frame.open(data_file, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC) as fp:
             while True:
                 try:
                     sim_state: Simulator = pickle.load(fp)
-                    states.append(sim_state)
-                    times.append(sim_state.cur_day)
+                    yield sim_state, sim_state.cur_day
                 except EOFError:
-                    logger.debug("Loaded %d states from the dump", len(states))
                     break
 
-        return states, times
-
     @staticmethod
-    def dump_as_pd(states: List[Simulator], times: List[dt.datetime]) -> pd.DataFrame:
+    def dump_as_dataframe(states_times_it: Iterator[Tuple[Simulator, dt.datetime]]) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
         """
         Convert a dump into a pandas dataframe
 
         Format: index is (timestamp, farm)
         Columns are: "L1" ... "L5f" (nested dict for now...), "a", "A", "Aa" (ints)
 
-        :param states: a list of states
-        :param times: a list of timestamps for each state
-        :return: a dataframe as described above
+        :param states_times_it: a list of states
+        :returns: a pair (dataframe, times)
         """
 
         farm_data = {}
-        # farms = states[0].organisation.farms
-        for state, time in zip(states, times):
+        times = []
+        cfg = None
+        for state, time in states_times_it:
+            times.append(time)
+            if cfg is None:
+                cfg = state.cfg
+
             for farm in state.organisation.farms:
                 key = (time, "farm_" + str(farm.name))
                 is_treating = all([cage.is_treated(time) for cage in farm.cages])
@@ -236,7 +246,7 @@ class Simulator: #pragma: no cover
 
         dataframe = dataframe.join(aggregate_geno_info)
 
-        return dataframe.rename_axis(("timestamp", "farm_name"))
+        return dataframe.rename_axis(("timestamp", "farm_name")), times, cfg
 
     @staticmethod
     def dump_optimiser_as_pd(states: List[List[Simulator]]):
@@ -294,7 +304,7 @@ class Simulator: #pragma: no cover
                 new_step = []
                 for it in range(avg_iterations):
                     try:
-                        pickle_path = path / f"simulation_data_optimisation_{step}_{it}.pickle"
+                        pickle_path = path / f"simulation_data_optimisation_{step}_{it}.pickle.lz4"
                         print(pickle_path)
                         with pickle_path.open("rb") as f:
                             new_step.append(pickle.load(f))
@@ -316,10 +326,10 @@ class Simulator: #pragma: no cover
     def run_model(self, resume=False):
         """Perform the simulation by running the model.
 
-        :param path:: Path to store the results in
-        :param sim_id:: Simulation name
-        :param cfg:: Configuration object holding parameter information.
-        :param Organisation:: the organisation to work on.
+        :param path: Path to store the results in
+        :param sim_id: Simulation name
+        :param cfg: Configuration object holding parameter information.
+        :param Organisation: the organisation to work on.
         """
         logger.info("running simulation, saving to %s", self.output_dir)
 
@@ -329,6 +339,7 @@ class Simulator: #pragma: no cover
 
         if not resume:
             data_file = self.output_dump_path.open(mode="wb")
+            compressed_stream = lz4.frame.open(data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC)
 
         num_days = (self.cfg.end_date - self.cur_day).days
         for day in tqdm.trange(num_days):
@@ -339,10 +350,11 @@ class Simulator: #pragma: no cover
             if not resume:
                 if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0) \
                         or day == num_days - 1:
-                    pickle.dump(self, data_file)
+                    pickle.dump(self, compressed_stream)
             self.cur_day += dt.timedelta(days=1)
 
         if not resume:
+            compressed_stream.close()
             data_file.close()
 
 

@@ -4,7 +4,7 @@ This module provides plotting widgets and utils.
 
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING, List
+from typing import Optional, TYPE_CHECKING, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -34,10 +34,17 @@ class SmoothedPlotItemWrap:
     color_palette = glasbey_light
 
     def __init__(self, plot_item: PlotItem, smoothing_size: int, average_factor: int, method="linear"):
+        """
+        :param plot_item: the wrapped :class:`PlotItem`
+        :param smoothing_size: the amount of smoothing to apply
+        :param average_factor: the common divider across lines (used when comparing farms with different cage numbers)
+        :param method: if to use linear smoothing. Currently it is the only one supported.
+        """
         self.plot_item = plot_item
         self.kernel_size = smoothing_size
         self.average_factor = average_factor
         self.method = method
+        self.original_title = plot_item.titleLabel.text
 
     def plot(self, signal, stage: Optional[str] = None, **kwargs) -> PlotDataItem:
         # compute the signal
@@ -77,6 +84,9 @@ class SmoothedPlotItemWrap:
 
     def setAverageFactor(self, average_factor: int):
         self.average_factor = average_factor
+        title = self.original_title + (" averaged across cages" if average_factor > 1 else "")
+        print(title)
+        self.plot_item.setTitle(title)
 
     def heightForWidth(self, width):
         return int(width * 1.5)
@@ -116,7 +126,9 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
 
         state = parent.state
         if state:
-            num_cages = len(state.states[0].organisation.farms[farm_idx].cages)
+            if state.cfg.nfarms <= farm_idx:
+                return 1
+            num_cages = state.cfg.farms[farm_idx].n_cages
             average_factor = num_cages if checkbox_state == 2 else 1
             return average_factor
         return 1
@@ -133,7 +145,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
             plot_item.setAverageFactor(average_factor)
         self.newAverageFactor.emit()
 
-    def addSmoothedPlot(self, exclude_from_averaging=False, **kwargs) -> SmoothedPlotItemWrap:
+    def addSmoothedPlot(self, exclude_from_averaging=False, scientific=False, **kwargs) -> SmoothedPlotItemWrap:
         axis_params = ["left", "right", "top", "bottom"]
         axis_dict = {}
         for axis_param in axis_params:
@@ -141,7 +153,11 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
                 params = kwargs[axis_param]
                 if isinstance(params, str):
                     params = {'text': params}
-                axis_dict[axis_param] = axis = NonScientificAxisItem(**{'orientation': axis_param, **params})
+                if not scientific:
+                    axis_item_type = NonScientificAxisItem
+                else:
+                    axis_item_type = pg.AxisItem
+                axis_dict[axis_param] = axis = axis_item_type(**{'orientation': axis_param, **params})
                 # By default, the axes miss the label and believe they are using SI measures, thus breaking
                 # the scaling altogether. In theory, it is not a bug but the behaviour was so horribly visualised
                 # it looked like one.
@@ -191,7 +207,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         size: QSize = self.size()
         num_farms = len(self.pane._uniqueFarms)
         # 9/60 is not the real aspect ratio but it takes into account padding
-        self.setFixedHeight(num_farms * size.width() * 9/60)
+        self.setFixedHeight((num_farms + 1) * size.width() * 9/60)
 
 
 class LightModeMixin:
@@ -292,7 +308,6 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self._showGenotype = value
         self._updatePlot()
 
-
     def _createPlots(self):
         num_farms = len(self._uniqueFarms)
 
@@ -307,13 +322,13 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             self.pqgPlotContainer.addSmoothedPlot(title=f"Fish population of farm {i}", left="population", bottom="days", row=i, col=1)
             for i in range(num_farms)]
         self.aggregationRatePlot = [
-            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", left="population", bottom="days", row=i, col=2)
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", scientific=False, left="population", bottom="days", row=i, col=2)
             for i in range(num_farms)]
 
         self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(
-            exclude_from_averaging=True, title="Cumulated payoff", row=0, col=3)
+            exclude_from_averaging=True, title="Cumulated payoff", row=num_farms, col=0)
         self.extPressureRatios = self.pqgPlotContainer.addSmoothedPlot(
-            title="External pressure ratios", row=1, col=3)
+            title="External pressure ratios", row=num_farms, col=1)
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
@@ -451,13 +466,13 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             if self.showDetailedGenotypeCheckBox.isChecked():
                 allele_data = {allele: farm_df[allele].to_numpy() for allele in allele_names}
 
-                pen = {'color': allele_colours[allele_name], 'width': monocolour_pen['width']}
                 for allele_name, stage_value in allele_data.items():
+                    pen = {'color': allele_colours[allele_name], 'width': monocolour_pen['width']}
                     self.licePopulationPlots[farm_idx].plot(stage_value, name=allele_name, pen=pen)
 
             # Stage information
             else:
-                # TODO: move the palette selection logic into SmoothedPlotItem
+                # TODO: eggs and ExtP are not stages but graphically speaking they are.
                 # render per stage
                 stages_num = len(LicePopulation.lice_stages)
                 egg_palette = self._colorPalette[stages_num:]
@@ -539,7 +554,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         # Generate treatment regions by looking for the first non-consecutive treatment blocks.
         # There may be a chance where multiple treatments happen consecutively, on which case
         # we simply consider them as a unique case.
-        # TODO: we are not keeping tracks of all the PlotItem's - clear events may not delete them
+
         if len(treatment_days) > 0:
             treatment_ranges = []
             lo = 0
