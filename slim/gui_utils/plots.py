@@ -34,10 +34,17 @@ class SmoothedPlotItemWrap:
     color_palette = glasbey_light
 
     def __init__(self, plot_item: PlotItem, smoothing_size: int, average_factor: int, method="linear"):
+        """
+        :param plot_item: the wrapped :class:`PlotItem`
+        :param smoothing_size: the amount of smoothing to apply
+        :param average_factor: the common divider across lines (used when comparing farms with different cage numbers)
+        :param method: if to use linear smoothing. Currently it is the only one supported.
+        """
         self.plot_item = plot_item
         self.kernel_size = smoothing_size
         self.average_factor = average_factor
         self.method = method
+        self.original_title = plot_item.titleLabel.text
 
     def plot(self, signal, stage: Optional[str] = None, **kwargs) -> PlotDataItem:
         # compute the signal
@@ -77,6 +84,9 @@ class SmoothedPlotItemWrap:
 
     def setAverageFactor(self, average_factor: int):
         self.average_factor = average_factor
+        title = self.original_title + (" averaged across cages" if average_factor > 1 else "")
+        print(title)
+        self.plot_item.setTitle(title)
 
     def heightForWidth(self, width):
         return int(width * 1.5)
@@ -116,7 +126,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
 
         state = parent.state
         if state:
-            if state.cfg.nfarms >= farm_idx:
+            if state.cfg.nfarms <= farm_idx:
                 return 1
             num_cages = state.cfg.farms[farm_idx].n_cages
             average_factor = num_cages if checkbox_state == 2 else 1

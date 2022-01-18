@@ -10,7 +10,7 @@ import datetime as dt
 import json
 import lz4.frame
 from pathlib import Path
-from typing import List, Optional, Tuple, Deque, Generator, TYPE_CHECKING
+from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator
 
 import dill as pickle
 import pandas as pd
@@ -185,7 +185,7 @@ class Simulator: #pragma: no cover
         return path / f"simulation_data_{sim_id}.pickle.lz4"
 
     @staticmethod
-    def reload_all_dump(path: Path, sim_id: str) -> Generator[Tuple[Simulator, dt.datetime]]:
+    def reload_all_dump(path: Path, sim_id: str) -> Iterator[Tuple[Simulator, dt.datetime]]:
         """Reload a simulator.
         
         :param path: the folder containing the artifact
@@ -204,7 +204,7 @@ class Simulator: #pragma: no cover
                     break
 
     @staticmethod
-    def dump_as_dataframe(states_times_it: Generator[Tuple[Simulator, dt.datetime]]) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
+    def dump_as_dataframe(states_times_it: Iterator[Tuple[Simulator, dt.datetime]]) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
         """
         Convert a dump into a pandas dataframe
 
