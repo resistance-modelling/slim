@@ -621,6 +621,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         exportPlot(self.payoffPlot.plot_item, "payoff")
         exportPlot(self.extPressureRatios.plot_item, "extpressure")
 
+        QMessageBox.information(self, "Success", "The images have been generated with success!")
+
 class OptimiserPlotPane(QWidget, LightModeMixin):
     def __init__(self, mainPane: Window):
         super().__init__(mainPane)
