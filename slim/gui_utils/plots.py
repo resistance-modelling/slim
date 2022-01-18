@@ -4,6 +4,7 @@ This module provides plotting widgets and utils.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional, TYPE_CHECKING, List, Tuple
 
 import numpy as np
@@ -14,9 +15,10 @@ import scipy.ndimage
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox, QSpinBox, QLabel, QScrollArea, \
-    QListWidget, QSplitter, QListWidgetItem
+    QListWidget, QSplitter, QListWidgetItem, QFileDialog, QDialog, QMessageBox
 from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget
+from pyqtgraph.exporters import ImageExporter, SVGExporter
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
 
 from slim.simulation.lice_population import LicePopulation, GenoDistrib
@@ -575,6 +577,49 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                     for trange in treatment_ranges]
         return []
 
+    def exportPlots(self):
+        """
+        Export all the plots. This will open a dialog window asking for a directory where to save the images.
+
+        The images are saved in both PNG and SVG format. The resolution depends on the window resolution.
+        (To get greater control on plot resolution I'm afraid we need to export to matplotlib?)
+
+        This will generate the following:
+
+        * An image of the whole scene, called "{sim_id}_all"
+        * An image for each plot, called "{sim_id}_{plot_type}_{i}", e.g. "Fyne_150_lice_2"
+        """
+        if not self.state:
+            QMessageBox.information(self, "Export", "You need to load a dump first")
+            return
+
+        dir = QFileDialog.getExistingDirectory(self, "Export into a folder",
+                                               ".",
+                                               QFileDialog.ShowDirsOnly)
+        if not dir:
+            return
+        if not Path(dir).is_dir():
+            QMessageBox.critical(self, "Error", "The given directory does not exist. Halting!")
+            return
+
+        def exportPlot(plot, name: str):
+            png_exporter = ImageExporter(plot)
+            svg_exporter = SVGExporter(plot)
+            path = Path(dir) / f"{self.state.sim_name}_{name}"
+            # TODO: svg does not work?
+            png_exporter.export(str(path) + ".png")
+            svg_exporter.export(str(path) + ".svg")
+
+        exportPlot(self.pqgPlotContainer.scene(), "all")
+        for idx, lice_plot in enumerate(self.licePopulationPlots):
+            exportPlot(lice_plot.plot_item, f"lice_{idx}")
+        for idx, fish_plot in enumerate(self.fishPopulationPlots):
+            exportPlot(fish_plot.plot_item, f"fish_{idx}")
+        for idx, aggregation_plot in enumerate(self.aggregationRatePlot):
+            exportPlot(aggregation_plot.plot_item, f"aggregation_{idx}")
+
+        exportPlot(self.payoffPlot.plot_item, "payoff")
+        exportPlot(self.extPressureRatios.plot_item, "extpressure")
 
 class OptimiserPlotPane(QWidget, LightModeMixin):
     def __init__(self, mainPane: Window):
