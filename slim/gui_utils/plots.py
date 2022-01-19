@@ -4,6 +4,7 @@ This module provides plotting widgets and utils.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional, TYPE_CHECKING, List, Tuple
 
 import numpy as np
@@ -11,12 +12,13 @@ import pandas as pd
 import pyqtgraph as pg
 import scipy
 import scipy.ndimage
-from PyQt5 import QtCore
+from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QCheckBox, QSpinBox, QLabel, QScrollArea, \
-    QListWidget, QSplitter, QListWidgetItem
+    QListWidget, QSplitter, QListWidgetItem, QFileDialog, QDialog, QMessageBox
 from colorcet import glasbey_light, glasbey_dark
 from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget
+from pyqtgraph.exporters import ImageExporter, SVGExporter
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
 
 from slim.simulation.lice_population import LicePopulation, GenoDistrib
@@ -45,6 +47,7 @@ class SmoothedPlotItemWrap:
         self.average_factor = average_factor
         self.method = method
         self.original_title = plot_item.titleLabel.text
+        self.title_style = plot_item.titleLabel.opts
 
     def plot(self, signal, stage: Optional[str] = None, **kwargs) -> PlotDataItem:
         # compute the signal
@@ -85,8 +88,7 @@ class SmoothedPlotItemWrap:
     def setAverageFactor(self, average_factor: int):
         self.average_factor = average_factor
         title = self.original_title + (" averaged across cages" if average_factor > 1 else "")
-        print(title)
-        self.plot_item.setTitle(title)
+        self.plot_item.setTitle(title, **self.title_style)
 
     def heightForWidth(self, width):
         return int(width * 1.5)
@@ -95,13 +97,13 @@ class SmoothedPlotItemWrap:
         return getattr(self.plot_item, item)
 
 
-class NonScientificAxisItem(pg.AxisItem):
+class ScientificAxisItem(pg.AxisItem):
     """A non-scientific axis. See <https://stackoverflow.com/a/43782129>_"""
-    def tickStrings(self, values, _scale, spacing):
+    def tickStrings(self, values, scale, spacing):
         if self.logMode:
-            return self.logTickStrings(values, _scale, spacing)
+            return self.logTickStrings(values, scale, spacing)
 
-        return [str(int(value*1)) for value in values]
+        return ["%.4g" % (value * scale) for value in values]
 
 
 class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
@@ -145,7 +147,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
             plot_item.setAverageFactor(average_factor)
         self.newAverageFactor.emit()
 
-    def addSmoothedPlot(self, exclude_from_averaging=False, scientific=False, **kwargs) -> SmoothedPlotItemWrap:
+    def addSmoothedPlot(self, exclude_from_averaging=False, force_scientific=False, **kwargs) -> SmoothedPlotItemWrap:
         axis_params = ["left", "right", "top", "bottom"]
         axis_dict = {}
         for axis_param in axis_params:
@@ -153,8 +155,8 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
                 params = kwargs[axis_param]
                 if isinstance(params, str):
                     params = {'text': params}
-                if not scientific:
-                    axis_item_type = NonScientificAxisItem
+                if force_scientific:
+                    axis_item_type = ScientificAxisItem
                 else:
                     axis_item_type = pg.AxisItem
                 axis_dict[axis_param] = axis = axis_item_type(**{'orientation': axis_param, **params})
@@ -165,7 +167,12 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
                 axis.enableAutoSIPrefix(False)
                 del kwargs[axis_param]
 
-        plot = self.addPlot(**kwargs, axisItems=axis_dict)
+        plot: PlotItem = self.addPlot(**kwargs, axisItems=axis_dict)
+
+        # Make titles a bit larger
+        if "title" in kwargs:
+            plot.setTitle(kwargs["title"], size="12.5pt")
+
         for axis_item in axis_dict.values():
             axis_item.setParentItem(plot)
 
@@ -316,32 +323,32 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self.pqgPlotContainer.newKernelSize.connect(self._updatePlot)
 
         self.licePopulationPlots = [
-            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice population of farm {i}", left="population", bottom="days", row=i, col=0)
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice population of farm {i}", left="Population", bottom="days", row=i, col=0)
             for i in range(num_farms)]
         self.fishPopulationPlots = [
-            self.pqgPlotContainer.addSmoothedPlot(title=f"Fish population of farm {i}", left="population", bottom="days", row=i, col=1)
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Fish population of farm {i}", left="Population", bottom="days", row=i, col=1)
             for i in range(num_farms)]
         self.aggregationRatePlot = [
-            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", scientific=False, left="population", bottom="days", row=i, col=2)
+            self.pqgPlotContainer.addSmoothedPlot(title=f"Lice aggregation of farm {i}", left="Population", bottom="days", row=i, col=2)
             for i in range(num_farms)]
 
         self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(
-            exclude_from_averaging=True, title="Cumulated payoff", row=num_farms, col=0)
+            exclude_from_averaging=True, title="Cumulated payoff", bottom="days", left="Payoff", force_scientific=True, row=num_farms, col=0)
         self.extPressureRatios = self.pqgPlotContainer.addSmoothedPlot(
-            title="External pressure ratios", row=num_farms, col=1)
+            title="External pressure ratios", bottom="days", left="Probability", row=num_farms, col=1)
 
         self.licePopulationLegend: Optional[pg.LegendItem] = None
 
         # add grid, synchronise Y-range
         for plot in self.licePopulationPlots + self.fishPopulationPlots:
-            plot.showGrid(x=True, y=True)
+            plot.showGrid(x=True, y=False)
 
         for plotList in [self.licePopulationPlots, self.fishPopulationPlots, self.aggregationRatePlot]:
             for idx in range(1, len(plotList)):
                 plotList[idx].setYLink(plotList[idx - 1])
                 plotList[idx].setXLink(plotList[idx - 1])
 
-        self.payoffPlot.showGrid(x=True, y=True)
+        self.payoffPlot.showGrid(x=True, y=False)
 
         self.splitter.splitterMoved.connect(self.pqgPlotContainer.enforceAspectRatio)
 
@@ -537,7 +544,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
         for singlePlot in [self.payoffPlot, self.extPressureRatios]:
             singlePlot.setXRange(0, len(payoffs), padding=0)
-            singlePlot.vb.setLimits(xMin=0, xMax=len(payoffs))
+
+        self.payoffPlot.vb.setLimits(xMin=0, xMax=len(payoffs))
+        self.extPressureRatios.vb.setLimits(xMin=0, xMax=len(payoffs), yMin=0, yMax=1)
 
     def _convolve(self, signal):
         kernel_size = self.convolutionKernelSizeBox.value()
@@ -568,6 +577,51 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                     for trange in treatment_ranges]
         return []
 
+    def exportPlots(self):
+        """
+        Export all the plots. This will open a dialog window asking for a directory where to save the images.
+
+        The images are saved in both PNG and SVG format. The resolution depends on the window resolution.
+        (To get greater control on plot resolution I'm afraid we need to export to matplotlib?)
+
+        This will generate the following:
+
+        * An image of the whole scene, called "{sim_id}_all"
+        * An image for each plot, called "{sim_id}_{plot_type}_{i}", e.g. "Fyne_150_lice_2"
+        """
+        if not self.state:
+            QMessageBox.information(self, "Export", "You need to load a dump first")
+            return
+
+        dir = QFileDialog.getExistingDirectory(self, "Export into a folder",
+                                               ".",
+                                               QFileDialog.ShowDirsOnly)
+        if not dir:
+            return
+        if not Path(dir).is_dir():
+            QMessageBox.critical(self, "Error", "The given directory does not exist. Halting!")
+            return
+
+        def exportPlot(plot, name: str):
+            png_exporter = ImageExporter(plot)
+            svg_exporter = SVGExporter(plot)
+            path = Path(dir) / f"{self.state.sim_name}_{name}"
+            # TODO: svg does not work?
+            png_exporter.export(str(path) + ".png")
+            svg_exporter.export(str(path) + ".svg")
+
+        exportPlot(self.pqgPlotContainer.scene(), "all")
+        for idx, lice_plot in enumerate(self.licePopulationPlots):
+            exportPlot(lice_plot.plot_item, f"lice_{idx}")
+        for idx, fish_plot in enumerate(self.fishPopulationPlots):
+            exportPlot(fish_plot.plot_item, f"fish_{idx}")
+        for idx, aggregation_plot in enumerate(self.aggregationRatePlot):
+            exportPlot(aggregation_plot.plot_item, f"aggregation_{idx}")
+
+        exportPlot(self.payoffPlot.plot_item, "payoff")
+        exportPlot(self.extPressureRatios.plot_item, "extpressure")
+
+        QMessageBox.information(self, "Success", "The images have been generated with success!")
 
 class OptimiserPlotPane(QWidget, LightModeMixin):
     def __init__(self, mainPane: Window):

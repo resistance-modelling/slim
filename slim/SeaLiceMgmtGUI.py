@@ -137,7 +137,7 @@ class Window(QMainWindow):
         self.paperModeAction.setCheckable(True)
         self.clearAction = QAction("&Clear plot", self)
         self.aboutAction = QAction("&About", self)
-        self.showDetailedGenotypeAction = QAction(self)
+        self.exportAction = QAction("&Export plots")
 
         self._updateRecentFilesActions()
 
@@ -148,6 +148,7 @@ class Window(QMainWindow):
         self.paperModeAction.toggled.connect(self.optimiserPlotPane.setPaperMode)
         self.aboutAction.triggered.connect(self._openAboutMessage)
         self.clearAction.triggered.connect(self.simulationPlotPane.cleanPlot)
+        self.exportAction.triggered.connect(self.simulationPlotPane.exportPlots)
 
     def _createMenuBar(self):
         menuBar = self.menuBar()
@@ -156,11 +157,10 @@ class Window(QMainWindow):
         fileMenu.addAction(self.loadDumpAction)
         fileMenu.addAction(self.loadOptimiserDumpAction)
         fileMenu.addSeparator()
+        fileMenu.addAction(self.exportAction)
+        fileMenu.addSeparator()
         for action in self.recentFilesActions:
             fileMenu.addAction(action)
-        # TODO: add recent actions for dumps
-        # fileMenu.addSeparator()
-
 
         viewMenu = QMenu("&View", self)
         viewMenu.addAction(self.paperModeAction)
@@ -250,7 +250,7 @@ class SimulatorLoadingWorker(QThread):
             sim_name = self.dump_path.name[len("simulation_name_"):-len(".pickle.lz4")]
             states_times_it = Simulator.reload_all_dump(parent_path, sim_name)
             states_as_df, times, cfg = Simulator.dump_as_dataframe(states_times_it)
-            self.finished.emit(SimulatorSingleRunState(times, states_as_df, cfg))
+            self.finished.emit(SimulatorSingleRunState(times, states_as_df, cfg, sim_name))
 
         except FileNotFoundError:
             self.failed.emit()

@@ -1,3 +1,7 @@
+"""
+Models for communication across widgets in accordance to MVC.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -17,6 +21,7 @@ class SimulatorSingleRunState:
     times: List[dt.datetime]
     states_as_df: pd.DataFrame
     cfg: Config
+    sim_name: str
 
 
 @dataclass
