@@ -7,7 +7,7 @@ in salmonid farms.
 
 However, it is more than a simple epidemic simulator. The tool
 is intended to answer *What if?* questions in terms of treatment strategies.
-For example, *What will be our loss if we apply treatment as soon as the AF aggregation ratio reaches x?*
+For example, *What will be our loss if we apply treatment as soon as the adult female aggregation ratio reaches x?*
 *How long does it take before treatment resistance becomes significant? (regardless of what we mean by that)*
 
 .. _Rationale:

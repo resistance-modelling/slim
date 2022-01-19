@@ -276,10 +276,10 @@ class OptimiserLoadingWorker(QThread):
             self.failed.emit()
 
 
-app = QApplication(sys.argv)
-win = Window()
-win.show()
-
 if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    win = Window()
+    win.show()
+
     if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
         pg.exec()

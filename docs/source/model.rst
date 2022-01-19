@@ -74,6 +74,41 @@ In all stages but AM or AF lice can evolve. Evolution from PA will result in rou
 Treatment
 *********
 
+Treatment affects the lice population in different ways, depending on the genotype of the population and the
+type of treatment. We model two types of treatment: chemical and non-chemical treatments. The full list
+of supported treatments can be found in :py:class:`slim.types.TreatmentTypes.Treatment`.
+
+When a treatment is administered some delay occurs before effects are noticeable (non-chemical
+treatments have a virtual delay of one day). The mortality rate is computed in
+:py:meth:`slim.simulation.cage.Cage.get_lice_treatment_mortality_rate`. In the case of EMB
+it is the following:
+
+.. math::
+   \mu^{EMB}_{tfcg} = \begin{cases}
+    1 - \phi^{EMB}(g) &\text{if t } \in [t_{fcb} + \delta^{EMB}, t_{fcb} + \Delta^{dur}]\\
+    0 &\text{otherwise}
+    \end{cases}
+
+where:
+
+* :math:`t, f, c` represent the current time, farm and cage;
+* :math:`g` is the chosen genotype;
+* :math:`\phi^EMB` is the phenotype resistance corresponding to the given genotype. The codomain is in :math:`[0-1]`
+* :math:`t_{fcb}` is the time when a treatment was started
+* :math:`\delta^{EMB}` is the delay of the treatment.
+* :math:`\Delta^{dur}` is the efficacy duration, computed as :math:`\delta^{dur} / T_{t^0}` where :math:`T_{t^0}`
+  is the average water temperature when the treatment is applied and :math:`\delta^{dur}` is a constant.
+
+In other words, if the current time falls within a scheduled treatment the mortality rate is computed as the inverse
+of the resistance rate provided by :math:`\phi^{EMB}`.
+
+Once the mortality rates are computed for each genotype, we use a Poisson distribution to generate the mortality
+events and a hypergeometric distribution to choose from which stages to remove lice.
+
+For more information check :py:mod:`slim.types.TreatmentTypes`.
+
+.. _Reproduction:
+
 Reproduction
 ************
 

@@ -253,7 +253,8 @@ class Cage(LoggableMixin):
         logger.debug("\t\ttreating farm {}/cage {} on date {}".format(self.farm_id,
                                                                       self.id, cur_date))
 
-        geno_treatment_distrib = self.cfg.get_treatment(treatment_type).get_lice_treatment_mortality_rate(self.lice_population, ave_temp)
+        geno_treatment_distrib = self.cfg.get_treatment(treatment_type).\
+            get_lice_treatment_mortality_rate(self.lice_population, ave_temp)
 
         return geno_treatment_distrib
 
@@ -264,6 +265,7 @@ class Cage(LoggableMixin):
         Note: this method consumes the internal event queue
 
         :param cur_date: the current date
+        :returns a pair (distribution of dead lice, cost of treatment)
         """
 
         dead_lice_dist = self.lice_population.get_empty_geno_distrib()
@@ -274,10 +276,11 @@ class Cage(LoggableMixin):
 
         for geno, (mortality_rate, num_susc) in dead_mortality_distrib.items():
             if mortality_rate > 0:
+                # Compute the number of mortality events, then decide which stages should be affected.
+                # To ensure that no stage underflows we use a hypergeometric distribution.
                 num_dead_lice = self.cfg.rng.poisson(mortality_rate * num_susc)
                 num_dead_lice = min(num_dead_lice, num_susc)
 
-                # We emulate the top algorithm with a multivariate hypergeom distrib
                 population_by_stages = np.array([self.lice_population.geno_by_lifestage[stage][geno]
                                                  for stage in LicePopulation.susceptible_stages])
 
