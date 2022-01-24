@@ -440,6 +440,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         elif len(self._uniqueFarms) != len(self.licePopulationPlots):
             self._remountPlot()
             self.pqgPlotContainer.enforceAspectRatio()
+            # _remountPlot calls _updatePlot implicitly so avoid recursion
+            return
 
         if len(self._uniqueFarms) == 0:
             return
@@ -534,7 +536,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             self.extPressureRatios.plot(extp_ratios, title=str(geno), pen=allele_colours[allele_name])
         self.extPressureRatios.addLegend()
 
-        for plot in self.licePopulationPlots + self.fishPopulationPlots:
+        for plot in self.licePopulationPlots:
             plot.setLogMode(False, True)
 
         # keep ranges consistent
