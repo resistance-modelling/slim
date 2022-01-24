@@ -55,7 +55,8 @@ Differently from [#Aldrin17]_ we omit the explicit age encoding but instead grou
 by its genotype. Nevertheless, the age distribution can be simulated at will via
 :py:meth:`slim.simulation.cage.Cage.get_stage_ages_distrib`.
 
-A genotype distribution of the lice population as related to resistance to treatment is modelled by the :py:class:`slim.simulation.lice_population.GenoDistrib` class. A genotype distribution
+A genotype distribution of the lice population as related to resistance to treatment is modelled by the
+:py:class:`slim.simulation.lice_population.GenoDistrib` class. A genotype distribution
 is, ultimately, a discretised dictionary with where the keys are allele combinations (see
 :py:attr:`slim.simulation.lice_population.GenoDistrib.alleles`) and the values are the actual number of lice in that group.
 
@@ -79,7 +80,8 @@ type of treatment. We model two types of treatment: chemical and non-chemical tr
 of supported treatments can be found in :py:class:`slim.types.TreatmentTypes.Treatment`.
 
 When a treatment is administered some delay occurs before effects are noticeable (non-chemical
-treatments have a virtual delay of one day). The mortality rate is computed in
+treatments have a virtual delay of one day). The mortality rate (a multiplicative factor of the given
+population) is computed in
 :py:meth:`slim.simulation.cage.Cage.get_lice_treatment_mortality_rate`. In the case of EMB
 it is the following:
 
@@ -93,20 +95,22 @@ where:
 
 * :math:`t, f, c` represent the current time, farm and cage;
 * :math:`g` is the chosen genotype;
-* :math:`\phi^EMB` is the phenotype resistance corresponding to the given genotype. The codomain is in :math:`[0-1]`
-* :math:`t_{fcb}` is the time when a treatment was started
-* :math:`\delta^{EMB}` is the delay of the treatment.
+* :math:`\phi^EMB` is the phenotype resistance corresponding to the given genotype. The codomain is in :math:`[0,1]`
+* :math:`t_{fcb}` is the time when a treatment was started;
+* :math:`\delta^{EMB}` is the delay of the treatment;
 * :math:`\Delta^{dur}` is the efficacy duration, computed as :math:`\delta^{dur} / T_{t^0}` where :math:`T_{t^0}`
   is the average water temperature when the treatment is applied and :math:`\delta^{dur}` is a constant.
 
-In other words, if the current time falls within a scheduled treatment the mortality rate is computed as the inverse
-of the resistance rate provided by :math:`\phi^{EMB}`.
+In other words, if the current time falls within the efficacy timeframe of a treatment
+the mortality rate is computed as the inverse of the resistance rate provided by :math:`\phi^{EMB}`.
 
 Once the mortality rates are computed for each genotype, we use a Poisson distribution to generate the mortality
 events and a hypergeometric distribution to choose from which stages to remove lice.
 
-For more information check :py:mod:`slim.types.TreatmentTypes`.
+For the sake of notation the stage has been omitted but not all stages are taken into account. For examples,
+since EMB affects lice attachment only the stages from Chalimus onward are affected.
 
+For more information check :py:mod:`slim.types.TreatmentTypes`.
 .. _Reproduction:
 
 Reproduction

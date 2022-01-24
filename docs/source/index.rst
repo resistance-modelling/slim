@@ -13,6 +13,7 @@ Welcome to SLIM's documentation!
    intro
    getting-started
    model
+   config
 
 .. toctree::
    :maxdepth: 2

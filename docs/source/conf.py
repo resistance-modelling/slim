@@ -34,7 +34,8 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.mathjax',
-    'sphinx_tabs.tabs'
+    'sphinx_tabs.tabs',
+    'sphinx-jsonschema'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -65,4 +66,8 @@ html_favicon = '../../res/logo.png'
 
 html_theme_options = {
     'style_nav_header_background': 'black'
+}
+
+jsonschema_options = {
+    'lift_description': True
 }
