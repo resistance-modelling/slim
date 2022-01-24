@@ -62,7 +62,7 @@ class SmoothedPlotItemWrap:
             stages_num = len(LicePopulation.lice_stages)
             stages_palette, egg_palette = SmoothedPlotItemWrap.color_palette[:stages_num], \
                                           SmoothedPlotItemWrap.color_palette[stages_num:]
-            stages_styles = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6]  # enums from Qt.PenStyle
+            stages_styles = [1, 2, 3, 4, 5, 1, 2, 3, 4, 5]  # enums from Qt.PenStyle
 
             stages_colours = dict(zip(LicePopulation.lice_stages, stages_palette))
             stages_styles_dict = dict(zip(LicePopulation.lice_stages, stages_styles))
