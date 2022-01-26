@@ -278,7 +278,7 @@ class Cage(LoggableMixin):
             if mortality_rate > 0:
                 # Compute the number of mortality events, then decide which stages should be affected.
                 # To ensure that no stage underflows we use a hypergeometric distribution.
-                num_dead_lice = self.cfg.rng.poisson(mortality_rate * num_susc)
+                num_dead_lice = round(mortality_rate * num_susc)
                 num_dead_lice = min(num_dead_lice, num_susc)
 
                 population_by_stages = np.array([self.lice_population.geno_by_lifestage[stage][geno]
@@ -705,9 +705,10 @@ class Cage(LoggableMixin):
             return GenoDistrib()
 
         # We need to follow GenoDistrib's ordering now
-        p = np.array([N_a, N_Aa, N_A]) / denom
+        p = np.array([N_A, N_a, N_Aa]) / denom
+        proba_dict = dict(zip(keys, p))
 
-        return GenoDistrib.from_ratios(number_eggs, p, self.cfg.rng)
+        return GenoDistrib.from_ratios(number_eggs, proba_dict, self.cfg.rng)
 
     @staticmethod
     def generate_eggs_maternal_batch(dams: GenoDistrib, number_eggs: int) -> GenoDistrib:
@@ -728,6 +729,9 @@ class Cage(LoggableMixin):
         :param eggs: the genotype distribution of the newly produced eggs
         :param mutation_rate: the rate of mutation with respect to the number of eggs.
         """
+        # TODO
+        return eggs
+
         if mutation_rate == 0:
             return eggs
 
@@ -752,7 +756,7 @@ class Cage(LoggableMixin):
         # since I can't really be bothered to avoid negative mutations, we simply roll the dice every time until we get
         # a favourable outcome. Not ideal, but it works...
 
-        while True:
+        for i in range(10):
             swap_matrix = self.cfg.rng.multinomial(mutations, p).reshape(n, n)
             result = eggs.copy()
             for idx, allele in enumerate(alleles):
@@ -1058,11 +1062,8 @@ class Cage(LoggableMixin):
         pre-adult female 0.05, pre-adult male ... Stien et al 2005)
 
         :returns: the current background mortality. The return value is genotype-agnostic
-
         """
         # TODO
-        return {stage: 0 for stage in LicePopulation.lice_stages}
-
         lice_mortality_rates = self.cfg.background_lice_mortality_rates
         lice_population = self.lice_population
 
@@ -1074,7 +1075,6 @@ class Cage(LoggableMixin):
 
         logger.debug("\t\tbackground mortality distribution of dead lice = {}".format(dead_lice_dist))
         return dead_lice_dist
-
 
     def average_fish_mass(self, days):
         """
@@ -1101,12 +1101,8 @@ class Cage(LoggableMixin):
         new_L1_gross = self.cfg.rng.integers(low=0, high=pressure, size=1)[0]
         new_L2_gross = pressure - new_L1_gross
 
-        keys = list(external_pressure_ratios.keys())
-        probas = list(external_pressure_ratios.values())
-        new_L1 = GenoDistrib.from_ratios(new_L1_gross, probas, self.cfg.rng)
-        new_L2 = GenoDistrib.from_ratios(new_L2_gross, probas, self.cfg.rng)
-        #new_L1 = GenoDistrib(dict(zip(keys, self.cfg.rng.multinomial(new_L1_gross, probas).tolist())))
-        #new_L2 = GenoDistrib(dict(zip(keys, self.cfg.rng.multinomial(new_L2_gross, probas).tolist())))
+        new_L1 = GenoDistrib.from_ratios(new_L1_gross, external_pressure_ratios, self.cfg.rng)
+        new_L2 = GenoDistrib.from_ratios(new_L2_gross, external_pressure_ratios, self.cfg.rng)
 
         new_lice_dist = {"L1": new_L1, "L2": new_L2}
         logger.debug("\t\tdistribution of new lice from reservoir = {}".format(new_lice_dist))

@@ -132,7 +132,7 @@
         },
         "L2": {
           "type": "number",
-          "description": "Aldrin et al., 2017"
+          "description": "Tucker et al., 2002"
         },
         "L3": {
           "type": "number",

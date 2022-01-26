@@ -37,7 +37,7 @@
     "fish_mortality_k": 15.7,
     "background_lice_mortality_rates": {
         "L1": 0.17,
-        "L2": 0.22,
+        "L2": 0.101,
         "L3": 0.008,
         "L4": 0.05,
         "L5f": 0.02,
