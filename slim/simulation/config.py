@@ -6,7 +6,7 @@ import datetime as dt
 import json
 import os
 from pathlib import Path
-from typing import Tuple, Dict, Optional, TYPE_CHECKING
+from typing import Tuple, Dict, Optional, TYPE_CHECKING, Union
 
 import jsonschema
 import numpy as np
@@ -53,7 +53,8 @@ class RuntimeConfig:
         self.stage_age_evolutions: Dict[LifeStage, float] = data["stage_age_evolutions"] 
         self.delta_p: Dict[LifeStage, float] = data["delta_p"] 
         self.delta_s: Dict[LifeStage, float] = data["delta_s"] 
-        self.delta_m10: Dict[LifeStage, float] = data["delta_m10"] 
+        self.delta_m10: Dict[LifeStage, float] = data["delta_m10"]
+        self.lice_development_rates: Dict[LifeStage, float] = data["lice_development_rates"]
         self.smolt_mass_params = SmoltParams(**data["smolt_mass_params"])
 
         # Infection constants
@@ -95,6 +96,27 @@ class RuntimeConfig:
         self.seed = data.get("seed", 0)
 
         self.rng = np.random.default_rng(seed=self.seed)
+
+    def multivariate_hypergeometric(self, bins: np.ndarray, balls: Union[int, np.integer]):
+        """A wrapper onto numpy's hypergeometric sampler.
+        Because numpy cannot handle large bins, we approximate the distribution to a
+        multinomial distribution.
+
+        :param bins: the number of bins
+        :param balls: the number of balls to sample from the bins
+
+        :returns the sampled distribution
+        """
+        s = np.sum(bins)
+        if s > 1e6:
+            return self.rng.multinomial(balls, bins/s)
+        if np.sum(bins) < 100:
+            method = "count"
+        elif np.sum(bins) < 1e6:
+            method = "marginals"
+        return self.rng.multivariate_hypergeometric(bins, balls, method=method)
+
+
 
 
 class Config(RuntimeConfig):
@@ -139,7 +161,7 @@ class Config(RuntimeConfig):
         self.min_ext_pressure = data["ext_pressure"]
         self.initial_genetic_ratios: GenoDistribDict = {
             tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"].items()}
-
+        self.genetic_learning_rate: float = data["genetic_learning_rate"]
         self.monthly_cost = Money(data["monthly_cost"])
         self.name: str = data["name"]
 

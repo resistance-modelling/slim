@@ -83,6 +83,21 @@
         }
       }
     },
+    "lice_development_rates": {
+      "description": "Lice development rates from the ith stage to the next",
+      "comment": "Stien et al. (2005), in turn from Tucker et al. (2002)",
+        "properties": {
+        "L1": {
+          "type": "number"
+        },
+        "L": {
+          "type": "number"
+        },
+        "L4": {
+          "type": "number"
+        }
+      }
+    },
     "infection_main_delta": {
       "description": "Infection expectation",
       "comment": "Aldrin et al., 2017",
@@ -109,23 +124,27 @@
     },
     "background_lice_mortality_rates": {
       "description": "Background lice mortality rates per stage",
-      "source": "Aldrin et al., 2017",
       "type": "object",
       "properties": {
         "L1": {
-          "type": "number"
+          "type": "number",
+          "description": "Aldrin et al., 2017"
         },
         "L2": {
-          "type": "number"
+          "type": "number",
+          "description": "Aldrin et al., 2017"
         },
         "L3": {
-          "type": "number"
+          "type": "number",
+          "description": "Stien et al., 2005"
         },
         "L4": {
-          "type": "number"
+          "type": "number",
+          "description": "Stien et al., 2005"
         },
         "L5f": {
-          "type": "number"
+          "type": "number",
+          "description": "Stien et al., 2005"
         }
       }
     },

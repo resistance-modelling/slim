@@ -286,7 +286,7 @@ class Cage(LoggableMixin):
 
                 # TODO: why is num_dead_lice not clamped?
                 num_dead_lice = min(population_by_stages.sum(), num_dead_lice)
-                dead_lice_nums = self.cfg.rng.multivariate_hypergeometric(
+                dead_lice_nums = self.cfg.multivariate_hypergeometric(
                     population_by_stages, num_dead_lice).tolist()
                 for stage, dead_lice_num in zip(LicePopulation.susceptible_stages, dead_lice_nums):
                     dead_lice_dist[stage][geno] = dead_lice_num
@@ -367,6 +367,10 @@ class Cage(LoggableMixin):
         logger.debug("\t\tupdating lice lifecycle stages")
 
         def evolve_next_stage(stage: LifeStage, temp_c: float) -> int:
+            # TODO: that's a hack
+            if stage == "L4":
+                return round(self.lice_population["L4"] * self.cfg.lice_development_rates["L4"])
+
             # weibull params
             del_p = self.cfg.delta_p[stage]
             del_m10 = self.cfg.delta_m10[stage]
@@ -382,9 +386,8 @@ class Cage(LoggableMixin):
             evolution_rates = self._dev_rates(del_p, del_m10, del_s, temp_c, ages)
             average_rates = np.mean(evolution_rates)
 
-            # print(f"Stage {stage} -> {average_rates}")
-
             return round(num_lice * average_rates) #int(min(self.cfg.rng.poisson(num_lice * average_rates), num_lice))
+
 
         lice_dist = {}
         ave_temp = self.get_temperature(cur_date)
@@ -414,7 +417,7 @@ class Cage(LoggableMixin):
             self,
             days_since_start: int,
             fish_lice_deaths: int,
-            fish_backgroud_deaths: int) -> int:
+            fish_background_deaths: int) -> int:
         """
         Get fish mortality due to treatment. Mortality due to treatment is defined in terms of
         point percentage increases, thus we can only account for "excess deaths".
@@ -427,7 +430,7 @@ class Cage(LoggableMixin):
         :returns: number of fish death events
         """
         # See surveys/overton_treatment_mortalities.py for an explanation on what is going on
-        mortality_events = fish_lice_deaths + fish_backgroud_deaths
+        mortality_events = fish_lice_deaths + fish_background_deaths
 
         if mortality_events == 0 or self.num_fish == 0:
             return 0
@@ -477,7 +480,9 @@ class Cage(LoggableMixin):
             :param days: number of days elapsed
             :return: fish background mortality rate
             """
-            return 0.000057  # (1000 + (days - 700)**2)/490000000
+            # To make things simple, let's assume 0 for now
+            return 0
+            # return 0.0000057  # (1000 + (days - 700)**2)/490000000
 
         # Apply a sigmoid based on the number of lice per fish
         pathogenic_lice = sum([self.lice_population[stage] for stage in LicePopulation.pathogenic_stages])
@@ -487,9 +492,15 @@ class Cage(LoggableMixin):
         else:
             lice_per_host_mass = 0.0
 
+        # Calculation taken from Vollken (2019) (see appendix, page 6)
+        # Derivation: the formula only provides the surviving odds,
+        # from which we extract the probability with the known formula
+        # p = e^odds / (1 + e^odds)
+
         # The daily mortality rate also takes into account a mortality event takes days (in this case, 5).
-        prob_lice_death = 0.2 / (1 + math.exp(-self.cfg.fish_mortality_k *
-                                            (lice_per_host_mass - self.cfg.fish_mortality_center)))
+        exp_odds = math.exp(self.cfg.fish_mortality_center - self.cfg.fish_mortality_k*lice_per_host_mass)
+
+        prob_lice_death = 0.0001*(1 - (exp_odds / (1 + exp_odds)))
 
         ebf_death = fb_mort(days_since_start) * self.num_fish
         elf_death = self.num_infected_fish * prob_lice_death
@@ -502,8 +513,8 @@ class Cage(LoggableMixin):
         return fish_deaths_natural, fish_deaths_from_lice
 
     def compute_eta_aldrin(self, num_fish_in_farm, days):
-        return self.cfg.infection_main_delta + math.log(num_fish_in_farm/1e5) + self.cfg.infection_weight_delta * \
-               (math.log(self.average_fish_mass(days)/1e3) - self.cfg.delta_expectation_weight_log)
+        return self.cfg.infection_main_delta + math.log(num_fish_in_farm/1e5) + self.cfg.infection_weight_delta * 1#\
+               #(math.log(self.average_fish_mass(days)/1e3) - self.cfg.delta_expectation_weight_log)
 
     def get_infection_rates(self, days_since_start) -> Tuple[float, int]:
         """
@@ -758,7 +769,7 @@ class Cage(LoggableMixin):
         """
         From a geno distribution of eligible lice sample a given Genotype distribution
 
-        Note: this is very similar to GenoDistrib.normalise_to() but performs an explicit
+        Note: this is very similar to :meth:`GenoDistrib.normalise_to` but performs an explicit
         sampling.
 
         TODO: should we integrate this into GenoDistrib class
@@ -773,8 +784,8 @@ class Cage(LoggableMixin):
         # "we need to select k lice from the given population broken down into different allele
         # bins and subtract" -> "select :math:`n` balls from the following :math`N_1, ..., N_k` bins without
         # replacement -> use a multivariate hypergeometric distribution
-        lice_as_list = self.cfg.rng.multivariate_hypergeometric(
-            list(distrib_lice_available.values()), num_lice)
+        lice_as_list = self.cfg.multivariate_hypergeometric(
+            np.fromiter(distrib_lice_available.values(), np.int64), num_lice)
         selected_lice = GenoDistrib(dict(zip(distrib_lice_available.keys(),
                                                    lice_as_list)))
 
@@ -1049,7 +1060,9 @@ class Cage(LoggableMixin):
         :returns: the current background mortality. The return value is genotype-agnostic
 
         """
-        # TODO: this is dumb
+        # TODO
+        return {stage: 0 for stage in LicePopulation.lice_stages}
+
         lice_mortality_rates = self.cfg.background_lice_mortality_rates
         lice_population = self.lice_population
 
