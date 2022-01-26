@@ -29,11 +29,13 @@ class Event:
                 dct[k] = v.to_json_dict()
         return dct
 
+
 class CageEvent(abc.ABC, Event):
     @property
     @abc.abstractmethod
     def event_time(self):
         pass
+
 
 @dataclass(order=True)
 class EggBatch(CageEvent):

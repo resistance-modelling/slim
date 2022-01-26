@@ -111,6 +111,28 @@ For the sake of notation the stage has been omitted but not all stages are taken
 since EMB affects lice attachment only the stages from Chalimus onward are affected.
 
 For more information check :py:mod:`slim.types.TreatmentTypes`.
+
+Evolution
+*********
+
+Similarly to [#Stien02]_ we avoid to model age dependencies explicitly to keep the model complexity simple
+and rather use explicit rates across stages. However, due to interesting interactions between fish population,
+weight and lice infection we preferred to use [#Aldrin17]_'s approach to infection.
+
++------------+--------------------------+--------------+
+| Stage      | Approach                 | Source       |
++============+==========================+==============+
+| Eggs       | Explicit hatching queue  | [#Aldrin17]_ |
++------------+--------------------------+--------------+
+| Nauplius   | Evolution rate           | [#Stien02]_  |
++------------+--------------------------+--------------+
+| Copepopids | Explicit infection       | [#Aldrin17]_ |
++------------+--------------------------+--------------+
+| Preadults  | Evolution rate           | [#Stien02]_  |
++------------+--------------------------+--------------+
+| Adults     | Evolution rate           | [#Stien02]_  |
++------------+--------------------------+--------------+
+
 .. _Reproduction:
 
 Reproduction
@@ -122,10 +144,71 @@ host. We assume a scenario in which one female lice can mate with only one male 
 before being fecundated. As in [#Cox17]_ we estimate such number via a negative multinomial
 distribution.
 
-The number of produced eggs is defined in a similar way to [#Aldrin17]_ and follows a power law
-parametrised on the (virtual) age distribution.
+Assuming a louse can attach to either fish, we reduce this problem to finding the
+probability that :math:`k` lice land to :math:`n` fish, and then find such expectation.
 
-TODO: expand on this.
+The expectation can be found to be: [#ExpInfectedFish]_
+
+.. math::
+   \mu = \mathbb{E}[X] = n\left[ 1 - \left(\frac{n-1}{n}\right)^k \right]
+
+To use the negative multinomial distribution we also need a VMR: variance-to-mean ratio.
+The variance in this case refers to the variance of the *lice occupation*
+:math:`Y \sim Multinomial(\textbf{p} = \left(\frac{1}{n}, \ldots \right))` which we
+reduced to a multinomial problem. Thus the formula for the variance is the usual (with a notation abuse for X):
+
+.. math::
+   \nu = \mathbb{Var}[Y] = k^2 \frac{n-1}{n^2}
+
+The probability of a matching occurring between two lice on the same host is thus:
+
+.. math::
+   p_{mating} = 1 - \left(1 + \frac{N_{AM}}{\left(N_{AM} + N_{AF'}\right)\gamma}\right)^{-(1 + \gamma)}
+
+where:
+
+.. math::
+    \mu_l &= \frac{N_{AM} + N_{AF'}}{\mu}\\
+    VMR &= \frac{\nu}{\mu} \\
+    \gamma &= \frac{\mu_l}{VMR - 1}
+
+
+The number of matings is thus just a proportion on the number of free females (denoted with :math:`N_AF'`)
+
+The number of produced eggs is defined in a similar way to [#Aldrin17]_ and follows a power law
+parametrised on the (virtual) age distribution. For details see :meth:`slim.simulation.cage.Cage.get_num_eggs`
+
+Once an adult female has been breed she enters a refractory period that lasts up to 3 days.
+
+Matings and gene inheritance
+----------------------------
+
+Explicit mating modelling would be pointless without addressing the genomics.
+
+In principle, inheritance follows a Mendelian scheme: because of heterozygosity there are only a handful
+of valid pairings that can yield to 3 distinct traits, each of them with different probabilities
+depending on the parents' genes.
+
+To accommodate the need for fast processing, we use double counting to consider the number of possible
+matches, then use a multinomial distribution to generate the bespoke genotype distribution given
+such (normalised) pairings.
+
+External Pressure
+*****************
+
+Quite differently from previous authors, we only model the external pressure without modelling a reservoir
+*as a special cage*. Instead, we consider the reservoir as an infinite, _dynamic_ generator of new lice.
+
+Indeed, we assume that a fraction of the eggs extruded during mating will be reabsorbed by the loch rather than
+just disappearing, for example by wild salmons. The external pressure therefore emits a dynamic number
+of lice depending on two things:
+
+1. the average offspring throughput over the last 30 days;
+2. the genotype distribution of such offspring.
+
+As for the first requirement, the overall number of lice is: :math:`N_{EXT}^t = N_{EXT}^0 + k{N_{Eggs}^{t-30...t-1}}`.
+As for the second, we use a Dirichlet-Multinomial Bayesian process to infer the genotype ratio of the new lice.
+The objective is to guarantee a _reserve_ of each genotype (even rare ones) while favouring the most prolific trait.
 
 Footnote
 --------
@@ -134,3 +217,5 @@ Footnote
 .. [#Aldrin17] `"A stage-structured Bayesian hierarchical model for salmon lice populations at individual salmon farms – Estimated from multiple farm data sets" by Aldrin et al. 2017 <https://doi.org/10.1016/j.ecolmodel.2017.05.019>`_
 .. [#Cox17] `"Mate limitation in sea lice infesting wild salmon hosts: the influence of parasite sex ratio and aggregation" by Cox et al. 2017_ <https://doi.org/10.1002/ecs2.2040>`_
 .. [#Jensen17] `"A selection study on a laboratory-designed population of salmon lice (Lepeophtheirus salmonis) using organophosphate and pyrethroid pesticides" by Jensen et al. 2017 <https://doi.org/10.1371/journal.pone.0178068>`_
+.. [#Stien02] `Population dynamics of salmon lice Lepeophtheirus salmonis on Atlantic salmon and sea trout <http://dx.doi.org/10.3354/meps290263>`_
+.. [#ExpInfectedFish] `Stack Exchange <https://stats.stackexchange.com/a/296053/328123>`_

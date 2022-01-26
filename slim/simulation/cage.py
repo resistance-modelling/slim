@@ -584,19 +584,29 @@ class Cage(LoggableMixin):
         num_infected_fish = int(self.num_fish * (1 - ((self.num_fish - 1) / self.num_fish) ** attached_lice))
         return num_infected_fish
 
-    def get_variance_infected_fish(self, n: int, k: int) -> float:
-        # Rationale: assuming that we generate N bins that sum to K, we can model this as a multinomial distribution
-        # where all p_i are the same. Therefore, the variance of each bin is k*(n-1)/(n**2)
-        # Because we are considering the total variance of k events at the same time we need to multiply by k,
-        # thus yielding k**2*(n-1)/(n**2).
+    @staticmethod
+    def get_variance_infected_fish(num_fish: int, infecting_lice: int) -> float:
+        r"""
+        Compute the variance of the lice infecting the fish.
 
-        if n == 0:
+        Rationale: assuming that we generate :math:`N` bins that sum to :math:`K`, we can model this as a multinomial distribution
+        where all :math:`p_i` are the same. Therefore, the variance of each bin is :math:`k \frac{n-1}{n^2}`
+
+        Because we are considering the total variance of k events at the same time we need to multiply by :math:`k`,
+        thus yielding :math:`k^2 \frac{n-1}{n^2}` .
+
+        :param num_fish: the number of fish
+        :param infecting_lice: the number of lice attached to the fish
+        :returns the variance
+        """
+
+        if num_fish == 0:
             return 0.0
-        return k**2 * (n - 1) / (n ** 2)
+        return infecting_lice ** 2 * (num_fish - 1) / (num_fish ** 2)
 
     def get_num_matings(self) -> int:
         """
-        Get the number of matings. Implement Cox's approach assuming an unbiased sex distribution
+        Get the number of matings. Implement Cox (2017)'s approach assuming an unbiased sex distribution.
         """
 
         # Background: AF and AM are randomly assigned to fish according to a negative multinomial distribution.
