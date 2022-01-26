@@ -9,6 +9,7 @@
         "a": 0.25,
         "A,a": 0.5
     },
+    "genetic_learning_rate": 1,
     "farms": [
         {
             "ncages": 6,

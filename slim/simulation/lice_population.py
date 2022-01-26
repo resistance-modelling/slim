@@ -52,8 +52,8 @@ def largest_remainder(nums: np.ndarray) -> np.ndarray:
     # a vectorised implementation of largest remainder
     assert np.all(nums >= 0) or np.all(nums <= 0)
 
-    nums = nums.astype(np.float32)
-    approx = np.trunc(nums, dtype=np.float32)
+    nums = nums.astype(np.float64)
+    approx = np.trunc(nums, dtype=np.float64)
 
     while True:
         diff = nums - approx

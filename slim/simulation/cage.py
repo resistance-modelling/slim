@@ -500,7 +500,7 @@ class Cage(LoggableMixin):
         # The daily mortality rate also takes into account a mortality event takes days (in this case, 5).
         exp_odds = math.exp(self.cfg.fish_mortality_center - self.cfg.fish_mortality_k*lice_per_host_mass)
 
-        prob_lice_death = 0.0001*(1 - (exp_odds / (1 + exp_odds)))
+        prob_lice_death = 0.005*(1 - (exp_odds / (1 + exp_odds)))
 
         ebf_death = fb_mort(days_since_start) * self.num_fish
         elf_death = self.num_infected_fish * prob_lice_death
@@ -729,9 +729,6 @@ class Cage(LoggableMixin):
         :param eggs: the genotype distribution of the newly produced eggs
         :param mutation_rate: the rate of mutation with respect to the number of eggs.
         """
-        # TODO
-        return eggs
-
         if mutation_rate == 0:
             return eggs
 
@@ -754,7 +751,7 @@ class Cage(LoggableMixin):
         p = mask_matrix.flatten() / np.sum(mask_matrix)
 
         # since I can't really be bothered to avoid negative mutations, we simply roll the dice every time until we get
-        # a favourable outcome. Not ideal, but it works...
+        # a favourable outcome, unless no mutation is possible
 
         for i in range(10):
             swap_matrix = self.cfg.rng.multinomial(mutations, p).reshape(n, n)
@@ -765,9 +762,9 @@ class Cage(LoggableMixin):
                 if result[allele] == 0:
                     del result[allele]
             if result.is_positive():
-                break
+                return result
 
-        return result
+        return eggs # no mutation could be found
 
     def select_lice(self, distrib_lice_available: GenoDistrib, num_lice: int) -> GenoDistrib:
         """
@@ -1069,7 +1066,7 @@ class Cage(LoggableMixin):
 
         dead_lice_dist = {}
         for stage in lice_population:
-            mortality_rate = lice_population[stage] * lice_mortality_rates[stage] # some exp / different mortalities - but this gets quickly unwieldly
+            mortality_rate = lice_population[stage] * lice_mortality_rates[stage]
             mortality: int = round(mortality_rate)#min(self.cfg.rng.poisson(mortality_rate), lice_population[stage])
             dead_lice_dist[stage] = mortality
 
