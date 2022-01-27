@@ -25,6 +25,11 @@
         "L3": 18.934,
         "L4": 10.742
     },
+    "lice_development_rates": {
+        "L1": 0.8,
+        "L2": 0.47,
+        "L4": 0.10
+    },
     "infection_main_delta": -2.576,
     "infection_weight_delta": 0.082,
     "delta_expectation_weight_log": -0.55,
@@ -32,7 +37,7 @@
     "fish_mortality_k": 15.7,
     "background_lice_mortality_rates": {
         "L1": 0.17,
-        "L2": 0.22,
+        "L2": 0.101,
         "L3": 0.008,
         "L4": 0.05,
         "L5f": 0.02,
@@ -47,7 +52,7 @@
         "x_shift": 475
     },
     "gain_per_kg": "4.39",
-    "reservoir_offspring_integration_ratio": 0.001,
+    "reservoir_offspring_integration_ratio": 1e-6,
     "reservoir_offspring_average": 30,
     "genetic_mechanism": "discrete",
     "geno_mutation_rate": 1e-5,

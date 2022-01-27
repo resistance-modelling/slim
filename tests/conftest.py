@@ -136,7 +136,7 @@ def sample_treatment_mortality(first_cage, first_cage_population, null_offspring
     # create a custom rng to avoid breaking other tests
     rng = np.random.default_rng(0)
 
-    probs = [0.01, 0.9, 0.09]
+    probs = dict(zip(GenoDistrib.alleles, [0.01, 0.9, 0.09]))
 
     # create n stages
     target_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 5, "L5f": 5}

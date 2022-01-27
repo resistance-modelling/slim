@@ -52,8 +52,8 @@ def largest_remainder(nums: np.ndarray) -> np.ndarray:
     # a vectorised implementation of largest remainder
     assert np.all(nums >= 0) or np.all(nums <= 0)
 
-    nums = nums.astype(np.float32)
-    approx = np.trunc(nums, dtype=np.float32)
+    nums = nums.astype(np.float64)
+    approx = np.trunc(nums, dtype=np.float64)
 
     while True:
         diff = nums - approx
@@ -126,7 +126,7 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
                 self._store.update(params._store)
 
     @staticmethod
-    def from_ratios(n: int, p: Union[np.ndarray, List[float]], rng: np.random.Generator) -> GenoDistrib:
+    def from_ratios(n: int, p: GenoDistribDict, rng: np.random.Generator) -> GenoDistrib:
         """
         Create a :class:`GenoDistrib` with a given number of lice and a probability distribution
 
@@ -142,10 +142,14 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
         :returns: the new GenoDistrib
         """
 
-        assert np.isclose(np.sum(p), 1.0), "p must be a probability distribution"
+        probas = np.fromiter(p.values(), np.float64)
+        assert np.isclose(np.sum(probas), 1.0), "p must be a probability distribution"
 
-        keys = GenoDistrib.alleles
-        values = rng.multinomial(n, p).tolist()
+        keys = p.keys()
+        if np.sum(probas) > 1.0:
+            # do some rounding
+            probas = largest_remainder(probas)
+        values = rng.multinomial(n, probas).tolist()
         return GenoDistrib(dict(zip(keys, values)))
 
     def normalise_to(self, population: int) -> GenoDistrib:

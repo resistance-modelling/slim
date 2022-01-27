@@ -62,7 +62,7 @@ class SmoothedPlotItemWrap:
             stages_num = len(LicePopulation.lice_stages)
             stages_palette, egg_palette = SmoothedPlotItemWrap.color_palette[:stages_num], \
                                           SmoothedPlotItemWrap.color_palette[stages_num:]
-            stages_styles = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6]  # enums from Qt.PenStyle
+            stages_styles = [1, 2, 3, 4, 5, 1, 2, 3, 4, 5]  # enums from Qt.PenStyle
 
             stages_colours = dict(zip(LicePopulation.lice_stages, stages_palette))
             stages_styles_dict = dict(zip(LicePopulation.lice_stages, stages_styles))
@@ -440,6 +440,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         elif len(self._uniqueFarms) != len(self.licePopulationPlots):
             self._remountPlot()
             self.pqgPlotContainer.enforceAspectRatio()
+            # _remountPlot calls _updatePlot implicitly so avoid recursion
+            return
 
         if len(self._uniqueFarms) == 0:
             return
@@ -534,7 +536,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             self.extPressureRatios.plot(extp_ratios, title=str(geno), pen=allele_colours[allele_name])
         self.extPressureRatios.addLegend()
 
-        for plot in self.licePopulationPlots + self.fishPopulationPlots:
+        for plot in self.licePopulationPlots:
             plot.setLogMode(False, True)
 
         # keep ranges consistent

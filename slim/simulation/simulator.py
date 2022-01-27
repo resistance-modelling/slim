@@ -23,7 +23,6 @@ from .lice_population import GenoDistrib
 from slim.types.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
 from slim.types.TreatmentTypes import Money
 
-
 if TYPE_CHECKING:
     from .config import Config
     from .lice_population import GenoDistribDict
@@ -66,7 +65,8 @@ class Organisation:
         # (see: https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_discrete_distribution )
         # we can use a simple bayesian approach
         if offspring.gross > 0:
-            self.genetic_ratios = self.genetic_ratios + (offspring * (1/offspring.gross))
+            self.genetic_ratios = self.genetic_ratios + (offspring * (1 / offspring.gross)) \
+                                  * self.cfg.genetic_learning_rate
         multinomial_probas = self.cfg.rng.dirichlet(tuple(self.genetic_ratios.values())).tolist()
         keys = self.genetic_ratios.keys()
         self.external_pressure_ratios = dict(zip(keys, multinomial_probas))
@@ -156,6 +156,7 @@ class Organisation:
         :param cur_date: the current day
         :param farm: the farm that sent the message
         """
+
         def cts(farm_response: FarmResponse):
             if isinstance(farm_response, SamplingResponse) and \
                     farm_response.detected_rate >= self.cfg.aggregation_rate_threshold:
@@ -166,8 +167,9 @@ class Organisation:
         pop_from_queue(farm.farm_to_org, cur_date, cts)
 
 
-class Simulator: #pragma: no cover
+class Simulator:  # pragma: no cover
     """The main entry point of the simulator."""
+
     def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
         self.output_dir = output_dir
         self.sim_id = sim_id
@@ -204,7 +206,8 @@ class Simulator: #pragma: no cover
                     break
 
     @staticmethod
-    def dump_as_dataframe(states_times_it: Iterator[Tuple[Simulator, dt.datetime]]) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
+    def dump_as_dataframe(states_times_it: Iterator[Tuple[Simulator, dt.datetime]]) -> Tuple[
+        pd.DataFrame, List[dt.datetime], Config]:
         """
         Convert a dump into a pandas dataframe
 
@@ -254,7 +257,7 @@ class Simulator: #pragma: no cover
         payoff_row = []
         proba_row = {}
         for state_row in states:
-            payoff = sum([float(state.payoff) for state in state_row])/len(state_row)
+            payoff = sum([float(state.payoff) for state in state_row]) / len(state_row)
             farm_cfgs = state_row[0].cfg.farms
             farms = state_row[0].organisation.farms
             payoff_row.append(payoff)
@@ -265,7 +268,6 @@ class Simulator: #pragma: no cover
                 proba_row.setdefault(key, []).append(proba)
 
         return pd.DataFrame({"payoff": payoff_row, **proba_row})
-
 
     @staticmethod
     def reload(path: Path, sim_id: str, timestamp: Optional[dt.datetime] = None, resume_after: Optional[int] = None):
@@ -360,16 +362,17 @@ class Simulator: #pragma: no cover
 
 class OffspringAveragingQueue:
     """Helper class to compute a rolling average"""
+
     def __init__(self, rolling_average: int):
         """
         :param rolling_average: the maximum length to consider
         """
-        self._queue = Deque[GenoDistrib](maxlen=rolling_average) # pytype: disable=not-callable
+        self._queue = Deque[GenoDistrib](maxlen=rolling_average)  # pytype: disable=not-callable
         self.offspring_sum = GenoDistrib()
-    
+
     def __len__(self):
         return len(self._queue)
-    
+
     @property
     def rolling_average_factor(self):
         return self._queue.maxlen
