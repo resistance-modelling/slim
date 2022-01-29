@@ -8,8 +8,10 @@ __all__ = [
     "GenoDistribSerialisable",
     "GenoDistrib",
     "GenoLifeStageDistrib",
+    "GenoTreatmentDistrib",
     "GenoTreatmentValue",
     "GrossLiceDistrib",
+    "LifeStage",
     "LicePopulation",
 ]
 

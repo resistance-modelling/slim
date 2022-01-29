@@ -5,14 +5,14 @@ This module provides plotting widgets and utils.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING, List, Tuple
+from typing import Optional, TYPE_CHECKING, List
 
 import numpy as np
 import pandas as pd
 import pyqtgraph as pg
 import scipy
 import scipy.ndimage
-from PyQt5 import QtCore, QtGui
+from PyQt5 import QtCore
 from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtWidgets import (
     QWidget,
@@ -27,7 +27,6 @@ from PyQt5.QtWidgets import (
     QSplitter,
     QListWidgetItem,
     QFileDialog,
-    QDialog,
     QMessageBox,
 )
 from colorcet import glasbey_light, glasbey_dark
@@ -64,7 +63,7 @@ class SmoothedPlotItemWrap:
         :param plot_item: the wrapped :class:`PlotItem`
         :param smoothing_size: the amount of smoothing to apply
         :param average_factor: the common divider across lines (used when comparing farms with different cage numbers)
-        :param method: if to use linear smoothing. Currently it is the only one supported.
+        :param method: if to use linear smoothing. Currently, it is the only one supported.
         """
         self.plot_item = plot_item
         self.kernel_size = smoothing_size
@@ -251,7 +250,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         # This is a hack that works half of the time. Expect flickering.
         size: QSize = self.size()
         num_farms = len(self.pane._uniqueFarms)
-        # 9/60 is not the real aspect ratio but it takes into account padding
+        # 9/60 is not the real aspect ratio, but it takes into account padding
         self.setFixedHeight((num_farms + 1) * size.width() * 9 / 60)
 
 

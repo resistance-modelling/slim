@@ -17,7 +17,7 @@ class CustomFarmEncoder(json.JSONEncoder):
     def default(self, o):
         """
         Provide a json string of an object.
-        :param o:: The object to be encoded as a json string.
+        :param o: The object to be encoded as a json string.
         :return: the json representation of o.
         """
         if isinstance(o, np.ndarray):

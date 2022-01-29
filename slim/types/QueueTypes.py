@@ -1,6 +1,6 @@
 """
 Cages, Farms and Organisations communicate via a mix of traditional API and message passing via channels. This allows
-for greater flexibility when there is a need to communicate back and forth. Furthermore it allows for greater
+for greater flexibility when there is a need to communicate back and forth. Furthermore, it allows for greater
 multithreading capabilities.
 """
 from __future__ import annotations
@@ -147,7 +147,6 @@ def pop_from_queue(
     :param queue: the queue to process
     :param cur_time: the current time to compare the events with. Only events past cur_time will be popped
     :param continuation: the function to call for each event in the queue
-    :param peek: whether to consume the event or not. If peek is True then `continuation` will be invoked at most once.
     """
 
     @singledispatch

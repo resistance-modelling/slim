@@ -125,12 +125,12 @@ class RuntimeConfig:
         :returns the sampled distribution
         """
         s = np.sum(bins)
-        if s > 1e6:
-            return self.rng.multinomial(balls, bins / s)
-        if np.sum(bins) < 100:
+        if s < 100:
             method = "count"
-        elif np.sum(bins) < 1e6:
+        elif s < 1e6:
             method = "marginals"
+        else:
+            return self.rng.multinomial(balls, bins / s)
         return self.rng.multivariate_hypergeometric(bins, balls, method=method)
 
 

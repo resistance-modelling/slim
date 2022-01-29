@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtWidgets, QtCore
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QSettings
+from PyQt5.QtCore import QThread, pyqtSignal, QSettings
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -41,6 +41,7 @@ from slim.gui_utils.plots import SingleRunPlotPane, OptimiserPlotPane
 from slim.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState
 
 
+# noinspection PyUnresolvedReferences
 class Window(QMainWindow):
     loadedSimulatorState = pyqtSignal(SimulatorSingleRunState)
     loadedOptimiserState = pyqtSignal(SimulatorOptimiserState)
