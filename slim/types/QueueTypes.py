@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 class Event:
     """An empty parent class for all the events with a default serialiser."""
+
     def to_json_dict(self):
         dct = asdict(self)
 
@@ -86,9 +87,10 @@ class TreatmentEvent(CageEvent):
     def __lt__(self, other: TreatmentEvent):
         # in the rare case two treatments are applied in a row it would be better to prefer longer treatments.
         # Apparently there is no way to force a reverse lexicographical order for some fields with a @dataclass
-        return self.first_application_date < other.first_application_date or \
-               (self.first_application_date == other.first_application_date and
-                self.effectiveness_duration_days > other.effectiveness_duration_days)
+        return self.first_application_date < other.first_application_date or (
+            self.first_application_date == other.first_application_date
+            and self.effectiveness_duration_days > other.effectiveness_duration_days
+        )
 
     @property
     def event_time(self):
@@ -102,12 +104,14 @@ class TreatmentEvent(CageEvent):
 @dataclass(order=True)
 class FarmCommand(Event):
     """Base class for all commands sent from the Organisation to a Farm"""
+
     request_date: dt.datetime
 
 
 @dataclass(order=True)
 class SamplingEvent(Event):
     """Internal sampling event used inside farm"""
+
     # TODO: move inside Farm?
     sampling_date: dt.datetime
 
@@ -115,6 +119,7 @@ class SamplingEvent(Event):
 @dataclass(order=True)
 class FarmResponse(Event):
     """Base class for all farm activities that require some communication with the organisation."""
+
     response_date: dt.datetime
 
 
@@ -134,7 +139,7 @@ EventT = TypeVar("EventT", CageEvent, FarmCommand, FarmResponse, SamplingEvent)
 def pop_from_queue(
     queue: PriorityQueue[EventT],
     cur_time: dt.datetime,
-    continuation: Callable[[EventT], None]
+    continuation: Callable[[EventT], None],
 ):
     """
     Pops an event from a queue and call a continuation function
@@ -144,6 +149,7 @@ def pop_from_queue(
     :param continuation: the function to call for each event in the queue
     :param peek: whether to consume the event or not. If peek is True then `continuation` will be invoked at most once.
     """
+
     @singledispatch
     def access_time_lt(_peek_element, _cur_time: dt.datetime):
         pass  # pragma: no cover
@@ -169,7 +175,6 @@ def pop_from_queue(
     @access_time_lt.register  # type: ignore[no-redef]
     def _(arg: FarmResponse, _cur_time: dt.datetime):
         return arg.response_date <= _cur_time  # pragma: no cover
-
 
     while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
         event = queue.get()

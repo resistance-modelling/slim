@@ -21,13 +21,19 @@ from slim import LoggableMixin, logger
 from slim.simulation.cage import Cage
 from slim.simulation.config import Config
 from slim.JSONEncoders import CustomFarmEncoder
-from slim.simulation.lice_population import GrossLiceDistrib, GenoDistrib, GenoDistribDict
+from slim.simulation.lice_population import (
+    GrossLiceDistrib,
+    GenoDistrib,
+    GenoDistribDict,
+)
 from slim.types.QueueTypes import *
 from slim.types.TreatmentTypes import Money, Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
-LocationTemps = TypedDict("LocationTemps", {"northing": int, "temperatures": List[float]})
+LocationTemps = TypedDict(
+    "LocationTemps", {"northing": int, "temperatures": List[float]}
+)
 
 
 class Farm(LoggableMixin):
@@ -36,7 +42,12 @@ class Farm(LoggableMixin):
     subjected to external infestation pressure from sea lice.
     """
 
-    def __init__(self, name: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None):
+    def __init__(
+        self,
+        name: int,
+        cfg: Config,
+        initial_lice_pop: Optional[GrossLiceDistrib] = None,
+    ):
         """
         Create a farm.
 
@@ -55,7 +66,9 @@ class Farm(LoggableMixin):
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.available_treatments = farm_cfg.max_num_treatments
-        self.cages = [Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)]  # pytype: disable=wrong-arg-types
+        self.cages = [
+            Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)
+        ]  # pytype: disable=wrong-arg-types
 
         self.year_temperatures = self._initialise_temperatures(cfg.loch_temperatures)
 
@@ -63,9 +76,9 @@ class Farm(LoggableMixin):
         self._preemptively_assign_treatments(self.farm_cfg.treatment_starts)
 
         # Queues
-        self.command_queue: PriorityQueue[FarmCommand] = PriorityQueue() 
-        self.farm_to_org: PriorityQueue[FarmResponse] = PriorityQueue() 
-        self.__sampling_events: PriorityQueue[SamplingEvent] = PriorityQueue() 
+        self.command_queue: PriorityQueue[FarmCommand] = PriorityQueue()
+        self.farm_to_org: PriorityQueue[FarmResponse] = PriorityQueue()
+        self.__sampling_events: PriorityQueue[SamplingEvent] = PriorityQueue()
 
         self.generate_sampling_events()
 
@@ -107,7 +120,12 @@ class Farm(LoggableMixin):
     @property
     def lice_population(self):
         """Return the overall lice population in a farm"""
-        return dict(sum([Counter(cage.lice_population.as_dict()) for cage in self.cages], Counter()))
+        return dict(
+            sum(
+                [Counter(cage.lice_population.as_dict()) for cage in self.cages],
+                Counter(),
+            )
+        )
 
     @property
     def lice_genomics(self):
@@ -115,7 +133,10 @@ class Farm(LoggableMixin):
 
         genomics = defaultdict(lambda: GenoDistrib())
         for cage in self.cages:
-            for stage, value in cage.lice_population.geno_by_lifestage.as_dict().items():
+            for (
+                stage,
+                value,
+            ) in cage.lice_population.geno_by_lifestage.as_dict().items():
                 genomics[stage] = genomics[stage] + value
 
         return {k: v.to_json_dict() for k, v in genomics.items()}
@@ -141,8 +162,9 @@ class Farm(LoggableMixin):
         Ndiff = self.loc_y - y_northing
         return np.round(y_temps - Ndiff * degs, 1)
 
-    def generate_treatment_event(self, treatment_type: Treatment, cur_date: dt.datetime
-                                 ) -> TreatmentEvent:
+    def generate_treatment_event(
+        self, treatment_type: Treatment, cur_date: dt.datetime
+    ) -> TreatmentEvent:
         """
         Generate a new treatment event with the correct efficacy based on the given day
         and type.
@@ -161,9 +183,10 @@ class Farm(LoggableMixin):
 
         return TreatmentEvent(
             cur_date + dt.timedelta(days=delay),
-            treatment_type, efficacy,
+            treatment_type,
+            efficacy,
             cur_date,
-            cur_date + dt.timedelta(days=application_period)
+            cur_date + dt.timedelta(days=application_period),
         )
 
     def generate_sampling_events(self):
@@ -203,13 +226,18 @@ class Farm(LoggableMixin):
         :returns: whether the treatment has been added to at least one cage or not.
         """
 
-        logger.debug("\t\tFarm {} requests treatment {}".format(self.name, str(treatment_type)))
+        logger.debug(
+            "\t\tFarm {} requests treatment {}".format(self.name, str(treatment_type))
+        )
         if self.available_treatments <= 0:
             return False
 
         # TODO: no support for treatment combination. See #127
-        eligible_cages = [cage for cage in self.cages if not
-                          (cage.start_date > day or cage.is_fallowing or cage.is_treated(day))]
+        eligible_cages = [
+            cage
+            for cage in self.cages
+            if not (cage.start_date > day or cage.is_fallowing or cage.is_treated(day))
+        ]
 
         if len(eligible_cages) == 0:
             logger.debug("\t\tTreatment not scheduled as no cages were eligible")
@@ -254,10 +282,12 @@ class Farm(LoggableMixin):
 
         self.add_treatment(picked_treatment, cur_date)
 
-    def update(self,
-               cur_date: dt.datetime,
-               ext_influx: int,
-               ext_pressure_ratios: GenoDistribDict) -> Tuple[GenoDistribByHatchDate, Money]:
+    def update(
+        self,
+        cur_date: dt.datetime,
+        ext_influx: int,
+        ext_pressure_ratios: GenoDistribDict,
+    ) -> Tuple[GenoDistribByHatchDate, Money]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites. Also distribute the offspring across cages.
 
@@ -275,8 +305,13 @@ class Farm(LoggableMixin):
         else:
             logger.debug("Updating farm {} (non-operational)".format(self.name))
 
-        self.log("\tAdding %r new lice from the reservoir", new_reservoir_lice=ext_influx)
-        self.log("\tReservoir lice genetic ratios: %s", new_reservoir_lice_ratios=ext_pressure_ratios)
+        self.log(
+            "\tAdding %r new lice from the reservoir", new_reservoir_lice=ext_influx
+        )
+        self.log(
+            "\tReservoir lice genetic ratios: %s",
+            new_reservoir_lice_ratios=ext_pressure_ratios,
+        )
 
         self._handle_events(cur_date)
 
@@ -292,9 +327,9 @@ class Farm(LoggableMixin):
         for cage in self.cages:
 
             # update the cage and collect the offspring info
-            egg_distrib, hatch_date, cost = cage.update(cur_date,
-                                                        pressures_per_cage[cage.id],
-                                                        ext_pressure_ratios)
+            egg_distrib, hatch_date, cost = cage.update(
+                cur_date, pressures_per_cage[cage.id], ext_pressure_ratios
+            )
 
             if hatch_date:
                 # update the total offspring info
@@ -322,13 +357,17 @@ class Farm(LoggableMixin):
         assert external_inflow >= 0, "External pressure cannot be negative."
 
         # assume equal chances for each cage
-        probs_per_cage = np.full(len(self.cages), 1/len(self.cages))
+        probs_per_cage = np.full(len(self.cages), 1 / len(self.cages))
 
-        return list(self.cfg.rng.multinomial(external_inflow * len(self.cages),
-                                             probs_per_cage,
-                                             size=1)[0])
+        return list(
+            self.cfg.rng.multinomial(
+                external_inflow * len(self.cages), probs_per_cage, size=1
+            )[0]
+        )
 
-    def get_farm_allocation(self, target_farm: Farm, eggs_by_hatch_date: GenoDistribByHatchDate) -> GenoDistribByHatchDate:
+    def get_farm_allocation(
+        self, target_farm: Farm, eggs_by_hatch_date: GenoDistribByHatchDate
+    ) -> GenoDistribByHatchDate:
         """Return farm allocation of arrivals, that is a dictionary of genotype distributions based
         on hatch date updated to take into account probability of making it to the target farm.
 
@@ -361,7 +400,9 @@ class Farm(LoggableMixin):
 
         return farm_allocation
 
-    def get_cage_allocation(self, ncages: int, eggs_by_hatch_date: GenoDistribByHatchDate) -> CageAllocation:
+    def get_cage_allocation(
+        self, ncages: int, eggs_by_hatch_date: GenoDistribByHatchDate
+    ) -> CageAllocation:
         """Return allocation of eggs for given number of cages.
 
         :param ncages: Number of bins to allocate to
@@ -380,21 +421,29 @@ class Farm(LoggableMixin):
         probs_per_bin = np.full(ncages, 1 / ncages)
 
         # preconstruct the data structure
-        hatch_list: CageAllocation = [{hatch_date: GenoDistrib() for hatch_date in eggs_by_hatch_date} for n in range(ncages)]
+        hatch_list: CageAllocation = [
+            {hatch_date: GenoDistrib() for hatch_date in eggs_by_hatch_date}
+            for n in range(ncages)
+        ]
         for hatch_date, geno_dict in eggs_by_hatch_date.items():
             for genotype in geno_dict:
                 # generate the bin distribution of this genotype with
                 # this hatch date
-                genotype_per_bin = self.cfg.rng.multinomial(geno_dict[genotype],
-                                                            probs_per_bin,
-                                                            size=1)[0]
+                genotype_per_bin = self.cfg.rng.multinomial(
+                    geno_dict[genotype], probs_per_bin, size=1
+                )[0]
                 # update the info
                 for bin_ix, n in enumerate(genotype_per_bin):
                     hatch_list[bin_ix][hatch_date][genotype] = n
 
         return hatch_list
 
-    def disperse_offspring(self, eggs_by_hatch_date: GenoDistribByHatchDate, farms: List[Farm], cur_date: dt.datetime):
+    def disperse_offspring(
+        self,
+        eggs_by_hatch_date: GenoDistribByHatchDate,
+        farms: List[Farm],
+        cur_date: dt.datetime,
+    ):
         """Allocate new offspring between the farms and cages.
 
         Assumes the lice can float freely across a given farm so that
@@ -419,14 +468,21 @@ class Farm(LoggableMixin):
             farm_arrivals = self.get_farm_allocation(farm, eggs_by_hatch_date)
             arrivals_per_cage = self.get_cage_allocation(len(farm.cages), farm_arrivals)
 
-            total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
+            total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(
+                arrivals_per_cage
+            )
             logger.debug("\t\t\tTotal new eggs = {}".format(total))
             logger.debug("\t\t\tPer cage distribution = {}".format(by_cage))
-            self.log("\t\t\tPer cage distribution (as geno) = %s", arrivals_per_cage=by_geno_cage)
+            self.log(
+                "\t\t\tPer cage distribution (as geno) = %s",
+                arrivals_per_cage=by_geno_cage,
+            )
 
             # get the arrival time of the egg batch at the allocated
             # destination
-            travel_time = self.cfg.rng.poisson(self.cfg.interfarm_times[self.name][farm.name])
+            travel_time = self.cfg.rng.poisson(
+                self.cfg.interfarm_times[self.name][farm.name]
+            )
             arrival_date = cur_date + dt.timedelta(days=travel_time)
 
             # update the cages
@@ -434,7 +490,9 @@ class Farm(LoggableMixin):
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
     @staticmethod
-    def get_cage_arrivals_stats(cage_arrivals: CageAllocation) -> Tuple[int, List[int], List[GenoDistrib]]:
+    def get_cage_arrivals_stats(
+        cage_arrivals: CageAllocation,
+    ) -> Tuple[int, List[int], List[GenoDistrib]]:
         """Get stats about the cage arrivals for logging
 
         :param cage_arrivals: List of Dictionaries of genotype distributions based on hatch date.
@@ -443,9 +501,10 @@ class Farm(LoggableMixin):
         """
 
         # Basically ignore the hatch dates and sum up the batches
-        geno_by_cage = [cast(GenoDistrib,
-                             GenoDistrib.batch_sum(list(hatch_dict.values())))
-                   for hatch_dict in cage_arrivals]
+        geno_by_cage = [
+            cast(GenoDistrib, GenoDistrib.batch_sum(list(hatch_dict.values())))
+            for hatch_dict in cage_arrivals
+        ]
         gross_by_cage = [geno.gross for geno in geno_by_cage]
         return sum(gross_by_cage), gross_by_cage, geno_by_cage
 
@@ -456,7 +515,10 @@ class Farm(LoggableMixin):
         :param cur_date: the current day
         :returns: the total profit that can be earned from this farm at the current time
         """
-        mass_per_cage = [cage.average_fish_mass((cur_date - cage.start_date).days) / 1e3 for cage in self.cages]
+        mass_per_cage = [
+            cage.average_fish_mass((cur_date - cage.start_date).days) / 1e3
+            for cage in self.cages
+        ]
         return self.cfg.gain_per_kg * Money(sum(mass_per_cage))
 
     def _handle_events(self, cur_date: dt.datetime):

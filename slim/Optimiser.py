@@ -16,6 +16,7 @@ from slim import logger, create_logger
 from slim.simulation.simulator import Simulator
 from slim.simulation.config import Config
 
+
 @dataclass
 class Optimiser:
     starting_cfg: Config
@@ -27,18 +28,12 @@ class Optimiser:
         temp = 1 - (steps + 1) / self.iterations
         return np.clip(rng.normal(probas, temp), 0, 1)
 
-    def get_simulator_from_probas(
-        self,
-        probas,
-        out_path: Path,
-        sim_name: str,
-        rng
-    ):
+    def get_simulator_from_probas(self, probas, out_path: Path, sim_name: str, rng):
         current_cfg = deepcopy(self.starting_cfg)
         for farm, defection_proba in zip(current_cfg.farms, probas):
             farm.defection_proba = defection_proba
 
-        current_cfg.seed = rng.integers(1<<32)
+        current_cfg.seed = rng.integers(1 << 32)
         current_cfg.rng = np.random.default_rng(current_cfg.seed)
 
         return Simulator(out_path, sim_name, current_cfg)
@@ -51,7 +46,7 @@ class Optimiser:
         if method == "annealing":
             payload = {
                 "average_iterations": self.repeat_experiment,
-                "walk_iterations": self.iterations
+                "walk_iterations": self.iterations,
             }
         else:
             # other methods
@@ -64,7 +59,7 @@ class Optimiser:
         # TODO: logging + tqdm would be nice to have
         farm_no = len(self.starting_cfg.farms)
         output_path = Path(output_path)
-        optimiser_rng =  np.random.default_rng(self.optimiser_seed)
+        optimiser_rng = np.random.default_rng(self.optimiser_seed)
         current_state = np.clip(optimiser_rng.normal(0.5, 0.5, farm_no), 0, 1)
         current_state_sol = 1e-6
         best_sol = current_state.copy()
@@ -80,10 +75,7 @@ class Optimiser:
             for t in tqdm.trange(self.repeat_experiment):
                 sim_name = f"optimisation_{i}_{t}"
                 sim = self.get_simulator_from_probas(
-                    candidate_state,
-                    output_path,
-                    sim_name,
-                    optimiser_rng
+                    candidate_state, output_path, sim_name, optimiser_rng
                 )
                 sim.run_model()
                 payoff_sum += float(sim.payoff)
@@ -110,33 +102,42 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sea lice strategy optimiser")
 
     # set up and read the command line arguments
-    parser.add_argument("output_path",
-                        type=str,
-                        help="Output directory path. The base directory will be used for logging. " + \
-                             "All intermediate run files will be generated under subfolders")
-    parser.add_argument("param_dir",
-                        type=str,
-                        help="Directory of simulation parameters files.")
-    parser.add_argument("--quiet",
-                        help="Don't log to console or file.",
-                        default=False,
-                        action="store_true")
-    parser.add_argument("--iterations",
-                        help="Number of iterations to run in the optimiser",
-                        type=int,
-                        default=10)
-    parser.add_argument("--repeat-experiment",
-                        help="How many times to repeat the same experiment with autoregressive seeds",
-                        type=int,
-                        default=3)
-    parser.add_argument("--objective",
-                        help="What is the objective function to optimise",
-                        choices=["cumulative_payoff"],
-                        default="cumulative_payoff")
-    parser.add_argument("--optimiser-seed",
-                        help="Seed used by the optimiser",
-                        type=int,
-                        default=42)
+    parser.add_argument(
+        "output_path",
+        type=str,
+        help="Output directory path. The base directory will be used for logging. "
+        + "All intermediate run files will be generated under subfolders",
+    )
+    parser.add_argument(
+        "param_dir", type=str, help="Directory of simulation parameters files."
+    )
+    parser.add_argument(
+        "--quiet",
+        help="Don't log to console or file.",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--iterations",
+        help="Number of iterations to run in the optimiser",
+        type=int,
+        default=10,
+    )
+    parser.add_argument(
+        "--repeat-experiment",
+        help="How many times to repeat the same experiment with autoregressive seeds",
+        type=int,
+        default=3,
+    )
+    parser.add_argument(
+        "--objective",
+        help="What is the objective function to optimise",
+        choices=["cumulative_payoff"],
+        default="cumulative_payoff",
+    )
+    parser.add_argument(
+        "--optimiser-seed", help="Seed used by the optimiser", type=int, default=42
+    )
 
     args, unknown = parser.parse_known_args()
 
@@ -159,15 +160,15 @@ if __name__ == "__main__":
     if args.quiet:
         logger.addFilter(lambda record: False)
 
-    config_parser = Config.generate_argparse_from_config(cfg_schema_path, str(cfg_basename / "params.schema.json"))
+    config_parser = Config.generate_argparse_from_config(
+        cfg_schema_path, str(cfg_basename / "params.schema.json")
+    )
     config_args = config_parser.parse_args(unknown)
 
     # create the basic config object
     cfg = Config(cfg_path, args.param_dir, vars(config_args))
 
     optimiser = Optimiser(
-        cfg, args.iterations,
-        args.repeat_experiment,
-        args.optimiser_seed
+        cfg, args.iterations, args.repeat_experiment, args.optimiser_seed
     )
     print(optimiser.annealing(args.output_path))

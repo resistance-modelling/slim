@@ -4,7 +4,7 @@ This module provides the main entry point to any simulation task.
 
 from __future__ import annotations
 
-__all__ = ['Organisation', 'Simulator']
+__all__ = ["Organisation", "Simulator"]
 
 import datetime as dt
 import json
@@ -52,7 +52,9 @@ class Organisation:
         self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
         self.genetic_ratios = GenoDistrib(cfg.initial_genetic_ratios)
         self.external_pressure_ratios = cfg.initial_genetic_ratios.copy()
-        self.offspring_queue = OffspringAveragingQueue(self.cfg.reservoir_offspring_average)
+        self.offspring_queue = OffspringAveragingQueue(
+            self.cfg.reservoir_offspring_average
+        )
 
     def update_genetic_ratios(self, offspring: GenoDistrib):
         """
@@ -65,9 +67,13 @@ class Organisation:
         # (see: https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_discrete_distribution )
         # we can use a simple bayesian approach
         if offspring.gross > 0:
-            self.genetic_ratios = self.genetic_ratios + (offspring * (1 / offspring.gross)) \
-                                  * self.cfg.genetic_learning_rate
-        multinomial_probas = self.cfg.rng.dirichlet(tuple(self.genetic_ratios.values())).tolist()
+            self.genetic_ratios = (
+                self.genetic_ratios
+                + (offspring * (1 / offspring.gross)) * self.cfg.genetic_learning_rate
+            )
+        multinomial_probas = self.cfg.rng.dirichlet(
+            tuple(self.genetic_ratios.values())
+        ).tolist()
         keys = self.genetic_ratios.keys()
         self.external_pressure_ratios = dict(zip(keys, multinomial_probas))
 
@@ -84,8 +90,11 @@ class Organisation:
 
         :returns: a pair (number of new lice from reservoir, the ratios to sample from)
         """
-        number = self.offspring_queue.offspring_sum.gross * \
-                 self.cfg.reservoir_offspring_integration_ratio + self.cfg.min_ext_pressure
+        number = (
+            self.offspring_queue.offspring_sum.gross
+            * self.cfg.reservoir_offspring_integration_ratio
+            + self.cfg.min_ext_pressure
+        )
         ratios = self.external_pressure_ratios
 
         return number, ratios
@@ -135,10 +144,7 @@ class Organisation:
         return json.dumps(json_dict, cls=CustomFarmEncoder, indent=4)
 
     def to_json_dict(self):
-        return {
-            "name": self.name,
-            "farms": self.farms
-        }
+        return {"name": self.name, "farms": self.farms}
 
     def __repr__(self):
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
@@ -158,11 +164,15 @@ class Organisation:
         """
 
         def cts(farm_response: FarmResponse):
-            if isinstance(farm_response, SamplingResponse) and \
-                    farm_response.detected_rate >= self.cfg.aggregation_rate_threshold:
+            if (
+                isinstance(farm_response, SamplingResponse)
+                and farm_response.detected_rate >= self.cfg.aggregation_rate_threshold
+            ):
                 # send a treatment command to everyone
                 for other_farm in self.farms:
-                    other_farm.ask_for_treatment(cur_date, can_defect=other_farm != farm)
+                    other_farm.ask_for_treatment(
+                        cur_date, can_defect=other_farm != farm
+                    )
 
         pop_from_queue(farm.farm_to_org, cur_date, cts)
 
@@ -187,17 +197,21 @@ class Simulator:  # pragma: no cover
         return path / f"simulation_data_{sim_id}.pickle.lz4"
 
     @staticmethod
-    def reload_all_dump(path: Path, sim_id: str) -> Iterator[Tuple[Simulator, dt.datetime]]:
+    def reload_all_dump(
+        path: Path, sim_id: str
+    ) -> Iterator[Tuple[Simulator, dt.datetime]]:
         """Reload a simulator.
-        
+
         :param path: the folder containing the artifact
         :param sim_id: the simulation id
-        
+
         :returns: an iterator of pairs (sim_state, time)
         """
         logger.info("Loading from a dump...")
         data_file = Simulator.get_simulation_path(path, sim_id)
-        with lz4.frame.open(data_file, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC) as fp:
+        with lz4.frame.open(
+            data_file, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
+        ) as fp:
             while True:
                 try:
                     sim_state: Simulator = pickle.load(fp)
@@ -206,8 +220,9 @@ class Simulator:  # pragma: no cover
                     break
 
     @staticmethod
-    def dump_as_dataframe(states_times_it: Iterator[Tuple[Simulator, dt.datetime]]) -> Tuple[
-        pd.DataFrame, List[dt.datetime], Config]:
+    def dump_as_dataframe(
+        states_times_it: Iterator[Tuple[Simulator, dt.datetime]]
+    ) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
         """
         Convert a dump into a pandas dataframe
 
@@ -237,7 +252,7 @@ class Simulator:  # pragma: no cover
                     "payoff": float(state.payoff),
                 }
 
-        dataframe = pd.DataFrame.from_dict(farm_data, orient='index')
+        dataframe = pd.DataFrame.from_dict(farm_data, orient="index")
 
         # extract cumulative geno info regardless of the stage
         def aggregate_geno(data):
@@ -270,7 +285,12 @@ class Simulator:  # pragma: no cover
         return pd.DataFrame({"payoff": payoff_row, **proba_row})
 
     @staticmethod
-    def reload(path: Path, sim_id: str, timestamp: Optional[dt.datetime] = None, resume_after: Optional[int] = None):
+    def reload(
+        path: Path,
+        sim_id: str,
+        timestamp: Optional[dt.datetime] = None,
+        resume_after: Optional[int] = None,
+    ):
         """Reload a simulator state from a dump at a given time"""
         states, times = Simulator.reload_all_dump(path, sim_id)
 
@@ -291,7 +311,9 @@ class Simulator:  # pragma: no cover
         :return: a matrix of simulation events generated by the walk
         """
         if not path.is_dir():
-            raise NotADirectoryError(f"{path} needs to be a directory to extract from the optimiser")
+            raise NotADirectoryError(
+                f"{path} needs to be a directory to extract from the optimiser"
+            )
 
         with open(path / "params.json") as f:
             params = json.load(f)
@@ -306,7 +328,10 @@ class Simulator:  # pragma: no cover
                 new_step = []
                 for it in range(avg_iterations):
                     try:
-                        pickle_path = path / f"simulation_data_optimisation_{step}_{it}.pickle.lz4"
+                        pickle_path = (
+                            path
+                            / f"simulation_data_optimisation_{step}_{it}.pickle.lz4"
+                        )
                         print(pickle_path)
                         with pickle_path.open("rb") as f:
                             new_step.append(pickle.load(f))
@@ -337,11 +362,15 @@ class Simulator:  # pragma: no cover
 
         # create a file to store the population data from our simulation
         if resume and not self.output_dump_path.exists():
-            logger.warning(f"{self.output_dump_path} could not be found! Creating a new log file.")
+            logger.warning(
+                f"{self.output_dump_path} could not be found! Creating a new log file."
+            )
 
         if not resume:
             data_file = self.output_dump_path.open(mode="wb")
-            compressed_stream = lz4.frame.open(data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC)
+            compressed_stream = lz4.frame.open(
+                data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
+            )
 
         num_days = (self.cfg.end_date - self.cur_day).days
         for day in tqdm.trange(num_days):
@@ -350,8 +379,11 @@ class Simulator:  # pragma: no cover
 
             # Save the model snapshot either when checkpointing or during the last iteration
             if not resume:
-                if (self.cfg.save_rate and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate == 0) \
-                        or day == num_days - 1:
+                if (
+                    self.cfg.save_rate
+                    and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate
+                    == 0
+                ) or day == num_days - 1:
                     pickle.dump(self, compressed_stream)
             self.cur_day += dt.timedelta(days=1)
 
@@ -367,7 +399,9 @@ class OffspringAveragingQueue:
         """
         :param rolling_average: the maximum length to consider
         """
-        self._queue = Deque[GenoDistrib](maxlen=rolling_average)  # pytype: disable=not-callable
+        self._queue = Deque[GenoDistrib](
+            maxlen=rolling_average
+        )  # pytype: disable=not-callable
         self.offspring_sum = GenoDistrib()
 
     def __len__(self):

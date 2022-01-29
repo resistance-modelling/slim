@@ -24,36 +24,47 @@ if __name__ == "__main__":
 
     # set up and read the command line arguments
     parser = argparse.ArgumentParser(description="Sea lice simulation")
-    parser.add_argument("simulation_path",
-                        type=str,
-                        help="Output directory path. The base directory will be used for logging and serialisation " + \
-                             "of the simulator state.")
-    parser.add_argument("param_dir",
-                        type=str,
-                        help="Directory of simulation parameters files.")
-    parser.add_argument("--quiet",
-                        help="Don't log to console or file.",
-                        default=False,
-                        action="store_true")
-    parser.add_argument("--profile",
-                        help="(DEBUG) Dump cProfile stats. The output path is your_simulation_path/profile.bin.",
-                        default=False,
-                        action="store_true"
-                        )
+    parser.add_argument(
+        "simulation_path",
+        type=str,
+        help="Output directory path. The base directory will be used for logging and serialisation "
+        + "of the simulator state.",
+    )
+    parser.add_argument(
+        "param_dir", type=str, help="Directory of simulation parameters files."
+    )
+    parser.add_argument(
+        "--quiet",
+        help="Don't log to console or file.",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--profile",
+        help="(DEBUG) Dump cProfile stats. The output path is your_simulation_path/profile.bin.",
+        default=False,
+        action="store_true",
+    )
 
     resume_group = parser.add_mutually_exclusive_group()
-    resume_group.add_argument("--resume",
-                              type=str,
-                              help="(DEBUG) resume the simulator from a given timestep. All configuration variables will be ignored.")
-    resume_group.add_argument("--resume-after",
-                              type=int,
-                              help="(DEBUG) resume the simulator from a given number of days since the beginning of the simulation. All configuration variables will be ignored.")
-    resume_group.add_argument("--save-rate",
-                              help="Interval to dump the simulation state. Useful for visualisation and debugging." + \
-                                   "Warning: saving a run is a slow operation. Saving and resuming at the same time" + \
-                                   "is forbidden. If this is not provided, only the last timestep is serialised",
-                              type=int,
-                              required=False)
+    resume_group.add_argument(
+        "--resume",
+        type=str,
+        help="(DEBUG) resume the simulator from a given timestep. All configuration variables will be ignored.",
+    )
+    resume_group.add_argument(
+        "--resume-after",
+        type=int,
+        help="(DEBUG) resume the simulator from a given number of days since the beginning of the simulation. All configuration variables will be ignored.",
+    )
+    resume_group.add_argument(
+        "--save-rate",
+        help="Interval to dump the simulation state. Useful for visualisation and debugging."
+        + "Warning: saving a run is a slow operation. Saving and resuming at the same time"
+        + "is forbidden. If this is not provided, only the last timestep is serialised",
+        type=int,
+        required=False,
+    )
 
     args, unknown = parser.parse_known_args()
 
@@ -76,7 +87,9 @@ if __name__ == "__main__":
     if args.quiet:
         logger.addFilter(lambda record: False)
 
-    config_parser = Config.generate_argparse_from_config(cfg_schema_path, str(cfg_basename / "params.schema.json"))
+    config_parser = Config.generate_argparse_from_config(
+        cfg_schema_path, str(cfg_basename / "params.schema.json")
+    )
     config_args = config_parser.parse_args(unknown)
 
     # create the config object
@@ -86,9 +99,13 @@ if __name__ == "__main__":
     resume = True
     if args.resume:
         resume_time = to_dt(args.resume)
-        sim: Simulator = Simulator.reload(output_folder, simulation_id, timestamp=resume_time) 
+        sim: Simulator = Simulator.reload(
+            output_folder, simulation_id, timestamp=resume_time
+        )
     elif args.resume_after:
-        sim: Simulator = Simulator.reload(output_folder, simulation_id, resume_after=args.resume_after) 
+        sim: Simulator = Simulator.reload(
+            output_folder, simulation_id, resume_after=args.resume_after
+        )
     else:
         sim = Simulator(output_folder, simulation_id, cfg)
         resume = False

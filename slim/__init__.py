@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 logger = logging.getLogger("SeaLiceManagementGame")
 
+
 def create_logger():
     """
     Create a logger that logs to both file (in debug mode) and terminal (info).
@@ -14,14 +15,18 @@ def create_logger():
     file_handler.setLevel(logging.DEBUG)
     term_handler = logging.StreamHandler()
     term_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     term_handler.setFormatter(formatter)
     file_handler.setFormatter(formatter)
     logger.addHandler(term_handler)
     logger.addHandler(file_handler)
 
+
 class LoggableMixin:
     """A mixin to store variables when recording log entries."""
+
     def __init__(self):
         self.logged_data: Dict[str, Any] = {}
 

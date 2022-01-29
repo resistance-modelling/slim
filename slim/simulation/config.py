@@ -1,4 +1,4 @@
-__all__ = ['to_dt', 'Config']
+__all__ = ["to_dt", "Config"]
 
 import argparse
 from dataclasses import dataclass
@@ -11,7 +11,14 @@ from typing import Tuple, Dict, Optional, TYPE_CHECKING, Union
 import jsonschema
 import numpy as np
 
-from slim.types.TreatmentTypes import Treatment, TreatmentParams, GeneticMechanism, EMB, Money, Thermolicer
+from slim.types.TreatmentTypes import (
+    Treatment,
+    TreatmentParams,
+    GeneticMechanism,
+    EMB,
+    Money,
+    Thermolicer,
+)
 
 if TYPE_CHECKING:
     from slim.simulation.lice_population import LifeStage, GenoDistribDict
@@ -50,46 +57,54 @@ class RuntimeConfig:
         jsonschema.validate(data, schema)
 
         # Evolution constants
-        self.stage_age_evolutions: Dict[LifeStage, float] = data["stage_age_evolutions"] 
-        self.delta_p: Dict[LifeStage, float] = data["delta_p"] 
-        self.delta_s: Dict[LifeStage, float] = data["delta_s"] 
+        self.stage_age_evolutions: Dict[LifeStage, float] = data["stage_age_evolutions"]
+        self.delta_p: Dict[LifeStage, float] = data["delta_p"]
+        self.delta_s: Dict[LifeStage, float] = data["delta_s"]
         self.delta_m10: Dict[LifeStage, float] = data["delta_m10"]
-        self.lice_development_rates: Dict[LifeStage, float] = data["lice_development_rates"]
+        self.lice_development_rates: Dict[LifeStage, float] = data[
+            "lice_development_rates"
+        ]
         self.smolt_mass_params = SmoltParams(**data["smolt_mass_params"])
 
         # Infection constants
-        self.infection_main_delta: float = data["infection_main_delta"] 
-        self.infection_weight_delta: float = data["infection_weight_delta"] 
-        self.delta_expectation_weight_log: float = data["delta_expectation_weight_log"] 
+        self.infection_main_delta: float = data["infection_main_delta"]
+        self.infection_weight_delta: float = data["infection_weight_delta"]
+        self.delta_expectation_weight_log: float = data["delta_expectation_weight_log"]
 
         # Treatment constants
         self.emb = EMB(data["treatments"][0])
         self.thermolicer = Thermolicer(data["treatments"][1])
 
         # Fish mortality constants
-        self.fish_mortality_center: float = data["fish_mortality_center"] 
-        self.fish_mortality_k: float = data["fish_mortality_k"] 
-        self.male_detachment_rate: float = data["male_detachment_rate"] 
+        self.fish_mortality_center: float = data["fish_mortality_center"]
+        self.fish_mortality_k: float = data["fish_mortality_k"]
+        self.male_detachment_rate: float = data["male_detachment_rate"]
 
         # Background lice mortality constants
-        self.background_lice_mortality_rates: Dict[LifeStage, float] = data["background_lice_mortality_rates"] 
+        self.background_lice_mortality_rates: Dict[LifeStage, float] = data[
+            "background_lice_mortality_rates"
+        ]
 
         # Reproduction and recruitment constants
-        self.reproduction_eggs_first_extruded: int = data["reproduction_eggs_first_extruded"]
+        self.reproduction_eggs_first_extruded: int = data[
+            "reproduction_eggs_first_extruded"
+        ]
         self.reproduction_age_dependence: float = data["reproduction_age_dependence"]
         self.dam_unavailability: int = data["dam_unavailability"]
         self.genetic_mechanism = GeneticMechanism[data["genetic_mechanism"].upper()]
         self.geno_mutation_rate: float = data["geno_mutation_rate"]
 
         # TODO: take into account processing of non-discrete keys
-        self.reservoir_offspring_integration_ratio: float = data["reservoir_offspring_integration_ratio"]
+        self.reservoir_offspring_integration_ratio: float = data[
+            "reservoir_offspring_integration_ratio"
+        ]
         self.reservoir_offspring_average: int = data["reservoir_offspring_average"]
 
         # Other reward/payoff constants
         self.gain_per_kg = Money(data["gain_per_kg"])
 
         # Other constraints
-        self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"] 
+        self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]
 
         # load in the seed if provided
         # otherwise don't use a seed
@@ -97,7 +112,9 @@ class RuntimeConfig:
 
         self.rng = np.random.default_rng(seed=self.seed)
 
-    def multivariate_hypergeometric(self, bins: np.ndarray, balls: Union[int, np.integer]):
+    def multivariate_hypergeometric(
+        self, bins: np.ndarray, balls: Union[int, np.integer]
+    ):
         """A wrapper onto numpy's hypergeometric sampler.
         Because numpy cannot handle large bins, we approximate the distribution to a
         multinomial distribution.
@@ -109,14 +126,12 @@ class RuntimeConfig:
         """
         s = np.sum(bins)
         if s > 1e6:
-            return self.rng.multinomial(balls, bins/s)
+            return self.rng.multinomial(balls, bins / s)
         if np.sum(bins) < 100:
             method = "count"
         elif np.sum(bins) < 1e6:
             method = "marginals"
         return self.rng.multivariate_hypergeometric(bins, balls, method=method)
-
-
 
 
 class Config(RuntimeConfig):
@@ -126,8 +141,8 @@ class Config(RuntimeConfig):
         self,
         config_file: str,
         simulation_dir: str,
-        override_params: Optional[dict]= None,
-        save_rate: Optional[int] = None
+        override_params: Optional[dict] = None,
+        save_rate: Optional[int] = None,
     ):
         """Read the configuration from files
 
@@ -160,19 +175,26 @@ class Config(RuntimeConfig):
         # Experiment-specific genetic ratios
         self.min_ext_pressure = data["ext_pressure"]
         self.initial_genetic_ratios: GenoDistribDict = {
-            tuple(sorted(key.split(","))): val for key, val in data["genetic_ratios"].items()}
+            tuple(sorted(key.split(","))): val
+            for key, val in data["genetic_ratios"].items()
+        }
         self.genetic_learning_rate: float = data["genetic_learning_rate"]
         self.monthly_cost = Money(data["monthly_cost"])
         self.name: str = data["name"]
 
         # farms
-        self.farms = [FarmConfig(farm_data)
-                      for farm_data in data["farms"]]
+        self.farms = [FarmConfig(farm_data) for farm_data in data["farms"]]
         self.nfarms = len(self.farms)
 
-        self.interfarm_times = np.loadtxt(os.path.join(simulation_dir, "interfarm_time.csv"), delimiter=",")
-        self.interfarm_probs = np.loadtxt(os.path.join(simulation_dir, "interfarm_prob.csv"), delimiter=",")
-        self.loch_temperatures = np.loadtxt(os.path.join(simulation_dir, "temperatures.csv"), delimiter=",")
+        self.interfarm_times = np.loadtxt(
+            os.path.join(simulation_dir, "interfarm_time.csv"), delimiter=","
+        )
+        self.interfarm_probs = np.loadtxt(
+            os.path.join(simulation_dir, "interfarm_prob.csv"), delimiter=","
+        )
+        self.loch_temperatures = np.loadtxt(
+            os.path.join(simulation_dir, "temperatures.csv"), delimiter=","
+        )
 
         # driver-specific settings
         self.save_rate = save_rate
@@ -181,23 +203,21 @@ class Config(RuntimeConfig):
         return [self.emb, self.thermolicer][treatment_type.value]
 
     @staticmethod
-    def generate_argparse_from_config(cfg_schema_path: str, simulation_schema_path: str): # pragma: no cover
+    def generate_argparse_from_config(
+        cfg_schema_path: str, simulation_schema_path: str
+    ):  # pragma: no cover
         parser = argparse.ArgumentParser(description="Sea lice simulation")
 
         # TODO: we are parsing the config twice.
         with open(cfg_schema_path) as fp:
-            cfg_dict: dict = json.load(fp) 
+            cfg_dict: dict = json.load(fp)
 
         with open(simulation_schema_path) as fp:
-            simulation_dict: dict = json.load(fp) 
+            simulation_dict: dict = json.load(fp)
 
         def add_to_group(group_name, data):
             group = parser.add_argument_group(group_name)
-            schema_types_to_python = {
-                "string": str,
-                "number": float,
-                "integer": int
-            }
+            schema_types_to_python = {"string": str, "number": float, "integer": int}
 
             for k, v in data.items():
                 choices = None
@@ -218,15 +238,20 @@ class Config(RuntimeConfig):
                 if type_ == "array":
                     nargs = v.get("minLength", "*")
                     if "items" in v:
-                        type_ = v["items"]["type"] # this breaks with object arrays
+                        type_ = v["items"]["type"]  # this breaks with object arrays
 
                 if type_ == "object":
                     continue  # TODO: deal with them later, e.g. prop_a.prop_b for dicts?
                 description = v["description"]
                 value_type = schema_types_to_python.get(type_, type_)
 
-                group.add_argument(f"--{k.replace('_', '-')}",
-                                   type=value_type, help=description, choices=choices, nargs=nargs)
+                group.add_argument(
+                    f"--{k.replace('_', '-')}",
+                    type=value_type,
+                    help=description,
+                    choices=choices,
+                    nargs=nargs,
+                )
 
         add_to_group("Organisation parameters", simulation_dict["properties"])
         add_to_group("Runtime parameters", cfg_dict["properties"])
@@ -244,14 +269,13 @@ class FarmConfig:
         """
 
         # set params
-        self.num_fish: int = data["num_fish"] 
-        self.n_cages: int = data["ncages"] 
-        self.farm_location: Tuple[int, int] = data["location"] 
+        self.num_fish: int = data["num_fish"]
+        self.n_cages: int = data["ncages"]
+        self.farm_location: Tuple[int, int] = data["location"]
         self.farm_start = to_dt(data["start_date"])
-        self.cages_start = [to_dt(date)
-                            for date in data["cages_start_dates"]]
-        self.max_num_treatments: int = data["max_num_treatments"] 
-        self.sampling_spacing: int = data["sampling_spacing"] 
+        self.cages_start = [to_dt(date) for date in data["cages_start_dates"]]
+        self.max_num_treatments: int = data["max_num_treatments"]
+        self.sampling_spacing: int = data["sampling_spacing"]
 
         # TODO: a farm may employ different chemicals
         self.treatment_type = Treatment[data["treatment_type"].upper()]
@@ -268,5 +292,3 @@ class SmoltParams:
     max_mass: float
     skewness: float
     x_shift: float
-
-

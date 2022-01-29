@@ -23,9 +23,17 @@ from pathlib import Path
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtWidgets, QtCore
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QSettings
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
-                             QAction, QFileDialog, QMessageBox, QProgressBar,
-                             QVBoxLayout, QTabWidget)
+from PyQt5.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QMenu,
+    QAction,
+    QFileDialog,
+    QMessageBox,
+    QProgressBar,
+    QVBoxLayout,
+    QTabWidget,
+)
 from slim.simulation.simulator import Simulator
 from slim.gui_utils.configuration import ConfigurationPane
 from slim.gui_utils.console import ConsoleWidget
@@ -44,7 +52,7 @@ class Window(QMainWindow):
 
     def _createUI(self):
         self.setWindowTitle("SLIM GUI")
-        self.setWindowIcon(QtGui.QIcon('res/logo.png'))
+        self.setWindowIcon(QtGui.QIcon("res/logo.png"))
         self.resize(800, 600)
 
         pg.setConfigOptions(antialias=True)
@@ -188,7 +196,9 @@ class Window(QMainWindow):
             if filename_as_path.exists():
                 new_action = QAction(f"&{idx}: {option}", self)
                 # ugly hack as python does not capture "option" but only a lexical reference to it
-                new_action.triggered.connect(lambda _, option=option: self._createLoaderWorker(option))
+                new_action.triggered.connect(
+                    lambda _, option=option: self._createLoaderWorker(option)
+                )
                 new_recent_options.append(option)
                 self.recentFilesActions.append(new_action)
 
@@ -206,7 +216,8 @@ class Window(QMainWindow):
 
     def openSimulatorDump(self):
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Load a dump", "", "Pickle file (*.pickle.lz4)")
+            self, "Load a dump", "", "Pickle file (*.pickle.lz4)"
+        )
 
         if filename:
             recentFiles = self.recentFilesList
@@ -217,7 +228,8 @@ class Window(QMainWindow):
 
     def openOptimiserDump(self):
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Load an Optimiser dump", "", "Optimiser artifact (params.json)")
+            self, "Load an Optimiser dump", "", "Optimiser artifact (params.json)"
+        )
 
         print(filename)
         if filename:
@@ -225,12 +237,15 @@ class Window(QMainWindow):
             self._createLoaderWorker(dirname, is_optimiser=True)
 
     def _openAboutMessage(self):
-        QMessageBox.about(self, "About SLIM",
-                          """
+        QMessageBox.about(
+            self,
+            "About SLIM",
+            """
                           GUI for the Sea Lice sIMulator.
                           
                           For more details see https://github.com/resistance-modelling/slim
-                          """)
+                          """,
+        )
 
     def helpContent(self):
         pass
@@ -247,10 +262,14 @@ class SimulatorLoadingWorker(QThread):
     def run(self):
         try:
             parent_path = self.dump_path.parent
-            sim_name = self.dump_path.name[len("simulation_name_"):-len(".pickle.lz4")]
+            sim_name = self.dump_path.name[
+                len("simulation_name_") : -len(".pickle.lz4")
+            ]
             states_times_it = Simulator.reload_all_dump(parent_path, sim_name)
             states_as_df, times, cfg = Simulator.dump_as_dataframe(states_times_it)
-            self.finished.emit(SimulatorSingleRunState(times, states_as_df, cfg, sim_name))
+            self.finished.emit(
+                SimulatorSingleRunState(times, states_as_df, cfg, sim_name)
+            )
 
         except FileNotFoundError:
             self.failed.emit()
@@ -281,5 +300,5 @@ if __name__ == "__main__":
     win = Window()
     win.show()
 
-    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, "PYQT_VERSION"):
         pg.exec()
