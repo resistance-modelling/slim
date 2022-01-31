@@ -326,7 +326,7 @@ class Cage(LoggableMixin):
         Note: this method consumes the internal event queue
 
         :param cur_date: the current date
-        :returns a pair (distribution of dead lice, cost of treatment)
+        :returns: a pair (distribution of dead lice, cost of treatment)
         """
 
         dead_lice_dist = self.lice_population.get_empty_geno_distrib()
@@ -711,7 +711,7 @@ class Cage(LoggableMixin):
 
         :param num_fish: the number of fish
         :param infecting_lice: the number of lice attached to the fish
-        :returns the variance
+        :returns: the variance
         """
 
         if num_fish == 0:
