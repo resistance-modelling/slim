@@ -89,9 +89,9 @@ class TreatmentParams(ABC):
                 1,
                 temperature,
                 fish_mass_indicator,
-                temperature ** 2,
+                temperature**2,
                 temperature * fish_mass_indicator,
-                fish_mass_indicator ** 2,
+                fish_mass_indicator**2,
             ]
         )
         return max(float(self.quadratic_fish_mortality_coeffs.dot(input)), 0)

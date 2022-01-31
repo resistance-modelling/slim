@@ -399,9 +399,9 @@ class OffspringAveragingQueue:
         """
         :param rolling_average: the maximum length to consider
         """
-        self._queue = Deque[GenoDistrib](
+        self._queue = Deque[GenoDistrib](  # pytype: disable=not-callable
             maxlen=rolling_average
-        )  # pytype: disable=not-callable
+        )
         self.offspring_sum = GenoDistrib()
 
     def __len__(self):

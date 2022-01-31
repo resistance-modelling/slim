@@ -716,7 +716,7 @@ class Cage(LoggableMixin):
 
         if num_fish == 0:
             return 0.0
-        return infecting_lice ** 2 * (num_fish - 1) / (num_fish ** 2)
+        return infecting_lice**2 * (num_fish - 1) / (num_fish**2)
 
     def get_num_matings(self) -> int:
         """
@@ -951,7 +951,7 @@ class Cage(LoggableMixin):
         # Hatching time is already covered in get_egg_batch
         eggs = (
             self.cfg.reproduction_eggs_first_extruded
-            * (age_range ** self.cfg.reproduction_age_dependence)
+            * (age_range**self.cfg.reproduction_age_dependence)
             * mated_females_distrib
         )
 
