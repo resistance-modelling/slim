@@ -27,14 +27,14 @@ temperatures = np.array([0, 4, 7, 10, 13])
 
 
 def fit(data):
-    normalised_pp_increase = np.nan_to_num((np.sum(data * pp_bins, axis=2) / np.sum(data, axis=2)) \
-        .flatten(), 0)
+    normalised_pp_increase = np.nan_to_num(
+        (np.sum(data * pp_bins, axis=2) / np.sum(data, axis=2)).flatten(), 0
+    )
     mass_indicator = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
 
     X = np.c_[np.tile(temperatures, 2), mass_indicator]
 
-    pipeline = Pipeline([("poly", PolynomialFeatures(degree=2)),
-                         ("ridge", Ridge())])
+    pipeline = Pipeline([("poly", PolynomialFeatures(degree=2)), ("ridge", Ridge())])
 
     trained_model = pipeline.fit(X, normalised_pp_increase)
     return trained_model.steps[1][1].coef_
@@ -43,28 +43,44 @@ def fit(data):
 # First axis: mass (<= 2Kg, > 2Kg)
 # Second axis: temperature bin
 # Third axis: pp increase bin
-deltamethrin_data = np.array([[[3, 3.5, 4, 0, 0],
-                               [4.5, 0, 0.5, 0, 0],
-                               [6, 5, 0.5, 0, 0],
-                               [5.5, 4, 2, 0.5, 0.5],
-                               [5, 3, 1, 0, 0]],
-                              [[5, 3, 0, 0, 0],
-                              [3, 1, 0.5, 0, 0],
-                              [4.5, 2, 2, 1.5, 0],
-                              [5, 2.5, 2, 2, 0],
-                              [7.5, 4.5, 1, 0.5, 0]]])
+deltamethrin_data = np.array(
+    [
+        [
+            [3, 3.5, 4, 0, 0],
+            [4.5, 0, 0.5, 0, 0],
+            [6, 5, 0.5, 0, 0],
+            [5.5, 4, 2, 0.5, 0.5],
+            [5, 3, 1, 0, 0],
+        ],
+        [
+            [5, 3, 0, 0, 0],
+            [3, 1, 0.5, 0, 0],
+            [4.5, 2, 2, 1.5, 0],
+            [5, 2.5, 2, 2, 0],
+            [7.5, 4.5, 1, 0.5, 0],
+        ],
+    ]
+)
 
 
-thermolicer_data = np.array([[[0, 0, 0, 0, 0],
-                              [13, 15, 2, 0, 0],
-                              [15, 5, 4, 2, 0],
-                              [10, 2.5, 2.5, 0.5, 1.5],
-                              [7, 6, 0, 0, 0]],
-                             [[0, 0, 0, 0, 0],
-                              [26, 9, 3, 1.5, 0.5],
-                              [16, 7, 3, 0, 0],
-                              [21, 5.5, 3, 1, 1],
-                              [24, 6, 2.5, 2.5, 0]]])
+thermolicer_data = np.array(
+    [
+        [
+            [0, 0, 0, 0, 0],
+            [13, 15, 2, 0, 0],
+            [15, 5, 4, 2, 0],
+            [10, 2.5, 2.5, 0.5, 1.5],
+            [7, 6, 0, 0, 0],
+        ],
+        [
+            [0, 0, 0, 0, 0],
+            [26, 9, 3, 1.5, 0.5],
+            [16, 7, 3, 0, 0],
+            [21, 5.5, 3, 1, 1],
+            [24, 6, 2.5, 2.5, 0],
+        ],
+    ]
+)
 
 print("Deltamethrin coeffs:", repr(fit(deltamethrin_data)))
 print("Thermolicer coeffs:", repr(fit(thermolicer_data)))

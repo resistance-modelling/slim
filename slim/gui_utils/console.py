@@ -10,13 +10,13 @@ class ConsoleWidget(RichJupyterWidget):
         self.font_size = 6
         self.kernel_manager = kernel_manager = QtInProcessKernelManager()
         kernel_manager.start_kernel()
-        kernel_manager.kernel.gui = 'qt'
+        kernel_manager.kernel.gui = "qt"
         self.kernel_client = kernel_client = self.kernel_manager.client()
         kernel_client.start_channels()
 
         def stop():
-           kernel_client.stop_channels()
-           kernel_manager.shutdown_kernel()
+            kernel_client.stop_channels()
+            kernel_manager.shutdown_kernel()
 
         self.exit_requested.connect(stop)
 

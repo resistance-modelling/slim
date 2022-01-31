@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 @dataclass
 class SimulatorSingleRunState:
     """State of the single simulator"""
+
     times: List[dt.datetime]
     states_as_df: pd.DataFrame
     cfg: Config
@@ -27,6 +28,7 @@ class SimulatorSingleRunState:
 @dataclass
 class SimulatorOptimiserState:
     """Optimiser state"""
+
     states: List[List[Simulator]]
     states_as_df: pd.DataFrame
 

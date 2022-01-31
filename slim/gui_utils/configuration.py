@@ -21,8 +21,12 @@ class ConfigurationPane(QWidget):
         self.mainLayout = QVBoxLayout()
         self.runtimeConfigView = QTableView()
         self.farmConfigView = QTableView()
-        self._populateListView(Path("config_data/config.schema.json"), self.runtimeConfigView)
-        self._populateListView(Path("config_data/params.schema.json"), self.farmConfigView)
+        self._populateListView(
+            Path("config_data/config.schema.json"), self.runtimeConfigView
+        )
+        self._populateListView(
+            Path("config_data/params.schema.json"), self.farmConfigView
+        )
 
         self.mainLayout.addWidget(QLabel("Runtime Configuration"))
         self.mainLayout.addWidget(self.runtimeConfigView)

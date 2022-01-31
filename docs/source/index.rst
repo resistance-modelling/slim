@@ -19,6 +19,7 @@ Welcome to SLIM's documentation!
    :maxdepth: 2
    :caption: Development guide:
 
+   contributing
    testing
    modules
 
