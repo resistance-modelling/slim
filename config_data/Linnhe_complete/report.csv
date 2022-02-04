@@ -1,0 +1,24 @@
+Year,Month,Site ID,Site Name,Lice Count,Comments,company,site,mortality,note,cumulative_mortality,lice_count
+2019,February,ARDG1,Ardgour (Linnhe),0.41,,Mowi Scotland Limited,Linnhe,0.7,,In production,0.41
+2019,March,ARDG1,Ardgour (Linnhe),0.37,,Mowi Scotland Limited,Linnhe,0.5,,In production,0.37
+2019,April,ARDG1,Ardgour (Linnhe),0.36,,Mowi Scotland Limited,Linnhe,0.5,,In production,0.36
+2019,May,ARDG1,Ardgour (Linnhe),0.37,,Mowi Scotland Limited,Linnhe,0.6,,In production,0.37
+2019,June,ARDG1,Ardgour (Linnhe),0.41,,Mowi Scotland Limited,Linnhe,1.3,,In production,0.41
+2019,July,ARDG1,Ardgour (Linnhe),0.97,,Mowi Scotland Limited,Linnhe,16.2,CMS,In production,0.97
+2019,August,ARDG1,Ardgour (Linnhe),FNC,Farm fallowed in Aug.,Mowi Scotland Limited,Linnhe,1.9,,23.5,
+2019,September,ARDG1,Ardgour (Linnhe),F,Fallow,Mowi Scotland Limited,Linnhe,,,Fallow,
+2019,October,ARDG1,Ardgour (Linnhe),F,Fallow,Mowi Scotland Limited,Linnhe,,,Fallow,
+2019,November,ARDG1,Ardgour (Linnhe),SNC,Farm stocked in Nov.,Mowi Scotland Limited,Linnhe,0.2,,In production,
+2019,December,ARDG1,Ardgour (Linnhe),0,,Mowi Scotland Limited,Linnhe,0.8,,In production,0.0
+2020,January,ARDG1,Ardgour (Linnhe),0,,Mowi Scotland Limited,Linnhe,0.4,,In production,0.0
+2020,February,ARDG1,Ardgour (Linnhe),0.01,,Mowi Scotland Limited,Linnhe,0.1,,In production,0.01
+2020,March,ARDG1,Ardgour (Linnhe),0,,Mowi Scotland Limited,Linnhe,0.2,,In production,0.0
+2020,April,ARDG1,Ardgour (Linnhe),0,,Mowi Scotland Limited,Linnhe,0.4,,In production,0.0
+2020,May,ARDG1,Ardgour (Linnhe),0.01,,Mowi Scotland Limited,Linnhe,0.2,,In production,0.01
+2020,June,ARDG1,Ardgour (Linnhe),0.02,,Mowi Scotland Limited,Linnhe,0.1,,In production,0.02
+2020,July,ARDG1,Ardgour (Linnhe),0.07,,Mowi Scotland Limited,Linnhe,0.2,,In production,0.07
+2020,August,ARDG1,Ardgour (Linnhe),0.16,,Mowi Scotland Limited,Linnhe,0.3,,In production,0.16
+2020,September,ARDG1,Ardgour (Linnhe),0.04,,Mowi Scotland Limited,Linnhe,0.2,,In production,0.04
+2020,October,ARDG1,Ardgour (Linnhe),0.17,,Mowi Scotland Limited,Linnhe,0.2,,In production,0.17
+2020,November,ARDG1,Ardgour (Linnhe),0.44,,Mowi Scotland Limited,Linnhe,0.1,,In production,0.44
+2020,December,ARDG1,Ardgour (Linnhe),0.81,,Mowi Scotland Limited,Linnhe,0.81,,,0.81
