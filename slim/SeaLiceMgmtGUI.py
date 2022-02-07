@@ -39,6 +39,7 @@ from slim.gui_utils.configuration import ConfigurationPane
 from slim.gui_utils.console import ConsoleWidget
 from slim.gui_utils.plots import SingleRunPlotPane, OptimiserPlotPane
 from slim.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState
+from slim.gui_utils.maps import MapWidget
 
 
 # noinspection PyUnresolvedReferences
@@ -77,6 +78,7 @@ class Window(QMainWindow):
         self._createPlotPane()
         self._createConfigurationPane()
         self._createConsole()
+        self._createMapWidget()
         self._createTabs()
         self._createProgressBar()
 
@@ -87,12 +89,17 @@ class Window(QMainWindow):
     def _createConfigurationPane(self):
         self.configurationPane = ConfigurationPane()
 
+    def _createMapWidget(self):
+        self.mapWidget = MapWidget(self)
+        self.mapWidget.show()
+
     def _createTabs(self):
         self.plotTabs = QTabWidget(self)
 
         self.plotTabs.addTab(self.simulationPlotPane, "Simulation plots")
         self.plotTabs.addTab(self.optimiserPlotPane, "Optimiser plots")
         self.plotTabs.addTab(self.configurationPane, "Configuration")
+        self.plotTabs.addTab(self.mapWidget, "Site Map")
         self.plotTabs.addTab(self.console, "Debugging console")
 
     def _createProgressBar(self):

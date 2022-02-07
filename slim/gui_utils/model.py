@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 import datetime as dt
 from typing import List, TYPE_CHECKING
 
+from PyQt5.QtCore import QUrl
+from PyQt5.QtPositioning import QGeoCoordinate
 
 if TYPE_CHECKING:
     from slim.simulation.simulator import Simulator
@@ -43,3 +45,10 @@ class CurveListState:
     L5m: bool = field(default=True)
     Eggs: bool = field(default=True)
     ExtP: bool = field(default=True)
+
+
+@dataclass
+class PositionMarker:
+    """Position marker on the GUI"""
+    position: QGeoCoordinate
+    source: QUrl
