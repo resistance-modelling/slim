@@ -41,6 +41,10 @@
             "items": {
                 "type": "object",
                 "properties": {
+                    "name": {
+                        "description": "Farm name",
+                        "type": "string"
+                    },
                     "ncages": {
                         "description": "Number of cages on the farm",
                         "type": "integer"

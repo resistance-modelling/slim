@@ -12,6 +12,7 @@
     "genetic_learning_rate": 1,
     "farms": [
         {
+            "name": "Tarbert",
             "ncages": 14,
             "location": [
                 190300,
@@ -42,6 +43,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Rubha Stillaig",
             "ncages": 10,
             "location": [
                 192500,
@@ -68,6 +70,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Glenan Bay",
             "ncages": 14,
             "location": [
                 191800,
@@ -98,6 +101,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Meall Mhor",
             "ncages": 12,
             "location": [
                 186500,
@@ -126,6 +130,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Gob a Bharra",
             "ncages": 10,
             "location": [
                 190400,
@@ -152,6 +157,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Strondoir Bay",
             "ncages": 10,
             "location": [
                 186300,
@@ -178,6 +184,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Ardgadden",
             "ncages": 14,
             "location": [
                 190800,
@@ -208,6 +215,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Ardcastle Bay",
             "ncages": 9,
             "location": [
                 195300,
@@ -233,6 +241,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Quarry Point",
             "ncages": 9,
             "location": [
                 199800,
