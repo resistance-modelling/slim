@@ -70,7 +70,7 @@ class Cage(LoggableMixin):
         self.cfg = cfg
         self.id = cage_id
 
-        self.farm_id = farm.name
+        self.farm_id = farm.id_
         self.start_date = cfg.farms[self.farm_id].cages_start[cage_id]
         self.date = cfg.start_date
 

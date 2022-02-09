@@ -6,9 +6,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import datetime as dt
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Tuple
 
 from PyQt5.QtCore import QUrl
+from PyQt5.QtGui import QColor
 from PyQt5.QtPositioning import QGeoCoordinate
 
 if TYPE_CHECKING:
@@ -50,5 +51,13 @@ class CurveListState:
 @dataclass
 class PositionMarker:
     """Position marker on the GUI"""
+    name: str
     position: QGeoCoordinate
     source: QUrl
+
+@dataclass
+class TransitionEndpoint:
+    """Lice transition on the map"""
+    endpoint: Tuple[QGeoCoordinate, QGeoCoordinate]
+    color: QColor
+    width: int

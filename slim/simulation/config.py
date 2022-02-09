@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 def to_dt(string_date) -> dt.datetime:
     """Convert from string date to datetime date
 
-    :param string_date:: Date as string timestamp
+    :param string_date: Date as string timestamp
     :type string_date: str
     :return: Date as Datetime
     :rtype: [type]
@@ -265,10 +265,11 @@ class FarmConfig:
     def __init__(self, data: dict):
         """Create farm configuration
 
-        :param data:: Dictionary with farm data
+        :param data: Dictionary with farm data
         """
 
         # set params
+        self.name: str = data["name"]
         self.num_fish: int = data["num_fish"]
         self.n_cages: int = data["ncages"]
         self.farm_location: Tuple[int, int] = data["location"]

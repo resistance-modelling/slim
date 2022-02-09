@@ -117,7 +117,7 @@ class Organisation:
         payoff = Money()
         for farm in self.farms:
             offspring, cost = farm.update(cur_date, *self.get_external_pressure())
-            offspring_dict[farm.name] = offspring
+            offspring_dict[farm.id_] = offspring
             # TODO: take into account other types of disadvantages, not just the mere treatment cost
             # e.g. how are environmental factors measured? Are we supposed to add some coefficients here?
             # TODO: if we take current fish population into account then what happens to the infrastructure cost?
@@ -242,7 +242,7 @@ class Simulator:  # pragma: no cover
                 cfg = state.cfg
 
             for farm in state.organisation.farms:
-                key = (time, "farm_" + str(farm.name))
+                key = (time, "farm_" + str(farm.id_))
                 is_treating = all([cage.is_treated(time) for cage in farm.cages])
                 farm_data[key] = {
                     **farm.lice_genomics,
@@ -279,7 +279,7 @@ class Simulator:  # pragma: no cover
 
             for farm_cfg, farm in zip(farm_cfgs, farms):
                 proba = farm_cfg.defection_proba
-                key = "farm_" + str(farm.name)
+                key = "farm_" + str(farm.id_)
                 proba_row.setdefault(key, []).append(proba)
 
         return pd.DataFrame({"payoff": payoff_row, **proba_row})

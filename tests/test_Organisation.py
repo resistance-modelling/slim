@@ -8,7 +8,7 @@ from slim.simulation.lice_population import GenoDistrib
 
 class TestOrganisation:
     def test_organisation_loads(self, organisation):
-        assert organisation.name == "Loch Fyne ACME Ltd."
+        assert organisation.id_ == "Loch Fyne ACME Ltd."
         assert len(organisation.farms) == 2
 
     def test_json(self, organisation):

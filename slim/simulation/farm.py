@@ -44,14 +44,14 @@ class Farm(LoggableMixin):
 
     def __init__(
         self,
-        name: int,
+        id_: int,
         cfg: Config,
         initial_lice_pop: Optional[GrossLiceDistrib] = None,
     ):
         """
         Create a farm.
 
-        :param name: the id of the farm.
+        :param id_: the id of the farm.
         :param cfg: the farm configuration
         :param initial_lice_pop: if provided, overrides default generated lice population
         """
@@ -59,9 +59,9 @@ class Farm(LoggableMixin):
 
         self.cfg = cfg
 
-        farm_cfg = cfg.farms[name]
+        farm_cfg = cfg.farms[id_]
         self.farm_cfg = farm_cfg
-        self.name = name
+        self.id_ = id_
         self.loc_x = farm_cfg.farm_location[0]
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
@@ -89,7 +89,7 @@ class Farm(LoggableMixin):
         :return: a description of the cage
         """
         cages = ", ".join(str(a) for a in self.cages)
-        return f"id: {self.name}, Cages: {cages}"
+        return f"id: {self.id_}, Cages: {cages}"
 
     def to_json_dict(self, **kwargs):
         filtered_vars = vars(self).copy()
@@ -110,7 +110,7 @@ class Farm(LoggableMixin):
             # don't attempt to compare against unrelated types
             return NotImplemented
 
-        return self.name == other.name
+        return self.id_ == other.id_
 
     @property
     def num_fish(self):
@@ -227,7 +227,7 @@ class Farm(LoggableMixin):
         """
 
         logger.debug(
-            "\t\tFarm {} requests treatment {}".format(self.name, str(treatment_type))
+            "\t\tFarm {} requests treatment {}".format(self.id_, str(treatment_type))
         )
         if self.available_treatments <= 0:
             return False
@@ -265,7 +265,7 @@ class Farm(LoggableMixin):
         :param can_defect: if True, the farm has a choice to not apply treatment
         """
 
-        logger.debug("Asking farm {} to treat".format(self.name))
+        logger.debug("Asking farm {} to treat".format(self.id_))
 
         # TODO: this is extremely simple.
         p = [self.farm_cfg.defection_proba, 1 - self.farm_cfg.defection_proba]
@@ -273,7 +273,7 @@ class Farm(LoggableMixin):
         self.log("Outcome of the vote: %r", is_treating=want_to_treat)
 
         if not want_to_treat:
-            logger.debug("\tFarm {} refuses to treat".format(self.name))
+            logger.debug("\tFarm {} refuses to treat".format(self.id_))
             return
 
         # TODO: implement a strategy to pick a treatment of choice
@@ -301,9 +301,9 @@ class Farm(LoggableMixin):
         self.clear_log()
 
         if cur_date >= self.start_date:
-            logger.debug("Updating farm {}".format(self.name))
+            logger.debug("Updating farm {}".format(self.id_))
         else:
-            logger.debug("Updating farm {} (non-operational)".format(self.name))
+            logger.debug("Updating farm {} (non-operational)".format(self.id_))
 
         self.log(
             "\tAdding %r new lice from the reservoir", new_reservoir_lice=ext_influx
@@ -342,7 +342,7 @@ class Farm(LoggableMixin):
 
             total_cost += cost
 
-        self.log("\t\tGenerated eggs by farm %d: %s", self.name, eggs=eggs_log)
+        self.log("\t\tGenerated eggs by farm %d: %s", self.id_, eggs=eggs_log)
 
         return eggs_by_hatch_date, total_cost
 
@@ -386,7 +386,7 @@ class Farm(LoggableMixin):
             for genotype, n in geno_dict.items():
 
                 # get the interfarm travel probability between the two farms
-                travel_prob = self.cfg.interfarm_probs[self.name][target_farm.name]
+                travel_prob = self.cfg.interfarm_probs[self.id_][target_farm.id_]
 
                 # calculate number of arrivals based on the probability and total
                 # number of offspring
@@ -456,13 +456,13 @@ class Farm(LoggableMixin):
         :param cur_date: Current date of the simulation
         """
 
-        logger.debug("\tDispersing total offspring Farm {}".format(self.name))
+        logger.debug("\tDispersing total offspring Farm {}".format(self.id_))
 
         for farm in farms:
-            if farm.name == self.name:
-                logger.debug("\t\tFarm {} (current):".format(farm.name))
+            if farm.id_ == self.id_:
+                logger.debug("\t\tFarm {} (current):".format(farm.id_))
             else:
-                logger.debug("\t\tFarm {}:".format(farm.name))
+                logger.debug("\t\tFarm {}:".format(farm.id_))
 
             # allocate eggs to cages
             farm_arrivals = self.get_farm_allocation(farm, eggs_by_hatch_date)
@@ -481,7 +481,7 @@ class Farm(LoggableMixin):
             # get the arrival time of the egg batch at the allocated
             # destination
             travel_time = self.cfg.rng.poisson(
-                self.cfg.interfarm_times[self.name][farm.name]
+                self.cfg.interfarm_times[self.id_][farm.id_]
             )
             arrival_date = cur_date + dt.timedelta(days=travel_time)
 

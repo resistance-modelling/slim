@@ -13,7 +13,7 @@ from slim.types.QueueTypes import SampleRequestCommand
 
 class TestFarm:
     def test_farm_loads_params(self, first_farm):
-        assert first_farm.name == 0
+        assert first_farm.id_ == 0
         assert len(first_farm.cages) == 6
         assert first_farm.loc_x == 190300
         assert first_farm.loc_y == 665300
@@ -126,7 +126,7 @@ class TestFarm:
             first_farm.get_cage_allocation(nbins, {})
 
     def test_get_farm_allocation(self, first_farm, second_farm, sample_offspring_distrib):
-        first_farm.cfg.interfarm_probs[first_farm.name][second_farm.name] = 0.1
+        first_farm.cfg.interfarm_probs[first_farm.id_][second_farm.id_] = 0.1
 
         total_eggs_by_date = {first_farm.start_date: sample_offspring_distrib}
         farm_eggs_by_date = first_farm.get_farm_allocation(second_farm, total_eggs_by_date)
@@ -221,7 +221,7 @@ class TestFarm:
         test_farm = request.getfixturevalue(test_farm)
 
         # ensure number of different hatching dates through a number of cages
-        test_farm.cfg.farms[test_farm.name].cages_start = [test_farm.start_date for i in range(10)]
+        test_farm.cfg.farms[test_farm.id_].cages_start = [test_farm.start_date for i in range(10)]
         test_farm.cages = [Cage(i, test_farm.cfg, test_farm, initial_lice_pop) for i in range(10)]
 
         eggs_by_hatch_date, cost = test_farm.update(

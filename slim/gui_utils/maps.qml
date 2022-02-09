@@ -1,10 +1,12 @@
 import QtQuick 2.11
+import QtQuick.Controls 2.2
+import QtQuick.Window 2.0
 import QtPositioning 5.11
 import QtLocation 5.11
 
 Rectangle {
     id:mapWidgetRect
-    width: 640 /* How to make flexible? */
+    width: 640
     height: 480
     Plugin {
         id: osmPlugin
@@ -19,13 +21,37 @@ Rectangle {
         center: locationTC
         zoomLevel: 8
         MapItemView {
-            model: markermodel // a list model-like class that instantiates a set of markers
-            delegate: MapQuickItem { // a marker is basically a coordinate with an icon
-                coordinate: model.position_marker
+            id: locations
+            model: marker_model
+            delegate: MapQuickItem {
+                coordinate: model.coords
                 anchorPoint.x: image.width
                 anchorPoint.y: image.height
-                sourceItem:
-                    Image { id: image; source: model.source_marker }
+                sourceItem: Rectangle {
+                    Image { id: image; source: model.source }
+
+                    Text {
+                        anchors.fill: parent
+                        text: model.name
+                    }
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        ToolTip.timeout = 2000
+                        ToolTip.visible = true
+                        ToolTip.text = qsTr("Coordinates: %1, %2").arg(model.coords.latitude).arg(model.coords.longitude)
+                    }
+                }
+            }
+        }
+        MapItemView {
+            id: network
+            model: network_model
+            delegate: MapPolyline {
+                line.width: model.lineWidth
+                line.color: model.lineColor
+                path: model.endpoints
             }
         }
     }
