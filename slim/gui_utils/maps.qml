@@ -13,7 +13,7 @@ Rectangle {
         name: "osm"
     }
     // Somewhere between Perth and Loch Lomond
-    property variant locationTC: QtPositioning.coordinate(56.33, -4.21)
+    property var locationTC: QtPositioning.coordinate(56.33, -4.21)
     Map {
         id: mapWidgetMap
         anchors.fill: parent
@@ -29,9 +29,8 @@ Rectangle {
                 anchorPoint.y: image.height
                 sourceItem: Rectangle {
                     Image { id: image; source: model.source }
-
                     Text {
-                        anchors.fill: parent
+                        anchors.left: image.right
                         text: model.name
                     }
                 }
@@ -53,6 +52,15 @@ Rectangle {
                 line.color: model.lineColor
                 path: model.endpoints
             }
+        }
+    }
+    Slider {
+        id: intensityThreshold
+        value: 0.5
+        x: mapWidgetMap.width - 50
+        y: 30
+        orientation: Qt.Vertical
+        onMoved: {
         }
     }
 }
