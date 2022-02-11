@@ -8,6 +8,8 @@ __all__ = ["Organisation", "Simulator"]
 
 import datetime as dt
 import json
+import os
+
 import lz4.frame
 from pathlib import Path
 from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator
@@ -264,7 +266,7 @@ class Simulator:  # pragma: no cover
 
         dataframe = dataframe.join(aggregate_geno_info)
 
-        return dataframe.rename_axis(("timestamp", "farm_name")), times, cfg
+        return dataframe.rename_axis(("timestamp", "farm_id")), times, cfg
 
     @staticmethod
     def dump_optimiser_as_pd(states: List[List[Simulator]]):
@@ -349,6 +351,14 @@ class Simulator:  # pragma: no cover
             return res
         else:
             raise NotImplementedError()
+
+    @staticmethod
+    def load_counts(cfg: Config) -> pd.Dataframe:
+        """Load a lice count and salmon mortality report."""
+        report = os.path.join(cfg.experiment_id, "report.csv")
+        report_df = pd.read_csv(report)
+        report_df["date"] = pd.to_datetime(report_df["date"])
+        return report_df
 
     def run_model(self, resume=False):
         """Perform the simulation by running the model.

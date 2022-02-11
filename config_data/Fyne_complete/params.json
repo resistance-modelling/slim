@@ -1,7 +1,7 @@
 {
     "name": "Loch Fyne (complete)",
-    "start_date": "2017-10-01 00:00:00",
-    "end_date": "2019-10-01 00:00:00",
+    "start_date": "2019-01-01 00:00:00",
+    "end_date": "2021-01-01 00:00:00",
     "ext_pressure": 150,
     "monthly_cost": "5000.00",
     "genetic_ratios": {
@@ -12,7 +12,7 @@
     "genetic_learning_rate": 1,
     "farms": [
         {
-            "name": "Tarbert",
+            "name": "Tarbert South",
             "ncages": 14,
             "location": [
                 190300,
@@ -184,7 +184,7 @@
             "defection_proba": 0.2
         },
         {
-            "name": "Ardgadden",
+            "name": "Ardgaddan",
             "ncages": 14,
             "location": [
                 190800,
@@ -215,7 +215,7 @@
             "defection_proba": 0.2
         },
         {
-            "name": "Ardcastle Bay",
+            "name": "Ardcastle",
             "ncages": 9,
             "location": [
                 195300,

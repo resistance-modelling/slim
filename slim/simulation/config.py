@@ -157,6 +157,8 @@ class Config(RuntimeConfig):
             override_params = dict()
         super().__init__(config_file, override_params)
 
+        self.experiment_id = simulation_dir
+
         # read and set the params
         with open(os.path.join(simulation_dir, "params.json")) as f:
             data = json.load(f)

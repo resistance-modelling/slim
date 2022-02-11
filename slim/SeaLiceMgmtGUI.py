@@ -250,9 +250,11 @@ class Window(QMainWindow):
 
     def openConfiguration(self):
         dir = QFileDialog.getExistingDirectory(
-            self, "Load a map configuration", "",
+            self,
+            "Load a map configuration",
+            "",
             # I hate GTK native dialogues
-            QFileDialog.ShowDirsOnly | QFileDialog.DontUseNativeDialog
+            QFileDialog.ShowDirsOnly | QFileDialog.DontUseNativeDialog,
         )
 
         if dir:
@@ -291,8 +293,12 @@ class SimulatorLoadingWorker(QThread):
             ]
             states_times_it = Simulator.reload_all_dump(parent_path, sim_name)
             states_as_df, times, cfg = Simulator.dump_as_dataframe(states_times_it)
+            try:
+                report = Simulator.load_counts(cfg)
+            except FileNotFoundError:
+                report = None
             self.finished.emit(
-                SimulatorSingleRunState(times, states_as_df, cfg, sim_name)
+                SimulatorSingleRunState(times, states_as_df, report, cfg, sim_name)
             )
 
         except FileNotFoundError:

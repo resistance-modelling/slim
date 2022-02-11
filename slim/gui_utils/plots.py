@@ -4,6 +4,7 @@ This module provides plotting widgets and utils.
 
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING, List
 
@@ -12,6 +13,7 @@ import pandas as pd
 import pyqtgraph as pg
 import scipy
 import scipy.ndimage
+
 from PyQt5 import QtCore
 from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtWidgets import (
@@ -71,8 +73,20 @@ class SmoothedPlotItemWrap:
         self.method = method
         self.original_title = plot_item.titleLabel.text
         self.title_style = plot_item.titleLabel.opts
+        self.min_date = None
 
-    def plot(self, signal, stage: Optional[str] = None, **kwargs) -> PlotDataItem:
+    def plot(
+        self, y, stage: Optional[str] = None, x: Optional[dt.datetime] = None, **kwargs
+    ) -> PlotDataItem:
+        """
+        Plot a list of values
+
+        For a list of options check :meth:`pg.PlotdataItem.__init__`
+
+        :param y: the sequence to plot
+        :param stage: if y is a population, pick a selected lifecycle stage
+        :param x: provide an optional x-axis
+        """
         # compute the signal
         # TODO: support multiple rolling averages
         if self.method == "linear":
@@ -104,10 +118,13 @@ class SmoothedPlotItemWrap:
         else:
             _kwargs = kwargs
 
+        if x is not None:
+            x = [(day - self.min_date).days for day in x]
+            print(x)
+
         return self.plot_item.plot(
-            scipy.ndimage.convolve(
-                signal / self.average_factor, kernel, mode="nearest"
-            ),
+            x=x,
+            y=scipy.ndimage.convolve(y / self.average_factor, kernel, mode="nearest"),
             **_kwargs,
         )
 
@@ -120,6 +137,9 @@ class SmoothedPlotItemWrap:
             " averaged across cages" if average_factor > 1 else ""
         )
         self.plot_item.setTitle(title, **self.title_style)
+
+    def setXAxis(self, timestamps: List[dt.datetime]):
+        self.min_date = timestamps[0]
 
     def heightForWidth(self, width):
         return int(width * 1.5)
@@ -149,6 +169,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         super().__init__(parent)
         self.pane = parent
         self.coord_to_plot = {}
+        self.timestamps = None
 
         smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
         averaging_widget = parent.normaliseByCageCheckbox
@@ -249,9 +270,17 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         # Maybe there is something else that has to be changed? Need to investigate...
         # This is a hack that works half of the time. Expect flickering.
         size: QSize = self.size()
-        num_farms = len(self.pane._uniqueFarms)
+        num_farms = len(self.pane._farmIDs)
         # 9/60 is not the real aspect ratio, but it takes into account padding
         self.setFixedHeight((num_farms + 1) * size.width() * 9 / 60)
+
+    def setDefaultXAxis(self, timestamps: List[dt.datetime]):
+        """
+        Set the x-axis of all the plots
+        """
+        for plot in self.coord_to_plot.values():
+            if isinstance(plot, SmoothedPlotItemWrap):
+                plot.setXAxis(timestamps)
 
 
 class LightModeMixin:
@@ -339,10 +368,22 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         mainPane.loadedSimulatorState.connect(self._updateModel)
 
     @property
-    def _uniqueFarms(self):
+    def _farmIDs(self):
+        """
         if self.state:
-            return self.state.states_as_df.reset_index()["farm_name"].unique()
+            return self.state.states_as_df.reset_index()["farm_id"].unique()
         return []
+        """
+
+        if self.state:
+            return [f"farm_{i}" for i in range(len(self.state.cfg.farms))]
+        return []
+
+    @property
+    def _farmNames(self):
+        if self.state:
+            return [farm.name for farm in self.state.cfg.farms]
+        pass
 
     @property
     def showGenotype(self):
@@ -353,7 +394,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self._updatePlot()
 
     def _createPlots(self):
-        num_farms = len(self._uniqueFarms)
+        num_farms = len(self._farmIDs)
 
         self.pqgPlotContainer = SmoothedGraphicsLayoutWidget(self)
         self.pqgPlotContainer.newAverageFactor.connect(self._updatePlot)
@@ -515,6 +556,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         # I need to know the exact number of farms right now
         self.pqgPlotContainer.deleteLater()
         self._createPlots()
+        if self.state:
+            self.pqgPlotContainer.setDefaultXAxis(self.state.times)
         self.scrollArea.setWidget(self.pqgPlotContainer)
         self._updatePlot()
 
@@ -531,13 +574,13 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             return
 
         # if the number of farms has changed
-        elif len(self._uniqueFarms) != len(self.licePopulationPlots):
+        elif len(self._farmIDs) != len(self.licePopulationPlots):
             self._remountPlot()
             self.pqgPlotContainer.enforceAspectRatio()
             # _remountPlot calls _updatePlot implicitly so avoid recursion
             return
 
-        if len(self._uniqueFarms) == 0:
+        if len(self._farmIDs) == 0:
             return
 
         self.licePopulationLegends = [
@@ -545,17 +588,18 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         ]
         self.extPressureRatiosLegend = self.extPressureRatios.addLegend()
 
-        farm_list = self._uniqueFarms
+        farm_list = self._farmIDs
         df = self.state.states_as_df.reset_index()
 
         for farm_idx, farm_name in enumerate(farm_list):
-            farm_df = df[df["farm_name"] == farm_name]
+            farm_df = df[df["farm_id"] == farm_name]
 
             # Show fish population
             num_fish = farm_df["num_fish"].to_numpy()
 
             monocolour_pen = {"colour": self._colorPalette[0], "width": 1.5}
 
+            # TODO: set derivativeMode instead
             if self.showFishPopulationDx.isChecked():
                 num_fish_dx = -np.diff(num_fish)
                 self.fishPopulationPlots[farm_idx].plot(num_fish_dx, pen=monocolour_pen)
@@ -632,6 +676,17 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                 aggregation_rate, pen=self._colorPalette[0]
             )
 
+            # extract from report
+            farm_geo_name = self._farmNames[farm_idx]
+            report_df = self.state.report_df
+            if report_df is not None:
+                report_farm = report_df[report_df["site_name"] == farm_geo_name]
+                self.aggregationRatePlot[farm_idx].plot(
+                    x=report_farm["date"],
+                    y=report_farm["lice_count"].to_numpy(),
+                    pen=self._colorPalette[2],
+                )
+
             # Plot treatments
             # note: PG does not allow to reuse the same
             treatment_lri = self._getTreatmentRegions(farm_df, 5)
@@ -644,6 +699,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                     # Multiple treatment regions may overlap this way, is this okay?
                     self.payoffPlot.addItem(lri[3])
                     self.extPressureRatios.addItem(lri[4])
+
+        # END FARM PLOTTING
 
         # because of the leaky scope, this is going to be something
         payoffs = farm_df["payoff"].to_numpy()
