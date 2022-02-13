@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator
 
 import dill as pickle
+import numpy as np
 import pandas as pd
 import tqdm
 
@@ -353,12 +354,65 @@ class Simulator:  # pragma: no cover
             raise NotImplementedError()
 
     @staticmethod
-    def load_counts(cfg: Config) -> pd.Dataframe:
-        """Load a lice count and salmon mortality report."""
+    def load_counts(cfg: Config) -> pd.DataFrame:
+        """Load a lice count, salmon mortality report and salmon survivorship
+        estimates.
+
+        :param cfg: the environment configuration
+        :returns: the bespoke count
+        """
         report = os.path.join(cfg.experiment_id, "report.csv")
         report_df = pd.read_csv(report)
         report_df["date"] = pd.to_datetime(report_df["date"])
-        return report_df
+        report_df = report_df[report_df["date"] >= cfg.start_date]
+
+        # calculate expected fish population
+        # TODO: there are better ways to do this...
+
+        farm_populations = {
+            farm.name: farm.n_cages * farm.num_fish for farm in cfg.farms
+        }
+
+        def aggregate_mortality(x):
+            # It's like np.cumprod but has to deal with fallowing that resets the count...
+            res = []
+            last_val = 1.0
+
+            for val in x:
+                if np.isnan(val):
+                    last_val = 1.0
+                    res.append(val)
+                else:
+                    last_val = (1 - 0.01 * val) * last_val
+                    res.append(last_val)
+
+            return res
+
+        aggregated_df = report_df.groupby("site_name")[["date", "mortality"]].agg(
+            {"date": pd.Series, "mortality": aggregate_mortality}
+        )
+
+        dfs = []
+        for farm_data in aggregated_df.iterrows():
+            farm_name, (dates, mortalities) = farm_data
+            dfs.append(
+                pd.DataFrame(
+                    {
+                        "date": dates,
+                        "survived_fish": (
+                            np.array(mortalities) * farm_populations.get(farm_name, 0)
+                        ).round(),
+                        "site_name": farm_name,
+                    }
+                )
+            )
+
+        new_df = pd.concat(dfs)
+        return (
+            report_df.set_index(["date", "site_name"])
+            .join(new_df.set_index(["date", "site_name"]))
+            .reset_index()
+        )
 
     def run_model(self, resume=False):
         """Perform the simulation by running the model.

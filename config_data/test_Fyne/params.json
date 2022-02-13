@@ -10,6 +10,7 @@
         "A,a": 0.5
     },
     "genetic_learning_rate": 1,
+    "aggregation_rate_threshold": 0.5,
     "farms": [
         {
             "name": "Tarbert",

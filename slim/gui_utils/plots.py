@@ -76,7 +76,11 @@ class SmoothedPlotItemWrap:
         self.min_date = None
 
     def plot(
-        self, y, stage: Optional[str] = None, x: Optional[dt.datetime] = None, **kwargs
+        self,
+        y,
+        stage: Optional[str] = None,
+        x: Optional[List[dt.datetime]] = None,
+        **kwargs,
     ) -> PlotDataItem:
         """
         Plot a list of values
@@ -120,7 +124,6 @@ class SmoothedPlotItemWrap:
 
         if x is not None:
             x = [(day - self.min_date).days for day in x]
-            print(x)
 
         return self.plot_item.plot(
             x=x,
@@ -402,7 +405,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
         self.licePopulationPlots = [
             self.pqgPlotContainer.addSmoothedPlot(
-                title=f"Lice population of farm {i}",
+                title=f"Lice population of farm {self._farmNames[i]}",
                 left="Population",
                 bottom="days",
                 row=i,
@@ -412,7 +415,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         ]
         self.fishPopulationPlots = [
             self.pqgPlotContainer.addSmoothedPlot(
-                title=f"Fish population of farm {i}",
+                title=f"Fish population of farm {self._farmNames[i]}",
                 left="Population",
                 bottom="days",
                 row=i,
@@ -422,7 +425,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         ]
         self.aggregationRatePlot = [
             self.pqgPlotContainer.addSmoothedPlot(
-                title=f"Lice aggregation of farm {i}",
+                title=f"Lice aggregation of farm {self._farmNames[i]}",
                 left="Population",
                 bottom="days",
                 row=i,
@@ -448,8 +451,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             col=1,
         )
 
-        self.licePopulationLegends: List[pg.LegendItem] = []
-        self.extPressureRatiosLegend: Optional[pg.LegendItem] = None
+        self.legends: List[pg.LegendItem] = []
 
         # add grid, synchronise Y-range
         for plot in self.licePopulationPlots + self.fishPopulationPlots:
@@ -545,11 +547,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         ):
             plot.clear()
 
-        for legend in self.licePopulationLegends:
+        for legend in self.legends:
             legend.clear()
-
-        if self.extPressureRatiosLegend:
-            self.extPressureRatiosLegend.clear()
 
     def _remountPlot(self):
         self.scrollArea.setWidget(None)
@@ -583,10 +582,14 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         if len(self._farmIDs) == 0:
             return
 
-        self.licePopulationLegends = [
-            plot.addLegend() for plot in self.licePopulationPlots
-        ]
-        self.extPressureRatiosLegend = self.extPressureRatios.addLegend()
+        self.legends = [
+            plot.addLegend()
+            for plot in (
+                self.licePopulationPlots
+                + self.fishPopulationPlots
+                + self.aggregationRatePlot
+            )
+        ] + [self.extPressureRatios.addLegend()]
 
         farm_list = self._farmIDs
         df = self.state.states_as_df.reset_index()
@@ -597,6 +600,12 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             # Show fish population
             num_fish = farm_df["num_fish"].to_numpy()
 
+            # Report info
+            farm_geo_name = self._farmNames[farm_idx]
+            report_df = self.state.report_df
+            if report_df is not None:
+                report_farm = report_df[report_df["site_name"] == farm_geo_name]
+
             monocolour_pen = {"colour": self._colorPalette[0], "width": 1.5}
 
             # TODO: set derivativeMode instead
@@ -604,13 +613,22 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                 num_fish_dx = -np.diff(num_fish)
                 self.fishPopulationPlots[farm_idx].plot(num_fish_dx, pen=monocolour_pen)
             else:
-                self.fishPopulationPlots[farm_idx].plot(num_fish, pen=monocolour_pen)
+                self.fishPopulationPlots[farm_idx].plot(
+                    num_fish, pen=monocolour_pen, name="Expected"
+                )
+                if report_df is not None:
+                    self.fishPopulationPlots[farm_idx].plot(
+                        x=report_farm["date"],
+                        y=report_farm["survived_fish"],
+                        pen=self._colorPalette[2],
+                        name="Ground truth",
+                    )
 
             stages = farm_df[LicePopulation.lice_stages].applymap(
                 lambda geno_data: sum(geno_data.values())
             )
 
-            allele_names = GenoDistrib.allele_labels
+            allele_names = GenoDistrib.allele_labels.values()
             allele_colours = dict(
                 zip(allele_names, self._colorPalette[: len(allele_names)])
             )
@@ -673,18 +691,16 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
             aggregation_rate = stages["L5f"].to_numpy() / num_fish
             self.aggregationRatePlot[farm_idx].plot(
-                aggregation_rate, pen=self._colorPalette[0]
+                aggregation_rate, pen=monocolour_pen, name="Expected"
             )
 
             # extract from report
-            farm_geo_name = self._farmNames[farm_idx]
-            report_df = self.state.report_df
             if report_df is not None:
-                report_farm = report_df[report_df["site_name"] == farm_geo_name]
                 self.aggregationRatePlot[farm_idx].plot(
                     x=report_farm["date"],
                     y=report_farm["lice_count"].to_numpy(),
                     pen=self._colorPalette[2],
+                    name="Ground truth",
                 )
 
             # Plot treatments
@@ -713,9 +729,10 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             for geno in GenoDistrib.alleles
         }
         for geno, extp_ratios in external_pressure_ratios.items():
-            allele_name = "".join(geno)
+            allele_name = GenoDistrib.allele_labels[geno]
+            allele_name_bio = GenoDistrib.allele_labels_bio[geno]
             self.extPressureRatios.plot(
-                extp_ratios, name=allele_name, pen=allele_colours[allele_name]
+                extp_ratios, name=allele_name_bio, pen=allele_colours[allele_name]
             )
 
         for plot in self.licePopulationPlots:

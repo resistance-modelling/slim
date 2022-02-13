@@ -600,7 +600,8 @@ class Cage(LoggableMixin):
             - self.cfg.fish_mortality_k * lice_per_host_mass
         )
 
-        prob_lice_death = 0.005 * (1 - (exp_odds / (1 + exp_odds)))
+        # TODO: the distribution should be way more skewed towards *high* concentration
+        prob_lice_death = 0.001 * (1 - (exp_odds / (1 + exp_odds)))
 
         ebf_death = fb_mort(days_since_start) * self.num_fish
         elf_death = self.num_infected_fish * prob_lice_death

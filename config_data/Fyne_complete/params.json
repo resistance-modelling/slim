@@ -1,7 +1,7 @@
 {
     "name": "Loch Fyne (complete)",
-    "start_date": "2019-01-01 00:00:00",
-    "end_date": "2021-01-01 00:00:00",
+    "start_date": "2018-01-01 00:00:00",
+    "end_date": "2020-01-01 00:00:00",
     "ext_pressure": 150,
     "monthly_cost": "5000.00",
     "genetic_ratios": {
@@ -10,6 +10,7 @@
         "A,a": 0.005
     },
     "genetic_learning_rate": 1,
+    "aggregation_rate_threshold": 2.0,
     "farms": [
         {
             "name": "Tarbert South",

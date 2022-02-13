@@ -207,10 +207,6 @@
       "comment": "TODO: dummy value.",
       "type": "number"
     },
-    "aggregation_rate_threshold": {
-      "description": "The allowed aggregation rate at any time",
-      "type": "number"
-    },
     "treatments": {
       "description": "Parameters related to specific treatments",
       "type": "array",

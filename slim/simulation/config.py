@@ -103,9 +103,6 @@ class RuntimeConfig:
         # Other reward/payoff constants
         self.gain_per_kg = Money(data["gain_per_kg"])
 
-        # Other constraints
-        self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]
-
         # load in the seed if provided
         # otherwise don't use a seed
         self.seed = data.get("seed", 0)
@@ -170,6 +167,8 @@ class Config(RuntimeConfig):
 
         jsonschema.validate(data, schema)
 
+        self.name: str = data["name"]
+
         # time and dates
         self.start_date = to_dt(data["start_date"])
         self.end_date = to_dt(data["end_date"])
@@ -182,7 +181,9 @@ class Config(RuntimeConfig):
         }
         self.genetic_learning_rate: float = data["genetic_learning_rate"]
         self.monthly_cost = Money(data["monthly_cost"])
-        self.name: str = data["name"]
+
+        # Other constraints
+        self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]
 
         # farms
         self.farms = [FarmConfig(farm_data) for farm_data in data["farms"]]
