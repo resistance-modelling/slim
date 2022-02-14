@@ -1,7 +1,7 @@
 Getting Started
 ===============
 
-This guide assumes you have already installed slim and its dependencies. If you haven't please check
+This page assumes you have already installed ``slim`` and its dependencies. If you haven't please check
 the  `README <https://github.com/resistance-modelling/slim/blob/master/README.md>`_.
 
 Run the simulator
@@ -49,6 +49,10 @@ An *environmental setup* consists of a subfolder containing three files:
 - ``params.json`` with simulation parameters specific to the organisation;
 - ``interfarm_time.csv`` with travel time of sea lice between any two given farms (as a dense CSV matrix);
 - ``interfarm_prob.csv`` with probability of sea lice travel between any two given farms (as a dense CSV matrix);
+
+Optionally, an environment may contain a CSV report (called ``report.csv``) of real-world lice counts and actions.
+If present, they will be imported by the GUI.
+To see how to generate those reports, check :file:`slim/surveys/scraper.py`.
 
 See ``config_data/Fyne`` for examples.
 
