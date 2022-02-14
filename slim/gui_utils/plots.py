@@ -73,7 +73,7 @@ class SmoothedPlotItemWrap:
         self.method = method
         self.original_title = plot_item.titleLabel.text
         self.title_style = plot_item.titleLabel.opts
-        self.min_date = None
+        self.default_x_axis: Optional[List[dt.datetime]] = None
 
     def plot(
         self,
@@ -122,8 +122,13 @@ class SmoothedPlotItemWrap:
         else:
             _kwargs = kwargs
 
-        if x is not None:
-            x = [(day - self.min_date).days for day in x]
+        if self.default_x_axis is None:
+            raise ValueError("No default axis given!")
+
+        if x is None:
+            x = self.default_x_axis
+
+        x = [(day - self.default_x_axis[0]).days for day in x]
 
         return self.plot_item.plot(
             x=x,
@@ -142,7 +147,10 @@ class SmoothedPlotItemWrap:
         self.plot_item.setTitle(title, **self.title_style)
 
     def setXAxis(self, timestamps: List[dt.datetime]):
-        self.min_date = timestamps[0]
+        self.default_x_axis = timestamps
+        max_x = (timestamps[-1] - timestamps[0]).days
+        self.setXRange(0, max_x)
+        self.vb.setLimits(xMin=0, xMax=max_x)
 
     def heightForWidth(self, width):
         return int(width * 1.5)
@@ -171,8 +179,8 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
     def __init__(self, parent: SingleRunPlotPane):
         super().__init__(parent)
         self.pane = parent
-        self.coord_to_plot = {}
-        self.timestamps = None
+        self._coord_to_plot = {}
+        self._plots = []
 
         smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
         averaging_widget = parent.normaliseByCageCheckbox
@@ -193,13 +201,13 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         return 1
 
     def _setSmoothingFactor(self, value):
-        for plot_item in self.coord_to_plot.values():
+        for plot_item in self._coord_to_plot.values():
             plot_item.setSmoothingFactor(value)
 
         self.newKernelSize.emit()
 
     def _setAverageFactor(self, value):
-        for (farm_idx, _), plot_item in self.coord_to_plot.items():
+        for (farm_idx, _), plot_item in self._coord_to_plot.items():
             average_factor = self._getAverageFactor(farm_idx, value)
             plot_item.setAverageFactor(average_factor)
         self.newAverageFactor.emit()
@@ -251,7 +259,8 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         smoothed_plot_item = SmoothedPlotItemWrap(plot, smoothing_kernel_size, average)
 
         if not exclude_from_averaging:
-            self.coord_to_plot[(farm_idx, col)] = smoothed_plot_item
+            self._coord_to_plot[(farm_idx, col)] = smoothed_plot_item
+        self._plots.append(smoothed_plot_item)
 
         return smoothed_plot_item
 
@@ -281,9 +290,13 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         """
         Set the x-axis of all the plots
         """
-        for plot in self.coord_to_plot.values():
+        for plot in self._plots:
             if isinstance(plot, SmoothedPlotItemWrap):
                 plot.setXAxis(timestamps)
+
+            else:
+                # TODO
+                pass
 
 
 class LightModeMixin:
@@ -405,7 +418,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
         self.licePopulationPlots = [
             self.pqgPlotContainer.addSmoothedPlot(
-                title=f"Lice population of farm {self._farmNames[i]}",
+                title=f"Lice population at site {self._farmNames[i]}",
                 left="Population",
                 bottom="days",
                 row=i,
@@ -415,7 +428,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         ]
         self.fishPopulationPlots = [
             self.pqgPlotContainer.addSmoothedPlot(
-                title=f"Fish population of farm {self._farmNames[i]}",
+                title=f"Fish population at site {self._farmNames[i]}",
                 left="Population",
                 bottom="days",
                 row=i,
@@ -425,7 +438,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         ]
         self.aggregationRatePlot = [
             self.pqgPlotContainer.addSmoothedPlot(
-                title=f"Lice aggregation of farm {self._farmNames[i]}",
+                title=f"Lice aggregation at site {self._farmNames[i]}",
                 left="Population",
                 bottom="days",
                 row=i,
@@ -744,14 +757,12 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             + self.fishPopulationPlots
             + self.aggregationRatePlot
         ):
-            plot.setXRange(0, len(payoffs), padding=0)
-            plot.vb.setLimits(xMin=0, xMax=len(payoffs), yMin=0)
+            plot.vb.setLimits(yMin=0)
 
-        for singlePlot in [self.payoffPlot, self.extPressureRatios]:
-            singlePlot.setXRange(0, len(payoffs), padding=0)
+        # for plot in self.fishPopulationPlots:
+        #    plot.setYRange(0, 100000)
 
-        self.payoffPlot.vb.setLimits(xMin=0, xMax=len(payoffs))
-        self.extPressureRatios.vb.setLimits(xMin=0, xMax=len(payoffs), yMin=0, yMax=1)
+        self.extPressureRatios.vb.setLimits(yMin=0, yMax=1)
 
     def _convolve(self, signal):
         kernel_size = self.convolutionKernelSizeBox.value()
@@ -883,10 +894,10 @@ class OptimiserPlotPane(QWidget, LightModeMixin):
         self._updatePlot()
 
     def _clearPlot(self):
-        self.payoffPlot._clear()
+        self.payoffPlot.clear()
 
         for probaPlot in self.individualProbas:
-            probaPlot._clear()
+            probaPlot.clear()
 
     def _updatePlot(self):
         self._clearPlot()
