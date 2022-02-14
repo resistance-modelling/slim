@@ -4,6 +4,7 @@ This module provides plotting widgets and utils.
 
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING, List
 
@@ -12,6 +13,7 @@ import pandas as pd
 import pyqtgraph as pg
 import scipy
 import scipy.ndimage
+
 from PyQt5 import QtCore
 from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtWidgets import (
@@ -71,8 +73,24 @@ class SmoothedPlotItemWrap:
         self.method = method
         self.original_title = plot_item.titleLabel.text
         self.title_style = plot_item.titleLabel.opts
+        self.default_x_axis: Optional[List[dt.datetime]] = None
 
-    def plot(self, signal, stage: Optional[str] = None, **kwargs) -> PlotDataItem:
+    def plot(
+        self,
+        y,
+        stage: Optional[str] = None,
+        x: Optional[List[dt.datetime]] = None,
+        **kwargs,
+    ) -> PlotDataItem:
+        """
+        Plot a list of values
+
+        For a list of options check :meth:`pg.PlotdataItem.__init__`
+
+        :param y: the sequence to plot
+        :param stage: if y is a population, pick a selected lifecycle stage
+        :param x: provide an optional x-axis
+        """
         # compute the signal
         # TODO: support multiple rolling averages
         if self.method == "linear":
@@ -104,10 +122,17 @@ class SmoothedPlotItemWrap:
         else:
             _kwargs = kwargs
 
+        if self.default_x_axis is None:
+            raise ValueError("No default axis given!")
+
+        if x is None:
+            x = self.default_x_axis
+
+        x = [(day - self.default_x_axis[0]).days for day in x]
+
         return self.plot_item.plot(
-            scipy.ndimage.convolve(
-                signal / self.average_factor, kernel, mode="nearest"
-            ),
+            x=x,
+            y=scipy.ndimage.convolve(y / self.average_factor, kernel, mode="nearest"),
             **_kwargs,
         )
 
@@ -120,6 +145,12 @@ class SmoothedPlotItemWrap:
             " averaged across cages" if average_factor > 1 else ""
         )
         self.plot_item.setTitle(title, **self.title_style)
+
+    def setXAxis(self, timestamps: List[dt.datetime]):
+        self.default_x_axis = timestamps
+        max_x = (timestamps[-1] - timestamps[0]).days
+        self.setXRange(0, max_x)
+        self.vb.setLimits(xMin=0, xMax=max_x)
 
     def heightForWidth(self, width):
         return int(width * 1.5)
@@ -148,7 +179,8 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
     def __init__(self, parent: SingleRunPlotPane):
         super().__init__(parent)
         self.pane = parent
-        self.coord_to_plot = {}
+        self._coord_to_plot = {}
+        self._plots = []
 
         smoothing_kernel_size_widget = parent.convolutionKernelSizeBox
         averaging_widget = parent.normaliseByCageCheckbox
@@ -169,13 +201,13 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         return 1
 
     def _setSmoothingFactor(self, value):
-        for plot_item in self.coord_to_plot.values():
+        for plot_item in self._coord_to_plot.values():
             plot_item.setSmoothingFactor(value)
 
         self.newKernelSize.emit()
 
     def _setAverageFactor(self, value):
-        for (farm_idx, _), plot_item in self.coord_to_plot.items():
+        for (farm_idx, _), plot_item in self._coord_to_plot.items():
             average_factor = self._getAverageFactor(farm_idx, value)
             plot_item.setAverageFactor(average_factor)
         self.newAverageFactor.emit()
@@ -227,7 +259,8 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         smoothed_plot_item = SmoothedPlotItemWrap(plot, smoothing_kernel_size, average)
 
         if not exclude_from_averaging:
-            self.coord_to_plot[(farm_idx, col)] = smoothed_plot_item
+            self._coord_to_plot[(farm_idx, col)] = smoothed_plot_item
+        self._plots.append(smoothed_plot_item)
 
         return smoothed_plot_item
 
@@ -249,9 +282,21 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         # Maybe there is something else that has to be changed? Need to investigate...
         # This is a hack that works half of the time. Expect flickering.
         size: QSize = self.size()
-        num_farms = len(self.pane._uniqueFarms)
+        num_farms = len(self.pane._farmIDs)
         # 9/60 is not the real aspect ratio, but it takes into account padding
         self.setFixedHeight((num_farms + 1) * size.width() * 9 / 60)
+
+    def setDefaultXAxis(self, timestamps: List[dt.datetime]):
+        """
+        Set the x-axis of all the plots
+        """
+        for plot in self._plots:
+            if isinstance(plot, SmoothedPlotItemWrap):
+                plot.setXAxis(timestamps)
+
+            else:
+                # TODO
+                pass
 
 
 class LightModeMixin:
@@ -339,10 +384,22 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         mainPane.loadedSimulatorState.connect(self._updateModel)
 
     @property
-    def _uniqueFarms(self):
+    def _farmIDs(self):
+        """
         if self.state:
-            return self.state.states_as_df.reset_index()["farm_name"].unique()
+            return self.state.states_as_df.reset_index()["farm_id"].unique()
         return []
+        """
+
+        if self.state:
+            return [f"farm_{i}" for i in range(len(self.state.cfg.farms))]
+        return []
+
+    @property
+    def _farmNames(self):
+        if self.state:
+            return [farm.name for farm in self.state.cfg.farms]
+        pass
 
     @property
     def showGenotype(self):
@@ -353,7 +410,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self._updatePlot()
 
     def _createPlots(self):
-        num_farms = len(self._uniqueFarms)
+        num_farms = len(self._farmIDs)
 
         self.pqgPlotContainer = SmoothedGraphicsLayoutWidget(self)
         self.pqgPlotContainer.newAverageFactor.connect(self._updatePlot)
@@ -361,7 +418,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
         self.licePopulationPlots = [
             self.pqgPlotContainer.addSmoothedPlot(
-                title=f"Lice population of farm {i}",
+                title=f"Lice population at site {self._farmNames[i]}",
                 left="Population",
                 bottom="days",
                 row=i,
@@ -371,7 +428,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         ]
         self.fishPopulationPlots = [
             self.pqgPlotContainer.addSmoothedPlot(
-                title=f"Fish population of farm {i}",
+                title=f"Fish population at site {self._farmNames[i]}",
                 left="Population",
                 bottom="days",
                 row=i,
@@ -381,7 +438,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         ]
         self.aggregationRatePlot = [
             self.pqgPlotContainer.addSmoothedPlot(
-                title=f"Lice aggregation of farm {i}",
+                title=f"Lice aggregation at site {self._farmNames[i]}",
                 left="Population",
                 bottom="days",
                 row=i,
@@ -407,8 +464,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             col=1,
         )
 
-        self.licePopulationLegends: List[pg.LegendItem] = []
-        self.extPressureRatiosLegend: Optional[pg.LegendItem] = None
+        self.legends: List[pg.LegendItem] = []
 
         # add grid, synchronise Y-range
         for plot in self.licePopulationPlots + self.fishPopulationPlots:
@@ -504,17 +560,16 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         ):
             plot.clear()
 
-        for legend in self.licePopulationLegends:
+        for legend in self.legends:
             legend.clear()
-
-        if self.extPressureRatiosLegend:
-            self.extPressureRatiosLegend.clear()
 
     def _remountPlot(self):
         self.scrollArea.setWidget(None)
         # I need to know the exact number of farms right now
         self.pqgPlotContainer.deleteLater()
         self._createPlots()
+        if self.state:
+            self.pqgPlotContainer.setDefaultXAxis(self.state.times)
         self.scrollArea.setWidget(self.pqgPlotContainer)
         self._updatePlot()
 
@@ -531,42 +586,62 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             return
 
         # if the number of farms has changed
-        elif len(self._uniqueFarms) != len(self.licePopulationPlots):
+        elif len(self._farmIDs) != len(self.licePopulationPlots):
             self._remountPlot()
             self.pqgPlotContainer.enforceAspectRatio()
             # _remountPlot calls _updatePlot implicitly so avoid recursion
             return
 
-        if len(self._uniqueFarms) == 0:
+        if len(self._farmIDs) == 0:
             return
 
-        self.licePopulationLegends = [
-            plot.addLegend() for plot in self.licePopulationPlots
-        ]
-        self.extPressureRatiosLegend = self.extPressureRatios.addLegend()
+        self.legends = [
+            plot.addLegend()
+            for plot in (
+                self.licePopulationPlots
+                + self.fishPopulationPlots
+                + self.aggregationRatePlot
+            )
+        ] + [self.extPressureRatios.addLegend()]
 
-        farm_list = self._uniqueFarms
+        farm_list = self._farmIDs
         df = self.state.states_as_df.reset_index()
 
         for farm_idx, farm_name in enumerate(farm_list):
-            farm_df = df[df["farm_name"] == farm_name]
+            farm_df = df[df["farm_id"] == farm_name]
 
             # Show fish population
             num_fish = farm_df["num_fish"].to_numpy()
 
+            # Report info
+            farm_geo_name = self._farmNames[farm_idx]
+            report_df = self.state.report_df
+            if report_df is not None:
+                report_farm = report_df[report_df["site_name"] == farm_geo_name]
+
             monocolour_pen = {"colour": self._colorPalette[0], "width": 1.5}
 
+            # TODO: set derivativeMode instead
             if self.showFishPopulationDx.isChecked():
                 num_fish_dx = -np.diff(num_fish)
                 self.fishPopulationPlots[farm_idx].plot(num_fish_dx, pen=monocolour_pen)
             else:
-                self.fishPopulationPlots[farm_idx].plot(num_fish, pen=monocolour_pen)
+                self.fishPopulationPlots[farm_idx].plot(
+                    num_fish, pen=monocolour_pen, name="Expected"
+                )
+                if report_df is not None:
+                    self.fishPopulationPlots[farm_idx].plot(
+                        x=report_farm["date"],
+                        y=report_farm["survived_fish"],
+                        pen=self._colorPalette[2],
+                        name="Ground truth",
+                    )
 
             stages = farm_df[LicePopulation.lice_stages].applymap(
                 lambda geno_data: sum(geno_data.values())
             )
 
-            allele_names = GenoDistrib.allele_labels
+            allele_names = GenoDistrib.allele_labels.values()
             allele_colours = dict(
                 zip(allele_names, self._colorPalette[: len(allele_names)])
             )
@@ -629,8 +704,17 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
             aggregation_rate = stages["L5f"].to_numpy() / num_fish
             self.aggregationRatePlot[farm_idx].plot(
-                aggregation_rate, pen=self._colorPalette[0]
+                aggregation_rate, pen=monocolour_pen, name="Expected"
             )
+
+            # extract from report
+            if report_df is not None:
+                self.aggregationRatePlot[farm_idx].plot(
+                    x=report_farm["date"],
+                    y=report_farm["lice_count"].to_numpy(),
+                    pen=self._colorPalette[2],
+                    name="Ground truth",
+                )
 
             # Plot treatments
             # note: PG does not allow to reuse the same
@@ -645,6 +729,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                     self.payoffPlot.addItem(lri[3])
                     self.extPressureRatios.addItem(lri[4])
 
+        # END FARM PLOTTING
+
         # because of the leaky scope, this is going to be something
         payoffs = farm_df["payoff"].to_numpy()
         self.payoffPlot.plot(payoffs, pen=self._colorPalette[0])
@@ -656,9 +742,10 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             for geno in GenoDistrib.alleles
         }
         for geno, extp_ratios in external_pressure_ratios.items():
-            allele_name = "".join(geno)
+            allele_name = GenoDistrib.allele_labels[geno]
+            allele_name_bio = GenoDistrib.allele_labels_bio[geno]
             self.extPressureRatios.plot(
-                extp_ratios, name=allele_name, pen=allele_colours[allele_name]
+                extp_ratios, name=allele_name_bio, pen=allele_colours[allele_name]
             )
 
         for plot in self.licePopulationPlots:
@@ -670,14 +757,12 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             + self.fishPopulationPlots
             + self.aggregationRatePlot
         ):
-            plot.setXRange(0, len(payoffs), padding=0)
-            plot.vb.setLimits(xMin=0, xMax=len(payoffs), yMin=0)
+            plot.vb.setLimits(yMin=0)
 
-        for singlePlot in [self.payoffPlot, self.extPressureRatios]:
-            singlePlot.setXRange(0, len(payoffs), padding=0)
+        # for plot in self.fishPopulationPlots:
+        #    plot.setYRange(0, 100000)
 
-        self.payoffPlot.vb.setLimits(xMin=0, xMax=len(payoffs))
-        self.extPressureRatios.vb.setLimits(xMin=0, xMax=len(payoffs), yMin=0, yMax=1)
+        self.extPressureRatios.vb.setLimits(yMin=0, yMax=1)
 
     def _convolve(self, signal):
         kernel_size = self.convolutionKernelSizeBox.value()

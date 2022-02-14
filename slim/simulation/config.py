@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 def to_dt(string_date) -> dt.datetime:
     """Convert from string date to datetime date
 
-    :param string_date:: Date as string timestamp
+    :param string_date: Date as string timestamp
     :type string_date: str
     :return: Date as Datetime
     :rtype: [type]
@@ -103,9 +103,6 @@ class RuntimeConfig:
         # Other reward/payoff constants
         self.gain_per_kg = Money(data["gain_per_kg"])
 
-        # Other constraints
-        self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]
-
         # load in the seed if provided
         # otherwise don't use a seed
         self.seed = data.get("seed", 0)
@@ -157,6 +154,8 @@ class Config(RuntimeConfig):
             override_params = dict()
         super().__init__(config_file, override_params)
 
+        self.experiment_id = simulation_dir
+
         # read and set the params
         with open(os.path.join(simulation_dir, "params.json")) as f:
             data = json.load(f)
@@ -167,6 +166,8 @@ class Config(RuntimeConfig):
             schema = json.load(f)
 
         jsonschema.validate(data, schema)
+
+        self.name: str = data["name"]
 
         # time and dates
         self.start_date = to_dt(data["start_date"])
@@ -180,7 +181,9 @@ class Config(RuntimeConfig):
         }
         self.genetic_learning_rate: float = data["genetic_learning_rate"]
         self.monthly_cost = Money(data["monthly_cost"])
-        self.name: str = data["name"]
+
+        # Other constraints
+        self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]
 
         # farms
         self.farms = [FarmConfig(farm_data) for farm_data in data["farms"]]
@@ -265,10 +268,11 @@ class FarmConfig:
     def __init__(self, data: dict):
         """Create farm configuration
 
-        :param data:: Dictionary with farm data
+        :param data: Dictionary with farm data
         """
 
         # set params
+        self.name: str = data["name"]
         self.num_fish: int = data["num_fish"]
         self.n_cages: int = data["ncages"]
         self.farm_location: Tuple[int, int] = data["location"]

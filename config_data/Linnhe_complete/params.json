@@ -10,8 +10,10 @@
         "A,a": 0.005
     },
     "genetic_learning_rate": 1,
+    "aggregation_rate_threshold": 2.0,
     "farms": [
         {
+            "name": "Gorsten",
             "ncages": 20,
             "location": [
                 206100,
@@ -48,6 +50,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Linnhe",
             "ncages": 24,
             "location": [
                 201300,
@@ -88,6 +91,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Loch Leven",
             "ncages": 12,
             "location": [
                 207900,
@@ -116,6 +120,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Kingairloch",
             "ncages": 8,
             "location": [
                 185200,
@@ -140,6 +145,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Shuna",
             "ncages": 10,
             "location": [
                 192500,
@@ -166,6 +172,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Lismore North",
             "ncages": 14,
             "location": [
                 186500,
@@ -196,6 +203,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Loch Creran (B)",
             "ncages": 14,
             "location": [
                 193400,
@@ -226,6 +234,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Walters (East Lismore)",
             "ncages": 9,
             "location": [
                 184700,
@@ -251,6 +260,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Dunstaffnage",
             "ncages": 9,
             "location": [
                 186700,
@@ -276,6 +286,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Kerrera B",
             "ncages": 10,
             "location": [
                 183500,

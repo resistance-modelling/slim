@@ -57,7 +57,6 @@
     "genetic_mechanism": "discrete",
     "geno_mutation_rate": 1e-5,
     "male_detachment_rate": 0.7,
-    "aggregation_rate_threshold": 0.5,
     "treatments": [
         {
             "treatment_name": "EMB",

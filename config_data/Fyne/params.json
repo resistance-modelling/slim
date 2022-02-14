@@ -1,17 +1,19 @@
 {
     "name": "Loch Fyne ACME Ltd.",
-    "start_date": "2017-10-01 00:00:00",
-    "end_date": "2019-10-01 00:00:00",
+    "start_date": "2018-01-01 00:00:00",
+    "end_date": "2020-01-01 23:59:59",
     "ext_pressure": 150,
     "monthly_cost": "5000.00",
     "genetic_ratios": {
-        "A": 0.005,
-        "a": 0.99,
-        "A,a": 0.005
+        "A": 0.0001,
+        "a": 0.999,
+        "A,a": 0.0009
     },
     "genetic_learning_rate": 0.01,
+    "aggregation_rate_threshold": 2.0,
     "farms": [
         {
+            "name": "Tarbert South",
             "ncages": 6,
             "location": [
                 190300,
@@ -35,10 +37,11 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Rubha Stillaig",
             "ncages": 3,
             "location": [
-                190300,
-                665300
+                192500,
+                668200
             ],
             "num_fish": 40000,
             "start_date": "2017-10-05 00:00:00",

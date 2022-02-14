@@ -64,3 +64,6 @@ venv/
 
 # Sphinx artifacts
 docs/build/
+
+# Jupyter cache
+.ipynb_checkpoints

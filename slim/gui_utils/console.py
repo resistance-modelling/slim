@@ -24,7 +24,7 @@ class ConsoleWidget(RichJupyterWidget):
         self.kernel_manager.kernel.shell.push(variableDict)
 
     def clear(self):
-        self._control.clear()
+        self._control._clear()
 
     def print_text(self, text):
         self._append_plain_text(text)

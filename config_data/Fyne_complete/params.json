@@ -1,7 +1,7 @@
 {
     "name": "Loch Fyne (complete)",
-    "start_date": "2017-10-01 00:00:00",
-    "end_date": "2019-10-01 00:00:00",
+    "start_date": "2018-01-01 00:00:00",
+    "end_date": "2020-01-01 00:00:00",
     "ext_pressure": 150,
     "monthly_cost": "5000.00",
     "genetic_ratios": {
@@ -10,8 +10,10 @@
         "A,a": 0.005
     },
     "genetic_learning_rate": 1,
+    "aggregation_rate_threshold": 2.0,
     "farms": [
         {
+            "name": "Tarbert South",
             "ncages": 14,
             "location": [
                 190300,
@@ -42,6 +44,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Rubha Stillaig",
             "ncages": 10,
             "location": [
                 192500,
@@ -68,6 +71,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Glenan Bay",
             "ncages": 14,
             "location": [
                 191800,
@@ -98,6 +102,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Meall Mhor",
             "ncages": 12,
             "location": [
                 186500,
@@ -126,6 +131,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Gob a Bharra",
             "ncages": 10,
             "location": [
                 190400,
@@ -152,6 +158,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Strondoir Bay",
             "ncages": 10,
             "location": [
                 186300,
@@ -178,6 +185,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Ardgaddan",
             "ncages": 14,
             "location": [
                 190800,
@@ -208,6 +216,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Ardcastle",
             "ncages": 9,
             "location": [
                 195300,
@@ -233,6 +242,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Quarry Point",
             "ncages": 9,
             "location": [
                 199800,

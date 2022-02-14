@@ -35,10 +35,12 @@ from PyQt5.QtWidgets import (
     QTabWidget,
 )
 from slim.simulation.simulator import Simulator
+from slim.simulation.config import Config
 from slim.gui_utils.configuration import ConfigurationPane
 from slim.gui_utils.console import ConsoleWidget
 from slim.gui_utils.plots import SingleRunPlotPane, OptimiserPlotPane
 from slim.gui_utils.model import SimulatorSingleRunState, SimulatorOptimiserState
+from slim.gui_utils.maps import MapWidget
 
 
 # noinspection PyUnresolvedReferences
@@ -77,6 +79,7 @@ class Window(QMainWindow):
         self._createPlotPane()
         self._createConfigurationPane()
         self._createConsole()
+        self._createMapWidget()
         self._createTabs()
         self._createProgressBar()
 
@@ -87,12 +90,17 @@ class Window(QMainWindow):
     def _createConfigurationPane(self):
         self.configurationPane = ConfigurationPane()
 
+    def _createMapWidget(self):
+        self.mapWidget = MapWidget(self)
+        self.mapWidget.show()
+
     def _createTabs(self):
         self.plotTabs = QTabWidget(self)
 
         self.plotTabs.addTab(self.simulationPlotPane, "Simulation plots")
         self.plotTabs.addTab(self.optimiserPlotPane, "Optimiser plots")
         self.plotTabs.addTab(self.configurationPane, "Configuration")
+        self.plotTabs.addTab(self.mapWidget, "Site Map")
         self.plotTabs.addTab(self.console, "Debugging console")
 
     def _createProgressBar(self):
@@ -118,6 +126,7 @@ class Window(QMainWindow):
 
     def _displaySimulatorData(self, simulator_data: SimulatorSingleRunState):
         self.configurationPane.newConfig.emit(simulator_data.cfg)
+        self.mapWidget.newConfig.emit(simulator_data.cfg)
         self.console.push_vars(vars(simulator_data))
         self.loadedSimulatorState.emit(simulator_data)
 
@@ -140,8 +149,9 @@ class Window(QMainWindow):
         self.worker.start()
 
     def _createActions(self):
-        self.loadDumpAction = QAction("&Load Dump")
-        self.loadOptimiserDumpAction = QAction("&Load Optimiser Dump")
+        self.loadDumpAction = QAction("L&oad Dump")
+        self.loadOptimiserDumpAction = QAction("Load Optimiser Dump")
+        self.loadConfigurationAction = QAction("Load single &configuration")
         self.paperModeAction = QAction("Set &light mode (paper mode)")
         self.paperModeAction.setCheckable(True)
         self.clearAction = QAction("&Clear plot", self)
@@ -153,6 +163,7 @@ class Window(QMainWindow):
     def _connectActions(self):
         self.loadDumpAction.triggered.connect(self.openSimulatorDump)
         self.loadOptimiserDumpAction.triggered.connect(self.openOptimiserDump)
+        self.loadConfigurationAction.triggered.connect(self.openConfiguration)
         self.paperModeAction.toggled.connect(self.simulationPlotPane.setPaperMode)
         self.paperModeAction.toggled.connect(self.optimiserPlotPane.setPaperMode)
         self.aboutAction.triggered.connect(self._openAboutMessage)
@@ -165,6 +176,7 @@ class Window(QMainWindow):
         fileMenu = QMenu("&File", self)
         fileMenu.addAction(self.loadDumpAction)
         fileMenu.addAction(self.loadOptimiserDumpAction)
+        fileMenu.addAction(self.loadConfigurationAction)
         fileMenu.addSeparator()
         fileMenu.addAction(self.exportAction)
         fileMenu.addSeparator()
@@ -232,10 +244,23 @@ class Window(QMainWindow):
             self, "Load an Optimiser dump", "", "Optimiser artifact (params.json)"
         )
 
-        print(filename)
         if filename:
             dirname = Path(filename).parent
             self._createLoaderWorker(dirname, is_optimiser=True)
+
+    def openConfiguration(self):
+        dir = QFileDialog.getExistingDirectory(
+            self,
+            "Load a map configuration",
+            "",
+            # I hate GTK native dialogues
+            QFileDialog.ShowDirsOnly | QFileDialog.DontUseNativeDialog,
+        )
+
+        if dir:
+            cfg = Config("config_data/config.json", dir)
+            self.configurationPane.newConfig.emit(cfg)
+            self.mapWidget.newConfig.emit(cfg)
 
     def _openAboutMessage(self):
         QMessageBox.about(
@@ -268,8 +293,12 @@ class SimulatorLoadingWorker(QThread):
             ]
             states_times_it = Simulator.reload_all_dump(parent_path, sim_name)
             states_as_df, times, cfg = Simulator.dump_as_dataframe(states_times_it)
+            try:
+                report = Simulator.load_counts(cfg)
+            except FileNotFoundError:
+                report = None
             self.finished.emit(
-                SimulatorSingleRunState(times, states_as_df, cfg, sim_name)
+                SimulatorSingleRunState(times, states_as_df, report, cfg, sim_name)
             )
 
         except FileNotFoundError:

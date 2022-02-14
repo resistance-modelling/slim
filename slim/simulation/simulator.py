@@ -8,11 +8,14 @@ __all__ = ["Organisation", "Simulator"]
 
 import datetime as dt
 import json
+import os
+
 import lz4.frame
 from pathlib import Path
 from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator
 
 import dill as pickle
+import numpy as np
 import pandas as pd
 import tqdm
 
@@ -117,7 +120,7 @@ class Organisation:
         payoff = Money()
         for farm in self.farms:
             offspring, cost = farm.update(cur_date, *self.get_external_pressure())
-            offspring_dict[farm.name] = offspring
+            offspring_dict[farm.id_] = offspring
             # TODO: take into account other types of disadvantages, not just the mere treatment cost
             # e.g. how are environmental factors measured? Are we supposed to add some coefficients here?
             # TODO: if we take current fish population into account then what happens to the infrastructure cost?
@@ -242,7 +245,7 @@ class Simulator:  # pragma: no cover
                 cfg = state.cfg
 
             for farm in state.organisation.farms:
-                key = (time, "farm_" + str(farm.name))
+                key = (time, "farm_" + str(farm.id_))
                 is_treating = all([cage.is_treated(time) for cage in farm.cages])
                 farm_data[key] = {
                     **farm.lice_genomics,
@@ -264,7 +267,7 @@ class Simulator:  # pragma: no cover
 
         dataframe = dataframe.join(aggregate_geno_info)
 
-        return dataframe.rename_axis(("timestamp", "farm_name")), times, cfg
+        return dataframe.rename_axis(("timestamp", "farm_id")), times, cfg
 
     @staticmethod
     def dump_optimiser_as_pd(states: List[List[Simulator]]):
@@ -279,7 +282,7 @@ class Simulator:  # pragma: no cover
 
             for farm_cfg, farm in zip(farm_cfgs, farms):
                 proba = farm_cfg.defection_proba
-                key = "farm_" + str(farm.name)
+                key = "farm_" + str(farm.id_)
                 proba_row.setdefault(key, []).append(proba)
 
         return pd.DataFrame({"payoff": payoff_row, **proba_row})
@@ -349,6 +352,67 @@ class Simulator:  # pragma: no cover
             return res
         else:
             raise NotImplementedError()
+
+    @staticmethod
+    def load_counts(cfg: Config) -> pd.DataFrame:
+        """Load a lice count, salmon mortality report and salmon survivorship
+        estimates.
+
+        :param cfg: the environment configuration
+        :returns: the bespoke count
+        """
+        report = os.path.join(cfg.experiment_id, "report.csv")
+        report_df = pd.read_csv(report)
+        report_df["date"] = pd.to_datetime(report_df["date"])
+        report_df = report_df[report_df["date"] >= cfg.start_date]
+
+        # calculate expected fish population
+        # TODO: there are better ways to do this...
+
+        farm_populations = {
+            farm.name: farm.n_cages * farm.num_fish for farm in cfg.farms
+        }
+
+        def aggregate_mortality(x):
+            # It's like np.cumprod but has to deal with fallowing that resets the count...
+            res = []
+            last_val = 1.0
+
+            for val in x:
+                if np.isnan(val):
+                    last_val = 1.0
+                    res.append(val)
+                else:
+                    last_val = (1 - 0.01 * val) * last_val
+                    res.append(last_val)
+
+            return res
+
+        aggregated_df = report_df.groupby("site_name")[["date", "mortality"]].agg(
+            {"date": pd.Series, "mortality": aggregate_mortality}
+        )
+
+        dfs = []
+        for farm_data in aggregated_df.iterrows():
+            farm_name, (dates, mortalities) = farm_data
+            dfs.append(
+                pd.DataFrame(
+                    {
+                        "date": dates,
+                        "survived_fish": (
+                            np.array(mortalities) * farm_populations.get(farm_name, 0)
+                        ).round(),
+                        "site_name": farm_name,
+                    }
+                )
+            )
+
+        new_df = pd.concat(dfs)
+        return (
+            report_df.set_index(["date", "site_name"])
+            .join(new_df.set_index(["date", "site_name"]))
+            .reset_index()
+        )
 
     def run_model(self, resume=False):
         """Perform the simulation by running the model.

@@ -10,8 +10,10 @@
         "A,a": 0.5
     },
     "genetic_learning_rate": 1,
+    "aggregation_rate_threshold": 0.5,
     "farms": [
         {
+            "name": "Tarbert",
             "ncages": 6,
             "location": [
                 190300,
@@ -39,6 +41,7 @@
             "defection_proba": 0.2
         },
         {
+            "name": "Tarbert 2",
             "ncages": 3,
             "location": [
                 190300,

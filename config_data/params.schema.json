@@ -34,6 +34,10 @@
             "description": "Dirichlet learning rate",
             "type": "number"
         },
+        "aggregation_rate_threshold": {
+            "description": "The allowed aggregation rate at any time",
+            "type": "number"
+        },
         "farms": {
             "type": "array",
             "description": "Farm-specific configuration",
@@ -41,6 +45,10 @@
             "items": {
                 "type": "object",
                 "properties": {
+                    "name": {
+                        "description": "Farm name",
+                        "type": "string"
+                    },
                     "ncages": {
                         "description": "Number of cages on the farm",
                         "type": "integer"
