@@ -71,13 +71,17 @@ class NetworkModel(QtCore.QAbstractListModel):
     """Represents pairs between lines"""
 
     LineWidth, LineColor, Endpoints = range(QtCore.Qt.UserRole, QtCore.Qt.UserRole + 3)
+    thresholdChanged = QtCore.pyqtSignal(float)
 
     def __init__(self, parent=None):
         super(NetworkModel, self).__init__(parent)
         self._pairs: List[TransitionEndpoint] = []
+        self._renderedPairs: List[TransitionEndpoint] = []
+        self._threshold = 0.0
+        self.thresholdChanged.connect(self._redraw)
 
     def rowCount(self, parent=QtCore.QModelIndex) -> int:
-        return len(self._pairs)
+        return len(self._renderedPairs)
 
     def roleNames(self):
         return {
@@ -87,30 +91,50 @@ class NetworkModel(QtCore.QAbstractListModel):
         }
 
     def appendEdge(self, endpoint, intensity, min_intensity, max_intensity):
-        self.beginInsertRows(QtCore.QModelIndex(), self.rowCount(), self.rowCount())
         width = 3
         t = (intensity - min_intensity) / (max_intensity - min_intensity)
-        palette = cc.bgy
+        palette = cc.rainbow4
         color = QColor(palette[int((len(palette) - 1) * t)])
         color.setAlphaF(0.5)
-        edge = TransitionEndpoint(endpoint, color, width)
+        edge = TransitionEndpoint(endpoint, color, width, intensity)
         self._pairs.append(edge)
+        self._appendToModel(edge)
+
+    def _appendToModel(self, edge: TransitionEndpoint):
+        self.beginInsertRows(QtCore.QModelIndex(), self.rowCount(), self.rowCount())
+        self._renderedPairs.append(edge)
         self.endInsertRows()
 
     def data(self, index, role=QtCore.Qt.DisplayRole):
         if 0 <= index.row() < self.rowCount():
             if role == NetworkModel.LineWidth:
-                return self._pairs[index.row()].width
+                return self._renderedPairs[index.row()].width
             elif role == NetworkModel.LineColor:
-                return self._pairs[index.row()].color
+                return self._renderedPairs[index.row()].color
             elif role == NetworkModel.Endpoints:
-                return list(self._pairs[index.row()].endpoint)
+                return list(self._renderedPairs[index.row()].endpoint)
         return QtCore.QVariant()
 
-    def clear(self):
+    def _clear(self):
         self.beginResetModel()
-        self._pairs = []
+        self._renderedPairs = []
         self.endResetModel()
+
+    @QtCore.pyqtProperty(float, notify=thresholdChanged)
+    def threshold(self):
+        return self._threshold
+
+    @threshold.setter
+    def threshold(self, t):
+        if self._threshold != t:
+            self._threshold = t
+            self.thresholdChanged.emit(t)
+
+    def _redraw(self):
+        self._clear()
+        for edge in self._pairs:
+            if edge.value >= self.threshold:
+                self._appendToModel(edge)
 
 
 class MapWidget(QtQuickWidgets.QQuickWidget):
@@ -135,7 +159,7 @@ class MapWidget(QtQuickWidgets.QQuickWidget):
     def _newConfigUpdate(self, cfg: Config):
         self.cfg = cfg
         self.marker_model.clear()
-        self.network_model.clear()
+        self.network_model._clear()
         self._updateMap()
 
     def _updateMap(self):

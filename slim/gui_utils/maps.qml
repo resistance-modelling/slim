@@ -11,12 +11,30 @@ Rectangle {
     Plugin {
         id: osmPlugin
         name: "osm"
+        PluginParameter {
+            name: "osm.mapping.host"
+            value: "https://cartodb-basemaps-c.global.ssl.fastly.net/light_all/"
+        }
+        PluginParameter {
+            name: "osm.mapping.copyright"
+            value: "Map tiles by Carto, under CC BY 3.0. Data by OpenStreetMap, under ODbL."
+        }
+
+        /*
+        PluginParameter {
+            name:"osm.mapping.providersrepository.disable"
+            value:true
+        }
+        */
     }
+
+
     // Somewhere between Perth and Loch Lomond
     property var locationTC: QtPositioning.coordinate(56.33, -4.21)
     Map {
         id: mapWidgetMap
         anchors.fill: parent
+        activeMapType: supportedMapTypes[supportedMapTypes.length-1]
         plugin: osmPlugin
         center: locationTC
         zoomLevel: 8
@@ -56,11 +74,13 @@ Rectangle {
     }
     Slider {
         id: intensityThreshold
-        value: 0.5
+        to: 0.05
+        value: network_model.threshold
         x: mapWidgetMap.width - 50
         y: 30
         orientation: Qt.Vertical
         onMoved: {
+            network_model.threshold = intensityThreshold.value
         }
     }
 }

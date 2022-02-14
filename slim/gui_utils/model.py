@@ -65,3 +65,4 @@ class TransitionEndpoint:
     endpoint: Tuple[QGeoCoordinate, QGeoCoordinate]
     color: QColor
     width: int
+    value: float

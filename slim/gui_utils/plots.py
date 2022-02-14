@@ -883,10 +883,10 @@ class OptimiserPlotPane(QWidget, LightModeMixin):
         self._updatePlot()
 
     def _clearPlot(self):
-        self.payoffPlot.clear()
+        self.payoffPlot._clear()
 
         for probaPlot in self.individualProbas:
-            probaPlot.clear()
+            probaPlot._clear()
 
     def _updatePlot(self):
         self._clearPlot()
