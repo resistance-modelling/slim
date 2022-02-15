@@ -47,6 +47,7 @@ class CurveListState:
     L5m: bool = field(default=True)
     Eggs: bool = field(default=True)
     ExtP: bool = field(default=True)
+    sum_: bool = field(default=False)
 
 
 @dataclass
