@@ -2,7 +2,7 @@
 This module provides two important classes:
 
 * a :class:`Simulator` class for standalone runs;
-* a :class:`SimulatorEnv` class for RL-based optimisation.
+* a :func:`SimulatorPZEnv` method to generate a Simulator
 
 The former is a simple wrapper for the latter so that calling code does not have
 to worry about stepping or manually instantiating a policy.
@@ -25,9 +25,10 @@ import pandas as pd
 import tqdm
 
 from slim import logger
+from .farm import MAX_NUM_CAGES
 from .lice_population import GenoDistrib
 from .organisation import Organisation
-from slim.types.TreatmentTypes import Money
+from slim.types.TreatmentTypes import Money, Treatment
 
 import functools
 
@@ -35,13 +36,24 @@ import numpy as np
 from gym import spaces
 from pettingzoo import AECEnv
 from .config import Config
-from pettingzoo.utils import agent_selector
+from pettingzoo.utils import agent_selector, wrappers
 
-if TYPE_CHECKING:
-    from slim.types.policies import ACTION_SPACE, CURRENT_TREATMENTS
+from slim.types.policies import ACTION_SPACE, CURRENT_TREATMENTS
 
 
-class SimulatorPZRawEnv(AECEnv):
+def get_env(cfg: Config):
+    env = SimulatorPZEnv(cfg)
+    # This wrapper is only for environments which print results to the terminal
+    env = wrappers.CaptureStdoutWrapper(env)
+    # this wrapper helps error handling for discrete action spaces
+    env = wrappers.AssertOutOfBoundsWrapper(env)
+    # Provides a wide variety of helpful user errors
+    # Strongly recommended
+    env = wrappers.OrderEnforcingWrapper(env)
+    return env
+
+
+class SimulatorPZEnv(AECEnv):
     """
     The PettingZoo environment. This implements the basic API that any policy expects.
 
@@ -71,29 +83,32 @@ class SimulatorPZRawEnv(AECEnv):
 
     metadata = {"render.modes": ["human"], "name": "slim_v0"}
 
-    def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
-        super(SimulatorPZRawEnv).__init__()
-        self.output_dir = output_dir
-        self.sim_id = sim_id
+    def __init__(self, cfg: Config):
+        super(SimulatorPZEnv).__init__()
         self.cfg = cfg
         self.cur_day = cfg.start_date
         self.organisation = Organisation(cfg)
         self.payoff = Money()
+        self.treatment_no = len(Treatment)
         self.reset()
 
         self._action_spaces = {agent: ACTION_SPACE for agent in self.agents}
 
         # TODO: Question: would it be better to model distinct cage pops?
         self._observation_spaces = {
-            i: spaces.Dict(
+            agent: spaces.Dict(
                 {
-                    "aggregation": spaces.Box(low=0, high=20),
-                    "fish_population": spaces.Box(low=0, high=1e6, shape=(1, 20)),
+                    "aggregation": spaces.Box(
+                        low=0, high=20, shape=(20,), dtype=np.float32
+                    ),
+                    "fish_population": spaces.Box(
+                        low=0, high=1e6, shape=(20,), dtype=np.int64
+                    ),
                     "current_treatments": CURRENT_TREATMENTS,
                     "asked_to_treat": spaces.MultiBinary(1),  # Yes or no
                 }
             )
-            for i in range(len(self.agents))
+            for agent in self.agents
         }
 
     @functools.lru_cache(maxsize=None)
@@ -113,9 +128,9 @@ class SimulatorPZRawEnv(AECEnv):
     @functools.lru_cache(maxsize=None)
     def no_observation(self):
         return {
-            "aggregation": 0.0,
-            "fish_population": np.zeros((20,), dtype=np.int64),
-            "current_treatments": np.zeros((self.treatment_no,), dtype=np.int8),
+            "aggregation": np.zeros((MAX_NUM_CAGES,), dtype=np.float32),
+            "fish_population": np.zeros((MAX_NUM_CAGES,), dtype=np.int64),
+            "current_treatments": np.zeros((self.treatment_no + 1,), dtype=np.int8),
             "asked_to_treat": np.zeros((1,), dtype=np.int8),
         }
 
@@ -129,6 +144,7 @@ class SimulatorPZRawEnv(AECEnv):
             # handles stepping an agent which is already done
             # accepts a None action for the one agent, and moves the agent_selection to
             # the next done agent,  or if there are no more done agents, to the next live agent
+            self.dones[agent] = True
             return self._was_done_step(action)
         self._chosen_actions[agent] = action
 
@@ -143,15 +159,17 @@ class SimulatorPZRawEnv(AECEnv):
         self.organisation = Organisation(self.cfg)
         # Gym/PZ assume the agents are a dict
         self._agent_to_farm = self.organisation.farms
-        self.possible_agents = list(range(len(self._agent_to_farm)))
-        self.agents = self.possible_agents
+        self.possible_agents = [f"farm_{i}" for i in range(len(self._agent_to_farm))]
+        self.agents = self.possible_agents[:]
         self.rewards = {agent: 0 for agent in self.agents}
-        self._cumulative_rewards = [0] * len(self.agents)
+        self.dones = {agent: False for agent in self.agents}
+        self.infos = {agent: {} for agent in self.agents}
+        self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self.observations = {agent: self.no_observation for agent in self.agents}
 
         self._agent_selector = agent_selector(self.agents)
         self.agent_selection = self._agent_selector.next()
-        self._chosen_actions = [-1] * len(self.agents)
+        self._chosen_actions = {agent: -1 for agent in self.agents}
 
 
 class Simulator:  # pragma: no cover

@@ -548,8 +548,11 @@ class Farm(LoggableMixin):
 
     def get_gym_space(self):
         fish_population = np.array([cage.num_fish for cage in self.cages])
+        aggregations = np.array([cage.aggregation_rate for cage in self.cages])
         return {
-            "aggregation": self.aggregation_rate,
+            "aggregation": np.pad(
+                aggregations, (0, MAX_NUM_CAGES - len(aggregations), "constant")
+            ),
             "fish_population": np.pad(
                 fish_population, (0, MAX_NUM_CAGES - len(fish_population), "constant")
             ),

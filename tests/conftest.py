@@ -11,7 +11,7 @@ import builtins
 builtins.__dict__["profile"] = lambda x: x
 
 from slim.simulation.config import Config
-from slim.simulation.simulator import Organisation
+from slim.simulation.simulator import Organisation, get_env
 from slim.types.QueueTypes import EggBatch, DamAvailabilityBatch
 from slim.simulation.lice_population import LicePopulation, GenoDistrib
 
@@ -107,6 +107,11 @@ def sample_offspring_distrib():
             ("A", "a"): 300,
         }
     )
+
+
+@pytest.fixture
+def sim_env(farm_config):
+    return get_env(farm_config)
 
 
 @pytest.fixture
