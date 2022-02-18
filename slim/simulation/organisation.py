@@ -25,12 +25,12 @@ from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import GenoDistrib
 from slim.types.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
 from slim.types.TreatmentTypes import Money
-from ..types.policies import SAMPLED_ACTIONS
 
 if TYPE_CHECKING:
     from .config import Config
     from .lice_population import GenoDistribDict
     from .farm import GenoDistribByHatchDate
+    from slim.types.policies import SAMPLED_ACTIONS
 
 
 class Organisation:

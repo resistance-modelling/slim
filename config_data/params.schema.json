@@ -88,15 +88,25 @@
                         }
                     },
                     "treatment_dates": {
-                        "description": "Treatment dates for each cage. If not provided the farm will apply treatments only when asked to, or depending on the chosen strategy"
+                        "description": "Treatment dates for each cage. If not provided the farm will apply treatments only when asked to, or depending on the chosen strategy",
                         "type": "array",
                         "item": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                                "date": {
+                                    "type": "string"
+                                },
+                                "treatment_type": {
+                                    "type": "string"
+                                },
+                                "required": ["date"]
+                            }
                         }
                     },
                     "treatment_strategy": {
-                        "description": "Which treatment strategy to apply",
+                        "description": "Which treatment strategy to apply. Used during standalone simulation",
                         "enum": [
+                            "untreated",
                             "bernoulli",
                             "mosaic"
                         ]
@@ -119,7 +129,7 @@
                     "location",
                     "num_fish",
                     "cages_start_dates",
-                    "treatment_type",
+                    "treatment_types",
                     "treatment_dates",
                     "max_num_treatments",
                     "sampling_spacing",

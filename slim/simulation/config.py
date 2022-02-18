@@ -282,14 +282,17 @@ class FarmConfig:
         self.sampling_spacing: int = data["sampling_spacing"]
 
         self.treatment_types = [
-            Treatment[treatment.upper()] for treatment in data["treatment_type"]
+            Treatment[treatment.upper()] for treatment in data["treatment_types"]
         ]
 
         # Defection probability
         self.defection_proba: float = data["defection_proba"]
 
         # fixed treatment schedules
-        self.treatment_starts = [to_dt(date) for date in data["treatment_dates"]]
+        self.treatment_dates = [
+            (to_dt(date), Treatment[treatment.upper()])
+            for (date, treatment) in data["treatment_dates"]
+        ]
 
 
 @dataclass

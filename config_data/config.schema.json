@@ -197,7 +197,6 @@
       "description": "The length of the rolling average to consider in the external pressure calculation",
       "comment": "integer"
     },
-
     "geno_mutation_rate": {
       "description": "Mutation rate, as in number of individual mutation events that can happen out of the number of offsprings. For example, 1e-5 is one mutation every 10,000 extruded eggs",
       "type": "number"
@@ -232,7 +231,7 @@
           },
           "price_per_kg": {
             "description": "Cost per kg when applying treatment",
-            "comment": "For EMB, Values taken from www.sigmaaldrich.com , rescaled to have a 1kg denominator",
+            "comment": "For EMB, Values taken from wwconfigw.sigmaaldrich.com , rescaled to have a 1kg denominator",
             "type": "string"
           },
           "price_per_applicatrion": {

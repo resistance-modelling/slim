@@ -75,7 +75,7 @@ class Farm(LoggableMixin):
         self.year_temperatures = self._initialise_temperatures(cfg.loch_temperatures)
 
         # TODO: only for testing purposes
-        self._preemptively_assign_treatments(self.farm_cfg.treatment_starts)
+        self._preemptively_assign_treatments(self.farm_cfg.treatment_dates)
 
         # Queues
         self.command_queue: PriorityQueue[FarmCommand] = PriorityQueue()
@@ -201,15 +201,17 @@ class Farm(LoggableMixin):
             sampling_event = SamplingEvent(start_date + dt.timedelta(days=days))
             self.__sampling_events.put(sampling_event)
 
-    def _preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
+    def _preemptively_assign_treatments(
+        self, scheduled_treatments: List[Tuple[dt.datetime, Treatment]]
+    ):
         """
         Assign a few treatment dates to cages.
         NOTE: Mainly used for testing. May be deprecated when a proper strategy mechanism is in place
 
-        :param treatment_dates: the dates when to apply treatment
+        :param scheduled_treatments: the dates when to apply treatment
         """
-        for treatment_date in treatment_dates:
-            self.add_treatment(self.farm_cfg.treatment_types, treatment_date)
+        for scheduled_treatment in scheduled_treatments:
+            self.add_treatment(scheduled_treatment[1], scheduled_treatment[0])
 
     def fallow(self):
         for cage in self.cages:

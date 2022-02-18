@@ -18,7 +18,7 @@ import os
 
 import lz4.frame
 from pathlib import Path
-from typing import List, Optional, Tuple, Iterator
+from typing import List, Optional, Tuple, Iterator, TYPE_CHECKING
 
 import dill as pickle
 import pandas as pd
@@ -34,9 +34,11 @@ import functools
 import numpy as np
 from gym import spaces
 from pettingzoo import AECEnv
-from slim.types.policies import ACTION_SPACE, CURRENT_TREATMENTS
 from .config import Config
 from pettingzoo.utils import agent_selector
+
+if TYPE_CHECKING:
+    from slim.types.policies import ACTION_SPACE, CURRENT_TREATMENTS
 
 
 class SimulatorPZRawEnv(AECEnv):
@@ -122,11 +124,8 @@ class SimulatorPZRawEnv(AECEnv):
 
     def step(self, action: spaces.Discrete):
         # the agent id is implicitly given by self.agent_selection
-        if self.cur_day >= self.cfg.end_date:
-            return  # TODO
-
         agent = self.agent_selection
-        if self.dones[agent]:
+        if self.cur_day >= self.cfg.end_date:
             # handles stepping an agent which is already done
             # accepts a None action for the one agent, and moves the agent_selection to
             # the next done agent,  or if there are no more done agents, to the next live agent
@@ -134,16 +133,20 @@ class SimulatorPZRawEnv(AECEnv):
         self._chosen_actions[agent] = action
 
         if self._agent_selector.is_last():
-            rewards = self.organisation.step(self.cur_day, self._chosen_actions)
+            self.rewards = self.organisation.step(self.cur_day, self._chosen_actions)
+            for agent_ in self.agents:
+                self.observations[agent_] = self._agent_to_farm[agent].get_gym_space()
+        else:
+            self._clear_rewards()
 
     def reset(self):
         self.organisation = Organisation(self.cfg)
-        self._agent_to_farm = self._org.farms
-        self.possible_agents = list(self._agent_to_farm.keys())
-        self.agents = self.possible_agents[:]
-        self.dones = {agent: False for agent in self.agents}
+        # Gym/PZ assume the agents are a dict
+        self._agent_to_farm = self.organisation.farms
+        self.possible_agents = list(range(len(self._agent_to_farm)))
+        self.agents = self.possible_agents
         self.rewards = {agent: 0 for agent in self.agents}
-        self._cumulative_rewards = {agent: 0 for agent in self.agents}
+        self._cumulative_rewards = [0] * len(self.agents)
         self.observations = {agent: self.no_observation for agent in self.agents}
 
         self._agent_selector = agent_selector(self.agents)
