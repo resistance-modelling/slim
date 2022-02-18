@@ -77,19 +77,29 @@
                             "type": "string"
                         }
                     },
-                    "treatment_type": {
-                        "description": "Type of applied treatment",
-                        "enum": [
-                            "emb",
-                            "thermolicer"
-                        ]
+                    "treatment_types": {
+                        "description": "Available treatments at this site",
+                        "type": "array",
+                        "item": {
+                            "enum": [
+                                "emb",
+                                "thermolicer"
+                            ]
+                        }
                     },
                     "treatment_dates": {
-                        "description": "Treatment dates for each cage",
+                        "description": "Treatment dates for each cage. If not provided the farm will apply treatments only when asked to, or depending on the chosen strategy"
                         "type": "array",
                         "item": {
                             "type": "string"
                         }
+                    },
+                    "treatment_strategy": {
+                        "description": "Which treatment strategy to apply",
+                        "enum": [
+                            "bernoulli",
+                            "mosaic"
+                        ]
                     },
                     "max_num_treatments": {
                         "description": "Maximum number of treatments allowed within one year",

@@ -1,5 +1,11 @@
 """
-This module provides the main entry point to any simulation task.
+This module provides two important classes:
+
+* a :class:`Simulator` class for standalone runs;
+* a :class:`SimulatorEnv` class for RL-based optimisation.
+
+The former is a simple wrapper for the latter so that calling code does not have
+to worry about stepping or manually instantiating a policy.
 """
 
 from __future__ import annotations
@@ -12,176 +18,149 @@ import os
 
 import lz4.frame
 from pathlib import Path
-from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator
+from typing import List, Optional, Tuple, Iterator
 
 import dill as pickle
-import numpy as np
 import pandas as pd
 import tqdm
 
 from slim import logger
-from .farm import Farm
-from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import GenoDistrib
-from slim.types.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
+from .organisation import Organisation
 from slim.types.TreatmentTypes import Money
 
-if TYPE_CHECKING:
-    from .config import Config
-    from .lice_population import GenoDistribDict
-    from .farm import GenoDistribByHatchDate
+import functools
+
+import numpy as np
+from gym import spaces
+from pettingzoo import AECEnv
+from slim.types.policies import ACTION_SPACE, CURRENT_TREATMENTS
+from .config import Config
+from pettingzoo.utils import agent_selector
 
 
-class Organisation:
+class SimulatorPZRawEnv(AECEnv):
     """
-    An organisation is a cooperative of :class:`.farm.Farm` s. At every time step farms
-    handle the population update logic and produce a number of offspring, which the
-    Organisation is supposed to handle.
+    The PettingZoo environment. This implements the basic API that any policy expects.
 
-    Furthermore, farms regularly send messages to
-    their farms about their statuses. An organisation can recommend farms to apply treatment
-    if one of those has surpassed critical levels (see :meth:`handle_farm_messages`).
+    If you simply want to launch a simulation please just use the :class:`Simulator` class.
 
-    Ultimately, farm updates are used to recompute the external pressure.
+    This class models an AEC environment in which each farmer will actively maximise their
+    own rewards.
+
+    To better model reality, a farm operator is not omniscient but only has access to:
+    - lice aggregation.
+    - fish population (per-cage)
+    - which treatment(s) are being performed right now
+    - if the organisation has asked you to treat, e.g. because someone else is treating as well
+
+    The action space is the following:
+    - Nothing
+    - Fallow (game over - until production cycles are implemented)
+    - Apply 1 out of N treatments
+
+    Typically, all treatments will be considered in use for a few days (or months)
+    and a repeated treatment command will be silently ignored.
+
+    TODO: Lice aggregation should only be available once a sampling is performed
+    TODO: what about treating in secret?
+    TODO: what about hydrodynamics? if yes, should we represent a row and a column representing them?
     """
 
-    def __init__(self, cfg: Config, *args):
-        """
-        :param cfg: a Configuration
-        :param \*args: other constructing parameters passed to the underlying :class:`.farm.Farm` s.
-        """
-        self.name: str = cfg.name
+    metadata = {"render.modes": ["human"], "name": "slim_v0"}
+
+    def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
+        super(SimulatorPZRawEnv).__init__()
+        self.output_dir = output_dir
+        self.sim_id = sim_id
         self.cfg = cfg
-        self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
-        self.genetic_ratios = GenoDistrib(cfg.initial_genetic_ratios)
-        self.external_pressure_ratios = cfg.initial_genetic_ratios.copy()
-        self.offspring_queue = OffspringAveragingQueue(
-            self.cfg.reservoir_offspring_average
-        )
+        self.cur_day = cfg.start_date
+        self.organisation = Organisation(cfg)
+        self.payoff = Money()
+        self.reset()
 
-    def update_genetic_ratios(self, offspring: GenoDistrib):
-        """
-        Update the genetic ratios after an offspring update.
+        self._action_spaces = {agent: ACTION_SPACE for agent in self.agents}
 
-        :param offspring: the offspring update
-        """
-
-        # Because the Dirichlet distribution is the prior of the multinomial distribution
-        # (see: https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_discrete_distribution )
-        # we can use a simple bayesian approach
-        if offspring.gross > 0:
-            self.genetic_ratios = (
-                self.genetic_ratios
-                + (offspring * (1 / offspring.gross)) * self.cfg.genetic_learning_rate
+        # TODO: Question: would it be better to model distinct cage pops?
+        self._observation_spaces = {
+            i: spaces.Dict(
+                {
+                    "aggregation": spaces.Box(low=0, high=20),
+                    "fish_population": spaces.Box(low=0, high=1e6, shape=(1, 20)),
+                    "current_treatments": CURRENT_TREATMENTS,
+                    "asked_to_treat": spaces.MultiBinary(1),  # Yes or no
+                }
             )
-        multinomial_probas = self.cfg.rng.dirichlet(
-            tuple(self.genetic_ratios.values())
-        ).tolist()
-        keys = self.genetic_ratios.keys()
-        self.external_pressure_ratios = dict(zip(keys, multinomial_probas))
+            for i in range(len(self.agents))
+        }
 
-    def get_external_pressure(self) -> Tuple[int, GenoDistribDict]:
-        """
-        Get the external pressure. Callers of this function should then invoke
-        some distribution to sample the obtained number of lice that respects the probabilities.
+    @functools.lru_cache(maxsize=None)
+    def observation_space(self, agent):
+        return self._observation_spaces[agent]
 
-        For example:
+    @functools.lru_cache(maxsize=None)
+    def action_space(self, agent):
+        return self._action_spaces[agent]
 
-        >>> n, p = org.get_external_pressure()
-        >>> new_lice = GenoDistrib.from_ratios(n, p)
+    def render(self, mode="human"):
+        # TODO: could we invoke pyqt from here?
 
+        pass
 
-        :returns: a pair (number of new lice from reservoir, the ratios to sample from)
-        """
-        number = (
-            self.offspring_queue.offspring_sum.gross
-            * self.cfg.reservoir_offspring_integration_ratio
-            + self.cfg.min_ext_pressure
-        )
-        ratios = self.external_pressure_ratios
+    @property
+    @functools.lru_cache(maxsize=None)
+    def no_observation(self):
+        return {
+            "aggregation": 0.0,
+            "fish_population": np.zeros((20,), dtype=np.int64),
+            "current_treatments": np.zeros((self.treatment_no,), dtype=np.int8),
+            "asked_to_treat": np.zeros((1,), dtype=np.int8),
+        }
 
-        return number, ratios
+    def observe(self, agent):
+        return self.observations[agent]
 
-    def step(self, cur_date) -> Money:
-        """
-        Perform an update across all farms.
-        After that, some offspring will be distributed into the farms while others will be dispersed into
-        the reservoir, thus changing the global external pressure.
+    def step(self, action: spaces.Discrete):
+        # the agent id is implicitly given by self.agent_selection
+        if self.cur_day >= self.cfg.end_date:
+            return  # TODO
 
-        :param cur_date: the current date
-        :returns: the cumulated reward from all the farm updates.
-        """
+        agent = self.agent_selection
+        if self.dones[agent]:
+            # handles stepping an agent which is already done
+            # accepts a None action for the one agent, and moves the agent_selection to
+            # the next done agent,  or if there are no more done agents, to the next live agent
+            return self._was_done_step(action)
+        self._chosen_actions[agent] = action
 
-        # update the farms and get the offspring
-        for farm in self.farms:
-            self.handle_farm_messages(cur_date, farm)
+        if self._agent_selector.is_last():
+            rewards = self.organisation.step(self.cur_day, self._chosen_actions)
 
-        offspring_dict = {}
-        payoff = Money()
-        for farm in self.farms:
-            offspring, cost = farm.update(cur_date, *self.get_external_pressure())
-            offspring_dict[farm.id_] = offspring
-            # TODO: take into account other types of disadvantages, not just the mere treatment cost
-            # e.g. how are environmental factors measured? Are we supposed to add some coefficients here?
-            # TODO: if we take current fish population into account then what happens to the infrastructure cost?
-            payoff += farm.get_profit(cur_date) - cost
+    def reset(self):
+        self.organisation = Organisation(self.cfg)
+        self._agent_to_farm = self._org.farms
+        self.possible_agents = list(self._agent_to_farm.keys())
+        self.agents = self.possible_agents[:]
+        self.dones = {agent: False for agent in self.agents}
+        self.rewards = {agent: 0 for agent in self.agents}
+        self._cumulative_rewards = {agent: 0 for agent in self.agents}
+        self.observations = {agent: self.no_observation for agent in self.agents}
 
-        # once all of the offspring is collected
-        # it can be dispersed (interfarm and intercage movement)
-        # note: this is done on organisation level because it requires access to
-        # other farms - and will allow multiprocessing of the main update
-
-        for farm_ix, offspring in offspring_dict.items():
-            self.farms[farm_ix].disperse_offspring(offspring, self.farms, cur_date)
-
-        total_offspring = list(offspring_dict.values())
-        self.offspring_queue.append(total_offspring)
-
-        self.update_genetic_ratios(self.offspring_queue.average)
-
-        return payoff
-
-    def to_json(self, **kwargs):
-        json_dict = kwargs.copy()
-        json_dict.update(self.to_json_dict())
-        return json.dumps(json_dict, cls=CustomFarmEncoder, indent=4)
-
-    def to_json_dict(self):
-        return {"name": self.name, "farms": self.farms}
-
-    def __repr__(self):
-        return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
-
-    def handle_farm_messages(self, cur_date: dt.datetime, farm: Farm):
-        """
-        Handle the messages sent in the farm-to-organisation queue.
-        Currently, only one type of message is implemented: :class:`slim.types.QueueTypes.SamplingResponse`.
-
-        If the lice aggregation rate detected and reported on that farm exceeds the configured threshold
-        then all the farms will be asked to treat, and the offending farm **can not** defect.
-        Note however that this does not mean that treatment will be applied anyway due
-        to eligibility requirements. See :meth:`.farm.Farm.ask_for_treatment` for details.
-
-        :param cur_date: the current day
-        :param farm: the farm that sent the message
-        """
-
-        def cts(farm_response: FarmResponse):
-            if (
-                isinstance(farm_response, SamplingResponse)
-                and farm_response.detected_rate >= self.cfg.aggregation_rate_threshold
-            ):
-                # send a treatment command to everyone
-                for other_farm in self.farms:
-                    other_farm.ask_for_treatment(
-                        cur_date, can_defect=other_farm != farm
-                    )
-
-        pop_from_queue(farm.farm_to_org, cur_date, cts)
+        self._agent_selector = agent_selector(self.agents)
+        self.agent_selection = self._agent_selector.next()
+        self._chosen_actions = [-1] * len(self.agents)
 
 
 class Simulator:  # pragma: no cover
-    """The main entry point of the simulator."""
+    """
+    The main entry point of the simulator.
+    This class provides the main loop of the simulation and is typically used by the driver
+    when extracting simulation data.
+    Furthermore, the class allows the user to perform experience replays by resuming
+    snapshots.
+
+    TODO: merge Simulator and SimulatorPZRawEnv.
+    """
 
     def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
         self.output_dir = output_dir
@@ -454,42 +433,3 @@ class Simulator:  # pragma: no cover
         if not resume:
             compressed_stream.close()
             data_file.close()
-
-
-class OffspringAveragingQueue:
-    """Helper class to compute a rolling average"""
-
-    def __init__(self, rolling_average: int):
-        """
-        :param rolling_average: the maximum length to consider
-        """
-        self._queue = Deque[GenoDistrib](  # pytype: disable=not-callable
-            maxlen=rolling_average
-        )
-        self.offspring_sum = GenoDistrib()
-
-    def __len__(self):
-        return len(self._queue)
-
-    @property
-    def rolling_average_factor(self):
-        return self._queue.maxlen
-
-    def append(self, offspring_per_farm: List[GenoDistribByHatchDate]):
-        """Add an element to our rolling average. This will automatically pop elements on the left."""
-        to_add = GenoDistrib()
-        for farm_offspring in offspring_per_farm:
-            to_add = to_add + GenoDistrib.batch_sum(list(farm_offspring.values()))
-        if len(self) == self.rolling_average_factor:
-            self.popleft()
-        self._queue.append(to_add)
-        self.offspring_sum += to_add
-
-    def popleft(self) -> GenoDistrib:
-        element = self._queue.popleft()
-        self.offspring_sum = self.offspring_sum - element
-        return element
-
-    @property
-    def average(self):
-        return self.offspring_sum * (1 / self.rolling_average_factor)

@@ -281,8 +281,9 @@ class FarmConfig:
         self.max_num_treatments: int = data["max_num_treatments"]
         self.sampling_spacing: int = data["sampling_spacing"]
 
-        # TODO: a farm may employ different chemicals
-        self.treatment_type = Treatment[data["treatment_type"].upper()]
+        self.treatment_types = [
+            Treatment[treatment.upper()] for treatment in data["treatment_type"]
+        ]
 
         # Defection probability
         self.defection_proba: float = data["defection_proba"]
