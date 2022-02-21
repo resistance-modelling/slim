@@ -5,7 +5,7 @@ from queue import PriorityQueue
 
 import numpy as np
 
-from slim.types.TreatmentTypes import Money
+from slim.types.treatments import Money
 
 
 class CustomFarmEncoder(json.JSONEncoder):

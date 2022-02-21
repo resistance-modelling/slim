@@ -38,6 +38,14 @@
             "description": "The allowed aggregation rate at any time",
             "type": "number"
         },
+        "treatment_strategy": {
+            "description": "Which treatment strategy to apply. Used during standalone simulation",
+            "enum": [
+                "untreated",
+                "bernoulli",
+                "mosaic"
+            ]
+        },
         "farms": {
             "type": "array",
             "description": "Farm-specific configuration",
@@ -102,14 +110,6 @@
                                 "required": ["date"]
                             }
                         }
-                    },
-                    "treatment_strategy": {
-                        "description": "Which treatment strategy to apply. Used during standalone simulation",
-                        "enum": [
-                            "untreated",
-                            "bernoulli",
-                            "mosaic"
-                        ]
                     },
                     "max_num_treatments": {
                         "description": "Maximum number of treatments allowed within one year",

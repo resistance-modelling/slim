@@ -4,13 +4,45 @@ slim.gui\_utils package
 Submodules
 ----------
 
-.. toctree::
-   :maxdepth: 4
+slim.gui\_utils.configuration module
+------------------------------------
 
-   slim.gui_utils.configuration
-   slim.gui_utils.console
-   slim.gui_utils.model
-   slim.gui_utils.plots
+.. automodule:: slim.gui_utils.configuration
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.gui\_utils.console module
+------------------------------
+
+.. automodule:: slim.gui_utils.console
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.gui\_utils.maps module
+---------------------------
+
+.. automodule:: slim.gui_utils.maps
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.gui\_utils.model module
+----------------------------
+
+.. automodule:: slim.gui_utils.model
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.gui\_utils.plots module
+----------------------------
+
+.. automodule:: slim.gui_utils.plots
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Module contents
 ---------------

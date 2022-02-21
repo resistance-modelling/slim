@@ -9,18 +9,43 @@ Subpackages
 
    slim.gui_utils
    slim.simulation
+   slim.surveys
    slim.types
 
 Submodules
 ----------
 
-.. toctree::
-   :maxdepth: 4
+slim.JSONEncoders module
+------------------------
 
-   slim.JSONEncoders
-   slim.Optimiser
-   slim.SeaLiceMgmt
-   slim.SeaLiceMgmtGUI
+.. automodule:: slim.JSONEncoders
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.Optimiser module
+---------------------
+
+.. automodule:: slim.Optimiser
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.SeaLiceMgmt module
+-----------------------
+
+.. automodule:: slim.SeaLiceMgmt
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.SeaLiceMgmtGUI module
+--------------------------
+
+.. automodule:: slim.SeaLiceMgmtGUI
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Module contents
 ---------------

@@ -27,7 +27,7 @@ from slim.simulation.lice_population import (
     GenoDistribDict,
 )
 from slim.types.QueueTypes import *
-from slim.types.TreatmentTypes import Money, Treatment
+from slim.types.treatments import Money, Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
@@ -36,6 +36,7 @@ LocationTemps = TypedDict(
 )
 
 MAX_NUM_CAGES = 20
+MAX_NUM_APPLICATIONS = 10
 
 
 class Farm(LoggableMixin):
@@ -87,7 +88,7 @@ class Farm(LoggableMixin):
 
     def __str__(self):
         """
-        Get a human readable string representation of the farm.
+        Get a human-readable string representation of the farm.
 
         :return: a description of the cage
         """
@@ -557,6 +558,7 @@ class Farm(LoggableMixin):
                 fish_population, (0, MAX_NUM_CAGES - len(fish_population), "constant")
             ),
             "current_treatment": 0,  # TODO
+            "allowed_treatments": self.available_treatments,
             "asked_to_treat": self._asked_to_treat,
         }
 

@@ -4,14 +4,53 @@ slim.simulation package
 Submodules
 ----------
 
-.. toctree::
-   :maxdepth: 4
+slim.simulation.cage module
+---------------------------
 
-   slim.simulation.cage
-   slim.simulation.config
-   slim.simulation.farm
-   slim.simulation.lice_population
-   slim.simulation.simulator
+.. automodule:: slim.simulation.cage
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.simulation.config module
+-----------------------------
+
+.. automodule:: slim.simulation.config
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.simulation.farm module
+---------------------------
+
+.. automodule:: slim.simulation.farm
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.simulation.lice\_population module
+---------------------------------------
+
+.. automodule:: slim.simulation.lice_population
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.simulation.organisation module
+-----------------------------------
+
+.. automodule:: slim.simulation.organisation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+slim.simulation.simulator module
+--------------------------------
+
+.. automodule:: slim.simulation.simulator
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Module contents
 ---------------

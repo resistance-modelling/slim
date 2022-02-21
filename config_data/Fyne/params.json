@@ -11,6 +11,7 @@
     },
     "genetic_learning_rate": 0.01,
     "aggregation_rate_threshold": 2.0,
+    "treatment_strategy": "bernoulli",
     "farms": [
         {
             "name": "Tarbert South",
@@ -29,7 +30,9 @@
                 "2017-10-29 00:00:00",
                 "2017-11-05 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": [
+                "emb", "thermolicer"
+            ],
             "treatment_dates": [
             ],
             "max_num_treatments": 10,
@@ -50,7 +53,10 @@
                 "2017-10-16 00:00:00",
                 "2017-10-23 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": [
+                "emb",
+                "thermolicer"
+            ],
             "treatment_dates": [
             ],
             "max_num_treatments": 8,

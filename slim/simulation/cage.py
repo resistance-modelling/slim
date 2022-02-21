@@ -12,7 +12,7 @@ import numpy as np
 
 from slim import logger, LoggableMixin
 from slim.simulation.config import Config
-from slim.types.TreatmentTypes import (
+from slim.types.treatments import (
     GeneticMechanism,
     Money,
     ChemicalTreatment,

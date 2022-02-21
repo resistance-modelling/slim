@@ -11,7 +11,7 @@ from typing import Tuple, Dict, Optional, TYPE_CHECKING, Union
 import jsonschema
 import numpy as np
 
-from slim.types.TreatmentTypes import (
+from slim.types.treatments import (
     Treatment,
     TreatmentParams,
     GeneticMechanism,
@@ -184,6 +184,9 @@ class Config(RuntimeConfig):
 
         # Other constraints
         self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]
+
+        # Policy
+        self.treatment_strategy: str = data["treatment_strategy"]
 
         # farms
         self.farms = [FarmConfig(farm_data) for farm_data in data["farms"]]

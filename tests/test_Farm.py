@@ -7,7 +7,7 @@ import pytest
 from slim.simulation.lice_population import LicePopulation
 from slim.simulation.cage import Cage
 from slim.simulation.config import to_dt
-from slim.types.TreatmentTypes import Treatment
+from slim.types.treatments import Treatment
 from slim.types.QueueTypes import SampleRequestCommand
 
 

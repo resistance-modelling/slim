@@ -8,23 +8,14 @@ __all__ = ["Organisation"]
 
 import datetime as dt
 import json
-import os
 
-import lz4.frame
-from pathlib import Path
 from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator, Union
 
-import dill as pickle
-import numpy as np
-import pandas as pd
-import tqdm
-
-from slim import logger
 from .farm import Farm
 from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import GenoDistrib
 from slim.types.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
-from slim.types.TreatmentTypes import Money
+from slim.types.treatments import Money
 
 if TYPE_CHECKING:
     from .config import Config

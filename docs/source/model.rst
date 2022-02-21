@@ -18,7 +18,7 @@ traits to proliferate and thus make the former less and less effective at each c
    This section assumes you have some basic knowledge of salmon aquaculture. If
    you don't we suggest having a look at :ref:`Rationale` or [1]_ first.
 
-The project models an environment in which an :py:class:`slim.simulation.simulator.Organisation` of salmon farmers - which reside
+The project models an environment in which an :py:class:`slim.simulation.organisation.Organisation` of salmon farmers - which reside
 and operate on the same *loch* - run their own :py:class:`slim.simulation.farm.Farm` s which are in turn divided into
 :py:class:`slim.simulation.cage.Cage` s.
 
@@ -77,7 +77,7 @@ Treatment
 
 Treatment affects the lice population in different ways, depending on the genotype of the population and the
 type of treatment. We model two types of treatment: chemical and non-chemical treatments. The full list
-of supported treatments can be found in :py:class:`slim.types.TreatmentTypes.Treatment`.
+of supported treatments can be found in :py:class:`slim.types.treatment_types.Treatment`.
 
 When a treatment is administered some delay occurs before effects are noticeable (non-chemical
 treatments have a virtual delay of one day). The mortality rate (a multiplicative factor of the given

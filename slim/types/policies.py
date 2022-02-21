@@ -6,19 +6,34 @@ from typing import List, Union
 
 import numpy as np
 
-from .TreatmentTypes import Treatment
-from gym.spaces import Discrete, MultiBinary
+from .treatments import Treatment
+from gym.spaces import Discrete, MultiBinary, Dict, Box
 
-__all__ = ["ACTION_SPACE", "SAMPLED_ACTIONS", "CURRENT_TREATMENTS"]
+__all__ = [
+    "ACTION_SPACE",
+    "SAMPLED_ACTIONS",
+    "ACTION_SPACE",
+    "FALLOW",
+    "NO_ACTION",
+    "CURRENT_TREATMENTS",
+    "TREATMENT_NO",
+]
 
-treatment_no = len(Treatment)
+TREATMENT_NO = len(Treatment)
 # 0 - (treatment_no - 1): treatment code
 # treatment_no: fallowing
 # treatment_no+1: no action
-ACTION_SPACE = Discrete(treatment_no + 2)
-ACTION_TYPE = int
-SAMPLED_ACTIONS = Union[List[ACTION_TYPE], np.ndarray]
+ACTION_SPACE = Discrete(TREATMENT_NO + 2)
+
+FALLOW = TREATMENT_NO
+NO_ACTION = TREATMENT_NO + 1
+
+
+ActionType = int
+SAMPLED_ACTIONS = Union[List[ActionType], np.ndarray]
+# Problem: the observation type needs to be flattened...
+ObservationType = Union[Dict, Box]
 # 0th (MSB) - (treatment_no - 1)th bit: treatment code
 # treatment_no: fallowing
 # Each of those bits is 1 if that treatment is performed.
-CURRENT_TREATMENTS = MultiBinary(treatment_no + 1)
+CURRENT_TREATMENTS = MultiBinary(TREATMENT_NO + 1)

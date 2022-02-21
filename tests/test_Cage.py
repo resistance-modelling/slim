@@ -10,7 +10,7 @@ import pytest
 
 from slim.simulation.config import to_dt
 from slim.types.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch
-from slim.types.TreatmentTypes import GeneticMechanism, Treatment, Money
+from slim.types.treatments import GeneticMechanism, Treatment, Money
 from slim.simulation.lice_population import GenoDistrib, LicePopulation
 
 
