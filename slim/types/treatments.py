@@ -16,8 +16,6 @@ from slim.simulation.lice_population import (
     GenoTreatmentDistrib,
 )
 
-Money = Decimal
-
 
 class Treatment(Enum):
     """
@@ -158,7 +156,7 @@ class ChemicalTreatment(TreatmentParams):
     def __init__(self, payload):
         super().__init__(payload)
         self.pheno_resistance = self.parse_pheno_resistance(payload["pheno_resistance"])
-        self.price_per_kg = Money(payload["price_per_kg"])
+        self.price_per_kg = payload["price_per_kg"]
 
         self.durability_temp_ratio: float = payload["durability_temp_ratio"]
 
@@ -168,7 +166,7 @@ class ThermalTreatment(TreatmentParams):
 
     def __init__(self, payload):
         super().__init__(payload)
-        self.price_per_application = Money(payload["price_per_application"])
+        self.price_per_application = payload["price_per_application"]
         # NOTE: these are currently unused
         # self.exposure_temperature: float = payload["exposure_temperature"]
         # self.exposure_length: float = payload["efficacy"]

@@ -179,10 +179,8 @@
     },
     "gain_per_kg": {
       "description": "Selling rate for fish kg (in GBP)",
-      "value": "4.39",
       "comment": "Source: NASDAQ Salmon Index, last updated 6/08/21, with a corresponding NOK-GBP currency conversion",
-      "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]{2}$"
+      "type": "number"
     },
     "initial_genetic_ratios": {
       "description": "Genetic ratios of lice population",
@@ -232,12 +230,12 @@
           "price_per_kg": {
             "description": "Cost per kg when applying treatment",
             "comment": "For EMB, Values taken from wwconfigw.sigmaaldrich.com , rescaled to have a 1kg denominator",
-            "type": "string"
+            "type": "number"
           },
-          "price_per_applicatrion": {
+          "price_per_application": {
             "description": "Cost per application when applying treatment",
             "comment": "TODO: for the thermolicer this is completely baseless",
-            "type": "string"
+            "type": "number"
           },
           "application_period": {
             "description": "For how long to apply the treatment (in days)",

@@ -35,7 +35,7 @@ from slim.types.policies import (
     NO_ACTION,
     TREATMENT_NO,
 )
-from slim.types.treatments import Money, Treatment
+from slim.types.treatments import Treatment
 
 import functools
 
@@ -108,7 +108,7 @@ class SimulatorPZEnv(AECEnv):
         self.cfg = cfg
         self.cur_day = cfg.start_date
         self.organisation = Organisation(cfg)
-        self.payoff = Money()
+        self.payoff = 0.0
         self.treatment_no = len(Treatment)
         self.reset()
 
@@ -152,7 +152,7 @@ class SimulatorPZEnv(AECEnv):
             "aggregation": np.zeros((MAX_NUM_CAGES,), dtype=np.float32),
             "fish_population": np.zeros((MAX_NUM_CAGES,), dtype=np.int64),
             "current_treatments": np.zeros((self.treatment_no + 1,), dtype=np.int8),
-            "allowed_treatments": np.zeros((self.treatment_no), dtype=np.int8),
+            "allowed_treatments": 0,
             "asked_to_treat": np.zeros((1,), dtype=np.int8),
         }
 
@@ -167,26 +167,39 @@ class SimulatorPZEnv(AECEnv):
             # accepts a None action for the one agent, and moves the agent_selection to
             # the next done agent,  or if there are no more done agents, to the next live agent
             self.dones[agent] = True
-            return self._was_done_step(action)
         if self.dones[agent]:
             return self._was_done_step(action)
 
+        # the agent which stepped last had its _cumulative_rewards accounted for
+        # (because it was returned by last()), so the _cumulative_rewards for this
+        # agent should start again at 0
+        self._cumulative_rewards[agent] = 0
+
         self._chosen_actions[agent] = action
-        self.dones[agent] = True
 
         if self._agent_selector.is_last():
-            self.rewards = self.organisation.step(self.cur_day, self._chosen_actions)
+            actions = [NO_ACTION] * len(self.possible_agents)
+            for k, v in self._chosen_actions.items():
+                id = int(k[len("farm_") :])
+                actions[id] = v
+
+            self.rewards = dict(
+                zip(self.possible_agents, self.organisation.step(self.cur_day, actions))
+            )
             for agent_ in self.agents:
                 self.observations[agent_] = self._agent_to_farm[agent].get_gym_space()
-                self.dones[agent] = False
         else:
             self._clear_rewards()
+        self.agent_selection = self._agent_selector.next()
+        self._accumulate_rewards()
 
     def reset(self):
         self.organisation = Organisation(self.cfg)
         # Gym/PZ assume the agents are a dict
-        self._agent_to_farm = self.organisation.farms
-        self.possible_agents = [f"farm_{i}" for i in range(len(self._agent_to_farm))]
+        self._agent_to_farm = {
+            f"farm_{i}": farm for i, farm in enumerate(self.organisation.farms)
+        }
+        self.possible_agents = list(self._agent_to_farm.keys())
         self.agents = self.possible_agents[:]
         self.rewards = {agent: 0 for agent in self.agents}
         self.dones = {agent: False for agent in self.agents}
@@ -208,7 +221,7 @@ class BernoullianPolicy(LoggableMixin):
     """
 
     def __init__(self, cfg: Config):
-        super(BernoullianPolicy).__init__()
+        super().__init__()
         self.proba = [farm_cfg.defection_proba for farm_cfg in cfg.farms]
         n = len(Treatment)
         self.treatment_probas = np.ones(n) / n
@@ -225,7 +238,7 @@ class BernoullianPolicy(LoggableMixin):
         self.log("Outcome of the vote: %r", is_treating=want_to_treat)
 
         if not want_to_treat:
-            logger.debug("\tFarm {} refuses to treat".format(self.id_))
+            logger.debug("\tFarm {} refuses to treat".format(agent))
             return NO_ACTION
 
         # TODO: implement a strategy to pick a treatment of choice
@@ -265,7 +278,11 @@ class MosaicPolicy:
     a different treatment is performed.
     """
 
-    pass
+    def __init__(self):
+        raise NotImplementedError()
+
+    def predict(self, **_kwargs):
+        return NO_ACTION
 
 
 class Simulator:  # pragma: no cover
@@ -299,7 +316,7 @@ class Simulator:  # pragma: no cover
 
         self.output_dump_path = _get_simulation_path(output_dir, sim_id)
         self.cur_day = cfg.start_date
-        self.payoff = Money()
+        self.payoff = 0.0
 
     def run_model(self, resume=False):
         """Perform the simulation by running the model.

@@ -3,7 +3,7 @@
     "start_date": "2017-10-01 00:00:00",
     "end_date": "2018-10-01 00:00:00",
     "ext_pressure": 150,
-    "monthly_cost": "5000.00",
+    "monthly_cost": 5000.00,
     "genetic_ratios": {
         "A": 0.25,
         "a": 0.25,

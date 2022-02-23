@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from collections import Counter
 import datetime as dt
 import json
@@ -14,7 +13,6 @@ from slim import logger, LoggableMixin
 from slim.simulation.config import Config
 from slim.types.treatments import (
     GeneticMechanism,
-    Money,
     ChemicalTreatment,
     ThermalTreatment,
 )
@@ -29,7 +27,7 @@ from slim.simulation.lice_population import (
     LifeStage,
     GenoDistribDict,
 )
-from slim.types.QueueTypes import (
+from slim.types.queue import (
     DamAvailabilityBatch,
     EggBatch,
     TravellingEggBatch,
@@ -150,7 +148,7 @@ class Cage(LoggableMixin):
 
     def update(
         self, cur_date: dt.datetime, pressure: int, ext_pressure_ratio: GenoDistribDict
-    ) -> Tuple[GenoDistrib, Optional[dt.datetime], Money]:
+    ) -> Tuple[GenoDistrib, Optional[dt.datetime], float]:
         """Update the cage at the current time step.
 
         :param cur_date: Current date of simulation
@@ -319,7 +317,7 @@ class Cage(LoggableMixin):
 
     def get_lice_treatment_mortality(
         self, cur_date
-    ) -> Tuple[GenoLifeStageDistrib, Money]:
+    ) -> Tuple[GenoLifeStageDistrib, float]:
         """
         Calculate the number of lice in each stage killed by treatment.
 
@@ -333,7 +331,7 @@ class Cage(LoggableMixin):
 
         dead_mortality_distrib = self.get_lice_treatment_mortality_rate(cur_date)
 
-        cost = Money("0.00")
+        cost = 0.0
 
         for geno, (mortality_rate, num_susc) in dead_mortality_distrib.items():
             if mortality_rate > 0:

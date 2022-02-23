@@ -16,7 +16,6 @@ from slim.types.treatments import (
     TreatmentParams,
     GeneticMechanism,
     EMB,
-    Money,
     Thermolicer,
 )
 
@@ -101,7 +100,7 @@ class RuntimeConfig:
         self.reservoir_offspring_average: int = data["reservoir_offspring_average"]
 
         # Other reward/payoff constants
-        self.gain_per_kg = Money(data["gain_per_kg"])
+        self.gain_per_kg = data["gain_per_kg"]
 
         # load in the seed if provided
         # otherwise don't use a seed
@@ -180,7 +179,7 @@ class Config(RuntimeConfig):
             for key, val in data["genetic_ratios"].items()
         }
         self.genetic_learning_rate: float = data["genetic_learning_rate"]
-        self.monthly_cost = Money(data["monthly_cost"])
+        self.monthly_cost = data["monthly_cost"]
 
         # Other constraints
         self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]

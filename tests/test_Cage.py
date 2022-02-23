@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 
 from slim.simulation.config import to_dt
-from slim.types.QueueTypes import DamAvailabilityBatch, EggBatch, TravellingEggBatch
-from slim.types.treatments import GeneticMechanism, Treatment, Money
+from slim.types.queue import DamAvailabilityBatch, EggBatch, TravellingEggBatch
+from slim.types.treatments import GeneticMechanism, Treatment
 from slim.simulation.lice_population import GenoDistrib, LicePopulation
 
 
@@ -64,7 +64,7 @@ class TestCage:
                 for geno_rate in rate.values()
             )
             assert first_cage.last_effective_treatment is None
-            assert cost == Money("0.00")
+            assert cost == 0.0
 
         # Even 5 days after, no effect can occur if the cage has not started yet.
         cur_day = treatment_dates[0][0] + dt.timedelta(days=5)
@@ -75,7 +75,7 @@ class TestCage:
             for geno_rate in rate.values()
         )
         assert first_cage.last_effective_treatment is None
-        assert cost == Money("0.00")
+        assert cost == 0.0
 
     def test_cage_update_lice_treatment_mortality(self, first_farm, first_cage):
         treatment_dates = first_farm.farm_cfg.treatment_dates

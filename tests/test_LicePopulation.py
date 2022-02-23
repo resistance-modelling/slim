@@ -3,7 +3,7 @@ import datetime as dt
 import numpy as np
 import pytest
 
-from slim.types.QueueTypes import DamAvailabilityBatch
+from slim.types.queue import DamAvailabilityBatch
 from slim.simulation.organisation import OffspringAveragingQueue
 from slim.simulation.lice_population import largest_remainder, GenoDistrib
 

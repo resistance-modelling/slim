@@ -14,8 +14,7 @@ from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator, Union
 from .farm import Farm
 from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import GenoDistrib
-from slim.types.QueueTypes import pop_from_queue, FarmResponse, SamplingResponse
-from slim.types.treatments import Money
+from slim.types.queue import pop_from_queue, FarmResponse, SamplingResponse
 
 if TYPE_CHECKING:
     from .config import Config
@@ -96,7 +95,7 @@ class Organisation:
 
     def step(
         self, cur_date, actions: Optional[SAMPLED_ACTIONS] = None
-    ) -> Union[Money, List[Money]]:
+    ) -> Union[float, List[float]]:
         """
         Perform an update across all farms.
         After that, some offspring will be distributed into the farms while others will be dispersed into
@@ -140,7 +139,7 @@ class Organisation:
 
         if v2:
             return payoffs
-        payoff = sum(payoffs, Money())
+        payoff = sum(payoffs)
         return payoff
 
     def to_json(self, **kwargs):

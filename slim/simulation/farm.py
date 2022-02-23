@@ -26,9 +26,9 @@ from slim.simulation.lice_population import (
     GenoDistrib,
     GenoDistribDict,
 )
-from slim.types.QueueTypes import *
+from slim.types.queue import *
 from slim.types.policies import TREATMENT_NO
-from slim.types.treatments import Money, Treatment
+from slim.types.treatments import Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
@@ -310,7 +310,7 @@ class Farm(LoggableMixin):
         cur_date: dt.datetime,
         ext_influx: int,
         ext_pressure_ratios: GenoDistribDict,
-    ) -> Tuple[GenoDistribByHatchDate, Money]:
+    ) -> Tuple[GenoDistribByHatchDate, float]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites. Also distribute the offspring across cages.
 
@@ -345,7 +345,7 @@ class Farm(LoggableMixin):
         # get number of lice from reservoir to be put in each cage
         pressures_per_cage = self.get_cage_pressures(ext_influx)
 
-        total_cost = Money("0.00")
+        total_cost = 0.0
 
         # collate egg batches by hatch time
         eggs_by_hatch_date: GenoDistribByHatchDate = {}
@@ -535,7 +535,7 @@ class Farm(LoggableMixin):
         gross_by_cage = [geno.gross for geno in geno_by_cage]
         return sum(gross_by_cage), gross_by_cage, geno_by_cage
 
-    def get_profit(self, cur_date: dt.datetime) -> Money:
+    def get_profit(self, cur_date: dt.datetime) -> float:
         """
         Get the current mass of fish that can be resold.
 
@@ -546,21 +546,22 @@ class Farm(LoggableMixin):
             cage.average_fish_mass((cur_date - cage.start_date).days) / 1e3
             for cage in self.cages
         ]
-        return self.cfg.gain_per_kg * Money(sum(mass_per_cage))
+        return self.cfg.gain_per_kg * sum(mass_per_cage)
 
     def get_gym_space(self):
         fish_population = np.array([cage.num_fish for cage in self.cages])
         aggregations = np.array([cage.aggregation_rate for cage in self.cages])
         return {
             "aggregation": np.pad(
-                aggregations, (0, MAX_NUM_CAGES - len(aggregations), "constant")
-            ),
+                aggregations, (0, MAX_NUM_CAGES - len(aggregations))
+            ).astype(np.float32),
             "fish_population": np.pad(
-                fish_population, (0, MAX_NUM_CAGES - len(fish_population), "constant")
+                fish_population,
+                (0, MAX_NUM_CAGES - len(fish_population)),
             ),
             "current_treatments": np.zeros((TREATMENT_NO + 1), dtype=np.int8),  # TODO
             "allowed_treatments": self.available_treatments,
-            "asked_to_treat": self._asked_to_treat,
+            "asked_to_treat": np.array([self._asked_to_treat], dtype=np.int8),
         }
 
     def _handle_events(self, cur_date: dt.datetime):

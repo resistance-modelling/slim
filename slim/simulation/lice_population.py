@@ -38,10 +38,10 @@ from typing import (
 import numpy as np
 
 from slim import logger
-from slim.types.QueueTypes import pop_from_queue
+from slim.types.queue import pop_from_queue
 
 if TYPE_CHECKING:  # pragma: no cover
-    from slim.types.QueueTypes import DamAvailabilityBatch
+    from slim.types.queue import DamAvailabilityBatch
 
 ################ Basic type aliases #####################
 LifeStage = str
