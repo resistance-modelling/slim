@@ -49,6 +49,7 @@ from pettingzoo.utils import agent_selector, wrappers
 def get_env(cfg: Config) -> wrappers.OrderEnforcingWrapper:
     """
     Generate a :class:`SimulatorPZEnv` wrapped inside a PettingZoo wrapper.
+    Note that nesting wrappers may make accessing attributes more difficult.
 
     :param cfg: the config to use
     :returns: the wrapped environment
@@ -188,6 +189,7 @@ class SimulatorPZEnv(AECEnv):
             )
             for agent_ in self.agents:
                 self.observations[agent_] = self._agent_to_farm[agent].get_gym_space()
+            self.cur_day += dt.timedelta(days=1)
         else:
             self._clear_rewards()
         self.agent_selection = self._agent_selector.next()
@@ -242,13 +244,10 @@ class BernoullianPolicy(LoggableMixin):
             return NO_ACTION
 
         # TODO: implement a strategy to pick a treatment of choice
-        treatments = list(Treatment)
         picked_treatment = self.rng.choice(
             np.arange(TREATMENT_NO), p=self.treatment_probas
         )
-        return treatments[picked_treatment]
-
-        # self.add_treatment(picked_treatment, cur_date)
+        return picked_treatment
 
     def predict(self, observation: ObservationType, agent: str):
         if isinstance(observation, spaces.Box):
@@ -292,12 +291,10 @@ class Simulator:  # pragma: no cover
     when extracting simulation data.
     Furthermore, the class allows the user to perform experience replays by resuming
     snapshots.
-
-    TODO: merge Simulator and SimulatorPZRawEnv.
     """
 
     def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
-        self._sim_env = get_env(cfg)
+        self.env = get_env(cfg)
         self.output_dir = output_dir
         self.sim_id = sim_id
         self.cfg = cfg
@@ -340,16 +337,16 @@ class Simulator:  # pragma: no cover
                 data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
             )
 
-        self._sim_env.reset()
+        self.env.reset()
 
         num_days = (self.cfg.end_date - self.cur_day).days
         for day in tqdm.trange(num_days):
             logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
-            for agent in self._sim_env.agents:
-                action = self.policy.predict(self._sim_env.observe(agent), agent)
-                self._sim_env.step(action)
+            for agent in self.env.agents:
+                action = self.policy.predict(self.env.observe(agent), agent)
+                self.env.step(action)
 
-            reward = self._sim_env.rewards
+            reward = self.env.rewards
             self.payoff += sum(reward.values())
 
             # Save the model snapshot either when checkpointing or during the last iteration
@@ -367,7 +364,7 @@ class Simulator:  # pragma: no cover
             data_file.close()
 
 
-def _get_simulation_path(path: Path, sim_id: str):
+def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
     if not path.is_dir():
         path.mkdir(parents=True, exist_ok=True)
 
@@ -399,7 +396,7 @@ def reload_all_dump(
 
 def dump_as_dataframe(
     states_times_it: Iterator[Tuple[Simulator, dt.datetime]]
-) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
+) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:  # pragma: no cover
     """
     Convert a dump into a pandas dataframe
 
@@ -418,7 +415,7 @@ def dump_as_dataframe(
         if cfg is None:
             cfg = state.cfg
 
-        for farm in state.organisation.farms:
+        for farm in state.env.unwrapped.organisation.farms:
             key = (time, "farm_" + str(farm.id_))
             is_treating = all([cage.is_treated(time) for cage in farm.cages])
             farm_data[key] = {
@@ -444,7 +441,7 @@ def dump_as_dataframe(
     return dataframe.rename_axis(("timestamp", "farm_id")), times, cfg
 
 
-def dump_optimiser_as_pd(states: List[List[Simulator]]):
+def dump_optimiser_as_pd(states: List[List[Simulator]]):  # pragma: no cover
     # TODO: maybe more things may be valuable to visualise
     payoff_row = []
     proba_row = {}
@@ -467,7 +464,7 @@ def reload(
     sim_id: str,
     timestamp: Optional[dt.datetime] = None,
     resume_after: Optional[int] = None,
-):
+):  # pragma: no cover
     """Reload a simulator state from a dump at a given time"""
     states, times = reload_all_dump(path, sim_id)
 
@@ -481,7 +478,7 @@ def reload(
     return states[idx]
 
 
-def reload_from_optimiser(path: Path) -> List[List[Simulator]]:
+def reload_from_optimiser(path: Path) -> List[List[Simulator]]:  # pragma: no cover
     """Reload from optimiser output
 
     :param path: the folder containing the optimiser walk and output.
@@ -527,7 +524,7 @@ def reload_from_optimiser(path: Path) -> List[List[Simulator]]:
         raise NotImplementedError()
 
 
-def load_counts(cfg: Config) -> pd.DataFrame:
+def load_counts(cfg: Config) -> pd.DataFrame:  # pragma: no cover
     """Load a lice count, salmon mortality report and salmon survivorship
     estimates.
 
