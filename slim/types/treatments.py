@@ -156,7 +156,8 @@ class ChemicalTreatment(TreatmentParams):
     def __init__(self, payload):
         super().__init__(payload)
         self.pheno_resistance = self.parse_pheno_resistance(payload["pheno_resistance"])
-        self.price_per_kg = payload["price_per_kg"]
+        self.price_per_kg: float = payload["price_per_kg"]
+        self.dosage_per_fish_kg: float = payload["dosage_per_fish_kg"]
 
         self.durability_temp_ratio: float = payload["durability_temp_ratio"]
 

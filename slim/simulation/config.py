@@ -100,7 +100,7 @@ class RuntimeConfig:
         self.reservoir_offspring_average: int = data["reservoir_offspring_average"]
 
         # Other reward/payoff constants
-        self.gain_per_kg = data["gain_per_kg"]
+        self.gain_per_kg: float = data["gain_per_kg"]
 
         # load in the seed if provided
         # otherwise don't use a seed

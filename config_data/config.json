@@ -63,6 +63,7 @@
             "effect_delay": 5,
             "durability_temp_ratio": 210,
             "price_per_kg": 341.20,
+            "dosage_per_fish_kg": 50e-6,
             "application_period": 7,
             "treatment_type": "chemical",
             "pheno_resistance": {

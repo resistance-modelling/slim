@@ -372,8 +372,14 @@ class Cage(LoggableMixin):
             treatment_cfg = self.cfg.get_treatment(treatment_type)
             cage_days = (cur_date - self.start_date).days
             if isinstance(treatment_cfg, ChemicalTreatment):
-                cost = treatment_cfg.price_per_kg * int(
-                    self.average_fish_mass(cage_days) / 1e3
+                # SLICE is administered to deliver 50 μg emamectin
+                # benzoate/kg fish biomass/day for 7 consecutive days.
+                # The suggested feeding rate is 0.5% fish biomass per day.
+                cost = (
+                    treatment_cfg.price_per_kg
+                    * treatment_cfg.dosage_per_fish_kg
+                    * self.average_fish_mass(cage_days)
+                    / 1e3
                 )
             elif isinstance(treatment_cfg, ThermalTreatment):
                 cost = treatment_cfg.price_per_application
