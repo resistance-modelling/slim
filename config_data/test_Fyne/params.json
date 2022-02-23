@@ -11,6 +11,7 @@
     },
     "genetic_learning_rate": 1,
     "aggregation_rate_threshold": 0.5,
+    "treatment_strategy": "bernoulli",
     "farms": [
         {
             "name": "Tarbert",

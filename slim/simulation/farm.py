@@ -27,6 +27,7 @@ from slim.simulation.lice_population import (
     GenoDistribDict,
 )
 from slim.types.QueueTypes import *
+from slim.types.policies import TREATMENT_NO
 from slim.types.treatments import Money, Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
@@ -557,7 +558,7 @@ class Farm(LoggableMixin):
             "fish_population": np.pad(
                 fish_population, (0, MAX_NUM_CAGES - len(fish_population), "constant")
             ),
-            "current_treatment": 0,  # TODO
+            "current_treatments": np.zeros((TREATMENT_NO + 1), dtype=np.int8),  # TODO
             "allowed_treatments": self.available_treatments,
             "asked_to_treat": self._asked_to_treat,
         }
