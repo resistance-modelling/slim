@@ -243,7 +243,6 @@ class BernoullianPolicy(LoggableMixin):
             logger.debug("\tFarm {} refuses to treat".format(agent))
             return NO_ACTION
 
-        # TODO: implement a strategy to pick a treatment of choice
         picked_treatment = self.rng.choice(
             np.arange(TREATMENT_NO), p=self.treatment_probas
         )

@@ -87,6 +87,10 @@ class Farm(LoggableMixin):
 
         self.generate_sampling_events()
 
+    def clear_flags(self):
+        """Call this method before the main update method."""
+        self._asked_to_treat = False
+
     def __str__(self):
         """
         Get a human-readable string representation of the farm.

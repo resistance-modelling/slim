@@ -109,6 +109,7 @@ class Organisation:
         # update the farms and get the offspring
         v2 = actions is not None
         for farm in self.farms:
+            farm.clear_flags()
             self.handle_farm_messages(cur_date, farm, v2=v2)
         if v2:
             for farm, action in zip(self.farms, actions):
