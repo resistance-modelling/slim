@@ -84,6 +84,7 @@ class TestCage:
         cur_day = treatment_dates[1][0] + dt.timedelta(days=1)
         first_cage.get_lice_treatment_mortality(cur_day)
         assert first_cage.is_treated()
+        assert first_cage.current_treatments == [0]
 
         # first useful day
         cur_day = treatment_dates[1][0] + dt.timedelta(days=5)
@@ -102,6 +103,7 @@ class TestCage:
                 mortality_updates[stage].values()
             )
         assert first_cage.is_treated()
+        assert first_cage.current_treatments == [0]
 
     def test_cage_update_lice_treatment_mortality_close_days(
         self, first_farm, first_cage

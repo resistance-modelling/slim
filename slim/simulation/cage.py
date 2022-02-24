@@ -8,6 +8,7 @@ from queue import PriorityQueue
 from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict, List
 
 import numpy as np
+from bitarray import bitarray
 
 from slim import logger, LoggableMixin
 from slim.simulation.config import Config
@@ -16,6 +17,7 @@ from slim.types.treatments import (
     ChemicalTreatment,
     ThermalTreatment,
     Treatment,
+    TREATMENT_NO,
 )
 from slim.simulation.lice_population import (
     GenoDistrib,
@@ -1337,6 +1339,13 @@ class Cage(LoggableMixin):
                 return True
 
         return False
+
+    @property
+    def current_treatments(self):
+        idxs = []
+        for event in self.effective_treatments:
+            idxs.append(event.treatment_type.value)
+        return idxs
 
     @property
     def aggregation_rate(self):
