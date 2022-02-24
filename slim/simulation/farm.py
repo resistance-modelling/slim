@@ -556,16 +556,23 @@ class Farm(LoggableMixin):
         ]
         return self.cfg.gain_per_kg * sum(mass_per_cage)
 
+    @property
+    def is_treating(self):
+        """
+        :returns: a list of applied treatments as binary indices
+        """
+        current_treatments = set()
+        for cage in self.cages:
+            current_treatments.update(cage.current_treatments)
+        return list(current_treatments)
+
     def get_gym_space(self):
         """
         :returns: a Gym space for the agent that controls this farm.
         """
         fish_population = np.array([cage.num_fish for cage in self.cages])
         aggregations = np.array([cage.aggregation_rate for cage in self.cages])
-        current_treatments = set()
-        for cage in self.cages:
-            current_treatments.update(cage.current_treatments)
-        current_treatments = list(current_treatments)
+        current_treatments = self.is_treating
         current_treatments_np = np.zeros((TREATMENT_NO + 1), dtype=np.int8)
         if len(current_treatments):
             current_treatments_np[current_treatments] = 1

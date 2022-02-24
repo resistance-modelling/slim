@@ -214,7 +214,7 @@ class SimulatorPZEnv(AECEnv):
         self._chosen_actions = {agent: -1 for agent in self.agents}
 
 
-class BernoullianPolicy(LoggableMixin):
+class BernoullianPolicy:
     """
     Perhaps the simplest policy here.
     Never apply treatment except for when asked by the organisation, and in which case whether to apply
@@ -237,7 +237,7 @@ class BernoullianPolicy(LoggableMixin):
         p = [self.proba[agent], 1 - self.proba[agent]]
 
         want_to_treat = self.rng.choice([False, True], p=p)
-        self.log("Outcome of the vote: %r", is_treating=want_to_treat)
+        logger.debug(f"Outcome of the vote: {want_to_treat}")
 
         if not want_to_treat:
             logger.debug("\tFarm {} refuses to treat".format(agent))
@@ -271,16 +271,21 @@ class UntreatedPolicy:
 
 class MosaicPolicy:
     """
-    A simple treatment: as soon as farms receive treatment the farmers do apply treatment
-    with probability :math:`p` (:math:`p=1` by default). Every time a treatment is allowed
-    a different treatment is performed.
+    A simple treatment: as soon as farms receive treatment the farmers apply treatment.
+    Treatments are selected in rotation
     """
 
-    def __init__(self):
-        raise NotImplementedError()
+    def __init__(self, cfg: Config):
+        self.last_action = [0] * len(cfg.farms)
 
-    def predict(self, **_kwargs):
-        return NO_ACTION
+    def predict(self, observation: ObservationType, agent: str):
+        if not observation["asked_to_treat"]:
+            return NO_ACTION
+
+        agent_id = int(agent[len("farm_") :])
+        action = self.last_action[agent_id]
+        self.last_action[agent_id] = (action + 1) % TREATMENT_NO
+        return action
 
 
 class Simulator:  # pragma: no cover
@@ -306,7 +311,7 @@ class Simulator:  # pragma: no cover
         elif strategy == "bernoulli":
             self.policy = BernoullianPolicy(self.cfg)
         elif strategy == "mosaic":
-            self.policy = MosaicPolicy()
+            self.policy = MosaicPolicy(self.cfg)
         else:
             raise ValueError("Unsupported strategy")
 
@@ -416,7 +421,7 @@ def dump_as_dataframe(
 
         for farm in state.env.unwrapped.organisation.farms:
             key = (time, "farm_" + str(farm.id_))
-            is_treating = all([cage.is_treated(time) for cage in farm.cages])
+            is_treating = farm.is_treating
             farm_data[key] = {
                 **farm.lice_genomics,
                 **farm.logged_data,

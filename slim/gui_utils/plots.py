@@ -32,7 +32,8 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 from colorcet import glasbey_light, glasbey_dark
-from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget
+from matplotlib.cm import get_cmap
+from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget, mkBrush
 from pyqtgraph.exporters import ImageExporter, SVGExporter
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
 
@@ -42,6 +43,7 @@ from slim.gui_utils.model import (
     SimulatorOptimiserState,
     CurveListState,
 )
+from slim.types.treatments import TREATMENT_NO
 
 if TYPE_CHECKING:
     from slim.SeaLiceMgmtGUI import Window
@@ -771,29 +773,48 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
     ) -> List[List[LinearRegionItem]]:
         # generate treatment regions
         # treatment markers
-        treatment_days_df = (
-            farm_df[farm_df["is_treating"]]["timestamp"] - self.state.times[0]
-        )
-        treatment_days = treatment_days_df.apply(lambda x: x.days).to_numpy()
+        cm = pg.colormap.get("Pastel2", source="matplotlib", skipCache=True)
+        colors = cm.getColors(1)
 
-        # Generate treatment regions by looking for the first non-consecutive treatment blocks.
-        # There may be a chance where multiple treatments happen consecutively, on which case
-        # we simply consider them as a unique case.
+        regions = []
+        for treatment_idx in range(TREATMENT_NO):
+            color = colors[treatment_idx]
+            color[-1] = 128  # alpha
+            brush = mkBrush(color)
 
-        if len(treatment_days) > 0:
-            treatment_ranges = []
-            lo = 0
-            for i in range(1, len(treatment_days)):
-                if treatment_days[i] > treatment_days[i - 1] + 1:
-                    treatment_ranges.append((treatment_days[lo], treatment_days[i - 1]))
-                    lo = i
-            treatment_ranges.append((treatment_days[lo], treatment_days[-1]))
+            treatment_days_df = (
+                farm_df[farm_df["is_treating"].apply(lambda l: treatment_idx in l)][
+                    "timestamp"
+                ]
+                - self.state.times[0]
+            )
+            treatment_days = treatment_days_df.apply(lambda x: x.days).to_numpy()
 
-            return [
-                [LinearRegionItem(values=trange, movable=False) for _ in range(shape)]
-                for trange in treatment_ranges
-            ]
-        return []
+            # Generate treatment regions by looking for the first non-consecutive treatment blocks.
+            # There may be a chance where multiple treatments happen consecutively, on which case
+            # we simply consider them as a unique case.
+
+            if len(treatment_days) > 0:
+                treatment_ranges = []
+                lo = 0
+                for i in range(1, len(treatment_days)):
+                    if treatment_days[i] > treatment_days[i - 1] + 1:
+                        treatment_ranges.append(
+                            (treatment_days[lo], treatment_days[i - 1])
+                        )
+                        lo = i
+                treatment_ranges.append((treatment_days[lo], treatment_days[-1]))
+
+                regions.extend(
+                    [
+                        [
+                            LinearRegionItem(values=trange, brush=brush, movable=False)
+                            for _ in range(shape)
+                        ]
+                        for trange in treatment_ranges
+                    ]
+                )
+        return regions
 
     def exportPlots(self):
         """

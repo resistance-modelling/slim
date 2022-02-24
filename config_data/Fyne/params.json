@@ -11,7 +11,7 @@
     },
     "genetic_learning_rate": 0.01,
     "aggregation_rate_threshold": 2.0,
-    "treatment_strategy": "bernoulli",
+    "treatment_strategy": "mosaic",
     "farms": [
         {
             "name": "Tarbert South",
