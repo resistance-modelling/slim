@@ -6,7 +6,7 @@ from typing import List, Union
 
 import numpy as np
 
-from .treatments import Treatment
+from .treatments import TREATMENT_NO
 from gym.spaces import Discrete, MultiBinary, Dict, Box
 
 __all__ = [
@@ -19,12 +19,11 @@ __all__ = [
     "TREATMENT_NO",
 ]
 
-TREATMENT_NO = len(Treatment)
 # 0 - (treatment_no - 1): treatment code
 # treatment_no: fallowing
 # treatment_no+1: no action
 ACTION_SPACE = Discrete(TREATMENT_NO + 2)
-
+# For efficiency reasons, these need to be integer rather than enums
 FALLOW = TREATMENT_NO
 NO_ACTION = TREATMENT_NO + 1
 

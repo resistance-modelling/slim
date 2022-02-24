@@ -66,6 +66,7 @@
             "dosage_per_fish_kg": 50e-6,
             "application_period": 7,
             "treatment_type": "chemical",
+            "gene": "a",
             "pheno_resistance": {
                 "dominant": 0.95,
                 "incompletely_dominant": 0.85,
@@ -86,6 +87,7 @@
             "application_period": 1,
             "price_per_application": 10000,
             "treatment_type": "thermal",
+            "gene": "t",
             "quadratic_fish_mortality_coeffs": [
                 0.0,
                 0.64650758,

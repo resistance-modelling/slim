@@ -28,6 +28,7 @@ dependencies:
   - sphinx-jsonschema=1.17.2
   - beautifulsoup4=4.10.0
   - wget=1.20.3
+  - bitarray=2.3.5
   - pip:
     - convertbng==0.6.36
     - pytype==2022.01.07

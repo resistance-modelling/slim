@@ -63,7 +63,7 @@ class TestCage:
                 for rate in mortality_updates.values()
                 for geno_rate in rate.values()
             )
-            assert first_cage.last_effective_treatment is None
+            assert len(first_cage.effective_treatments) == 0
             assert cost == 0.0
 
         # Even 5 days after, no effect can occur if the cage has not started yet.
@@ -74,7 +74,7 @@ class TestCage:
             for rate in mortality_updates.values()
             for geno_rate in rate.values()
         )
-        assert first_cage.last_effective_treatment is None
+        assert len(first_cage.effective_treatments) == 0
         assert cost == 0.0
 
     def test_cage_update_lice_treatment_mortality(self, first_farm, first_cage):
@@ -83,7 +83,7 @@ class TestCage:
         # before the first useful day, make sure the cage is aware of being under treatment
         cur_day = treatment_dates[1][0] + dt.timedelta(days=1)
         first_cage.get_lice_treatment_mortality(cur_day)
-        assert first_cage.is_treated(cur_day)
+        assert first_cage.is_treated()
 
         # first useful day
         cur_day = treatment_dates[1][0] + dt.timedelta(days=5)
@@ -93,12 +93,15 @@ class TestCage:
             if stage not in LicePopulation.susceptible_stages:
                 assert sum(mortality_updates[stage].values()) == 0
 
-        assert first_cage.last_effective_treatment.affecting_date == cur_day
-        assert mortality_updates["L5f"] == {("A",): 0, ("a",): 3, ("A", "a"): 2}
-        assert mortality_updates["L5m"] == {("A",): 0, ("a",): 3, ("A", "a"): 1}
-        assert mortality_updates["L4"] == {("A",): 1, ("a",): 7, ("A", "a"): 1}
-        assert mortality_updates["L3"] == {("A",): 0, ("a",): 8, ("A", "a"): 2}
-        assert first_cage.is_treated(cur_day)
+        assert first_cage.effective_treatments[0].affecting_date == cur_day
+        for stage in ["L3", "L4", "L5m", "L5f"]:
+            assert mortality_updates[stage][("a",)] == max(
+                mortality_updates[stage].values()
+            )
+            assert mortality_updates[stage][("A")] == min(
+                mortality_updates[stage].values()
+            )
+        assert first_cage.is_treated()
 
     def test_cage_update_lice_treatment_mortality_close_days(
         self, first_farm, first_cage
@@ -119,10 +122,13 @@ class TestCage:
         cur_day = treatment_dates[1][0] + dt.timedelta(days=10)
         mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
 
-        assert mortality_updates["L3"] == {("A",): 0, ("A", "a"): 2, ("a",): 8}
-        assert mortality_updates["L4"] == {("A",): 0, ("a",): 7, ("A", "a"): 2}
-        assert mortality_updates["L5m"] == {("A",): 1, ("a",): 3, ("A", "a"): 1}
-        assert mortality_updates["L5f"] == {("A",): 0, ("a",): 3, ("A", "a"): 1}
+        for stage in ["L3", "L4", "L5m", "L5f"]:
+            assert mortality_updates[stage][("a",)] == max(
+                mortality_updates[stage].values()
+            )
+            assert mortality_updates[stage][("A")] == min(
+                mortality_updates[stage].values()
+            )
 
         assert cost == 0
 
@@ -238,7 +244,7 @@ class TestCage:
         assert first_cage.get_fish_treatment_mortality(days_eloped, 100, 30) == 0
 
         first_cage.get_lice_treatment_mortality(cur_day + dt.timedelta(days_eloped))
-        assert first_cage.last_effective_treatment is not None
+        assert len(first_cage.effective_treatments) == 1
 
         num_deaths = first_cage.get_fish_treatment_mortality(days_eloped, 1000, 300)
 

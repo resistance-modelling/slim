@@ -8,37 +8,25 @@ class TestTreatmentType:
 
 
 class TestThermolicer:
-    def test_thermolicer_efficacy_no_lice(
-        self, farm_config, planctonic_only_population
-    ):
-        temperature = 10
-        thermolicer = farm_config.thermolicer
-        geno = thermolicer.get_lice_treatment_mortality_rate(
-            planctonic_only_population, temperature
-        )
-        geno_list = list(geno.values())
-
-        assert all([v.num_susc == 0 for v in geno_list])
-
     def test_thermolicer_efficacy(self, farm_config, first_cage_population):
         temperature = 12
         thermolicer = farm_config.thermolicer
-        geno = thermolicer.get_lice_treatment_mortality_rate(
-            first_cage_population, temperature
-        )
+        geno = thermolicer.get_lice_treatment_mortality_rate(temperature)
         geno_list = list(geno.values())
 
-        assert [v.num_susc for v in geno_list] == [22, 40, 18]
+        assert [v.susceptible_stages for v in geno_list] == [
+            ["L3", "L4", "L5m", "L5f"]
+        ] * 3
         assert [v.mortality_rate == 0.8 for v in geno_list]
 
         temperature = 10
 
-        geno = thermolicer.get_lice_treatment_mortality_rate(
-            first_cage_population, temperature
-        )
+        geno = thermolicer.get_lice_treatment_mortality_rate(temperature)
         geno_list = list(geno.values())
 
-        assert [v.num_susc for v in geno_list] == [22, 40, 18]
+        assert [v.susceptible_stages for v in geno_list] == [
+            ["L3", "L4", "L5m", "L5f"]
+        ] * 3
         assert all([v.mortality_rate == 0.99 for v in geno_list])
 
     def test_thermolicer_fish_mortality(self, farm_config):

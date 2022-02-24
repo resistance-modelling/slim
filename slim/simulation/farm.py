@@ -251,7 +251,11 @@ class Farm(LoggableMixin):
         eligible_cages = [
             cage
             for cage in self.cages
-            if not (cage.start_date > day or cage.is_fallowing or cage.is_treated(day))
+            if not (
+                cage.start_date > day
+                or cage.is_fallowing
+                or cage.is_treated(treatment_type)
+            )
         ]
 
         if len(eligible_cages) == 0:
