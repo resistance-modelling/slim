@@ -26,14 +26,18 @@ from slim.simulation.lice_population import (
     GenoDistrib,
     GenoDistribDict,
 )
-from slim.types.QueueTypes import *
-from slim.types.TreatmentTypes import Money, Treatment
+from slim.types.queue import *
+from slim.types.policies import TREATMENT_NO
+from slim.types.treatments import Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
 LocationTemps = TypedDict(
     "LocationTemps", {"northing": int, "temperatures": List[float]}
 )
+
+MAX_NUM_CAGES = 20
+MAX_NUM_APPLICATIONS = 10
 
 
 class Farm(LoggableMixin):
@@ -73,18 +77,23 @@ class Farm(LoggableMixin):
         self.year_temperatures = self._initialise_temperatures(cfg.loch_temperatures)
 
         # TODO: only for testing purposes
-        self._preemptively_assign_treatments(self.farm_cfg.treatment_starts)
+        self._preemptively_assign_treatments(self.farm_cfg.treatment_dates)
 
         # Queues
         self.command_queue: PriorityQueue[FarmCommand] = PriorityQueue()
         self.farm_to_org: PriorityQueue[FarmResponse] = PriorityQueue()
         self.__sampling_events: PriorityQueue[SamplingEvent] = PriorityQueue()
+        self._asked_to_treat = False
 
         self.generate_sampling_events()
 
+    def clear_flags(self):
+        """Call this method before the main update method."""
+        self._asked_to_treat = False
+
     def __str__(self):
         """
-        Get a human readable string representation of the farm.
+        Get a human-readable string representation of the farm.
 
         :return: a description of the cage
         """
@@ -198,15 +207,21 @@ class Farm(LoggableMixin):
             sampling_event = SamplingEvent(start_date + dt.timedelta(days=days))
             self.__sampling_events.put(sampling_event)
 
-    def _preemptively_assign_treatments(self, treatment_dates: List[dt.datetime]):
+    def _preemptively_assign_treatments(
+        self, scheduled_treatments: List[Tuple[dt.datetime, Treatment]]
+    ):
         """
         Assign a few treatment dates to cages.
         NOTE: Mainly used for testing. May be deprecated when a proper strategy mechanism is in place
 
-        :param treatment_dates: the dates when to apply treatment
+        :param scheduled_treatments: the dates when to apply treatment
         """
-        for treatment_date in treatment_dates:
-            self.add_treatment(self.farm_cfg.treatment_type, treatment_date)
+        for scheduled_treatment in scheduled_treatments:
+            self.add_treatment(scheduled_treatment[1], scheduled_treatment[0])
+
+    def fallow(self):
+        for cage in self.cages:
+            cage.fallow()
 
     def add_treatment(self, treatment_type: Treatment, day: dt.datetime) -> bool:
         """
@@ -236,7 +251,11 @@ class Farm(LoggableMixin):
         eligible_cages = [
             cage
             for cage in self.cages
-            if not (cage.start_date > day or cage.is_fallowing or cage.is_treated(day))
+            if not (
+                cage.start_date > day
+                or cage.is_fallowing
+                or cage.is_treated(treatment_type)
+            )
         ]
 
         if len(eligible_cages) == 0:
@@ -251,43 +270,35 @@ class Farm(LoggableMixin):
 
         return True
 
-    def ask_for_treatment(self, cur_date: dt.datetime, can_defect=True):
+    def ask_for_treatment(self):
         """
         Ask the farm to perform treatment.
+
         The farm will thus respond in the following way:
 
         - choose whether to apply treatment or not (regardless of the actual cage eligibility).
         - if yes, which treatment to apply (according to internal evaluations, e.g. increased lice resistance).
 
         The farm is not obliged to tell the organisation whether treatment is being performed.
-
-        :param cur_date: the current date
-        :param can_defect: if True, the farm has a choice to not apply treatment
         """
 
         logger.debug("Asking farm {} to treat".format(self.id_))
+        self._asked_to_treat = True
 
-        # TODO: this is extremely simple.
-        p = [self.farm_cfg.defection_proba, 1 - self.farm_cfg.defection_proba]
-        want_to_treat = self.cfg.rng.choice([False, True], p=p) if can_defect else True
-        self.log("Outcome of the vote: %r", is_treating=want_to_treat)
-
-        if not want_to_treat:
-            logger.debug("\tFarm {} refuses to treat".format(self.id_))
-            return
-
-        # TODO: implement a strategy to pick a treatment of choice
-        treatments = list(Treatment)
-        picked_treatment = treatments[0]
-
-        self.add_treatment(picked_treatment, cur_date)
+    def apply_action(self, cur_date: dt.datetime, action: int):
+        """Apply an action"""
+        if action < len(Treatment):
+            picked_treatment = list(Treatment)[action]
+            self.add_treatment(picked_treatment, cur_date)
+        elif action == len(Treatment):
+            self.fallow()
 
     def update(
         self,
         cur_date: dt.datetime,
         ext_influx: int,
         ext_pressure_ratios: GenoDistribDict,
-    ) -> Tuple[GenoDistribByHatchDate, Money]:
+    ) -> Tuple[GenoDistribByHatchDate, float]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites. Also distribute the offspring across cages.
 
@@ -315,10 +326,14 @@ class Farm(LoggableMixin):
 
         self._handle_events(cur_date)
 
+        # reset the number of treatments
+        if ((cur_date - self.start_date).days + 1) % 365 == 0:
+            self.available_treatments = self.farm_cfg.max_num_treatments
+
         # get number of lice from reservoir to be put in each cage
         pressures_per_cage = self.get_cage_pressures(ext_influx)
 
-        total_cost = Money("0.00")
+        total_cost = 0.0
 
         # collate egg batches by hatch time
         eggs_by_hatch_date: GenoDistribByHatchDate = {}
@@ -414,7 +429,7 @@ class Farm(LoggableMixin):
         if ncages < 1:
             raise Exception("Number of bins must be positive.")
 
-        # dummy implmentation - assumes equal probabilities
+        # dummy implementation - assumes equal probabilities
         # for both intercage and interfarm travel
         # TODO: complete with actual probabilities
         # probs_per_farm = self.cfg.interfarm_probs[self.name]
@@ -508,7 +523,7 @@ class Farm(LoggableMixin):
         gross_by_cage = [geno.gross for geno in geno_by_cage]
         return sum(gross_by_cage), gross_by_cage, geno_by_cage
 
-    def get_profit(self, cur_date: dt.datetime) -> Money:
+    def get_profit(self, cur_date: dt.datetime) -> float:
         """
         Get the current mass of fish that can be resold.
 
@@ -519,7 +534,47 @@ class Farm(LoggableMixin):
             cage.average_fish_mass((cur_date - cage.start_date).days) / 1e3
             for cage in self.cages
         ]
-        return self.cfg.gain_per_kg * Money(sum(mass_per_cage))
+        infection_per_cage = [cage.get_infecting_population() for cage in self.cages]
+        infection_rate = sum(infection_per_cage) / sum(mass_per_cage)
+        return (
+            self.cfg.gain_per_kg - infection_rate * self.cfg.infection_discount
+        ) * sum(mass_per_cage)
+
+    @property
+    def is_treating(self):
+        """
+        :returns: a list of applied treatments as binary indices
+        """
+        current_treatments = set()
+        for cage in self.cages:
+            current_treatments.update(cage.current_treatments)
+        return list(current_treatments)
+
+    def get_gym_space(self):
+        """
+        :returns: a Gym space for the agent that controls this farm.
+        """
+        fish_population = np.array([cage.num_fish for cage in self.cages])
+        aggregations = np.array([cage.aggregation_rate for cage in self.cages])
+        current_treatments = self.is_treating
+        current_treatments_np = np.zeros((TREATMENT_NO + 1), dtype=np.int8)
+        if len(current_treatments):
+            current_treatments_np[current_treatments] = 1
+
+        current_treatments_np[-1] = any(cage.is_fallowing for cage in self.cages)
+
+        return {
+            "aggregation": np.pad(
+                aggregations, (0, MAX_NUM_CAGES - len(aggregations))
+            ).astype(np.float32),
+            "fish_population": np.pad(
+                fish_population,
+                (0, MAX_NUM_CAGES - len(fish_population)),
+            ),
+            "current_treatments": current_treatments_np,
+            "allowed_treatments": self.available_treatments,
+            "asked_to_treat": np.array([self._asked_to_treat], dtype=np.int8),
+        }
 
     def _handle_events(self, cur_date: dt.datetime):
         def cts_command_queue(command):
@@ -530,10 +585,13 @@ class Farm(LoggableMixin):
 
         self._report_sample(cur_date)
 
+    @property
+    def aggregation_rate(self):
+        return max(cage.aggregation_rate for cage in self.cages)
+
     def _report_sample(self, cur_date):
         def cts(_):
             # report the worst across cages
-            rate = max(cage.aggregation_rate for cage in self.cages)
-            self.farm_to_org.put(SamplingResponse(cur_date, rate))
+            self.farm_to_org.put(SamplingResponse(cur_date, self.aggregation_rate))
 
         pop_from_queue(self.__sampling_events, cur_date, cts)

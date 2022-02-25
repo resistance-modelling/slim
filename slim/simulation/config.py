@@ -11,12 +11,11 @@ from typing import Tuple, Dict, Optional, TYPE_CHECKING, Union
 import jsonschema
 import numpy as np
 
-from slim.types.TreatmentTypes import (
+from slim.types.treatments import (
     Treatment,
     TreatmentParams,
     GeneticMechanism,
     EMB,
-    Money,
     Thermolicer,
 )
 
@@ -100,9 +99,6 @@ class RuntimeConfig:
         ]
         self.reservoir_offspring_average: int = data["reservoir_offspring_average"]
 
-        # Other reward/payoff constants
-        self.gain_per_kg = Money(data["gain_per_kg"])
-
         # load in the seed if provided
         # otherwise don't use a seed
         self.seed = data.get("seed", 0)
@@ -180,10 +176,15 @@ class Config(RuntimeConfig):
             for key, val in data["genetic_ratios"].items()
         }
         self.genetic_learning_rate: float = data["genetic_learning_rate"]
-        self.monthly_cost = Money(data["monthly_cost"])
+        self.monthly_cost: float = data["monthly_cost"]
+        self.gain_per_kg: float = data["gain_per_kg"]
+        self.infection_discount: float = data["infection_discount"]
 
         # Other constraints
         self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]
+
+        # Policy
+        self.treatment_strategy: str = data["treatment_strategy"]
 
         # farms
         self.farms = [FarmConfig(farm_data) for farm_data in data["farms"]]
@@ -281,14 +282,18 @@ class FarmConfig:
         self.max_num_treatments: int = data["max_num_treatments"]
         self.sampling_spacing: int = data["sampling_spacing"]
 
-        # TODO: a farm may employ different chemicals
-        self.treatment_type = Treatment[data["treatment_type"].upper()]
+        self.treatment_types = [
+            Treatment[treatment.upper()] for treatment in data["treatment_types"]
+        ]
 
         # Defection probability
         self.defection_proba: float = data["defection_proba"]
 
         # fixed treatment schedules
-        self.treatment_starts = [to_dt(date) for date in data["treatment_dates"]]
+        self.treatment_dates = [
+            (to_dt(date), Treatment[treatment.upper()])
+            for (date, treatment) in data["treatment_dates"]
+        ]
 
 
 @dataclass

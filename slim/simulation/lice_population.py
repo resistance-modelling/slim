@@ -18,6 +18,7 @@ __all__ = [
 import math
 from abc import ABC
 import datetime as dt
+from functools import lru_cache
 from heapq import heapify
 from queue import PriorityQueue
 from types import GeneratorType
@@ -38,13 +39,14 @@ from typing import (
 import numpy as np
 
 from slim import logger
-from slim.types.QueueTypes import pop_from_queue
+from slim.types.queue import pop_from_queue
 
 if TYPE_CHECKING:  # pragma: no cover
-    from slim.types.QueueTypes import DamAvailabilityBatch
+    from slim.types.queue import DamAvailabilityBatch
 
 ################ Basic type aliases #####################
 LifeStage = str
+Gene = str
 Allele = str
 Alleles = Tuple[Allele, ...]
 # These are used when GenoDistrib is not available
@@ -54,12 +56,12 @@ GenoDistribDict = Dict[Alleles, float]
 
 def largest_remainder(nums: np.ndarray) -> np.ndarray:
     """
-    An implementation of the Largest Remainder method.
-    The aim of this function is to round an array so that the integer sum
-    is preserved.
-
-    :param nums: the number to truncate
-    :returns: an array of numbers such that the integer sum is preserved
+        An implementation of the Largest Remainder method.
+        The aim of this function is to round an array so that the integer sum
+        is preserved.
+    test_Cage
+        :param nums: the number to truncate
+        :returns: an array of numbers such that the integer sum is preserved
     """
 
     # a vectorised implementation of largest remainder
@@ -101,9 +103,9 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
     alleles: List[Alleles] = [("a",), ("A", "a"), ("A",)]
     allele_labels = {allele: "".join(allele) for allele in alleles}
     allele_labels_bio = {
-        ("a",): "Non-resistant SL05 marker",
-        ("A", "a"): "Heterozygous resistant SL05 marker",
-        ("A",): "Homozygous resistant SL05 marker",
+        ("a",): "Non-resistant",
+        ("A", "a"): "Heterozygous resistant",
+        ("A",): "Homozygous resistant",
     }
 
     def __init__(
@@ -174,6 +176,22 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
             probas = largest_remainder(probas)
         values = rng.multinomial(n, probas).tolist()
         return GenoDistrib(dict(zip(keys, values)))
+
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def alleles_from_gene(gene: Gene) -> List[Alleles]:
+        """
+        Get the alleles that stem from a single gene.
+        Note that here "allele" is conflated to represent pairs of such alleles at the same
+        gene locus.
+
+        :param gene: the gene
+        :returns: the alleles
+        """
+        # TODO this is temporary
+        dominant = gene.upper()
+        recessive = gene.lower()
+        return [(recessive,), (dominant, recessive), (dominant,)]
 
     def normalise_to(self, population: int) -> GenoDistrib:
         """
@@ -352,7 +370,7 @@ GrossLiceDistrib = Dict[LifeStage, int]
 
 class GenoTreatmentValue(NamedTuple):
     mortality_rate: float
-    num_susc: int
+    susceptible_stages: List[LifeStage]
 
 
 GenoTreatmentDistrib = Dict[Alleles, GenoTreatmentValue]

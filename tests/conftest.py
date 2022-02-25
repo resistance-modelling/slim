@@ -7,13 +7,14 @@ import datetime
 
 # ignore profiling
 import builtins
-builtins.__dict__['profile'] = lambda x: x
+
+builtins.__dict__["profile"] = lambda x: x
 
 from slim.simulation.config import Config
-from slim.simulation.simulator import Organisation
-from slim.types.QueueTypes import EggBatch, DamAvailabilityBatch
+from slim.simulation.organisation import Organisation
+from slim.simulation.simulator import get_env, SimulatorPZEnv
+from slim.types.queue import EggBatch, DamAvailabilityBatch
 from slim.simulation.lice_population import LicePopulation, GenoDistrib
-
 
 
 @pytest.fixture
@@ -27,7 +28,7 @@ def farm_config():
 
     # Make PyCharm (which believes your working directory must be in tests/) happy
 
-    path = Path.cwd() /  "config_data"
+    path = Path.cwd() / "config_data"
     if not path.exists():
         path = Path.cwd().parent / "config_data"
 
@@ -38,7 +39,7 @@ def farm_config():
 
 @pytest.fixture
 def no_prescheduled_config(farm_config):
-    farm_config.farms[0].treatment_starts = []
+    farm_config.farms[0].treatment_dates = []
     return farm_config
 
 
@@ -89,20 +90,35 @@ def cur_day(first_cage):
 
 @pytest.fixture
 def null_offspring_distrib():
-    return GenoDistrib({
-        ('A',): 0,
-        ('a',): 0,
-        ('A', 'a'): 0,
-    })
+    return GenoDistrib(
+        {
+            ("A",): 0,
+            ("a",): 0,
+            ("A", "a"): 0,
+        }
+    )
 
 
 @pytest.fixture
 def sample_offspring_distrib():
-    return GenoDistrib({
-        ('A',): 100,
-        ('a',): 200,
-        ('A', 'a'): 300,
-    })
+    return GenoDistrib(
+        {
+            ("A",): 100,
+            ("a",): 200,
+            ("A", "a"): 300,
+        }
+    )
+
+
+@pytest.fixture
+def sim_env(farm_config):
+    return get_env(farm_config)
+
+
+@pytest.fixture
+def sim_env_unwrapped(farm_config):
+    return SimulatorPZEnv(farm_config)
+
 
 @pytest.fixture
 def null_hatched_arrivals(null_offspring_distrib, first_farm):
@@ -130,7 +146,9 @@ def null_treatment_mortality():
 
 
 @pytest.fixture
-def sample_treatment_mortality(first_cage, first_cage_population, null_offspring_distrib):
+def sample_treatment_mortality(
+    first_cage, first_cage_population, null_offspring_distrib
+):
     mortality = first_cage_population.get_empty_geno_distrib()
 
     # create a custom rng to avoid breaking other tests
@@ -142,7 +160,9 @@ def sample_treatment_mortality(first_cage, first_cage_population, null_offspring
     target_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 5, "L5f": 5}
 
     for stage, target in target_mortality.items():
-        mortality[stage] = GenoDistrib.from_ratios(min(target, first_cage_population[stage]), probs, rng)
+        mortality[stage] = GenoDistrib.from_ratios(
+            min(target, first_cage_population[stage]), probs, rng
+        )
 
     return mortality
 
@@ -150,7 +170,10 @@ def sample_treatment_mortality(first_cage, first_cage_population, null_offspring
 @pytest.fixture
 def planctonic_only_population(first_cage):
     lice_pop = {"L1": 100, "L2": 200, "L3": 0, "L4": 0, "L5f": 0, "L5m": 0}
-    geno = {stage: GenoDistrib({("a",): 0, ("A", "a"): 0, ("A",): 0}) for stage in lice_pop.keys()}
+    geno = {
+        stage: GenoDistrib({("a",): 0, ("A", "a"): 0, ("A",): 0})
+        for stage in lice_pop.keys()
+    }
     geno["L1"][("a",)] = 100
     geno["L2"][("a",)] = 200
     return LicePopulation(geno, first_cage.cfg.initial_genetic_ratios)

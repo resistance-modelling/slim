@@ -22,9 +22,16 @@
         },
         "monthly_cost": {
             "description": "Fixed infrastructure cost (per 28 activity day)",
-            "comment": "TODO: dummy value",
-            "type": "string",
-            "pattern": "^[0-9]+\\.[0-9]{2}$"
+            "type": "number"
+        },
+        "gain_per_kg": {
+            "description": "Selling rate for fish kg (in GBP)",
+            "comment": "Source: NASDAQ Salmon Index, last updated 6/08/21, with a corresponding NOK-GBP currency conversion",
+            "type": "number"
+        },
+        "infection_discount": {
+            "description": "Negative cost of infection, defined as lice / fish kg.",
+            "type": "number"
         },
         "genetic_ratios": {
             "description": "The initial genotype ratio distribution",
@@ -37,6 +44,14 @@
         "aggregation_rate_threshold": {
             "description": "The allowed aggregation rate at any time",
             "type": "number"
+        },
+        "treatment_strategy": {
+            "description": "Which treatment strategy to apply. Used during standalone simulation",
+            "enum": [
+                "untreated",
+                "bernoulli",
+                "mosaic"
+            ]
         },
         "farms": {
             "type": "array",
@@ -77,18 +92,30 @@
                             "type": "string"
                         }
                     },
-                    "treatment_type": {
-                        "description": "Type of applied treatment",
-                        "enum": [
-                            "emb",
-                            "thermolicer"
-                        ]
-                    },
-                    "treatment_dates": {
-                        "description": "Treatment dates for each cage",
+                    "treatment_types": {
+                        "description": "Available treatments at this site",
                         "type": "array",
                         "item": {
-                            "type": "string"
+                            "enum": [
+                                "emb",
+                                "thermolicer"
+                            ]
+                        }
+                    },
+                    "treatment_dates": {
+                        "description": "Treatment dates for each cage. If not provided the farm will apply treatments only when asked to, or depending on the chosen strategy",
+                        "type": "array",
+                        "item": {
+                            "type": "object",
+                            "properties": {
+                                "date": {
+                                    "type": "string"
+                                },
+                                "treatment_type": {
+                                    "type": "string"
+                                },
+                                "required": ["date"]
+                            }
                         }
                     },
                     "max_num_treatments": {
@@ -109,23 +136,28 @@
                     "location",
                     "num_fish",
                     "cages_start_dates",
-                    "treatment_type",
+                    "treatment_types",
                     "treatment_dates",
                     "max_num_treatments",
                     "sampling_spacing",
                     "defection_proba"
-                ]
+                ],
+                "additionalProperties": false
             }
         }
     },
+    "additionalProperties": false,
     "required": [
         "name",
         "start_date",
         "end_date",
         "ext_pressure",
         "monthly_cost",
+        "gain_per_kg",
+        "infection_discount",
         "genetic_ratios",
         "genetic_learning_rate",
+        "treatment_strategy",
         "farms"
     ]
 }

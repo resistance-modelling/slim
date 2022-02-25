@@ -12,7 +12,7 @@ from pathlib import Path
 # Maybe a cleaner approach would be to use an env var?
 
 from slim import logger, create_logger
-from slim.simulation.simulator import Simulator
+from slim.simulation.simulator import Simulator, reload
 from slim.simulation.config import Config, to_dt
 
 
@@ -99,11 +99,9 @@ if __name__ == "__main__":
     resume = True
     if args.resume:
         resume_time = to_dt(args.resume)
-        sim: Simulator = Simulator.reload(
-            output_folder, simulation_id, timestamp=resume_time
-        )
+        sim: Simulator = reload(output_folder, simulation_id, timestamp=resume_time)
     elif args.resume_after:
-        sim: Simulator = Simulator.reload(
+        sim: Simulator = reload(
             output_folder, simulation_id, resume_after=args.resume_after
         )
     else:

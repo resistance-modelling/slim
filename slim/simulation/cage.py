@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-
 from collections import Counter
 import datetime as dt
 import json
 import math
 from queue import PriorityQueue
-from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict
+from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict, List
 
 import numpy as np
 
 from slim import logger, LoggableMixin
 from slim.simulation.config import Config
-from slim.types.TreatmentTypes import (
+from slim.types.treatments import (
     GeneticMechanism,
-    Money,
     ChemicalTreatment,
     ThermalTreatment,
+    Treatment,
+    TREATMENT_NO,
 )
 from slim.simulation.lice_population import (
     GenoDistrib,
@@ -29,7 +29,7 @@ from slim.simulation.lice_population import (
     LifeStage,
     GenoDistribDict,
 )
-from slim.types.QueueTypes import (
+from slim.types.queue import (
     DamAvailabilityBatch,
     EggBatch,
     TravellingEggBatch,
@@ -113,7 +113,7 @@ class Cage(LoggableMixin):
         self.arrival_events: PriorityQueue[TravellingEggBatch] = PriorityQueue()
         self.treatment_events: PriorityQueue[TreatmentEvent] = PriorityQueue()
 
-        self.last_effective_treatment: Optional[TreatmentEvent] = None
+        self.effective_treatments: List[TreatmentEvent] = []
 
     def to_json_dict(self):
         """
@@ -150,7 +150,7 @@ class Cage(LoggableMixin):
 
     def update(
         self, cur_date: dt.datetime, pressure: int, ext_pressure_ratio: GenoDistribDict
-    ) -> Tuple[GenoDistrib, Optional[dt.datetime], Money]:
+    ) -> Tuple[GenoDistrib, Optional[dt.datetime], float]:
         """Update the cage at the current time step.
 
         :param cur_date: Current date of simulation
@@ -276,50 +276,47 @@ class Cage(LoggableMixin):
         :param cur_date: the current date
         :returns: the mortality rates broken down by geno data.
         """
-        susceptible_populations = [
-            self.lice_population.geno_by_lifestage[stage]
-            for stage in LicePopulation.susceptible_stages
-        ]
-        num_susc_per_geno = cast(
-            GenoDistrib, GenoDistrib.batch_sum(susceptible_populations)
-        )
-
-        geno_treatment_distrib = {
-            geno: GenoTreatmentValue(0.0, 0) for geno in num_susc_per_geno
-        }
 
         def cts(event):
             nonlocal self
-            self.last_effective_treatment = event
+            self.effective_treatments.append(event)
 
         pop_from_queue(self.treatment_events, cur_date, cts)
 
         # if no treatment has been applied check if the previous treatment is still effective
-        if (
-            self.last_effective_treatment is None
-            or self.last_effective_treatment.affecting_date > cur_date
-            or cur_date > self.last_effective_treatment.treatment_window
-        ):
-            return geno_treatment_distrib
+        new_effective_treatments = []
+        for treatment in self.effective_treatments:
+            if cur_date <= treatment.treatment_window:
+                new_effective_treatments.append(treatment)
 
-        treatment_type = self.last_effective_treatment.treatment_type
-        ave_temp = self.get_temperature(cur_date)
+        self.effective_treatments = new_effective_treatments
 
-        logger.debug(
-            "\t\ttreating farm {}/cage {} on date {}".format(
-                self.farm_id, self.id, cur_date
+        # if len(self.last_effective_treatment) == 0:
+        #    return geno_treatment_distrib
+
+        # TODO: this is very fragile
+        geno_treatment_distribs = {geno: (0, []) for geno in GenoDistrib.alleles}
+        for treatment in self.effective_treatments:
+            treatment_type = treatment.treatment_type
+            ave_temp = self.get_temperature(cur_date)
+
+            logger.debug(
+                "\t\ttreating farm {}/cage {} on date {}".format(
+                    self.farm_id, self.id, cur_date
+                )
             )
-        )
 
-        geno_treatment_distrib = self.cfg.get_treatment(
-            treatment_type
-        ).get_lice_treatment_mortality_rate(self.lice_population, ave_temp)
+            geno_treatment_distrib = self.cfg.get_treatment(
+                treatment_type
+            ).get_lice_treatment_mortality_rate(ave_temp)
+            for k, v in geno_treatment_distrib.items():
+                geno_treatment_distribs[k] = v
 
-        return geno_treatment_distrib
+        return geno_treatment_distribs
 
     def get_lice_treatment_mortality(
         self, cur_date
-    ) -> Tuple[GenoLifeStageDistrib, Money]:
+    ) -> Tuple[GenoLifeStageDistrib, float]:
         """
         Calculate the number of lice in each stage killed by treatment.
 
@@ -333,24 +330,23 @@ class Cage(LoggableMixin):
 
         dead_mortality_distrib = self.get_lice_treatment_mortality_rate(cur_date)
 
-        cost = Money("0.00")
+        cost = 0.0
 
-        for geno, (mortality_rate, num_susc) in dead_mortality_distrib.items():
+        for geno, (mortality_rate, susc_stages) in dead_mortality_distrib.items():
             if mortality_rate > 0:
                 # Compute the number of mortality events, then decide which stages should be affected.
                 # To ensure that no stage underflows we use a hypergeometric distribution.
-                num_dead_lice = round(mortality_rate * num_susc)
-                num_dead_lice = min(num_dead_lice, num_susc)
 
                 population_by_stages = np.array(
                     [
                         self.lice_population.geno_by_lifestage[stage][geno]
-                        for stage in LicePopulation.susceptible_stages
+                        for stage in susc_stages
                     ]
                 )
+                num_susc = np.sum(population_by_stages)
+                num_dead_lice = round(mortality_rate * num_susc)
+                num_dead_lice = min(num_dead_lice, num_susc)
 
-                # TODO: why is num_dead_lice not clamped?
-                num_dead_lice = min(population_by_stages.sum(), num_dead_lice)
                 dead_lice_nums = self.cfg.multivariate_hypergeometric(
                     population_by_stages, num_dead_lice
                 ).tolist()
@@ -366,16 +362,21 @@ class Cage(LoggableMixin):
                 )
 
         # Compute cost
-        if (
-            self.last_effective_treatment is not None
-            and self.last_effective_treatment.end_application_date > cur_date
-        ):
-            treatment_type = self.last_effective_treatment.treatment_type
+        for treatment in self.effective_treatments:
+            if treatment.end_application_date <= cur_date:
+                continue
+            treatment_type = treatment.treatment_type
             treatment_cfg = self.cfg.get_treatment(treatment_type)
             cage_days = (cur_date - self.start_date).days
             if isinstance(treatment_cfg, ChemicalTreatment):
-                cost = treatment_cfg.price_per_kg * int(
-                    self.average_fish_mass(cage_days) / 1e3
+                # SLICE is administered to deliver 50 μg emamectin
+                # benzoate/kg fish biomass/day for 7 consecutive days.
+                # The suggested feeding rate is 0.5% fish biomass per day.
+                cost = (
+                    treatment_cfg.price_per_kg
+                    * treatment_cfg.dosage_per_fish_kg  # TODO: this value is too small
+                    * self.average_fish_mass(cage_days)
+                    / 1e3
                 )
             elif isinstance(treatment_cfg, ThermalTreatment):
                 cost = treatment_cfg.price_per_application
@@ -511,7 +512,8 @@ class Cage(LoggableMixin):
         """
         Get fish mortality due to treatment. Mortality due to treatment is defined in terms of
         point percentage increases, thus we can only account for "excess deaths".
-        If treatment is not being applied the overall
+        If multiple treatments are performed their side effects are additively combined.
+        If no treatment is currently in action, no fish deaths are counted.
 
         :param days_since_start: the number of days since the beginning of the simulation
         :param fish_lice_deaths: the number of fish dead by lice
@@ -526,22 +528,20 @@ class Cage(LoggableMixin):
             return 0
 
         cur_date = self.start_date + dt.timedelta(days=days_since_start)
-        if not self.is_treated(cur_date):
-            return 0
+        treatment_mortality_occurrences = 0
 
-        efficacy_window = self.last_effective_treatment.effectiveness_duration_days
+        for treatment in self.effective_treatments:
+            efficacy_window = treatment.effectiveness_duration_days
 
-        temperature = self.get_temperature(cur_date)
-        fish_mass = self.average_fish_mass(days_since_start)
+            temperature = self.get_temperature(cur_date)
+            fish_mass = self.average_fish_mass(days_since_start)
 
-        last_treatment_params = self.cfg.get_treatment(
-            self.last_effective_treatment.treatment_type
-        )
-        predicted_deaths = last_treatment_params.get_fish_mortality_occurrences(
-            temperature, fish_mass, self.num_fish, efficacy_window, mortality_events
-        )
+            last_treatment_params = self.cfg.get_treatment(treatment.treatment_type)
+            predicted_deaths = last_treatment_params.get_fish_mortality_occurrences(
+                temperature, fish_mass, self.num_fish, efficacy_window, mortality_events
+            )
 
-        treatment_mortality_occurrences = round(predicted_deaths)
+            treatment_mortality_occurrences += round(predicted_deaths)
 
         return treatment_mortality_occurrences
 
@@ -1320,13 +1320,28 @@ class Cage(LoggableMixin):
     def is_fallowing(self):
         return self.num_fish == 0
 
-    def is_treated(self, cur_date):
-        if self.last_effective_treatment is not None:
-            treatment = self.last_effective_treatment
-            if cur_date <= treatment.treatment_window:
+    def is_treated(self, treatment_type: Optional[Treatment] = None):
+        """
+        Check if a farm is treated.
+
+        :param treatment_type: if provided, check if there is a treatment of the given type
+
+        :returns: True if the cage is being treated
+        """
+        if not treatment_type and len(self.effective_treatments):
+            return True
+        for treatment in self.effective_treatments:
+            if treatment.treatment_type == treatment_type:
                 return True
 
         return False
+
+    @property
+    def current_treatments(self):
+        idxs = []
+        for event in self.effective_treatments:
+            idxs.append(event.treatment_type.value)
+        return idxs
 
     @property
     def aggregation_rate(self):

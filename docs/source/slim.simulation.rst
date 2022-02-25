@@ -11,6 +11,7 @@ Submodules
    slim.simulation.config
    slim.simulation.farm
    slim.simulation.lice_population
+   slim.simulation.organisation
    slim.simulation.simulator
 
 Module contents

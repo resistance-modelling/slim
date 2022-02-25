@@ -168,12 +168,12 @@ This has two uses:
         .. code-block:: python
 
             from slim.simulation.config import Config, to_dt
-            from slim.simulation.simulator import Simulator
+            from slim.simulation.simulator import reload
 
             timestamp = to_dt("2018-12-05 00:00:00")
-            sim = Simulator.reload("output", "Fyne_foobar", timestamp=timestamp)
+            sim = reload("output", "Fyne_foobar", timestamp=timestamp)
             # or alternatively
-            sim = Simulator.reload("output", "Fyne_foobar", resume_after=365)
+            # sim = reload("output", "Fyne_foobar", resume_after=365)
             sim.run_model()
 
         Additionally, one can override the config parameters.

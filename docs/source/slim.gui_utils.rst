@@ -9,6 +9,7 @@ Submodules
 
    slim.gui_utils.configuration
    slim.gui_utils.console
+   slim.gui_utils.maps
    slim.gui_utils.model
    slim.gui_utils.plots
 

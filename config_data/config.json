@@ -51,7 +51,6 @@
         "skewness": -0.01,
         "x_shift": 475
     },
-    "gain_per_kg": "4.39",
     "reservoir_offspring_integration_ratio": 1e-6,
     "reservoir_offspring_average": 30,
     "genetic_mechanism": "discrete",
@@ -62,9 +61,11 @@
             "treatment_name": "EMB",
             "effect_delay": 5,
             "durability_temp_ratio": 210,
-            "price_per_kg": "341.20",
+            "price_per_kg": 341.20,
+            "dosage_per_fish_kg": 50e-6,
             "application_period": 7,
             "treatment_type": "chemical",
+            "gene": "a",
             "pheno_resistance": {
                 "dominant": 0.95,
                 "incompletely_dominant": 0.85,
@@ -83,8 +84,9 @@
             "treatment_name": "Thermolicer",
             "effect_delay": 1,
             "application_period": 1,
-            "price_per_application": "10000",
+            "price_per_application": 500,
             "treatment_type": "thermal",
+            "gene": "t",
             "quadratic_fish_mortality_coeffs": [
                 0.0,
                 0.64650758,

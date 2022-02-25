@@ -34,7 +34,14 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QTabWidget,
 )
-from slim.simulation.simulator import Simulator
+from slim.simulation.simulator import (
+    Simulator,
+    reload_all_dump,
+    dump_as_dataframe,
+    load_counts,
+    reload_from_optimiser,
+    dump_optimiser_as_pd,
+)
 from slim.simulation.config import Config
 from slim.gui_utils.configuration import ConfigurationPane
 from slim.gui_utils.console import ConsoleWidget
@@ -291,10 +298,10 @@ class SimulatorLoadingWorker(QThread):
             sim_name = self.dump_path.name[
                 len("simulation_name_") : -len(".pickle.lz4")
             ]
-            states_times_it = Simulator.reload_all_dump(parent_path, sim_name)
-            states_as_df, times, cfg = Simulator.dump_as_dataframe(states_times_it)
+            states_times_it = reload_all_dump(parent_path, sim_name)
+            states_as_df, times, cfg = dump_as_dataframe(states_times_it)
             try:
-                report = Simulator.load_counts(cfg)
+                report = load_counts(cfg)
             except FileNotFoundError:
                 report = None
             self.finished.emit(
@@ -315,8 +322,8 @@ class OptimiserLoadingWorker(QThread):
 
     def run(self):
         try:
-            states = Simulator.reload_from_optimiser(self.dir_dump_path)
-            states_as_df = Simulator.dump_optimiser_as_pd(states)
+            states = reload_from_optimiser(self.dir_dump_path)
+            states_as_df = dump_optimiser_as_pd(states)
 
             print("Loaded optimiser data")
             self.finished.emit(SimulatorOptimiserState(states, states_as_df))

@@ -3,8 +3,8 @@ import datetime as dt
 import numpy as np
 import pytest
 
-from slim.types.QueueTypes import DamAvailabilityBatch
-from slim.simulation.simulator import OffspringAveragingQueue
+from slim.types.queue import DamAvailabilityBatch
+from slim.simulation.organisation import OffspringAveragingQueue
 from slim.simulation.lice_population import largest_remainder, GenoDistrib
 
 
@@ -30,7 +30,7 @@ class TestLicePopulation:
         assert np.all(largest_remainder(x) == [2.0, 3.0, 4.0])
 
         x = np.array([0.91428571, 1.02857143, 2.05714286])
-        assert np.all(largest_remainder(x) == [1., 1., 2.])
+        assert np.all(largest_remainder(x) == [1.0, 1.0, 2.0])
 
         # this test case is interesting because 1.4 and 2.1 cannot be exactly represented
         x = np.array([1.4, 2.1, 3.5])
@@ -46,7 +46,7 @@ class TestLicePopulation:
         x = np.array([1.8, 2.4, 1.2, 0.6])
         assert np.all(largest_remainder(x) == [2, 2, 1, 1])
 
-        x = np.array([2/3, 1/3])
+        x = np.array([2 / 3, 1 / 3])
         assert np.all(largest_remainder(x) == [1, 0])
 
         with pytest.raises(AssertionError):
@@ -59,21 +59,30 @@ class TestLicePopulation:
     def test_avail_dams_freed_early(self, first_cage, first_cage_population, cur_day):
         dams, _ = first_cage.do_mating_events(cur_day)
 
-        first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
+        first_cage_population.add_busy_dams_batch(
+            DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams)
+        )
         assert all(x == 0 for x in first_cage_population.free_dams(cur_day).values())
 
-    def test_avail_dams_freed_same_day_once(self, first_cage, first_cage_population, cur_day):
+    def test_avail_dams_freed_same_day_once(
+        self, first_cage, first_cage_population, cur_day
+    ):
         first_cage_population["L5m"] = 1000
         first_cage_population["L5f"] = 1000
         dams, _ = first_cage.do_mating_events(cur_day)
-        target_dams = {('A',): 200,
-                       ('a',): 300,
-                       ('A', 'a'): 500}
+        target_dams = {("A",): 200, ("a",): 300, ("A", "a"): 500}
 
-        first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams))
-        assert first_cage_population.free_dams(cur_day + dt.timedelta(days=1)) == target_dams
+        first_cage_population.add_busy_dams_batch(
+            DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams)
+        )
+        assert (
+            first_cage_population.free_dams(cur_day + dt.timedelta(days=1))
+            == target_dams
+        )
 
-    def test_avail_dams_freed_same_day_thrice(self, first_cage, first_cage_population, cur_day):
+    def test_avail_dams_freed_same_day_thrice(
+        self, first_cage, first_cage_population, cur_day
+    ):
         first_cage_population["L5m"] = 1000
         first_cage_population["L5f"] = 1000
         dams, _ = first_cage.do_mating_events(cur_day)
@@ -81,8 +90,13 @@ class TestLicePopulation:
         target_dams = first_cage_population.available_dams.copy()
 
         for i in range(3):
-            first_cage_population.add_busy_dams_batch(DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams))
-        assert first_cage_population.free_dams(cur_day + dt.timedelta(days=3)) == target_dams
+            first_cage_population.add_busy_dams_batch(
+                DamAvailabilityBatch(cur_day + dt.timedelta(days=i), dams)
+            )
+        assert (
+            first_cage_population.free_dams(cur_day + dt.timedelta(days=3))
+            == target_dams
+        )
 
 
 class TestOffspring:
@@ -109,7 +123,7 @@ class TestOffspring:
         offspring = {cur_day: sample_offspring_distrib}
         for i in range(10):
             queue.append(offspring_per_farm=[offspring])
-            assert len(queue) == i+1
+            assert len(queue) == i + 1
 
         assert queue.average == sample_offspring_distrib
         assert len(queue) == 10

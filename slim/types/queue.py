@@ -15,7 +15,7 @@ from typing import Callable, TypeVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from slim.simulation.lice_population import GenoDistrib
-    from slim.types.TreatmentTypes import Treatment
+    from slim.types.treatments import Treatment
 
 
 class Event:

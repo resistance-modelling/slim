@@ -3,7 +3,9 @@
     "start_date": "2018-01-01 00:00:00",
     "end_date": "2020-01-01 00:00:00",
     "ext_pressure": 150,
-    "monthly_cost": "5000.00",
+    "monthly_cost": 5000.00,
+    "gain_per_kg": 4.39,
+    "infection_discount": 0.4,
     "genetic_ratios": {
         "A": 0.005,
         "a": 0.99,
@@ -11,6 +13,7 @@
     },
     "genetic_learning_rate": 1,
     "aggregation_rate_threshold": 2.0,
+    "treatment_strategy": "bernoulli",
     "farms": [
         {
             "name": "Tarbert South",
@@ -37,11 +40,14 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": [
+                "emb",
+                "thermolicer"
+            ],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
-            "defection_proba": 0.2
+            "defection_proba": 0.8
         },
         {
             "name": "Rubha Stillaig",
@@ -64,11 +70,14 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": [
+                "emb",
+                "thermolicer"
+            ],
             "treatment_dates": [],
             "max_num_treatments": 8,
             "sampling_spacing": 7,
-            "defection_proba": 0.2
+            "defection_proba": 0.8
         },
         {
             "name": "Glenan Bay",
@@ -95,11 +104,11 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
-            "defection_proba": 0.2
+            "defection_proba": 0.8
         },
         {
             "name": "Meall Mhor",
@@ -124,11 +133,11 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
-            "defection_proba": 0.2
+            "defection_proba": 0.8
         },
         {
             "name": "Gob a Bharra",
@@ -151,11 +160,11 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
-            "defection_proba": 0.2
+            "defection_proba": 0.8
         },
         {
             "name": "Strondoir Bay",
@@ -178,11 +187,11 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
-            "defection_proba": 0.2
+            "defection_proba": 0.8
         },
         {
             "name": "Ardgaddan",
@@ -209,11 +218,11 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
-            "defection_proba": 0.2
+            "defection_proba": 0.8
         },
         {
             "name": "Ardcastle",
@@ -235,11 +244,11 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
-            "defection_proba": 0.2
+            "defection_proba": 0.8
         },
         {
             "name": "Quarry Point",
@@ -261,11 +270,11 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb", "thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
-            "defection_proba": 0.2
+            "defection_proba": 0.8
         }
     ]
 }
