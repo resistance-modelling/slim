@@ -287,10 +287,7 @@ class Cage(LoggableMixin):
         # if no treatment has been applied check if the previous treatment is still effective
         new_effective_treatments = []
         for treatment in self.effective_treatments:
-            if (
-                treatment.affecting_date >= cur_date
-                and cur_date <= treatment.treatment_window
-            ):
+            if cur_date <= treatment.treatment_window:
                 new_effective_treatments.append(treatment)
 
         self.effective_treatments = new_effective_treatments

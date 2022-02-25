@@ -14,7 +14,7 @@ import pyqtgraph as pg
 import scipy
 import scipy.ndimage
 
-from PyQt5 import QtCore
+from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtWidgets import (
     QWidget,
@@ -33,7 +33,7 @@ from PyQt5.QtWidgets import (
 )
 from colorcet import glasbey_light, glasbey_dark
 from matplotlib.cm import get_cmap
-from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget, mkBrush
+from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget, mkBrush, mkColor
 from pyqtgraph.exporters import ImageExporter, SVGExporter
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
 
@@ -76,6 +76,12 @@ class SmoothedPlotItemWrap:
         self.original_title = plot_item.titleLabel.text
         self.title_style = plot_item.titleLabel.opts
         self.default_x_axis: Optional[List[dt.datetime]] = None
+
+        # set font size
+        tick_font = QtGui.QFont()
+        tick_font.setPixelSize(18)
+        self.plot_item.getAxis("bottom").tickFont = tick_font
+        self.plot_item.getAxis("left").tickFont = tick_font
 
     def plot(
         self,
@@ -606,7 +612,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                 self.fishPopulationPlots[farm_idx].plot(num_fish_dx, pen=monocolour_pen)
             else:
                 self.fishPopulationPlots[farm_idx].plot(
-                    num_fish, pen=monocolour_pen, name="Expected"
+                    num_fish, pen=monocolour_pen, name="Simulation output"
                 )
                 if report_df is not None:
                     self.fishPopulationPlots[farm_idx].plot(
@@ -773,7 +779,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
     ) -> List[List[LinearRegionItem]]:
         # generate treatment regions
         # treatment markers
-        cm = pg.colormap.get("Pastel2", source="matplotlib", skipCache=True)
+        cm = pg.colormap.get("Pastel1", source="matplotlib", skipCache=True)
         colors = cm.getColors(1)
 
         regions = []
@@ -781,6 +787,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             color = colors[treatment_idx]
             color[-1] = 128  # alpha
             brush = mkBrush(color)
+            qtColor = mkColor(color)
 
             treatment_days_df = (
                 farm_df[farm_df["is_treating"].apply(lambda l: treatment_idx in l)][
@@ -799,16 +806,24 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                 lo = 0
                 for i in range(1, len(treatment_days)):
                     if treatment_days[i] > treatment_days[i - 1] + 1:
-                        treatment_ranges.append(
-                            (treatment_days[lo], treatment_days[i - 1])
-                        )
+                        range_ = (treatment_days[lo], treatment_days[i - 1])
+                        if range_[1] - range_[0] <= 2:
+                            range_ = (range_[0] - 5, range_[0] + 5)
+                        treatment_ranges.append(range_)
                         lo = i
-                treatment_ranges.append((treatment_days[lo], treatment_days[-1]))
+
+                # since mechanical treatments are applied and effective for only one day we simulate a 10-day padding
+                range_ = (treatment_days[lo], treatment_days[i])
+                if range_[1] - range_[0] <= 2:
+                    range_ = (range_[0] - 5, range_[0] + 5)
+                treatment_ranges.append(range_)
 
                 regions.extend(
                     [
                         [
-                            LinearRegionItem(values=trange, brush=brush, movable=False)
+                            LinearRegionItem(
+                                values=trange, pen=qtColor, brush=brush, movable=False
+                            )
                             for _ in range(shape)
                         ]
                         for trange in treatment_ranges
@@ -851,6 +866,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             svg_exporter = SVGExporter(plot)
             path = Path(dir) / f"{self.state.sim_name}_{name}"
             # TODO: svg does not work?
+            png_exporter.parameters()["width"] = 1200
+            svg_exporter.parameters()["width"] = 1200
             png_exporter.export(str(path) + ".png")
             svg_exporter.export(str(path) + ".svg")
 

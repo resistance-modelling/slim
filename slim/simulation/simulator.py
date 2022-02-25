@@ -327,7 +327,10 @@ class Simulator:  # pragma: no cover
         :param cfg: Configuration object holding parameter information.
         :param Organisation: the organisation to work on.
         """
-        logger.info("running simulation, saving to %s", self.output_dir)
+        if not resume:
+            logger.info("running simulation, saving to %s", self.output_dir)
+        else:
+            logger.info("resuming simulation", self.output_dir)
 
         # create a file to store the population data from our simulation
         if resume and not self.output_dump_path.exists():
@@ -470,16 +473,19 @@ def reload(
     resume_after: Optional[int] = None,
 ):  # pragma: no cover
     """Reload a simulator state from a dump at a given time"""
-    states, times = reload_all_dump(path, sim_id)
-
     if not (timestamp or resume_after):
         raise ValueError("Resume timestep or range must be provided")
 
-    if resume_after:
-        return states[resume_after]
+    first_time = None
+    for idx, (state, time) in enumerate(reload_all_dump(path, sim_id)):
+        if first_time is None:
+            first_time = time
+        if resume_after and idx == resume_after:
+            return state
+        elif timestamp and timestamp >= time:
+            return state
 
-    idx = (timestamp - times[0]).days
-    return states[idx]
+    raise ValueError("Your chosen timestep is too much in the future!")
 
 
 def reload_from_optimiser(path: Path) -> List[List[Simulator]]:  # pragma: no cover
