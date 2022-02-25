@@ -5,6 +5,7 @@
     "ext_pressure": 150,
     "monthly_cost": 5000.00,
     "gain_per_kg": 4.39,
+    "infection_discount": 0.4,
     "genetic_ratios": {
         "A": 0.005,
         "a": 0.99,

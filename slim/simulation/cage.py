@@ -8,7 +8,6 @@ from queue import PriorityQueue
 from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict, List
 
 import numpy as np
-from bitarray import bitarray
 
 from slim import logger, LoggableMixin
 from slim.simulation.config import Config

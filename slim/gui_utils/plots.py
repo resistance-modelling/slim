@@ -249,7 +249,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
 
         # Make titles a bit larger
         if "title" in kwargs:
-            plot.setTitle(kwargs["title"], size="12.5pt")
+            plot.setTitle(kwargs["title"], size="14.5pt")
 
         for axis_item in axis_dict.values():
             axis_item.setParentItem(plot)
@@ -800,6 +800,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             # Generate treatment regions by looking for the first non-consecutive treatment blocks.
             # There may be a chance where multiple treatments happen consecutively, on which case
             # we simply consider them as a unique case.
+            # Note: this algorithm fails when the saving rate is not 1. This is not a problem as
+            # precision is not required here.
 
             if len(treatment_days) > 0:
                 treatment_ranges = []
@@ -813,7 +815,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                         lo = i
 
                 # since mechanical treatments are applied and effective for only one day we simulate a 10-day padding
-                range_ = (treatment_days[lo], treatment_days[i])
+                # This is also useful when the saving rate is not 1
+                range_ = (treatment_days[lo], treatment_days[-1])
                 if range_[1] - range_[0] <= 2:
                     range_ = (range_[0] - 5, range_[0] + 5)
                 treatment_ranges.append(range_)

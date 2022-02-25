@@ -227,11 +227,12 @@ class BernoullianPolicy:
         self.proba = [farm_cfg.defection_proba for farm_cfg in cfg.farms]
         n = len(Treatment)
         self.treatment_probas = np.ones(n) / n
+        self.treatment_threshold = cfg.aggregation_rate_threshold
         self.seed = cfg.seed
         self.reset()
 
-    def _predict(self, asked_to_treat, agent: int):
-        if not asked_to_treat:
+    def _predict(self, asked_to_treat, agg_rate: float, agent: int):
+        if not asked_to_treat and np.any(agg_rate < self.treatment_threshold):
             return NO_ACTION
 
         p = [self.proba[agent], 1 - self.proba[agent]]
@@ -253,8 +254,8 @@ class BernoullianPolicy:
             raise NotImplementedError("Only dict spaces are supported for now")
 
         agent_id = int(agent[len("farm_") :])
-        asked_to_treat = observation["asked_to_treat"]
-        return self._predict(asked_to_treat, agent_id)
+        asked_to_treat = bool(observation["asked_to_treat"])
+        return self._predict(asked_to_treat, observation["aggregation"], agent_id)
 
     def reset(self):
         self.rng = np.random.default_rng(self.seed)

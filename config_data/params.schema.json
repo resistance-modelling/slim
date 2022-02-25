@@ -29,6 +29,10 @@
             "comment": "Source: NASDAQ Salmon Index, last updated 6/08/21, with a corresponding NOK-GBP currency conversion",
             "type": "number"
         },
+        "infection_discount": {
+            "description": "Negative cost of infection, defined as lice / fish kg.",
+            "type": "number"
+        },
         "genetic_ratios": {
             "description": "The initial genotype ratio distribution",
             "type": "object"
@@ -150,6 +154,7 @@
         "ext_pressure",
         "monthly_cost",
         "gain_per_kg",
+        "infection_discount",
         "genetic_ratios",
         "genetic_learning_rate",
         "treatment_strategy",

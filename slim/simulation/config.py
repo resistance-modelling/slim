@@ -178,6 +178,7 @@ class Config(RuntimeConfig):
         self.genetic_learning_rate: float = data["genetic_learning_rate"]
         self.monthly_cost: float = data["monthly_cost"]
         self.gain_per_kg: float = data["gain_per_kg"]
+        self.infection_discount: float = data["infection_discount"]
 
         # Other constraints
         self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]

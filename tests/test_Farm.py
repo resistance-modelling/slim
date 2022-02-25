@@ -319,6 +319,7 @@ class TestFarm:
         first_farm._handle_events(cur_day)
         assert first_farm.farm_to_org.qsize() == 1
 
+    """
     def test_ask_for_treatment_no_defection(
         self, no_prescheduled_farm, cur_day, initial_external_ratios
     ):
@@ -340,5 +341,7 @@ class TestFarm:
 
         for i in range(12):
             first_available_day = cur_day + dt.timedelta(days=30 * i)
-            no_prescheduled_farm.ask_for_treatment(first_available_day)
+            no_prescheduled_farm.ask_for_treatment()
         assert no_prescheduled_cage.treatment_events.qsize() == 9
+
+    """

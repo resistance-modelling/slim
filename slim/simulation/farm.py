@@ -270,7 +270,7 @@ class Farm(LoggableMixin):
 
         return True
 
-    def ask_for_treatment(self, cur_date: dt.datetime, v2=False, can_defect=True):
+    def ask_for_treatment(self):
         """
         Ask the farm to perform treatment.
 
@@ -280,30 +280,10 @@ class Farm(LoggableMixin):
         - if yes, which treatment to apply (according to internal evaluations, e.g. increased lice resistance).
 
         The farm is not obliged to tell the organisation whether treatment is being performed.
-
-        :param cur_date: the current date
-        :param can_defect: if True, the farm has a choice to not apply treatment
         """
 
         logger.debug("Asking farm {} to treat".format(self.id_))
         self._asked_to_treat = True
-
-        if not v2:  # TODO all of this will be moved away soon
-            p = [self.farm_cfg.defection_proba, 1 - self.farm_cfg.defection_proba]
-            want_to_treat = (
-                self.cfg.rng.choice([False, True], p=p) if can_defect else True
-            )
-            self.log("Outcome of the vote: %r", is_treating=want_to_treat)
-
-            if not want_to_treat:
-                logger.debug("\tFarm {} refuses to treat".format(self.id_))
-                return
-
-            # TODO: implement a strategy to pick a treatment of choice
-            treatments = list(Treatment)
-            picked_treatment = treatments[0]
-
-            self.add_treatment(picked_treatment, cur_date)
 
     def apply_action(self, cur_date: dt.datetime, action: int):
         """Apply an action"""
@@ -554,7 +534,11 @@ class Farm(LoggableMixin):
             cage.average_fish_mass((cur_date - cage.start_date).days) / 1e3
             for cage in self.cages
         ]
-        return self.cfg.gain_per_kg * sum(mass_per_cage)
+        infection_per_cage = [cage.get_infecting_population() for cage in self.cages]
+        infection_rate = sum(infection_per_cage) / sum(mass_per_cage)
+        return (
+            self.cfg.gain_per_kg - infection_rate * self.cfg.infection_discount
+        ) * sum(mass_per_cage)
 
     @property
     def is_treating(self):

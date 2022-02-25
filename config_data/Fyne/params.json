@@ -2,7 +2,7 @@
     "name": "Loch Fyne ACME Ltd.",
     "start_date": "2018-01-01 00:00:00",
     "end_date": "2020-01-01 23:59:59",
-    "ext_pressure": 150,
+    "ext_pressure": 100,
     "monthly_cost": 5000.00,
     "genetic_ratios": {
         "A": 0.0001,
@@ -10,6 +10,7 @@
         "A,a": 0.0009
     },
     "gain_per_kg": 4.39,
+    "infection_discount": 0.0001,
     "genetic_learning_rate": 0.01,
     "aggregation_rate_threshold": 2.0,
     "treatment_strategy": "mosaic",

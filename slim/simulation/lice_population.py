@@ -103,9 +103,9 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
     alleles: List[Alleles] = [("a",), ("A", "a"), ("A",)]
     allele_labels = {allele: "".join(allele) for allele in alleles}
     allele_labels_bio = {
-        ("a",): "Non-resistant SL05 allele",
-        ("A", "a"): "Heterozygous resistant SL05 allele",
-        ("A",): "Homozygous resistant SL05 allele",
+        ("a",): "Non-resistant",
+        ("A", "a"): "Heterozygous resistant",
+        ("A",): "Homozygous resistant",
     }
 
     def __init__(

@@ -93,9 +93,7 @@ class Organisation:
 
         return number, ratios
 
-    def step(
-        self, cur_date, actions: Optional[SAMPLED_ACTIONS] = None
-    ) -> Union[float, List[float]]:
+    def step(self, cur_date, actions: SAMPLED_ACTIONS) -> List[float]:
         """
         Perform an update across all farms.
         After that, some offspring will be distributed into the farms while others will be dispersed into
@@ -107,13 +105,11 @@ class Organisation:
         """
 
         # update the farms and get the offspring
-        v2 = actions is not None
         for farm in self.farms:
             farm.clear_flags()
-            self.handle_farm_messages(cur_date, farm, v2=v2)
-        if v2:
-            for farm, action in zip(self.farms, actions):
-                farm.apply_action(cur_date, action)
+            self.handle_farm_messages(cur_date, farm)
+        for farm, action in zip(self.farms, actions):
+            farm.apply_action(cur_date, action)
 
         offspring_dict = {}
         payoffs = []
@@ -138,10 +134,7 @@ class Organisation:
 
         self.update_genetic_ratios(self.offspring_queue.average)
 
-        if v2:
-            return payoffs
-        payoff = sum(payoffs)
-        return payoff
+        return payoffs
 
     def to_json(self, **kwargs):
         json_dict = kwargs.copy()
@@ -154,7 +147,7 @@ class Organisation:
     def __repr__(self):
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
-    def handle_farm_messages(self, cur_date: dt.datetime, farm: Farm, v2=False):
+    def handle_farm_messages(self, cur_date: dt.datetime, farm: Farm):
         """
         Handle the messages sent in the farm-to-organisation queue.
         Currently, only one type of message is implemented: :class:`slim.types.QueueTypes.SamplingResponse`.
@@ -175,9 +168,7 @@ class Organisation:
             ):
                 # send a treatment command to everyone
                 for other_farm in self.farms:
-                    other_farm.ask_for_treatment(
-                        cur_date, v2=v2, can_defect=other_farm != farm
-                    )
+                    other_farm.ask_for_treatment()
 
         pop_from_queue(farm.farm_to_org, cur_date, cts)
 
