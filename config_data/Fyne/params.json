@@ -9,6 +9,7 @@
         "a": 0.999,
         "A,a": 0.0009
     },
+    "gain_per_kg": 4.39,
     "genetic_learning_rate": 0.01,
     "aggregation_rate_threshold": 2.0,
     "treatment_strategy": "mosaic",

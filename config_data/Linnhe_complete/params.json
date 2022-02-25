@@ -3,7 +3,8 @@
     "start_date": "2017-10-01 00:00:00",
     "end_date": "2019-10-01 00:00:00",
     "ext_pressure": 150,
-    "monthly_cost": "5000.00",
+    "monthly_cost": 5000.00,
+    "gain_per_kg": 4.39,
     "genetic_ratios": {
         "A": 0.005,
         "a": 0.99,
@@ -11,6 +12,7 @@
     },
     "genetic_learning_rate": 1,
     "aggregation_rate_threshold": 2.0,
+    "treatment_strategy": "bernoulli",
     "farms": [
         {
             "name": "Gorsten",
@@ -43,7 +45,7 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
@@ -84,7 +86,7 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
@@ -113,7 +115,7 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
@@ -138,7 +140,7 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
@@ -165,7 +167,7 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
@@ -196,7 +198,7 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
@@ -227,7 +229,7 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
@@ -253,7 +255,7 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
@@ -279,7 +281,7 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,
@@ -306,7 +308,7 @@
                 "2015-10-01 00:00:00",
                 "2015-10-01 00:00:00"
             ],
-            "treatment_type": "emb",
+            "treatment_types": ["emb","thermolicer"],
             "treatment_dates": [],
             "max_num_treatments": 10,
             "sampling_spacing": 7,

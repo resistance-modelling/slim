@@ -51,7 +51,6 @@
         "skewness": -0.01,
         "x_shift": 475
     },
-    "gain_per_kg": 4.39,
     "reservoir_offspring_integration_ratio": 1e-6,
     "reservoir_offspring_average": 30,
     "genetic_mechanism": "discrete",

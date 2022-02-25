@@ -24,6 +24,11 @@
             "description": "Fixed infrastructure cost (per 28 activity day)",
             "type": "number"
         },
+        "gain_per_kg": {
+            "description": "Selling rate for fish kg (in GBP)",
+            "comment": "Source: NASDAQ Salmon Index, last updated 6/08/21, with a corresponding NOK-GBP currency conversion",
+            "type": "number"
+        },
         "genetic_ratios": {
             "description": "The initial genotype ratio distribution",
             "type": "object"
@@ -132,18 +137,22 @@
                     "max_num_treatments",
                     "sampling_spacing",
                     "defection_proba"
-                ]
+                ],
+                "additionalProperties": false
             }
         }
     },
+    "additionalProperties": false,
     "required": [
         "name",
         "start_date",
         "end_date",
         "ext_pressure",
         "monthly_cost",
+        "gain_per_kg",
         "genetic_ratios",
         "genetic_learning_rate",
+        "treatment_strategy",
         "farms"
     ]
 }
