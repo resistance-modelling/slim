@@ -1,22 +1,71 @@
 """
+This module provides optimised implementations of genotype distributions
+and manipulation tools.
+
 Hic sunt leones.
 """
+from __future__ import annotations
+
+__all__ = [
+    "LifeStage",
+    "GeneType",
+    "GenoDistrib",
+    "GenoFrequencyType",
+    "GrossLiceDistrib",
+    "largest_remainder",
+    "LICE_STAGES_BIO_LABELS",
+    "PATHOGENIC_STAGES",
+]
+
+import datetime as dt
+from enum import IntEnum
+from heapq import heappush, heappop
 import math
 import timeit
-from typing import Any, Union, Dict
+from typing import Dict
 
 import numpy as np
-from numba import njit, float64, int64, vectorize
-from numba.core.extending import overload_method
+from numba import njit, float64, int64
 from numba.experimental import jitclass
-from numba.extending import overload
 
-from slim.simulation.lice_population import GenoDistrib
+# from numba.typed import Dict as NumbaDict
 
+from slim.simulation.lice_population import GenoDistrib as OldGenoDistrib
+
+# Needed as numba's decorator breaks the type checker
 from typing_extensions import Self
 
-AlleleType = int
-Alleles = int
+# ---------- TYPE DECLARATIONS --------------
+# With Numba Enums are (finally!) efficient
+
+#: A sea lice life stage
+class LifeStage(IntEnum):
+    L1 = 0
+    L2 = 1
+    L3 = 2
+    L4 = 3
+    L5f = 4
+    L5m = 5
+
+
+#: The type of a gene
+GeneType = int
+#: The type of the frequency of a particular allele
+GenoDistribFrequency = float
+#: The numba type of the frequency of a particular allele
+GenoFrequencyType = float64[:]
+#: The type of a serialised (JSON-style) representation of a :class:`GenoDistrib`
+GenoDistribSerialisable = Dict[str, float]
+#: The type of a mapping between each recessive base and its probability
+#  E.g. "a" -> 0.2 means the probability that the first of the two heterozygous
+#  bases is an "a" is :math:`0.2`; the probability to have a fully homozygous recessive
+#  gene is thus :math:`0.2^2 = 0.04`, for the heterozygous dominant it is :math:`2 \cdot 0.2 \cdot (1-0.2) = 0.32`
+#  and the dominant it is :math:`(1-0.2)^2 = 0.64`.
+#  Also note that all the bases are assumed to be uncorrelated lest combinatorial explosion occurs.
+GenoRates = Dict[str, float]
+#: The type of a dictionary
+GrossLiceDistrib = Dict[LifeStage, int]
+# --------------------------------------------
 
 
 @njit(float64[:](float64[:]), fastmath=True)
@@ -56,7 +105,7 @@ GenoDistribV2_spec = [
 
 
 @njit
-def bitstring_to_str(seq: int, k: int):
+def bitstring_to_str(seq: int, k: int) -> str:
     """
     :param seq: a bit sequence of :math:`2k` bits
     :param k: the aforementioned :math:`k`
@@ -86,8 +135,10 @@ def bitstring_to_str(seq: int, k: int):
 
 
 @jitclass(GenoDistribV2_spec)
-class GenoDistribV2:
+class GenoDistrib:
     """
+    An enriched Dictionary-style container of a statistical population of sea lice arranged by gene.
+
     Internal implementation: we assume a simple scheme where a genotype is a pair of two bitsets
     (or in this case two concatenated ones). When a bit at a position i is 0 the allele is considered recessive,
     whereas when it is 1 it is considered dominant. The combination of the ith and (2^k+i)th bit will give us
@@ -107,7 +158,7 @@ class GenoDistribV2:
 
     def __sum__(self, o) -> Self:
         assert o.num_alleles == self.num_alleles
-        new = GenoDistribV2(self.num_alleles)
+        new = GenoDistrib(self.num_alleles)
         for i in range(self.num_alleles * 2):
             new._store[i] = self._store[i] + o._store[i]
         return new
@@ -157,7 +208,7 @@ class GenoDistribV2:
         :returns: the new distribution
         """
 
-        new_geno = GenoDistribV2(self.num_alleles)
+        new_geno = GenoDistrib(self.num_alleles)
         if population == 0:  # small optimisation shortcut
             return new_geno
         truncated_store = self._normalise_to(population)
@@ -179,14 +230,14 @@ class GenoDistribV2:
 
     def copy(self):
         """Create a copy"""
-        new_geno = GenoDistribV2(self.num_alleles)
+        new_geno = GenoDistrib(self.num_alleles)
         new_geno._store = self._store.copy()
         new_geno._gross = self.gross
         return new_geno
 
     def add(self, other: Self) -> Self:
         """Overload add operation for GenoDistrib + GenoDistrib operations"""
-        res = GenoDistribV2(self.num_alleles)
+        res = GenoDistrib(self.num_alleles)
         res._store = self._store + other._store
         res._gross = self.gross + other.gross
         return res
@@ -197,7 +248,7 @@ class GenoDistribV2:
 
     def sub(self, other: Self) -> Self:
         """Overload sub operation"""
-        res = GenoDistribV2(self.num_alleles)
+        res = GenoDistrib(self.num_alleles)
         res._store = self._store + other._store
         res._gross = self.gross - other.gross
         return res
@@ -212,7 +263,7 @@ class GenoDistribV2:
         :param other: a similar distribution
         :returns: the new genotype distribution
         """
-        res = GenoDistribV2(self.num_alleles)
+        res = GenoDistrib(self.num_alleles)
         res._store = self._store * other._store
         res._gross = self.gross * other.gross
         return res
@@ -230,7 +281,7 @@ class GenoDistribV2:
         """
         truncate = math.trunc(other) == other
 
-        res = GenoDistribV2(self.num_alleles)
+        res = GenoDistrib(self.num_alleles)
         res._store = self._store * other
         if truncate:
             res._store = largest_remainder(res._store)
@@ -252,7 +303,7 @@ class GenoDistribV2:
         """
         return self._store
 
-    def to_json_dict(self) -> Dict[str, float]:
+    def to_json_dict(self) -> GenoDistribSerialisable:
         # starting from the LSB, the genes are just called "a", "b" etc.
         to_return = {}
 
@@ -262,11 +313,106 @@ class GenoDistribV2:
         return to_return
 
     def _truncate_negatives(self):
-        for k in self._store:
-            self[k] = max(self._store[k], 0.0)
+        for idx in range(1 << 2 * self.num_alleles):
+            clamped = max(self._store[idx], 0.0)
+            delta = self._store[idx] - clamped
+            self._store[idx] = clamped
+            self._gross += delta
 
 
-test = GenoDistribV2(2)
+GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
+
+_lice_stages_list = list(LifeStage)
+LICE_STAGES_BIO_LABELS = dict(
+    zip(_lice_stages_list, ["R", "CO", "CH", "PA", "AF", "AM"])
+)
+lice_stages_bio_long_names = dict(
+    zip(
+        _lice_stages_list,
+        [
+            "Recruitment",
+            "Copepopid",
+            "Chalimus",
+            "Preadult",
+            "Adult Female",
+            "Adult Male",
+        ],
+    )
+)
+
+PATHOGENIC_STAGES = _lice_stages_list[3:]
+
+# -------------- PRIORITY QUEUE ------------------
+
+
+@dataclass(order=True)
+class DamAvailabilityBatch:
+    availability_date: dt.datetime  # expected return time
+    geno_distrib: GenoDistrib = field(compare=False)
+
+    @property
+    def event_time(self):
+        return self.availability_date
+
+
+@jitclass()
+class _PriorityQueue:
+    """A mutex-free reimplementation of a priority queue via heapification."""
+
+    def __init__(self):
+        self.queue = []
+
+    def qsize(self):
+        return len(self.queue)
+
+    def put(self, item):
+        heappush(self.queue, item)
+
+    def get(self):
+        return heappop(self.queue)
+
+
+# ------------- END PRIORITY QUEUE ---------------
+
+# ------------- LICE POPULATION ------------------
+
+LicePopulation_spec = [
+    ("num_alleles", int64),
+    ("_store", float64[:]),
+    ("_gross", float64),
+]
+
+
+@jitclass
+class LicePopulation:
+    """
+    A cage-specific population of lice.
+
+    This class provides two "views" of the population: as gross numbers and fine-grained
+    to the genotype. Both of these are common use cases and require special attention
+    due to the hidden computational cost.
+
+    Furthermore, it takes into account busy female lice from being considered for mating
+    purposes.
+    """
+
+    def __init__(self, geno_data: GenoLifeStageDistrib, generic_ratios: GenoRates):
+        self._cache: Dict[LifeStage, int] = {}
+        self._busy_dams = _PriorityQueue()
+        self._busy_dams_cache = GenoDistrib()
+        self.genetic_ratios = generic_ratios
+        for stage, distrib in geno_data.items():
+            self._cache[stage] = distrib.gross
+
+    def __setitem__(self, key, value):
+        pass
+
+
+x = LicePopulation()
+print(x.lice_stages)
+
+"""
+test = GenoDistrib(2)
 test[0b0000] = 50
 test[0b0001] = 50
 test[0b0100] = 100
@@ -277,7 +423,6 @@ test[0b1111] = 25
 print(test[0])
 print(test[1])
 print(test.to_json_dict())
-"""
 test2 = test.normalise_to(1000)
 print(test2.gross)
 print(test2._store)
@@ -287,10 +432,11 @@ print(test.sub(test2)._store)
 print(test.mul(test2)._store)
 print(test.mul_by_scalar(1 / 3)._store)
 
+test._truncate_negatives()
 
 print(timeit.timeit("test.normalise_to(1000)", globals={"test": test}, number=10000))
 
-test3 = GenoDistrib({("a",): 50, ("A",): 100, ("A", "a"): 150})
+test3 = OldGenoDistrib({("a",): 50, ("A",): 100, ("A", "a"): 150})
 print(timeit.timeit("test.normalise_to(1000)", globals={"test": test3}, number=10000))
 
 test4 = test.copy()
@@ -298,5 +444,10 @@ test4[0b0000] = 20
 print("Testing copy")
 print(test._store)
 print(test4._store)
+
+print(timeit.timeit("test._truncate_negatives()", globals={"test": test}, number=10000))
+print(
+    timeit.timeit("test._truncate_negatives()", globals={"test": test3}, number=10000)
+)
 
 """

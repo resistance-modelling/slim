@@ -56,12 +56,11 @@ GenoDistribDict = Dict[Alleles, float]
 
 def largest_remainder(nums: np.ndarray) -> np.ndarray:
     """
-        An implementation of the Largest Remainder method.
-        The aim of this function is to round an array so that the integer sum
-        is preserved.
-    test_Cage
-        :param nums: the number to truncate
-        :returns: an array of numbers such that the integer sum is preserved
+    An implementation of the Largest Remainder method.
+    The aim of this function is to round an array so that the integer sum
+    is preserved.
+    :param nums: the number to truncate
+    :returns: an array of numbers such that the integer sum is preserved
     """
 
     # a vectorised implementation of largest remainder

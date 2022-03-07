@@ -870,7 +870,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             path = Path(dir) / f"{self.state.sim_name}_{name}"
             # TODO: svg does not work?
             png_exporter.parameters()["width"] = 1200
-            svg_exporter.parameters()["width"] = 1200
+            # svg_exporter.parameters()["width"] = 1200
             png_exporter.export(str(path) + ".png")
             svg_exporter.export(str(path) + ".svg")
 
