@@ -18,6 +18,7 @@ __all__ = [
 import math
 from abc import ABC
 import datetime as dt
+from copy import deepcopy, copy
 from functools import lru_cache
 from heapq import heapify
 from queue import PriorityQueue
@@ -230,7 +231,10 @@ class GenoDistrib(MutableMapping[Alleles, float], ABC):
 
     def copy(self) -> GenoDistrib:
         """Create a copy"""
-        return GenoDistrib(self._store.copy())
+        return GenoDistrib(copy(self._store))
+
+    def __deepcopy__(self, memodict={}):
+        return GenoDistrib(deepcopy(self._store))
 
     def __add__(self, other: Union[GenoDistrib, int]) -> GenoDistrib:
         """Overload add operation"""

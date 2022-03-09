@@ -19,7 +19,6 @@ __all__ = [
 
 import datetime as dt
 from enum import IntEnum
-from heapq import heappush, heappop
 import math
 import timeit
 from typing import Dict
@@ -56,13 +55,6 @@ GenoDistribFrequency = float
 GenoFrequencyType = float64[:]
 #: The type of a serialised (JSON-style) representation of a :class:`GenoDistrib`
 GenoDistribSerialisable = Dict[str, float]
-#: The type of a mapping between each recessive base and its probability
-#  E.g. "a" -> 0.2 means the probability that the first of the two heterozygous
-#  bases is an "a" is :math:`0.2`; the probability to have a fully homozygous recessive
-#  gene is thus :math:`0.2^2 = 0.04`, for the heterozygous dominant it is :math:`2 \cdot 0.2 \cdot (1-0.2) = 0.32`
-#  and the dominant it is :math:`(1-0.2)^2 = 0.64`.
-#  Also note that all the bases are assumed to be uncorrelated lest combinatorial explosion occurs.
-GenoRates = Dict[str, float]
 #: The type of a dictionary
 GrossLiceDistrib = Dict[LifeStage, int]
 # --------------------------------------------
@@ -89,6 +81,23 @@ def largest_remainder(nums):
     return approx
 
 
+@njit
+def geno_to_idx(key):
+    geno_idx = ord(key[0].lower()) - ord("a")
+    dominant = key[0].isupper()
+    recessive = key[-1].islower()
+
+    if dominant:
+        if recessive:
+            allele_variant = 2
+        else:
+            allele_variant = 1
+    else:
+        allele_variant = 0
+
+    return geno_idx, allele_variant
+
+
 # If this code looks nasty, please remember the following:
 # 1. Numba's jitclass is very experimental
 # 2. Forget about OOP, static methods, variable arguments, Union types (isinstance is broken) etc.
@@ -97,41 +106,25 @@ def largest_remainder(nums):
 #    enough, except for __getitem__ and __setitem__). Thus, the result is going to be very Java-esque. We could also
 #    install that PR but that'd be a pain for the CI...
 
+# the store is an k x 3 array representing populations.
+# To make the maths easier: the order is always a, A, Aa
 GenoDistribV2_spec = [
     ("num_alleles", int64),
-    ("_store", float64[:]),
+    ("_store", float64[:, :]),
     ("_gross", float64),
+    ("_default_probs", float64[:]),
 ]
 
 
 @njit
-def bitstring_to_str(seq: int, k: int) -> str:
-    """
-    :param seq: a bit sequence of :math:`2k` bits
-    :param k: the aforementioned :math:`k`
-
-    :returns: a human-readable string representation of such genes
-    """
-    rhs_mask = 0b1
-    lhs_mask = 0b1 << k
-    gene_name = ord("a")
-    res = ""
-
-    for i in range(k):
-        rhs = seq & rhs_mask
-        lhs = (seq & lhs_mask) >> k
-        if rhs & lhs:
-            res += chr(gene_name).upper()
-        elif not (rhs | lhs):
-            res += chr(gene_name)
-        else:
-            res += chr(gene_name).upper() + chr(gene_name)
-
-        rhs_mask <<= 1
-        lhs_mask <<= 1
-        gene_name += 1
-
-    return res
+def geno_to_str(gene_idx, allele_idx):
+    gene_str = chr(ord("a") + gene_idx)
+    if allele_idx == 0:
+        return gene_str
+    if allele_idx == 1:
+        return gene_str.upper()
+    else:
+        return gene_str.upper() + gene_str
 
 
 @jitclass(GenoDistribV2_spec)
@@ -139,66 +132,76 @@ class GenoDistrib:
     """
     An enriched Dictionary-style container of a statistical population of sea lice arranged by gene.
 
-    Internal implementation: we assume a simple scheme where a genotype is a pair of two bitsets
-    (or in this case two concatenated ones). When a bit at a position i is 0 the allele is considered recessive,
-    whereas when it is 1 it is considered dominant. The combination of the ith and (2^k+i)th bit will give us
-    the desired genotype.
+    The interpretation is the following:
+    a genotype is made of distinct genes, each of them appearing in at most 3 different modes:
+    recessive (e.g. a), homozygous dominant (e.g. A), heterozygous dominant (e.g. Aa).
+    In theory all combinations can occur (e.g. ABbcDEe -> dom. A, het. dom. B, rec. c,
+    dom. D, het. dom. e) but we chose not to consider joint probabilities here to save.
 
-    Technically all the operations here have O(2^(2k)) time and space complexity, which is fine for small k.
+    The value of this distribution at a specific allele is the number of lice that possess
+    that trait. Note that a magnitude change in one allele will result in a change in others.
+
+    Assuming all genes are i.i.d. we allocate O(k) space.
     """
 
-    def __init__(self, num_alleles: int):
+    def __init__(self, num_alleles: int, default_probs: np.ndarray):
         """
         :param num_alleles: the number of alleles to generate. Please keep this value below 5
+        :param default_probs: if the number of lice for a bucket is 0, use this array as a "normalised" probability
         """
         self.num_alleles = num_alleles
-        length = 1 << (2 * num_alleles)
-        self._store = np.zeros(length, dtype=np.float64)
-        self._gross = 0
+        self._store = np.zeros((num_alleles, 3), dtype=np.float64)
+        self._default_probs = default_probs
+        self._gross = 0.0
 
     def __sum__(self, o) -> Self:
         assert o.num_alleles == self.num_alleles
         new = GenoDistrib(self.num_alleles)
-        for i in range(self.num_alleles * 2):
+        for i in range(self.num_alleles):
             new._store[i] = self._store[i] + o._store[i]
         return new
 
-    def __getitem__(self, idx):
+    def __getitem__(self, key: str) -> float64:
         """
-        Get the number of dominant, recessive and partially dominant genes for the ith bit.
+        Get the population of the required allele
+        See the class documentation for instruction on how to interpret the key.
 
-        This method has :math:`\mathcal{\Theta}(2^{2k})` complexity with :math:`k` being the
-        number of loci.
+        :param key: the key
+        :returns: the number of lice with the given allele.
         """
-        dominant = 0
-        recessive = 0
-        partial_dominant = 0
-        # TODO: inspect whether AVX instructions are generated here (they likely should...)
-        for i in range(1 << (self.num_alleles * 2)):
-            rhs = i & (1 << idx)
-            lhs = (i & (1 << (self.num_alleles + idx))) >> (self.num_alleles)
 
-            if not (rhs | lhs):  # NOR = homozygous recessive
-                recessive += self._store[i]
+        # extract the gene
+        geno_id, allele_variant = geno_to_idx(key)
 
-            elif rhs ^ lhs:  # XOR = heterozygous dominant
-                print(i, rhs, lhs, self._store[i])
-                partial_dominant += self._store[i]
-
-            else:  # == AND = homozygous dominant
-                dominant += self._store[i]
-
-        return recessive, partial_dominant, dominant
+        return self._store[geno_id][allele_variant]
 
     def __setitem__(self, key, value):
-        self._gross = self.gross + (value - self._store[key])
-        self._store[key] = value
+        geno_id, allele_variant = geno_to_idx(key)
+        self._gross = self.gross + (value - self._store[geno_id][allele_variant])
+        self._store[geno_id][allele_variant] = value
+        for i in range(self.num_alleles):
+            if i != geno_id:
+                self._normalise_single_gene(i, self.gross)
 
-    def _normalise_to(self, population: int):
-        store = self._store / np.sum(self._store)
-        return largest_remainder(store * population)
+    def _normalise_single_gene(self, gene_idx: int, population: float):
+        gene_store = self._store[gene_idx]
+        current_gene_gross = np.sum(gene_store)
+        if current_gene_gross == 0.0:
+            normalised_store = self._default_probs * population
+        else:
+            normalised_store = (gene_store / current_gene_gross) * population
+        self._store[gene_idx] = largest_remainder(normalised_store)
 
-    def normalise_to(self, population: int) -> Self:
+    def _normalise_to(self, population: float):
+        new_store = np.empty_like(self._store)
+        for idx in range(self.num_alleles):
+            line = self._store[idx]
+            store_normalised = largest_remainder(line / np.sum(line) * population)
+            new_store[idx] = store_normalised
+
+        return new_store
+
+    def normalise_to(self, population: float) -> Self:
         """
         Transform the distribution so that the overall sum changes to the given number
         but the ratios are preserved.
@@ -208,8 +211,8 @@ class GenoDistrib:
         :returns: the new distribution
         """
 
-        new_geno = GenoDistrib(self.num_alleles)
-        if population == 0:  # small optimisation shortcut
+        new_geno = GenoDistrib(self.num_alleles, self._default_probs)
+        if population == 0.0:  # small optimisation shortcut
             return new_geno
         truncated_store = self._normalise_to(population)
         new_geno._store = truncated_store
@@ -230,30 +233,29 @@ class GenoDistrib:
 
     def copy(self):
         """Create a copy"""
-        new_geno = GenoDistrib(self.num_alleles)
+        new_geno = GenoDistrib(self.num_alleles, self._default_probs)
         new_geno._store = self._store.copy()
         new_geno._gross = self.gross
         return new_geno
 
     def add(self, other: Self) -> Self:
         """Overload add operation for GenoDistrib + GenoDistrib operations"""
-        res = GenoDistrib(self.num_alleles)
+        res = GenoDistrib(self.num_alleles, self._default_probs)
         res._store = self._store + other._store
         res._gross = self.gross + other.gross
         return res
 
-    def add_to_scalar(self, other: int):
+    def add_to_scalar(self, other: float):
         """Add to scalar."""
         return self.normalise_to(self.gross + other)
 
     def sub(self, other: Self) -> Self:
         """Overload sub operation"""
-        res = GenoDistrib(self.num_alleles)
+        res = GenoDistrib(self.num_alleles, self._default_probs)
         res._store = self._store + other._store
         res._gross = self.gross - other.gross
         return res
 
-    # def __mul__(self, other: Union[float, GenoDistrib]) -> GenoDistrib:
     def mul(self, other: Self) -> Self:
         """Multiply a distribution by another distribution.
 
@@ -263,7 +265,7 @@ class GenoDistrib:
         :param other: a similar distribution
         :returns: the new genotype distribution
         """
-        res = GenoDistrib(self.num_alleles)
+        res = GenoDistrib(self.num_alleles, self._default_probs)
         res._store = self._store * other._store
         res._gross = self.gross * other.gross
         return res
@@ -281,10 +283,10 @@ class GenoDistrib:
         """
         truncate = math.trunc(other) == other
 
-        res = GenoDistrib(self.num_alleles)
+        res = GenoDistrib(self.num_alleles, self._default_probs)
         res._store = self._store * other
         if truncate:
-            res._store = largest_remainder(res._store)
+            res._store = self._normalise_to(res._gross * other)
         res._gross = np.sum(res._store)
         return res
 
@@ -299,25 +301,33 @@ class GenoDistrib:
 
     def values(self):
         """
-        Avoid calling this.
+        Get a copy of the store.
         """
         return self._store
 
     def to_json_dict(self) -> GenoDistribSerialisable:
-        # starting from the LSB, the genes are just called "a", "b" etc.
+        """
+        Get a JSON representation of the different genotypes.
+        """
         to_return = {}
 
-        for idx, freq in enumerate(self._store):
-            to_return[bitstring_to_str(idx, self.num_alleles)] = freq
+        for gene in range(self.num_alleles):
+            for allele in range(3):
+                to_return[(geno_to_str(gene, allele))] = self._store[gene][allele]
 
         return to_return
 
     def _truncate_negatives(self):
-        for idx in range(1 << 2 * self.num_alleles):
-            clamped = max(self._store[idx], 0.0)
-            delta = self._store[idx] - clamped
-            self._store[idx] = clamped
-            self._gross += delta
+        for idx in range(self.num_alleles):
+            for allele in range(3):
+                clamped = max(self._store[idx][allele], 0.0)
+                delta = self._store[idx][allele] - clamped
+                self._store[idx] = clamped
+                self._gross += delta
+
+        # Ensure consistency across all stages
+        for idx in range(self.num_alleles):
+            self._normalise_single_gene(idx, self._gross)
 
 
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
@@ -342,7 +352,12 @@ lice_stages_bio_long_names = dict(
 
 PATHOGENIC_STAGES = _lice_stages_list[3:]
 
+'''
 # -------------- PRIORITY QUEUE ------------------
+
+# Note: as we cannot define the __lt__ we cannot use dataclasses inside
+# our priority queue. The obvious solution, to use pairs, does not work as
+# __lt__ for tuples requires GenoDistrib to have one as well.
 
 
 @dataclass(order=True)
@@ -410,44 +425,101 @@ class LicePopulation:
 
 x = LicePopulation()
 print(x.lice_stages)
+'''
 
-"""
-test = GenoDistrib(2)
-test[0b0000] = 50
-test[0b0001] = 50
-test[0b0100] = 100
-test[0b0101] = 100
-test[0b1000] = 50
-test[0b1001] = 50
-test[0b1111] = 25
-print(test[0])
-print(test[1])
-print(test.to_json_dict())
-test2 = test.normalise_to(1000)
-print(test2.gross)
-print(test2._store)
-print(test.normalise_to(0))
-print(test.add(test2)._store)
-print(test.sub(test2)._store)
-print(test.mul(test2)._store)
-print(test.mul_by_scalar(1 / 3)._store)
+if __name__ == "__main__":
+    test = GenoDistrib(2, np.array([0.2, 0.8, 0.2]))
+    test["a"] = 50
+    test["A"] = 50
+    test["Aa"] = 100
+    print(test["A"])
+    print(test["b"])
+    test["b"] = 100
+    print(test.to_json_dict())
+    test["B"] = 50
+    test["Bb"] = 50
+    print(test["A"])
+    print(test["b"])
 
-test._truncate_negatives()
+    print(test.to_json_dict())
+    test2 = test.normalise_to(1000)
+    print(test2.gross)
+    print(test2._store)
+    print(test.normalise_to(0))
+    print(test.add(test2)._store)
+    print(test.sub(test2)._store)
+    print(test.mul(test2)._store)
+    print(test.mul_by_scalar(1 / 3)._store)
 
-print(timeit.timeit("test.normalise_to(1000)", globals={"test": test}, number=10000))
+    test._truncate_negatives()
 
-test3 = OldGenoDistrib({("a",): 50, ("A",): 100, ("A", "a"): 150})
-print(timeit.timeit("test.normalise_to(1000)", globals={"test": test3}, number=10000))
+    test3 = OldGenoDistrib({("a",): 50, ("A",): 100, ("A", "a"): 150})
 
-test4 = test.copy()
-test4[0b0000] = 20
-print("Testing copy")
-print(test._store)
-print(test4._store)
+    print("Testing access of a single genotype")
+    print(
+        "new: {}".format(
+            timeit.timeit("test['A']", globals={"test": test}, number=10000)
+        )
+    )
+    print(
+        "old: {}".format(
+            timeit.timeit("test[('A',)]", globals={"test": test3}, number=10000)
+        )
+    )
 
-print(timeit.timeit("test._truncate_negatives()", globals={"test": test}, number=10000))
-print(
-    timeit.timeit("test._truncate_negatives()", globals={"test": test3}, number=10000)
-)
+    print("Testing normalise_to")
+    print(
+        "new: {}".format(
+            timeit.timeit(
+                "test.normalise_to(1000)", globals={"test": test}, number=10000
+            )
+        )
+    )
 
-"""
+    print(
+        "old: {}".format(
+            timeit.timeit(
+                "test.normalise_to(1000)", globals={"test": test3}, number=10000
+            )
+        )
+    )
+
+    test4 = test.copy()
+    test4["A"] = 20
+    print("Testing copy")
+    print(test._store)
+    print(test4._store)
+
+    print("Testing copy speed")
+    print(
+        "new (deep): {}".format(
+            timeit.timeit("test.copy()", globals={"test": test}, number=10000)
+        )
+    )
+    print(
+        "old (shallow): {}".format(
+            timeit.timeit("test.copy()", globals={"test": test3}, number=10000)
+        )
+    )
+
+    print(
+        "old (deep): {}".format(
+            timeit.timeit("test.__deepcopy__()", globals={"test": test3}, number=10000)
+        )
+    )
+
+    print("Testing truncating negatives")
+    print(
+        "new: {}".format(
+            timeit.timeit(
+                "test._truncate_negatives()", globals={"test": test}, number=10000
+            )
+        )
+    )
+    print(
+        "old: {}".format(
+            timeit.timeit(
+                "test._truncate_negatives()", globals={"test": test3}, number=10000
+            )
+        )
+    )
