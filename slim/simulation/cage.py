@@ -41,7 +41,6 @@ from slim.JSONEncoders import CustomFarmEncoder
 if TYPE_CHECKING:  # pragma: no cover
     from slim.simulation.farm import Farm, GenoDistribByHatchDate
 
-OptionalDamBatch = Optional[DamAvailabilityBatch]
 OptionalEggBatch = Optional[EggBatch]
 
 
@@ -96,14 +95,16 @@ class Cage(LoggableMixin):
         self.genetic_mechanism = self.cfg.genetic_mechanism
 
         geno_by_lifestage = {
-            stage: GenoDistrib(self.cfg.initial_genetic_ratios).normalise_to(
+            stage: GenoDistrib(1, self.cfg.initial_genetic_ratios).normalise_to(
                 lice_population[stage]
             )
             for stage in lice_population
         }
 
         self.lice_population = LicePopulation(
-            geno_by_lifestage, self.cfg.initial_genetic_ratios
+            geno_by_lifestage,
+            self.cfg.initial_genetic_ratios,
+            self.cfg.dam_unavailability,
         )
 
         self.num_fish = cfg.farms[self.farm_id].num_fish
@@ -197,7 +198,7 @@ class Cage(LoggableMixin):
             treatment_mortality = self.lice_population.get_empty_geno_distrib()
             fish_deaths_natural, fish_deaths_from_lice = 0, 0
             num_infection_events = 0
-            avail_dams_batch: OptionalDamBatch = None
+            delta_avail_dams = 0
             new_egg_batch: OptionalEggBatch = None
             cost = self.cfg.monthly_cost / 28
 
@@ -218,13 +219,7 @@ class Cage(LoggableMixin):
             num_infection_events = self.do_infection_events(days_since_start)
 
             # Mating events that create eggs
-            self.lice_population.free_dams(cur_date)
-            delta_avail_dams, delta_eggs = self.do_mating_events(cur_date)
-            avail_dams_batch = DamAvailabilityBatch(
-                cur_date + dt.timedelta(days=self.cfg.dam_unavailability),
-                delta_avail_dams,
-            )
-
+            delta_avail_dams, delta_eggs = self.do_mating_events()
             new_egg_batch = self.get_egg_batch(cur_date, delta_eggs)
 
         fish_deaths_from_treatment = self.get_fish_treatment_mortality(
@@ -245,7 +240,7 @@ class Cage(LoggableMixin):
             new_males,
             num_infection_events,
             lice_from_reservoir,
-            avail_dams_batch,
+            delta_avail_dams,
             new_offspring_distrib,
             hatched_arrivals_dist,
         )
@@ -757,12 +752,10 @@ class Cage(LoggableMixin):
             )
         )
 
-    def do_mating_events(self, cur_date) -> Tuple[GenoDistrib, GenoDistrib]:
+    def do_mating_events(self) -> Tuple[int, GenoDistrib]:
         """
         Will generate two deltas:  one to add to unavailable dams and subtract from available dams, one to add to eggs
         Assume males don't become unavailable? in this case we don't need a delta for sires
-
-        :param cur_date: the current date
 
         :returns: a pair (mating_dams, new_eggs)
         """
@@ -777,7 +770,7 @@ class Cage(LoggableMixin):
         mating_sires = self.select_lice(distrib_sire_available, num_matings)
 
         if distrib_sire_available.gross == 0 or distrib_dam_available.gross == 0:
-            return GenoDistrib(), GenoDistrib()
+            return 0, GenoDistrib()
 
         num_eggs = self.get_num_eggs(num_matings)
         if self.genetic_mechanism == GeneticMechanism.DISCRETE:
@@ -791,7 +784,7 @@ class Cage(LoggableMixin):
 
         delta_eggs = self.mutate(delta_eggs, mutation_rate=self.cfg.geno_mutation_rate)
 
-        return mating_dams, delta_eggs
+        return mating_dams.gross, delta_eggs
 
     def generate_eggs_discrete_batch(
         self, sire_distrib: GenoDistrib, dam_distrib: GenoDistrib, number_eggs: int
@@ -1139,7 +1132,7 @@ class Cage(LoggableMixin):
         new_males: int,
         new_infections: int,
         lice_from_reservoir: Dict[LifeStage, GenoDistrib],
-        delta_dams_batch: OptionalDamBatch,
+        delta_dams_batch: int,
         new_offspring_distrib: GenoDistrib,
         hatched_arrivals_dist: GenoDistrib,
     ):

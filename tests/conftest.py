@@ -13,7 +13,7 @@ builtins.__dict__["profile"] = lambda x: x
 from slim.simulation.config import Config
 from slim.simulation.organisation import Organisation
 from slim.simulation.simulator import get_env, SimulatorPZEnv
-from slim.types.queue import EggBatch, DamAvailabilityBatch
+from slim.types.queue import EggBatch
 from slim.simulation.lice_population import LicePopulation, GenoDistrib
 
 

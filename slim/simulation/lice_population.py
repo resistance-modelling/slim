@@ -3,7 +3,6 @@ from __future__ import annotations
 __all__ = [
     "largest_remainder",
     "Allele",
-    "Alleles",
     "GenoDistribDict",
     "GenoDistribSerialisable",
     "GenoDistrib",
@@ -15,60 +14,67 @@ __all__ = [
     "LicePopulation",
 ]
 
-import math
-from abc import ABC
-import datetime as dt
-from copy import deepcopy, copy
-from functools import lru_cache
-from heapq import heapify
-from queue import PriorityQueue
-from types import GeneratorType
-from typing import (
-    Dict,
-    MutableMapping,
-    Tuple,
-    Union,
-    NamedTuple,
-    Optional,
-    Iterable,
-    TYPE_CHECKING,
-    List,
-    cast,
-    Iterator,
-)
-
-import numpy as np
+from typing import NamedTuple, List
 
 from slim import logger
-from slim.types.queue import pop_from_queue
 
-if TYPE_CHECKING:  # pragma: no cover
-    from slim.types.queue import DamAvailabilityBatch
+from enum import IntEnum
+import math
+from typing import Dict
 
-################ Basic type aliases #####################
-LifeStage = str
+import numpy as np
+from numba import njit, float64, int64
+from numba.experimental import jitclass
+
+# Needed as numba's decorator breaks the type checker
+from typing_extensions import Self
+
+# ---------- TYPE DECLARATIONS --------------
+
+"""
+# With Numba Enums are (finally!) efficient
+
+#: A sea lice life stage
+class LifeStage(IntEnum):
+    L1 = 0
+    L2 = 1
+    L3 = 2
+    L4 = 3
+    L5f = 4
+    L5m = 5
+"""
+
+#: The type of a gene
 Gene = str
+#: The type of an allele key
 Allele = str
-Alleles = Tuple[Allele, ...]
-# These are used when GenoDistrib is not available
-GenoDistribSerialisable = Dict[str, float]
-GenoDistribDict = Dict[Alleles, float]
+#: The type of a lifestage
+LifeStage = str
+#: The type of the frequency of a particular allele
+GenoDistribFrequency = float
+#: The numba type of the frequency of a particular allele
+GenoFrequencyType = float64[:]
+#: The type of a serialised (JSON-style) representation of a :class:`GenoDistrib`
+GenoDistribSerialisable = Dict[Allele, float]
+#: The type of a dictionary
+GrossLiceDistrib = Dict[LifeStage, int]
+#: These are used when GenoDistrib is not available
+GenoDistribDict = Dict[Allele, float]
 
 
-def largest_remainder(nums: np.ndarray) -> np.ndarray:
-    """
-    An implementation of the Largest Remainder method.
-    The aim of this function is to round an array so that the integer sum
-    is preserved.
-    :param nums: the number to truncate
-    :returns: an array of numbers such that the integer sum is preserved
-    """
+class GenoTreatmentValue(NamedTuple):
+    mortality_rate: float
+    susceptible_stages: List[LifeStage]
 
-    # a vectorised implementation of largest remainder
-    assert np.all(nums >= 0) or np.all(nums <= 0)
 
-    nums = nums.astype(np.float64)
-    approx = np.trunc(nums, dtype=np.float64)
+GenoTreatmentDistrib = Dict[Allele, GenoTreatmentValue]
+
+# --------------------------------------------
+
+
+@njit(float64[:](float64[:]), fastmath=True)
+def largest_remainder(nums):
+    approx = np.trunc(nums)
 
     while True:
         diff = nums - approx
@@ -84,306 +90,324 @@ def largest_remainder(nums: np.ndarray) -> np.ndarray:
         else:
             approx[positions[:tweaks]] -= 1.0
 
-    assert np.rint(np.sum(approx)) == np.rint(
-        np.sum(nums)
-    ), f"{approx} is not summing to {nums}, as the first sums to {np.sum(approx)} and the second to {np.sum(nums)}"
     return approx
 
 
-class GenoDistrib(MutableMapping[Alleles, float], ABC):
+@njit(float64[:, :](float64[:, :]))
+def largest_remainder_matrix(nums: np.ndarray):
+    res = np.empty_like(nums)
+    for idx in range(nums.shape[0]):
+        res[idx] = largest_remainder(nums[idx])
+    return res
+
+
+@njit
+def geno_to_idx(key):
+    geno_idx = ord(key[0].lower()) - ord("a")
+    dominant = key[0].isupper()
+    recessive = key[-1].islower()
+
+    if dominant:
+        if recessive:
+            allele_variant = 2
+        else:
+            allele_variant = 1
+    else:
+        allele_variant = 0
+
+    return geno_idx, allele_variant
+
+
+# If this code looks nasty, please remember the following:
+# 1. Numba's jitclass is very experimental
+# 2. Forget about OOP, static methods (they do exist but are inaccessible inside a no-object
+#    pipeline), variable arguments, Union types (isinstance is broken) etc.
+# 3. Castings must always be explicit!
+# 4. Until https://github.com/numba/numba/pull/5877 gets merged, there is no overload support for jitclass (oddly
+#    enough, except for __getitem__ and __setitem__). Thus, the result is going to be very Java-esque. We could also
+#    install that PR but that'd be a pain for the CI...
+
+
+@njit
+def geno_to_str(gene_idx, allele_idx):
+    gene_str = chr(ord("a") + gene_idx)
+    if allele_idx == 0:
+        return gene_str
+    if allele_idx == 1:
+        return gene_str.upper()
+    else:
+        return gene_str.upper() + gene_str
+
+
+@njit
+def geno_config_to_matrix(geno_dict: GenoDistribDict) -> np.ndarray:
     """
-    A GenoDistrib is a distribution of genotypes.
+    Convert a dictionary of genes into a matrix.
 
-    Each GenoDistrib provides custom operator overloading operations and suitable
-    rescaling operations.
-    Internally, this is built to mimic the Counter type but implements smarter move semantics
-    when possible.
+    We recommend using :meth:`GenoDistrib.from_dict` as it will call this helper as well.
+    """
+    num_genes = len(geno_dict) // 3
+    print("Number of genes is:", num_genes)
+    matrix = np.empty((num_genes, 3), dtype=np.float64)
+    for k, v in geno_dict.items():
+        gene, allele = geno_to_idx(k)
+        matrix[gene, allele] = v
+    return matrix
+
+
+# the store is an k x 3 array representing populations.
+# To make the maths easier: the order is always a, A, Aa
+GenoDistribV2_spec = [
+    ("num_alleles", int64),
+    ("_store", float64[:, :]),
+    ("_gross", float64),
+    ("_default_probs", float64[:, :]),
+]
+
+
+@jitclass(GenoDistribV2_spec)
+class GenoDistrib:
+    """
+    An enriched Dictionary-style container of a statistical population of sea lice arranged by gene.
+
+    The interpretation is the following:
+    a genotype is made of distinct genes, each of them appearing in at most 3 different modes:
+    recessive (e.g. a), homozygous dominant (e.g. A), heterozygous dominant (e.g. Aa).
+    In theory all combinations can occur (e.g. ABbcDEe -> dom. A, het. dom. B, rec. c,
+    dom. D, het. dom. e) but we chose not to consider joint probabilities here to save.
+
+    The value of this distribution at a specific allele is the number of lice that possess
+    that trait. Note that a magnitude change in one allele will result in a change in others.
+
+    Assuming all genes are i.i.d. we allocate O(k) space.
     """
 
-    alleles: List[Alleles] = [("a",), ("A", "a"), ("A",)]
-    allele_labels = {allele: "".join(allele) for allele in alleles}
-    allele_labels_bio = {
-        ("a",): "Non-resistant",
-        ("A", "a"): "Heterozygous resistant",
-        ("A",): "Homozygous resistant",
-    }
-
-    def __init__(
-        self,
-        params: Optional[
-            Union[GenoDistrib, Dict[Alleles, float], Iterable[Tuple[Alleles, float]]]
-        ] = None,
-    ):
-        """A :class:`GenoDistrib` can be built in the following ways:
-
-        * Empty
-
-          >>> a = GenoDistrib()
-
-        * From a dictionary. The keys must be the same in alleles
-
-          >>> b = GenoDistrib({('A',): 10})
-        * From a generator
-
-          >>> c = GenoDistrib(zip(GenoDistrib.alleles, [1, 2, 3]))
-        * From another :class:`GenoDistrib`. This will create a distinct copy of keys and values.
-
-          >>> d = GenoDistrib(c)
-          >>> assert c != d
-
-        Note that the class does not enforce any type as this job is left to the type checker of choice
-        for efficiency reasons.
+    def __init__(self, num_alleles: int, default_probs: np.ndarray):
         """
-        # asdict() will call this constructor with a stream of tuples (Alleles, v)
-        # to prevent the default behaviour (Counter counts all the instances of the elements) we have to check
-        # for generators
-
-        self._store: Dict[Alleles, float] = {}
-
-        if params:
-            if isinstance(params, GeneratorType):
-                self._store = cast(Dict[Alleles, float], dict(params))
-            elif isinstance(params, dict):
-                self._store = cast(Dict[Alleles, float], params)
-            elif isinstance(params, GenoDistrib):
-                self._store.update(params._store)
-
-    @staticmethod
-    def from_ratios(
-        n: int, p: GenoDistribDict, rng: np.random.Generator
-    ) -> GenoDistrib:
+        :param num_alleles: the number of alleles to generate. Please keep this value below 5
+        :param default_probs: if the number of lice for a bucket is 0, use this array as a "normalised" probability
         """
-        Create a :class:`GenoDistrib` with a given number of lice and a probability distribution
+        self.num_alleles = num_alleles
+        self._store = np.zeros((num_alleles, 3), dtype=np.float64)
+        self._default_probs = default_probs
+        self._gross = 0.0
 
-        Note that this function uses a *statistical* approach to building such distribution.
-        If you prefer a faster but deterministic alternative you could do this:
+    def __getitem__(self, key: str) -> float64:
+        """
+        Get the population of the required allele
+        See the class documentation for instruction on how to interpret the key.
 
-        >>> GenoDistrib(dict(zip(GenoDistrib.alleles), p)).normalise_to(n)
-
-        :param n: the number of lice
-        :param p: the probability of each genotype
-        :param rng: the random number generator to use for sampling.
-
-        :returns: the new GenoDistrib
+        :param key: the key
+        :returns: the number of lice with the given allele.
         """
 
-        probas = np.fromiter(p.values(), np.float64)
-        assert np.isclose(np.sum(probas), 1.0), "p must be a probability distribution"
+        # extract the gene
+        geno_id, allele_variant = geno_to_idx(key)
 
-        keys = p.keys()
-        if np.sum(probas) > 1.0:
-            # do some rounding
-            probas = largest_remainder(probas)
-        values = rng.multinomial(n, probas).tolist()
-        return GenoDistrib(dict(zip(keys, values)))
+        return self._store[geno_id][allele_variant]
 
-    @staticmethod
-    @lru_cache(maxsize=None)
-    def alleles_from_gene(gene: Gene) -> List[Alleles]:
-        """
-        Get the alleles that stem from a single gene.
-        Note that here "allele" is conflated to represent pairs of such alleles at the same
-        gene locus.
+    def __setitem__(self, key, value):
+        geno_id, allele_variant = geno_to_idx(key)
+        self._gross = self.gross + (value - self._store[geno_id][allele_variant])
+        self._store[geno_id][allele_variant] = value
+        for i in range(self.num_alleles):
+            if i != geno_id:
+                self._normalise_single_gene(i, self.gross)
 
-        :param gene: the gene
-        :returns: the alleles
-        """
-        # TODO this is temporary
-        dominant = gene.upper()
-        recessive = gene.lower()
-        return [(recessive,), (dominant, recessive), (dominant,)]
+    def _normalise_single_gene(self, gene_idx: int, population: float):
+        gene_store = self._store[gene_idx]
+        current_gene_gross = np.sum(gene_store)
+        if current_gene_gross == 0.0:
+            normalised_store = self._default_probs * population
+        else:
+            normalised_store = (gene_store / current_gene_gross) * population
+        self._store[gene_idx] = largest_remainder(normalised_store)
 
-    def normalise_to(self, population: int) -> GenoDistrib:
+    def _normalise_to(self, population: float):
+        new_store = np.empty_like(self._store)
+        for idx in range(self.num_alleles):
+            line = self._store[idx]
+            store_normalised = largest_remainder(line / np.sum(line) * population)
+            new_store[idx] = store_normalised
+
+        return new_store
+
+    def normalise_to(self, population: float) -> Self:
         """
         Transform the distribution so that the overall sum changes to the given number
         but the ratios are preserved.
+        Note: this operation yields undefined behaviour if the genotype distribution is 0
 
         :param population: the new population
         :returns: the new distribution
         """
 
-        assert np.rint(population) == population, f"{population} is not an integer"
-        keys = self.keys()
-        values = list(self.values())
-        np_values = np.array(values)
-        # np.isclose is slow and not needed: all values are granted to be real and positive.
-        if np.sum(np_values) < 1 or population == 0:
-            return GenoDistrib({k: 0 for k in keys})
+        # TODO: This is broken
+        new_geno = GenoDistrib(self.num_alleles, self._default_probs)
+        if population == 0.0:  # small optimisation shortcut
+            return new_geno
+        truncated_store = self._normalise_to(population)
+        new_geno._store = truncated_store
+        new_geno._gross = population
+        return new_geno
 
-        np_values = np_values * population / np.sum(np_values)
-
-        rounded_values = largest_remainder(np_values).tolist()
-        return GenoDistrib(dict(zip(keys, map(int, rounded_values))))
-
-    def set(self, other: int):
+    def set(self, population: int) -> Self:
         """This is the inplace version of :meth:`normalise_to`.
 
-        :param other: the new population
+        :param population: the new population
         """
-        result = self.normalise_to(other)
-        self._store.clear()
-        self._store.update(result)
+        self._store = self._normalise_to(population)
+        self._gross = float(population)
 
     @property
-    def gross(self) -> int:
-        """Return the gross number of lice, i.e. the distribution sum."""
-        return int(sum(self.values()))
+    def gross(self):
+        return self._gross
 
-    def copy(self) -> GenoDistrib:
+    def copy(self):
         """Create a copy"""
-        return GenoDistrib(copy(self._store))
+        new_geno = GenoDistrib(self.num_alleles, self._default_probs)
+        new_geno._store = self._store.copy()
+        new_geno._gross = self.gross
+        return new_geno
 
-    def __deepcopy__(self, memodict={}):
-        return GenoDistrib(deepcopy(self._store))
+    def add(self, other: Self) -> Self:
+        """Overload add operation for GenoDistrib + GenoDistrib operations"""
+        res = GenoDistrib(self.num_alleles, self._default_probs)
+        res._store = self._store + other._store
+        res._gross = self.gross + other.gross
+        return res
 
-    def __add__(self, other: Union[GenoDistrib, int]) -> GenoDistrib:
-        """Overload add operation"""
-        if isinstance(other, GenoDistrib):
-            res = GenoDistrib()
-            res._store.update(self)
-            for k, v in other.items():
-                res[k] = self[k] + v
-            return res
-        else:
-            return self.normalise_to(self.gross + other)
+    def add_to_scalar(self, other: float):
+        """Add to scalar."""
+        return self.normalise_to(self.gross + other)
 
-    def __sub__(self, other: Union[GenoDistrib, int]) -> GenoDistrib:
+    def sub(self, other: Self) -> Self:
         """Overload sub operation"""
+        res = GenoDistrib(self.num_alleles, self._default_probs)
+        res._store = self._store + other._store
+        res._gross = self.gross - other.gross
+        return res
 
-        if isinstance(other, GenoDistrib):
-            res = GenoDistrib()
-            res._store.update(self)
-            for k, v in other.items():
-                res[k] = self[k] - v
-            return res
-        else:
-            return self.normalise_to(self.gross - other)
+    def mul(self, other: Self) -> Self:
+        """Multiply a distribution by another distribution.
 
-    def __mul__(self, other: Union[float, GenoDistrib]) -> GenoDistrib:
-        """Multiply a distribution by either a scalar or another distribution.
-
-        In the first case, the multiplication by a scalar will multiply each bin
-        by the scalar. If the new sum is expected to be an integer a rounding step
-        is applied.
-
-        In the second case it is simply a pairwise product.
-
-        :param other: either a float or a similar distribution
+        :param other: a similar distribution
         :returns: the new genotype distribution
         """
-        if isinstance(other, float) or isinstance(other, int):
-            keys = self.keys()
-            values = [v * other for v in self.values()]
-            if isinstance(other, float) and math.trunc(other) == other:
-                values = map(int, largest_remainder(np.array(values)).tolist())
-        else:
-            # pairwise product
-            # Sometimes it may be helpful to not round
-            keys = set(list(self.keys()) + list(other.keys()))
-            values = [self[k] * other[k] for k in keys]
-        return GenoDistrib(dict(zip(keys, values)))
+        res = GenoDistrib(self.num_alleles, self._default_probs)
+        res._store = self._store * other._store
+        res._gross = self.gross * other.gross
+        return res
 
-    def __eq__(self, other: Union[GenoDistrib, Dict[Alleles, int]]) -> bool:
+    def mul_by_scalar(self, other: float) -> Self:
+        """
+        Multiply a distribution by a scalar.
+
+        The multiplication by a scalar will multiply each bin by the scalar.
+        If the new sum is expected to be an integer a rounding step
+        is applied.
+
+        :param other: a scalar
+        :returns: the new genotype distribution
+        """
+        truncate = math.trunc(other) == other
+
+        res = GenoDistrib(self.num_alleles, self._default_probs)
+        res._store = self._store * other
+        if truncate:
+            res._store = self._normalise_to(res._gross * other)
+        res._gross = np.sum(res._store)
+        return res
+
+    def equals(self, other: Self):
         """Overloaded eq operator"""
-        # Make equality checks a bit more flexible
-        if isinstance(other, dict):
-            other = GenoDistrib(other)
+        # this is mainly useful for simple testing
         return self._store == other._store
-
-    def __le__(self, other: Union[GenoDistrib, float]) -> bool:
-        """A <= B if B has all the keys of A and A[k] <= B[k] for every k
-        Note that __gt__ is not implemented as its behaviour is not "greater than" but rather
-        "there may be an unbounded frequency"."""
-        if isinstance(other, float):
-            return all(v <= other for v in self.values())
-
-        merged_keys = set(list(self.keys()) + list(other.keys()))
-        return all(self[k] <= other[k] for k in merged_keys)
 
     def is_positive(self) -> bool:
         """:returns True if all the bins are positive."""
-        return all(v >= 0 for v in self.values())
+        return all(v >= 0 for v in self._store)
 
-    def __getitem__(self, key) -> float:
-        return self._store.setdefault(key, 0)
+    def values(self):
+        """
+        Get a copy of the store.
+        """
+        return self._store
 
-    def __setitem__(self, key, value):
-        self._store[key] = value
+    def to_json_dict(self) -> GenoDistribSerialisable:
+        """
+        Get a JSON representation of the different genotypes.
+        """
+        to_return = {}
 
-    def __delitem__(self, key):
-        del self._store[key]
+        for gene in range(self.num_alleles):
+            for allele in range(3):
+                to_return[(geno_to_str(gene, allele))] = self._store[gene][allele]
 
-    def __iter__(self) -> Iterator[Alleles]:
-        return iter(self._store)
-
-    def __len__(self) -> int:
-        return len(self._store)
-
-    def __repr__(self) -> str:
-        return repr(self._store)
-
-    def __str__(self) -> str:
-        return "GenoDistrib(" + str(self._store) + ")"
-
-    def to_json_dict(self) -> Dict[str, float]:
-        return {"".join(k): v for k, v in self.items()}
+        return to_return
 
     def _truncate_negatives(self):
-        for k in self:
-            self[k] = max(self[k], 0)
+        for idx in range(self.num_alleles):
+            for allele in range(3):
+                clamped = max(self._store[idx][allele], 0.0)
+                delta = self._store[idx][allele] - clamped
+                self._store[idx] = clamped
+                self._gross += delta
 
-    @staticmethod
-    def batch_sum(
-        batches: Union[List[GenoDistrib], List[Dict[str, float]]], as_pure_dict=False
-    ) -> Union[GenoDistrib, GenoDistribSerialisable]:
-        """
-        Calculate the sum of multiple :class:`GenoDistrib` instances.
-        This function is a bit faster than manually invoking a folding operation
-        due to reduced overhead.
-
-        :param batches: either a list of distribution or a list of dictionaries (useful for pandas)
-        :param as_pure_dict: if True return the final distribution as a dictionary rather than a :class:`GenoDistrib`
-        :returns: either a dictionary or a :class:`GenoDistrib`
-        """
-
-        # this function is ugly but it's a hotspot.
-        # TODO: automatically generate these from the class attrib
-        alleles_to_idx = {
-            ("a",): 0,
-            ("a"): 0,
-            ("A", "a"): 1,
-            ("Aa"): 1,
-            ("A",): 2,
-            ("A"): 2,
-        }
-        res_as_vector = [0, 0, 0]
-        for batch in batches:
-            for allele, value in batch.items():
-                res_as_vector[alleles_to_idx[allele]] += value
-
-        if as_pure_dict:
-            return dict(zip(["a", "Aa", "A"], res_as_vector))
-
-        return GenoDistrib(dict(zip(GenoDistrib.alleles, res_as_vector)))
+        # Ensure consistency across all stages
+        for idx in range(self.num_alleles):
+            self._normalise_single_gene(idx, self._gross)
 
 
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
-GrossLiceDistrib = Dict[LifeStage, int]
 
 
-class GenoTreatmentValue(NamedTuple):
-    mortality_rate: float
-    susceptible_stages: List[LifeStage]
+@njit
+def from_ratios_rng(
+    n: int, p: GenoDistribDict, rng: np.random.Generator
+) -> GenoDistrib:
+    """
+    Create a :class:`GenoDistrib` with a given number of lice and a probability distribution
+    Note that this function uses a *statistical* approach to building such distribution.
+    If you prefer a faster but deterministic alternative consider :func:`from_ratios` .
+
+    :param n: the number of lice
+    :param p: the probability of each genotype
+    :param rng: the random number generator to use for sampling.
+    :returns: the new GenoDistrib
+    """
+
+    probas = geno_config_to_matrix(p)
+    values = np.stack([rng.multinomial(n, proba) for proba in probas])
+    res = GenoDistrib(len(probas), probas)
+    res._store = values
+    res._gross = n
+    return res
 
 
-GenoTreatmentDistrib = Dict[Alleles, GenoTreatmentValue]
+@njit
+def from_ratios(p: GenoDistribDict, n: int = -1) -> GenoDistrib:
+    """
+    Create a :class:`GenoDistrib` with a given number of lice and fixed ratios.
+    Note that this function uses a *deterministic* approach based on the
+    largest remainder method. If you prefer a noisier approach consider
+    :func:`from_ratios_rng` .
+
+    :param p: the probability of each genotype
+    :param n: if not -1, set the distribution so that the gross value is equal to n
+    :returns: the new GenoDistrib
+    """
+    probas = geno_config_to_matrix(p)
+    res = GenoDistrib(len(probas), probas)
+    if n > -1:
+        return res.normalise_to(n)
+    return res
 
 
 # See https://stackoverflow.com/a/7760938
-class LicePopulation(MutableMapping[LifeStage, int]):
+class LicePopulation:
     """
-    Wrapper to keep the global population and genotype information updated
-    This is definitely a convoluted way to do this, but I wanted to memoise as much as possible.
+    Wrapper to keep the global population and genotype information updated.
     """
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
@@ -406,24 +430,25 @@ class LicePopulation(MutableMapping[LifeStage, int]):
     pathogenic_stages = lice_stages[3:]
 
     def __init__(
-        self, geno_data: GenoLifeStageDistrib, generic_ratios: GenoDistribDict
+        self,
+        geno_data: GenoLifeStageDistrib,
+        generic_ratios: GenoDistribDict,
+        busy_dam_waiting_time: float,
     ):
         """
-        :param geno_data: a Genotype distribution
+        :param geno_data: the default genetic ratios
         :param generic_ratios: a config to use
+        :param busy_dam_waiting_time: the average pregnancy period for dams
         """
-        self._cache: Dict[LifeStage, int] = {}
-        self.geno_by_lifestage = GenotypePopulation(self, geno_data)
+        self.geno_by_lifestage = geno_data.copy()
         self.genetic_ratios = generic_ratios
-        self._busy_dams: PriorityQueue[DamAvailabilityBatch] = PriorityQueue()
-        self._busy_dams_cache = GenoDistrib()
-        for stage, distrib in geno_data.items():
-            self._cache[stage] = distrib.gross
+        self._busy_dam_arrival_rate = 0.0
+        self._busy_dam_waiting_time = busy_dam_waiting_time
 
     def __setitem__(self, stage: LifeStage, value: int):
         # If one attempts to make gross modifications to the population these will be repartitioned according to the
         # current genotype information.
-        old_value = self._cache[stage]
+        old_value = self[stage]
         if old_value == 0:
             if value > 0:
                 logger.warning(
@@ -443,37 +468,29 @@ class LicePopulation(MutableMapping[LifeStage, int]):
             self.geno_by_lifestage[stage] = self.geno_by_lifestage[stage].normalise_to(
                 value
             )
-        if stage == "L5f":
-            self.__rescale_busy_dams(
-                round(self.busy_dams.gross * value / old_value) if old_value > 0 else 0
-            )
 
     def __getitem__(self, stage: LifeStage) -> int:
-        return self._cache[stage]
+        return int(self.geno_by_lifestage[stage].gross)
 
     def __delitem__(self, stage: LifeStage):
         raise NotImplementedError()
 
-    def __iter__(self) -> Iterator[LifeStage]:
-        return iter(self._cache)
-
     def __len__(self) -> int:
-        return len(self._cache)
+        return len(self.geno_by_lifestage)
 
     def __repr__(self) -> str:
-        return repr(self._cache)
+        return "LicePopulation" + repr(self.to_json_dict())
 
     def __str__(self) -> str:
-        return f"LicePopulation({str(self._cache)})"
+        return f"LicePopulation(" + str(self.as_dict()) + ")"
 
     def as_dict(self) -> Dict[LifeStage, int]:
-        return self._cache
-
-    def raw_update_value(self, stage: LifeStage, value: int):
-        self._cache[stage] = value
+        return {
+            stage: distrib.gross for stage, distrib in self.geno_by_lifestage.items()
+        }
 
     def clear_busy_dams(self):
-        self._busy_dams = PriorityQueue()
+        self._busy_dam_arrival_rate = 0.0
 
     @property
     def available_dams(self) -> GenoDistrib:
@@ -481,41 +498,17 @@ class LicePopulation(MutableMapping[LifeStage, int]):
 
     @property
     def busy_dams(self) -> GenoDistrib:
-        return self._busy_dams_cache
-
-    def free_dams(self, cur_time: dt.datetime) -> GenoDistrib:
-        """
-        Return the number of available dams
-
-        :param cur_time: the current time
-        :returns: the genotype population of dams that return available today
-        """
-        delta_avail_dams = GenoDistrib()
-
-        def cts(event):
-            nonlocal delta_avail_dams
-            delta_avail_dams += event.geno_distrib
-            self._busy_dams_cache = self._busy_dams_cache - event.geno_distrib
-
-        logger.debug(
-            f"\t\t\t\tIn free dams: self._busy_dams has {self._busy_dams.qsize()} events"
+        # Little's law
+        return self.geno_by_lifestage["L5f"].normalise_to(
+            round(self._busy_dam_waiting_time * self._busy_dam_arrival_rate)
         )
-        pop_from_queue(self._busy_dams, cur_time, cts)
 
-        return delta_avail_dams
-
-    def add_busy_dams_batch(self, delta_dams_batch: DamAvailabilityBatch):
-        dams_distrib = self.geno_by_lifestage["L5f"]
-        dams_to_add = delta_dams_batch.geno_distrib
-
-        # clip the distribution, just in case
-        for k in dams_to_add:
-            dams_to_add[k] = max(dams_to_add[k], 0)
-
-        if not (self.busy_dams + dams_to_add <= dams_distrib):
-            delta_dams_batch.geno_distrib = dams_distrib - self.busy_dams
-        self._busy_dams.put(delta_dams_batch)
-        self._busy_dams_cache = self._busy_dams_cache + delta_dams_batch.geno_distrib
+    def add_busy_dams_batch(self, num_dams: int):
+        # To "emulate" a queue we perform a very simple weighted mean over time
+        self._busy_dam_arrival_rate = (
+            (1 - 1 / self._busy_dam_waiting_time) * self._busy_dam_arrival_rate
+            + (1 / self._busy_dam_waiting_time) * num_dams
+        ) / 2
 
     def remove_negatives(self):
         for stage, distrib in self.geno_by_lifestage.items():
@@ -524,135 +517,9 @@ class LicePopulation(MutableMapping[LifeStage, int]):
             distrib_purged = GenoDistrib(dict(zip(keys, [max(v, 0) for v in values])))
             self.geno_by_lifestage[stage] = distrib_purged
 
-    def _flush_busy_dams_cache(self):
-        self._busy_dams_cache = cast(
-            GenoDistrib,
-            GenoDistrib.batch_sum([x.geno_distrib for x in self._busy_dams.queue]),
-        )
-
-    def __clear_empty_dams(self):
-        self._busy_dams.queue = [
-            x for x in self._busy_dams.queue if x.geno_distrib.gross > 0
-        ]
-        # re-ensure heaping condition is respected.
-        # TODO: no synchronisation is done here. Determine if this causes threading issues
-        heapify(self._busy_dams.queue)
-        self._flush_busy_dams_cache()
-
-    def __rescale_busy_dams(self, num: int):
-        # rescale the number of busy dams to the given number.
-        if num <= 0:
-            self.clear_busy_dams()
-
-        elif self._busy_dams.qsize() == 0 or self.busy_dams.gross == 0:
-            raise ValueError("Busy dam queue is empty")
-
-        else:
-            self.__clear_empty_dams()
-            partitions = np.array(
-                [event.geno_distrib.gross for event in self._busy_dams.queue]
-            )
-            total_busy = np.sum(partitions)
-            proportions = largest_remainder(num * partitions / total_busy)
-
-            # TODO: rounding this with iteround isn't easy so we need to make sure dams are clipped
-            for event, new_population in zip(self._busy_dams.queue, proportions):
-                event.geno_distrib.set(new_population)
-
-            self._clip_dams_to_stage()
-
-        assert self.busy_dams <= self.geno_by_lifestage["L5f"]
-
-    def _clip_dams_to_stage(self):
-        # make sure that self.busy_dams <= self.geno_by_lifestage["L5f"]
-        busy_sum = self.busy_dams
-        offset = busy_sum - self.geno_by_lifestage["L5f"]
-
-        # logger.debug(f"\t\t\t In _clip_dams_to_stage: L5f is {self.geno_by_lifestage['L5f']}")
-
-        for allele in offset:
-            off = offset[allele]
-            if off <= 0:
-                continue
-            for event in self._busy_dams.queue:
-                to_reduce = min(event.geno_distrib[allele], off)
-                offset[allele] -= to_reduce
-                off -= to_reduce
-                event.geno_distrib[allele] -= to_reduce
-
-        self._flush_busy_dams_cache()
-        assert self.busy_dams <= self.geno_by_lifestage["L5f"]
-
     @staticmethod
     def get_empty_geno_distrib() -> GenoLifeStageDistrib:
         return {stage: GenoDistrib() for stage in LicePopulation.lice_stages}
 
     def to_json_dict(self) -> GenoDistribSerialisable:
-        return self._cache
-
-
-class GenotypePopulation(MutableMapping[LifeStage, GenoDistrib]):
-    def __init__(
-        self, gross_lice_population: LicePopulation, geno_data: GenoLifeStageDistrib
-    ):
-        """
-        A GenotypePopulation is a mapping between the life stage and the actual
-        population rather than a gross projection.
-
-        :param gross_lice_population: the parent LicePopulation to update
-        :param geno_data: the initial geno population
-        """
-        self._store: Dict[LifeStage, GenoDistrib] = {}
-
-        self._lice_population = gross_lice_population
-        for k, v in geno_data.items():
-            self._store[k] = v.copy()
-
-    def __setitem__(self, stage: LifeStage, value: GenoDistrib):
-        # update the value and the gross population accordingly
-        value._truncate_negatives()
-        old_value = self[stage]
-        old_value_sum = self._lice_population[stage]
-        delta = value - old_value
-        self._store[stage] = value  # .copy()
-        value_sum = value.gross
-        self._lice_population.raw_update_value(stage, value_sum)
-
-        # if L5f increases all the new lice are by default free
-        # if it decreases we subtract the delta from each dam event
-        if stage == "L5f" and value_sum < old_value_sum:
-            # calculate the deltas and
-            busy_dams_denom = self._lice_population.busy_dams.gross
-            if busy_dams_denom == 0:
-                self._lice_population.clear_busy_dams()
-            else:
-                for event in self._lice_population._busy_dams.queue:
-                    geno_distrib = event.geno_distrib
-                    delta_geno = delta * (geno_distrib.gross / busy_dams_denom)
-                    geno_distrib += delta_geno
-
-        self._lice_population._clip_dams_to_stage()
-
-    def __getitem__(self, stage: LifeStage) -> GenoDistrib:
-        return self._store[stage]
-
-    def __delitem__(self, stage: LifeStage):
-        raise NotImplementedError()
-
-    def __iter__(self) -> Iterator[LifeStage]:
-        return iter(self._store)
-
-    def __len__(self) -> int:
-        return len(self._store)
-
-    def __repr__(self) -> str:
-        return repr(self._store)
-
-    def __str__(self) -> str:
-        return f"GenericGenoDistrib({str(self._store)})"
-
-    def to_json_dict(self) -> Dict[LifeStage, GenoDistribSerialisable]:
-        return {k: v.to_json_dict() for k, v in self.items()}
-
-    def as_dict(self) -> Dict[LifeStage, GenoDistrib]:
-        return self._store
+        return self.as_dict()

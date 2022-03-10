@@ -411,14 +411,12 @@ class TestCage:
             {("A",): 15, ("a",): 15, ("A", "a"): 15}
         )
         first_cage_population.clear_busy_dams()
-        first_cage_population.add_busy_dams_batch(
-            DamAvailabilityBatch(cur_day, GenoDistrib({("A", "a"): 15}))
-        )
+        first_cage_population.add_busy_dams_batch(15)
 
         target_eggs = {("A",): 0, ("a",): 698, ("A", "a"): 343}
         target_delta_dams = {("A",): 0, ("a",): 3, ("A", "a"): 0}
 
-        delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert delta_eggs == target_eggs
         assert delta_avail_dams == target_delta_dams
 
@@ -427,7 +425,7 @@ class TestCage:
 
         target_mutated_eggs = {("A",): 365, ("a",): 159, ("A", "a"): 517}
 
-        _, delta_mutated_eggs = first_cage.do_mating_events(cur_day)
+        _, delta_mutated_eggs = first_cage.do_mating_events()
         assert delta_mutated_eggs == target_mutated_eggs
 
     def test_do_mating_event_maternal(self, first_cage, first_cage_population, cur_day):
@@ -448,7 +446,7 @@ class TestCage:
         target_eggs = {("A",): 520, ("a",): 521, ("A", "a"): 0}
         target_delta_dams = {("A",): 0, ("a",): 3, ("A", "a"): 0}
 
-        delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert delta_eggs == target_eggs
         assert delta_avail_dams == target_delta_dams
 
@@ -457,7 +455,7 @@ class TestCage:
 
         target_mutated_eggs = {("A",): 520, ("a",): 521}
 
-        _, delta_mutated_eggs = first_cage.do_mating_events(cur_day)
+        _, delta_mutated_eggs = first_cage.do_mating_events()
         assert delta_mutated_eggs == target_mutated_eggs
 
     def test_no_available_sires_do_mating_events(self, first_cage, cur_day):
@@ -465,7 +463,7 @@ class TestCage:
             {("A",): 0, ("a",): 0, ("A", "a"): 0}
         )
 
-        delta_avail_dams, delta_eggs = first_cage.do_mating_events(cur_day)
+        delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert not bool(delta_avail_dams)
         assert not bool(delta_eggs)
 
@@ -607,7 +605,7 @@ class TestCage:
     def test_get_egg_batch(self, first_cage, first_cage_population, cur_day):
         first_cage_population["L5m"] *= 10
         first_cage_population["L5f"] *= 10
-        _, new_eggs = first_cage.do_mating_events(cur_day)
+        _, new_eggs = first_cage.do_mating_events()
         target_egg_distrib = GenoDistrib(
             {("A", "a"): 15677, ("A",): 6054, ("a",): 10388}
         )
@@ -1000,10 +998,8 @@ class TestCage:
         first_cage_population["L5m"] = first_cage_population["L5m"] * 100
         sample_treatment_mortality["L5f"] = sample_treatment_mortality["L5f"] * 10
 
-        dams, _ = first_cage.do_mating_events(cur_day)
-        first_cage_population.add_busy_dams_batch(
-            DamAvailabilityBatch(cur_day + dt.timedelta(days=1), dams)
-        )
+        dams, _ = first_cage.do_mating_events()
+        first_cage_population.add_busy_dams_batch(dams)
 
         background_mortality = first_cage.get_background_lice_mortality()
         fish_deaths_natural = 0
