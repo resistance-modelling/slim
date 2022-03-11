@@ -407,9 +407,7 @@ class TestCage:
         old_mutation_rate = first_cage.cfg.geno_mutation_rate
         first_cage.cfg.geno_mutation_rate = 0
 
-        first_cage.lice_population.geno_by_lifestage["L5f"] = GenoDistrib(
-            {("A",): 15, ("a",): 15, ("A", "a"): 15}
-        )
+        first_cage.lice_population.geno_by_lifestage["L5f"] = GenoDistrib()
         first_cage_population.clear_busy_dams()
         first_cage_population.add_busy_dams_batch(15)
 
@@ -434,12 +432,10 @@ class TestCage:
         first_cage.cfg.geno_mutation_rate = 0
         first_cage.genetic_mechanism = GeneticMechanism.MATERNAL
 
-        first_cage.lice_population.geno_by_lifestage["L5f"] = GenoDistrib(
-            {("A",): 15, ("a",): 15, ("A", "a"): 15}
-        )
+        first_cage.lice_population.geno_by_lifestage["L5f"] = GenoDistrib()
         first_cage_population.clear_busy_dams()
         first_cage_population.add_busy_dams_batch(
-            DamAvailabilityBatch(cur_day, GenoDistrib({("A", "a"): 15}))
+            DamAvailabilityBatch(cur_day, GenoDistrib())
         )
 
         # No Aa lice left among the free ones, therefore no matter what L5m contains there can be no Aa.
@@ -459,9 +455,7 @@ class TestCage:
         assert delta_mutated_eggs == target_mutated_eggs
 
     def test_no_available_sires_do_mating_events(self, first_cage, cur_day):
-        first_cage.lice_population.geno_by_lifestage["L5m"] = GenoDistrib(
-            {("A",): 0, ("a",): 0, ("A", "a"): 0}
-        )
+        first_cage.lice_population.geno_by_lifestage["L5m"] = GenoDistrib()
 
         delta_avail_dams, delta_eggs = first_cage.do_mating_events()
         assert not bool(delta_avail_dams)
@@ -469,23 +463,23 @@ class TestCage:
 
     def test_generate_eggs_discrete(self, first_cage):
         # A + A -> A
-        sires = GenoDistrib({("A",): 100})
-        dams = GenoDistrib({("A",): 100})
+        sires = GenoDistrib()
+        dams = GenoDistrib()
         num_eggs = 10000
 
         result = first_cage.generate_eggs_discrete_batch(sires, dams, num_eggs)
         assert result == {("A",): num_eggs, ("a",): 0, ("A", "a"): 0}
 
         # a + a -> a
-        sires = GenoDistrib({("a",): 100})
-        dams = GenoDistrib({("a",): 100})
+        sires = GenoDistrib()
+        dams = GenoDistrib()
 
         result = first_cage.generate_eggs_discrete_batch(sires, dams, num_eggs)
         assert result == {("a",): num_eggs, ("A",): 0, ("A", "a"): 0}
 
         # Aa + Aa -> a mix
-        sires = GenoDistrib({("A", "a"): 100})
-        dams = GenoDistrib({("A", "a"): 100})
+        sires = GenoDistrib()
+        dams = GenoDistrib()
 
         result = first_cage.generate_eggs_discrete_batch(sires, dams, num_eggs)
         assert result.gross == num_eggs
@@ -494,8 +488,8 @@ class TestCage:
         assert result == {("A",): 2504, ("a",): 2507, ("A", "a"): 4989}
 
         # Aa + A -> an even split between A and Aa
-        sires = GenoDistrib({("A",): 100})
-        dams = GenoDistrib({("A", "a"): 100})
+        sires = GenoDistrib()
+        dams = GenoDistrib()
 
         result = first_cage.generate_eggs_discrete_batch(sires, dams, num_eggs)
         assert result.gross == num_eggs
@@ -504,8 +498,8 @@ class TestCage:
         assert result == {("A",): 4978, ("a",): 0, ("A", "a"): 5022}
 
         # Aa + a -> an even split between a and Aa
-        sires = GenoDistrib({("a",): 100})
-        dams = GenoDistrib({("A", "a"): 100})
+        sires = GenoDistrib()
+        dams = GenoDistrib()
 
         result = first_cage.generate_eggs_discrete_batch(sires, dams, num_eggs)
         assert result.gross == num_eggs
@@ -522,7 +516,7 @@ class TestCage:
         )
 
     def test_generate_eggs_maternal(self, first_cage):
-        dams = GenoDistrib({("A",): 100, ("a",): 200})
+        dams = GenoDistrib()
         number_eggs = 10000
         eggs = first_cage.generate_eggs_maternal_batch(dams, number_eggs)
         assert eggs.gross == number_eggs
@@ -580,7 +574,7 @@ class TestCage:
         assert mutated_offspring == {("a",): 199, ("A", "a"): 301, ("A",): 100}
 
         # corner case
-        offspring_bordering = GenoDistrib({("a",): 1, ("A",): 500, ("A", "a"): 500})
+        offspring_bordering = GenoDistrib()
         for i in range(10):
             mutated_offspring = first_cage.mutate(offspring_bordering, mutations)
             assert mutated_offspring.gross == offspring_bordering.gross
@@ -606,9 +600,7 @@ class TestCage:
         first_cage_population["L5m"] *= 10
         first_cage_population["L5f"] *= 10
         _, new_eggs = first_cage.do_mating_events()
-        target_egg_distrib = GenoDistrib(
-            {("A", "a"): 15677, ("A",): 6054, ("a",): 10388}
-        )
+        target_egg_distrib = GenoDistrib()
 
         new_egg_batch = first_cage.get_egg_batch(cur_day, new_eggs)
         assert new_egg_batch == EggBatch(
@@ -662,13 +654,7 @@ class TestCage:
         assert first_cage.create_offspring(cur_day) == null_offspring_distrib
 
     def test_create_offspring_same_day(self, first_cage, cur_day):
-        egg_offspring = GenoDistrib(
-            {
-                ("A",): 10,
-                ("a",): 10,
-                ("A", "a"): 10,
-            }
-        )
+        egg_offspring = GenoDistrib()
 
         for i in range(3):
             first_cage.hatching_events.put(
@@ -684,12 +670,8 @@ class TestCage:
             first_cage.promote_population("L3", "L4", 100)
 
     def test_promote_population(self, first_cage):
-        first_cage.lice_population.geno_by_lifestage["L3"] = GenoDistrib(
-            {("A",): 1000, ("a",): 1000, ("A", "a"): 1000}
-        )
-        first_cage.lice_population.geno_by_lifestage["L4"] = GenoDistrib(
-            {("A",): 500, ("a",): 500, ("A", "a"): 500}
-        )
+        first_cage.lice_population.geno_by_lifestage["L3"] = GenoDistrib()
+        first_cage.lice_population.geno_by_lifestage["L4"] = GenoDistrib()
 
         old_L3 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L3"])
         old_L4 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L4"])
@@ -716,7 +698,7 @@ class TestCage:
         assert first_cage.lice_population.geno_by_lifestage["L3"] == old_L3
 
     def test_promote_population_offspring(self, first_cage):
-        offspring_distrib = GenoDistrib({("A",): 500, ("a",): 500, ("A", "a"): 500})
+        offspring_distrib = GenoDistrib()
         new_L2 = 10
         old_L1 = copy.deepcopy(first_cage.lice_population.geno_by_lifestage["L1"])
         first_cage.promote_population(offspring_distrib, "L1", new_L2)
@@ -739,13 +721,7 @@ class TestCage:
         )
         first_cage.arrival_events.put(unhatched_batch)
 
-        hatched_at_travel_dist = GenoDistrib(
-            {
-                ("A",): 10,
-                ("a",): 10,
-                ("A", "a"): 10,
-            }
-        )
+        hatched_at_travel_dist = GenoDistrib()
         hatch_date_hatched = cur_day - dt.timedelta(1)
         hatched_batch = TravellingEggBatch(
             cur_day, hatch_date_hatched, hatched_at_travel_dist
@@ -869,7 +845,7 @@ class TestCage:
         first_cage.lice_population = planctonic_only_population
 
         hatch_date = cur_date + dt.timedelta(1)
-        geno_hatch = GenoDistrib({("a",): 10, ("A", "a"): 0, ("A",): 0})
+        geno_hatch = GenoDistrib()
         first_cage.arrival_events.put(
             TravellingEggBatch(cur_date, hatch_date, geno_hatch)
         )
@@ -917,7 +893,7 @@ class TestCage:
         first_cage.lice_population = planctonic_only_population
 
         hatch_date = cur_date
-        geno_hatch = GenoDistrib({("a",): 10, ("A", "a"): 0, ("A",): 0})
+        geno_hatch = GenoDistrib()
         first_cage.hatching_events.put(EggBatch(hatch_date, geno_hatch))
         pressure = 10
 

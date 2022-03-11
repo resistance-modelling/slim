@@ -31,6 +31,7 @@ from slim.simulation.lice_population import (
     empty_geno_from_cfg,
     from_ratios_rng,
     from_ratios,
+    GenoRates,
 )
 from slim.types.queue import (
     DamAvailabilityBatch,
@@ -151,7 +152,7 @@ class Cage(LoggableMixin):
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
     def update(
-        self, cur_date: dt.datetime, pressure: int, ext_pressure_ratio: GenoDistribDict
+        self, cur_date: dt.datetime, pressure: int, ext_pressure_ratio: GenoRates
     ) -> Tuple[GenoDistrib, Optional[dt.datetime], float]:
         """Update the cage at the current time step.
 
@@ -196,7 +197,7 @@ class Cage(LoggableMixin):
 
         if cur_date < self.start_date or self.is_fallowing:
             # Values that are not used before the start date
-            treatment_mortality = self.lice_population.get_empty_geno_distrib()
+            treatment_mortality = self.lice_population.get_empty_geno_distrib(self.cfg)
             fish_deaths_natural, fish_deaths_from_lice = 0, 0
             num_infection_events = 0
             delta_avail_dams = 0
@@ -322,7 +323,7 @@ class Cage(LoggableMixin):
         :returns: a pair (distribution of dead lice, cost of treatment)
         """
 
-        dead_lice_dist = self.lice_population.get_empty_geno_distrib()
+        dead_lice_dist = self.lice_population.get_empty_geno_distrib(self.cfg)
 
         dead_mortality_distrib = self.get_lice_treatment_mortality_rate(cur_date)
 
@@ -922,9 +923,7 @@ class Cage(LoggableMixin):
         lice_as_list = self.cfg.multivariate_hypergeometric(
             np.fromiter(distrib_lice_available.values(), np.int64), num_lice
         )
-        selected_lice = GenoDistrib(
-            dict(zip(distrib_lice_available.keys(), lice_as_list))
-        )
+        selected_lice = GenoDistrib()
 
         return selected_lice
 
@@ -988,13 +987,11 @@ class Cage(LoggableMixin):
         :returns: a delta egg genomics
         """
 
-        delta_egg_offspring = GenoDistrib(
-            {geno: 0 for geno in self.cfg.initial_genetic_ratios}
-        )
+        delta_egg_offspring = empty_geno_from_cfg(self.cfg)
 
         def cts(hatching_event: EggBatch):
             nonlocal delta_egg_offspring
-            delta_egg_offspring += hatching_event.geno_distrib
+            delta_egg_offspring.iadd(hatching_event.geno_distrib)
 
         pop_from_queue(self.hatching_events, cur_time, cts)
         return delta_egg_offspring
@@ -1238,7 +1235,7 @@ class Cage(LoggableMixin):
         lice_population = self.lice_population
 
         dead_lice_dist = {}
-        for stage in lice_population:
+        for stage in LicePopulation.lice_stages:
             mortality_rate = lice_population[stage] * lice_mortality_rates[stage]
             mortality: int = round(
                 mortality_rate
@@ -1265,7 +1262,7 @@ class Cage(LoggableMixin):
         )
 
     def get_reservoir_lice(
-        self, pressure: int, external_pressure_ratios: GenoDistribDict
+        self, pressure: int, external_pressure_ratios: GenoRates
     ) -> Dict[LifeStage, GenoDistrib]:
         """Get distribution of lice coming from the reservoir
 

@@ -11,9 +11,16 @@ import json
 
 from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator, Union
 
+import numpy as np
+
 from .farm import Farm
 from slim.JSONEncoders import CustomFarmEncoder
-from .lice_population import GenoDistrib, empty_geno_from_cfg, geno_config_to_matrix
+from .lice_population import (
+    GenoDistrib,
+    empty_geno_from_cfg,
+    geno_config_to_matrix,
+    GenoRates,
+)
 from slim.types.queue import pop_from_queue, FarmResponse, SamplingResponse
 
 if TYPE_CHECKING:
@@ -71,21 +78,22 @@ class Organisation:
             size=(self.genetic_ratios.num_alleles, 3),
         )
 
-    def get_external_pressure(self) -> Tuple[int, GenoDistribDict]:
+    def get_external_pressure(self) -> Tuple[int, GenoRates]:
         """
         Get the external pressure. Callers of this function should then invoke
         some distribution to sample the obtained number of lice that respects the probabilities.
 
         For example:
 
+        >>> org = Organisation(...)
         >>> n, p = org.get_external_pressure()
-        >>> new_lice = GenoDistrib.from_ratios(n, p)
-
+        >>> new_lice = lice_population.from_ratios(p, n)
 
         :returns: a pair (number of new lice from reservoir, the ratios to sample from)
         """
-        number = (
-            self.offspring_queue.gross * self.cfg.reservoir_offspring_integration_ratio
+        number = int(
+            self.averaged_offspring.gross
+            * self.cfg.reservoir_offspring_integration_ratio
             + self.cfg.min_ext_pressure
         )
         ratios = self.external_pressure_ratios

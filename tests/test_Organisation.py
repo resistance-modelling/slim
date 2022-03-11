@@ -33,7 +33,7 @@ class TestOrganisation:
 
     def test_update_external_pressure(self, organisation):
         # we witness an increase of nonresistant offspring
-        new_offspring = GenoDistrib({("A",): 1, ("a",): 100, ("A", "a"): 1})
+        new_offspring = GenoDistrib()
         old_ratios = organisation.external_pressure_ratios.copy()
         organisation.update_genetic_ratios(new_offspring)
         new_ratios = organisation.external_pressure_ratios.copy()
@@ -43,7 +43,7 @@ class TestOrganisation:
         # assert max(new_ratios.values()) == new_ratios[('a',)]
 
     def test_update_external_pressure_constant(self, organisation):
-        new_offspring = GenoDistrib({("A",): 10, ("a",): 10, ("A", "a"): 10})
+        new_offspring = GenoDistrib()
         for i in range(30):
             organisation.update_genetic_ratios(new_offspring)
         new_ratios = organisation.external_pressure_ratios
@@ -65,7 +65,7 @@ class TestOrganisation:
         for i in range(900):
             deg = i / 30 * np.pi
             values = np.rint(100 * (1.0 + np.sin(deg + phases))).tolist()
-            offspring = GenoDistrib(dict(zip(GenoDistrib.alleles, values)))
+            offspring = GenoDistrib()
             organisation.offspring_queue.append(
                 [{cur_day + dt.timedelta(days=i): offspring}]
             )

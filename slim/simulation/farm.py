@@ -25,6 +25,9 @@ from slim.simulation.lice_population import (
     GrossLiceDistrib,
     GenoDistrib,
     GenoDistribDict,
+    GenoRates,
+    genorates_to_dict,
+    empty_geno_from_cfg,
 )
 from slim.types.queue import *
 from slim.types.policies import TREATMENT_NO
@@ -140,6 +143,7 @@ class Farm(LoggableMixin):
     def lice_genomics(self):
         """Return the overall lice population indexed by geno distribution and stage."""
 
+        # TODO: this is broken for now
         genomics = defaultdict(lambda: GenoDistrib())
         for cage in self.cages:
             for (
@@ -297,7 +301,7 @@ class Farm(LoggableMixin):
         self,
         cur_date: dt.datetime,
         ext_influx: int,
-        ext_pressure_ratios: GenoDistribDict,
+        ext_pressure_ratios: GenoRates,
     ) -> Tuple[GenoDistribByHatchDate, float]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites. Also distribute the offspring across cages.
@@ -321,7 +325,7 @@ class Farm(LoggableMixin):
         )
         self.log(
             "\tReservoir lice genetic ratios: %s",
-            new_reservoir_lice_ratios=ext_pressure_ratios,
+            new_reservoir_lice_ratios=genorates_to_dict(ext_pressure_ratios),
         )
 
         self._handle_events(cur_date)
@@ -337,7 +341,7 @@ class Farm(LoggableMixin):
 
         # collate egg batches by hatch time
         eggs_by_hatch_date: GenoDistribByHatchDate = {}
-        eggs_log = GenoDistrib()
+        eggs_log = empty_geno_from_cfg(self.cfg)
 
         for cage in self.cages:
 
@@ -353,7 +357,7 @@ class Farm(LoggableMixin):
                 else:
                     eggs_by_hatch_date[hatch_date] = egg_distrib
 
-                eggs_log += egg_distrib
+                eggs_log = eggs_log.add(egg_distrib)
 
             total_cost += cost
 

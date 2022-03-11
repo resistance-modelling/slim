@@ -90,24 +90,12 @@ def cur_day(first_cage):
 
 @pytest.fixture
 def null_offspring_distrib():
-    return GenoDistrib(
-        {
-            ("A",): 0,
-            ("a",): 0,
-            ("A", "a"): 0,
-        }
-    )
+    return GenoDistrib()
 
 
 @pytest.fixture
 def sample_offspring_distrib():
-    return GenoDistrib(
-        {
-            ("A",): 100,
-            ("a",): 200,
-            ("A", "a"): 300,
-        }
-    )
+    return GenoDistrib()
 
 
 @pytest.fixture
@@ -170,10 +158,7 @@ def sample_treatment_mortality(
 @pytest.fixture
 def planctonic_only_population(first_cage):
     lice_pop = {"L1": 100, "L2": 200, "L3": 0, "L4": 0, "L5f": 0, "L5m": 0}
-    geno = {
-        stage: GenoDistrib({("a",): 0, ("A", "a"): 0, ("A",): 0})
-        for stage in lice_pop.keys()
-    }
+    geno = {stage: GenoDistrib() for stage in lice_pop.keys()}
     geno["L1"][("a",)] = 100
     geno["L2"][("a",)] = 200
     return LicePopulation(geno, first_cage.cfg.initial_genetic_ratios)

@@ -34,11 +34,15 @@ __all__ = [
     "LicePopulation",
     "from_ratios",
     "from_ratios_rng",
+    "genorates_to_dict",
 ]
 
+import types
 import unicodedata
 from functools import lru_cache
-from typing import NamedTuple, List, TYPE_CHECKING
+from typing import NamedTuple, List, TYPE_CHECKING, Union
+
+from numba.core.extending import overload
 
 from slim import logger
 
@@ -49,7 +53,7 @@ from typing import Dict
 
 import numpy as np
 from numba import njit as _njit, float64, int64
-from numba.types import unicode_type
+from numba.core.types import unicode_type, Array
 from numba.experimental import jitclass
 
 from numba.typed.typeddict import Dict as NumbaDict
@@ -200,6 +204,21 @@ def geno_to_alleles(gene: Gene) -> List[Allele]:
     return [recessive, dominant + recessive, dominant]
 
 
+@njit
+def genorates_to_dict(store: GenoRates) -> GenoDistribSerialisable:
+    """
+    Get a JSON representation of the geno rates.
+    """
+    to_return = dict()
+    num_alleles = store.shape[0]
+
+    for gene in range(num_alleles):
+        for allele in range(3):
+            to_return[(geno_to_str(gene, allele))] = store[gene][allele]
+
+    return to_return
+
+
 # -------------- GenoDistrib class ---------------
 # If this code looks nasty, please remember the following:
 # 1. Numba's jitclass is very experimental
@@ -213,7 +232,6 @@ def geno_to_alleles(gene: Gene) -> List[Allele]:
 # the store is an k x 3 array representing populations.
 # To make the maths easier: the order is always a, A, Aa
 GenoDistribV2_spec = [
-    ("num_alleles", int64),
     ("_store", float64[:, :]),
     ("_gross", float64),
     ("_default_probs", float64[:, :]),
@@ -235,9 +253,7 @@ class GenoDistrib:
     Assuming all genes are i.i.d. we allocate O(k) space.
     """
 
-    def __init__(
-        self, num_alleles: int, default_probs: np.ndarray, _no_init: bool = False
-    ):
+    def __init__(self, default_probs: np.ndarray, _no_init: bool = False):
         """
         Creates an empty `GenoDistrib`. An "empty" genotype distribution is a distribution
         with zero lice but preallocated data structures, therefore both k and the
@@ -246,13 +262,12 @@ class GenoDistrib:
 
         :param num_alleles: the number of alleles to generate. Please keep this value below 5
         :param default_probs: if the number of lice for a bucket is 0, use this array as a "normalised" probability
-        :param _no_init: (ADVANCED) if provided do not fill the store matrix with 0.
+        :param _no_init: (ADVANCED) if provided do not initialise the store matrix with 0.
         """
-        self.num_alleles = num_alleles
         if _no_init:
-            self._store = np.empty((num_alleles, 3), dtype=np.float64)
+            self._store = np.empty_like(default_probs, dtype=np.float64)
         else:
-            self._store = np.zeros((num_alleles, 3), dtype=np.float64)
+            self._store = np.zeros_like(default_probs, dtype=np.float64)
         self._default_probs = default_probs
         self._gross = 0.0
 
@@ -310,8 +325,7 @@ class GenoDistrib:
         :returns: the new distribution
         """
 
-        # TODO: This is broken
-        new_geno = GenoDistrib(self.num_alleles, self._default_probs)
+        new_geno = GenoDistrib(self._default_probs, False)
         if population == 0.0:  # small optimisation shortcut
             return new_geno
         truncated_store = self._normalise_to(population)
@@ -331,19 +345,28 @@ class GenoDistrib:
     def gross(self):
         return self._gross
 
+    @property
+    def num_alleles(self):
+        return len(self._store)
+
     def copy(self):
         """Create a copy"""
-        new_geno = GenoDistrib(self.num_alleles, self._default_probs)
+        new_geno = GenoDistrib(self._default_probs, False)
         new_geno._store = self._store.copy()
         new_geno._gross = self.gross
         return new_geno
 
     def add(self, other: Self) -> Self:
-        """Overload add operation for GenoDistrib + GenoDistrib operations"""
-        res = GenoDistrib(self.num_alleles, self._default_probs)
+        """Add operation between GenoDistrib and GenoDistrib"""
+        res = GenoDistrib(self._default_probs, False)
         res._store = self._store + other._store
         res._gross = self.gross + other.gross
         return res
+
+    def iadd(self, other: Self):
+        """Inplace add operation between GenoDistrib and GenoDistrib"""
+        self._store += other._store
+        self._gross += other.gross
 
     def add_to_scalar(self, other: float):
         """Add to scalar."""
@@ -351,7 +374,7 @@ class GenoDistrib:
 
     def sub(self, other: Self) -> Self:
         """Overload sub operation"""
-        res = GenoDistrib(self.num_alleles, self._default_probs)
+        res = GenoDistrib(self._default_probs, False)
         res._store = self._store + other._store
         res._gross = self.gross - other.gross
         return res
@@ -362,7 +385,7 @@ class GenoDistrib:
         :param other: a similar distribution
         :returns: the new genotype distribution
         """
-        res = GenoDistrib(self.num_alleles, self._default_probs)
+        res = GenoDistrib(self._default_probs, False)
         res._store = self._store * other._store
         res._gross = self.gross * other.gross
         return res
@@ -380,7 +403,7 @@ class GenoDistrib:
         """
         truncate = math.trunc(other) == other
 
-        res = GenoDistrib(self.num_alleles, self._default_probs)
+        res = GenoDistrib(self._default_probs, False)
         res._store = self._store * other
         if truncate:
             res._store = self._normalise_to(res._gross * other)
@@ -409,13 +432,7 @@ class GenoDistrib:
         """
         Get a JSON representation of the different genotypes.
         """
-        to_return = {}
-
-        for gene in range(self.num_alleles):
-            for allele in range(3):
-                to_return[(geno_to_str(gene, allele))] = self._store[gene][allele]
-
-        return to_return
+        return genorates_to_dict(self._store)
 
     @staticmethod
     def batch_sum(batches: List[GenoDistrib]) -> GenoDistrib:
@@ -438,7 +455,7 @@ class GenoDistrib:
         num_alleles = batches[0].num_alleles
         default_distrib = batches[0]._default_probs
 
-        res = GenoDistrib(num_alleles, default_distrib)
+        res = GenoDistrib(default_distrib, False)
         res._store = x
 
         return res
@@ -466,19 +483,19 @@ def _dict_to_numba(x: GenoDistribDict):
     return p_numba
 
 
-@njit()
-def _from_ratios_rng(p_numba, n, rng):
-    probas = _geno_config_to_matrix(p_numba)
-    values = np.stack([rng.multinomial(n, proba) for proba in probas])
-    res = GenoDistrib(len(probas), probas)
-    res._store = values
-    res._gross = n
-    return res
+def _to_proba(_: Union[GenoDistribDict, GenoRates]) -> GenoRates:
+    return np.array()
 
 
-def from_ratios_rng(
-    n: int, p: GenoDistribDict, rng: np.random.Generator
-) -> GenoDistrib:
+@overload(_to_proba, nogil=True)
+def _jit_to_proba(p):
+    if isinstance(p, Array):
+        return lambda p: p
+    else:
+        return lambda p: _geno_config_to_matrix(p)
+
+
+def from_ratios_rng(n: int, pvals: GenoRates, rng: np.random.Generator) -> GenoDistrib:
     """
     Create a :class:`GenoDistrib` with a given number of lice and a probability distribution
     Note that this function uses a *statistical* approach to building such distribution.
@@ -490,21 +507,25 @@ def from_ratios_rng(
     :returns: the new GenoDistrib
     """
 
-    p_numba = _dict_to_numba(p)
-    return _from_ratios_rng(p_numba, n, rng)
+    values = np.stack([rng.multinomial(n, p) for p in pvals]).astype(np.float64)
+
+    res = GenoDistrib(pvals, False)
+    res._store = values
+    res._gross = n
+    return res
 
 
 @njit
-def _from_ratios(p_numba, n):
-    config_matrix = _geno_config_to_matrix(p_numba)
+def _from_ratios(p, n):
+    config_matrix = _to_proba(p)
     probas = config_matrix / np.sum(config_matrix, axis=1)
-    res = GenoDistrib(len(probas), probas)
+    res = GenoDistrib(probas, False)
     if n > -1:
         return res.normalise_to(n)
     return res
 
 
-def from_ratios(p: GenoDistribDict, n: int = -1) -> GenoDistrib:
+def from_ratios(p: Union[GenoDistribDict, GenoRates], n: int = -1) -> GenoDistrib:
     """
     Create a :class:`GenoDistrib` with a given number of lice and fixed ratios.
     Note that this function uses a *deterministic* approach based on the
@@ -515,9 +536,9 @@ def from_ratios(p: GenoDistribDict, n: int = -1) -> GenoDistrib:
     :param n: if not -1, set the distribution so that the gross value is equal to n
     :returns: the new GenoDistrib
     """
-
-    p_numba = _dict_to_numba(p)
-    return _from_ratios(p_numba, n)
+    if isinstance(p, dict):
+        p = _dict_to_numba(p)
+    return _from_ratios(p, n)
 
 
 def empty_geno_from_cfg(cfg: Config):
@@ -582,7 +603,7 @@ class LicePopulation:
                 logger.warning(
                     f"Trying to initialise population {stage} with null genotype distribution. Using default genotype information."
                 )
-            self.geno_by_lifestage[stage] = GenoDistrib(
+            self.geno_by_lifestage[stage] = from_ratios(
                 self.genetic_ratios
             ).normalise_to(value)
         else:
@@ -639,15 +660,12 @@ class LicePopulation:
         ) / 2
 
     def remove_negatives(self):
-        for stage, distrib in self.geno_by_lifestage.items():
-            keys = distrib.keys()
-            values = distrib.values()
-            distrib_purged = GenoDistrib(dict(zip(keys, [max(v, 0) for v in values])))
-            self.geno_by_lifestage[stage] = distrib_purged
+        for _, distrib in self.geno_by_lifestage.values():
+            distrib._truncate_negatives()
 
     @staticmethod
-    def get_empty_geno_distrib() -> GenoLifeStageDistrib:
-        return {stage: GenoDistrib() for stage in LicePopulation.lice_stages}
+    def get_empty_geno_distrib(cfg: Config) -> GenoLifeStageDistrib:
+        return {stage: empty_geno_from_cfg(cfg) for stage in LicePopulation.lice_stages}
 
     def to_json_dict(self) -> GenoDistribSerialisable:
         return self.as_dict()
