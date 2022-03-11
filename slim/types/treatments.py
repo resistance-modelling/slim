@@ -12,7 +12,7 @@ from slim.simulation.lice_population import (
     LicePopulation,
     GenoDistrib,
     GenoTreatmentValue,
-    Alleles,
+    Allele,
     GenoTreatmentDistrib,
     Gene,
 )
@@ -108,7 +108,7 @@ class TreatmentParams(ABC):
 
     @staticmethod
     @functools.lru_cache(maxsize=None)
-    def get_allele_heterozygous_trait(gene: Gene, alleles: Alleles):
+    def get_allele_heterozygous_trait(gene: Gene, alleles: Allele):
         """
         Get the allele heterozygous type
         """

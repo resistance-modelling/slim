@@ -28,6 +28,9 @@ from slim.simulation.lice_population import (
     largest_remainder,
     LifeStage,
     GenoDistribDict,
+    empty_geno_from_cfg,
+    from_ratios_rng,
+    from_ratios,
 )
 from slim.types.queue import (
     DamAvailabilityBatch,
@@ -88,16 +91,14 @@ class Cage(LoggableMixin):
 
         self.farm = farm
 
-        self.egg_genotypes = GenoDistrib()
+        self.egg_genotypes = empty_geno_from_cfg(self.cfg)
         # TODO/Question: what's the best way to deal with having multiple possible genetic schemes?
         # TODO/Question: I suppose some of this initial genotype information ought to come from the config file
         # TODO/Question: the genetic mechanism will be the same for all lice in a simulation, so should it live in the driver?
         self.genetic_mechanism = self.cfg.genetic_mechanism
 
         geno_by_lifestage = {
-            stage: GenoDistrib(1, self.cfg.initial_genetic_ratios).normalise_to(
-                lice_population[stage]
-            )
+            stage: from_ratios(self.cfg.initial_genetic_ratios, lice_population[stage])
             for stage in lice_population
         }
 
@@ -247,7 +248,7 @@ class Cage(LoggableMixin):
 
         logger.debug("\t\tfinal lice population= {}".format(self.lice_population))
 
-        egg_distrib = GenoDistrib()
+        egg_distrib = empty_geno_from_cfg(self.cfg)
         hatch_date: Optional[dt.datetime] = None
         if cur_date >= self.start_date and new_egg_batch:
             logger.debug("\t\tfinal fish population = {}".format(self.num_fish))
@@ -760,7 +761,7 @@ class Cage(LoggableMixin):
         :returns: a pair (mating_dams, new_eggs)
         """
 
-        delta_eggs = GenoDistrib()
+        delta_eggs = empty_geno_from_cfg(self.cfg)
         num_matings = self.get_num_matings()
 
         distrib_sire_available = self.lice_population.geno_by_lifestage["L5m"]
@@ -770,7 +771,7 @@ class Cage(LoggableMixin):
         mating_sires = self.select_lice(distrib_sire_available, num_matings)
 
         if distrib_sire_available.gross == 0 or distrib_dam_available.gross == 0:
-            return 0, GenoDistrib()
+            return 0, empty_geno_from_cfg(self.cfg)
 
         num_eggs = self.get_num_eggs(num_matings)
         if self.genetic_mechanism == GeneticMechanism.DISCRETE:
@@ -833,13 +834,13 @@ class Cage(LoggableMixin):
         N_Aa = denom - N_A - N_a
 
         if denom == 0:
-            return GenoDistrib()
+            return empty_geno_from_cfg(self.cfg)
 
         # We need to follow GenoDistrib's ordering now
         p = np.array([N_A, N_a, N_Aa]) / denom
         proba_dict = dict(zip(keys, p))
 
-        return GenoDistrib.from_ratios(number_eggs, proba_dict, self.cfg.rng)
+        return from_ratios_rng(number_eggs, proba_dict, self.cfg.rng)
 
     @staticmethod
     def generate_eggs_maternal_batch(
@@ -1006,7 +1007,7 @@ class Cage(LoggableMixin):
         :returns: Genotype distribution of eggs hatched in travel
         """
 
-        hatched_dist = GenoDistrib()
+        hatched_dist = empty_geno_from_cfg(self.cfg)
 
         # check queue for arrivals at current date
         def cts(batch: TravellingEggBatch):
@@ -1275,17 +1276,16 @@ class Cage(LoggableMixin):
         """
 
         if pressure == 0:
-            return {"L1": GenoDistrib(), "L2": GenoDistrib()}
+            return {
+                "L1": empty_geno_from_cfg(self.cfg),
+                "L2": empty_geno_from_cfg(self.cfg),
+            }
 
         new_L1_gross = self.cfg.rng.integers(low=0, high=pressure, size=1)[0]
         new_L2_gross = pressure - new_L1_gross
 
-        new_L1 = GenoDistrib.from_ratios(
-            new_L1_gross, external_pressure_ratios, self.cfg.rng
-        )
-        new_L2 = GenoDistrib.from_ratios(
-            new_L2_gross, external_pressure_ratios, self.cfg.rng
-        )
+        new_L1 = from_ratios_rng(new_L1_gross, external_pressure_ratios, self.cfg.rng)
+        new_L2 = from_ratios_rng(new_L2_gross, external_pressure_ratios, self.cfg.rng)
 
         new_lice_dist = {"L1": new_L1, "L2": new_L2}
         logger.debug(

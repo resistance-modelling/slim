@@ -1,3 +1,23 @@
+"""
+This module provides two important classes:
+
+* :class:`GenoDistrib`
+* :class:`LicePopulation`
+
+The first is a numba-optimised Dictionary-style container for
+gene frequency. Because of that, the API has been geared towards efficiency over
+"pythonicity".
+
+For convenience, use the following snippet to create
+empty distribution with a default per-allele distribution
+
+>>> cfg = Config(...)
+>>> empty_geno = empty_geno_from_cfg(cfg)
+>>> nonempty_geno = empty_geno.normalise_to(100)
+
+The second class is a wrapper to manage multiple :class:`GenoDistrib` arranged by
+life stage.
+"""
 from __future__ import annotations
 
 __all__ = [
@@ -12,22 +32,39 @@ __all__ = [
     "GrossLiceDistrib",
     "LifeStage",
     "LicePopulation",
+    "from_ratios",
+    "from_ratios_rng",
 ]
 
-from typing import NamedTuple, List
+import unicodedata
+from functools import lru_cache
+from typing import NamedTuple, List, TYPE_CHECKING
 
 from slim import logger
 
-from enum import IntEnum
+
+# from enum import IntEnum
 import math
 from typing import Dict
 
 import numpy as np
-from numba import njit, float64, int64
+from numba import njit as _njit, float64, int64
+from numba.types import unicode_type
 from numba.experimental import jitclass
 
-# Needed as numba's decorator breaks the type checker
-from typing_extensions import Self
+from numba.typed.typeddict import Dict as NumbaDict
+
+
+if TYPE_CHECKING:
+    from slim.simulation.config import Config
+
+    # Needed as numba's decorator breaks the type checker
+    from typing_extensions import Self
+
+# Cache by default
+def njit(*args, **kwargs):
+    return _njit(*args, **kwargs, cache=True)
+
 
 # ---------- TYPE DECLARATIONS --------------
 
@@ -60,6 +97,7 @@ GenoDistribSerialisable = Dict[Allele, float]
 GrossLiceDistrib = Dict[LifeStage, int]
 #: These are used when GenoDistrib is not available
 GenoDistribDict = Dict[Allele, float]
+GenoRates = float64[:, :]
 
 
 class GenoTreatmentValue(NamedTuple):
@@ -118,16 +156,6 @@ def geno_to_idx(key):
     return geno_idx, allele_variant
 
 
-# If this code looks nasty, please remember the following:
-# 1. Numba's jitclass is very experimental
-# 2. Forget about OOP, static methods (they do exist but are inaccessible inside a no-object
-#    pipeline), variable arguments, Union types (isinstance is broken) etc.
-# 3. Castings must always be explicit!
-# 4. Until https://github.com/numba/numba/pull/5877 gets merged, there is no overload support for jitclass (oddly
-#    enough, except for __getitem__ and __setitem__). Thus, the result is going to be very Java-esque. We could also
-#    install that PR but that'd be a pain for the CI...
-
-
 @njit
 def geno_to_str(gene_idx, allele_idx):
     gene_str = chr(ord("a") + gene_idx)
@@ -140,20 +168,47 @@ def geno_to_str(gene_idx, allele_idx):
 
 
 @njit
-def geno_config_to_matrix(geno_dict: GenoDistribDict) -> np.ndarray:
-    """
-    Convert a dictionary of genes into a matrix.
-
-    We recommend using :meth:`GenoDistrib.from_dict` as it will call this helper as well.
-    """
+def _geno_config_to_matrix(geno_dict: GenoDistribDict) -> np.ndarray:
     num_genes = len(geno_dict) // 3
-    print("Number of genes is:", num_genes)
     matrix = np.empty((num_genes, 3), dtype=np.float64)
     for k, v in geno_dict.items():
         gene, allele = geno_to_idx(k)
         matrix[gene, allele] = v
     return matrix
 
+
+def geno_config_to_matrix(geno_dict: GenoDistribDict) -> np.ndarray:
+    """
+    Convert a dictionary of genes into a matrix.
+
+    We recommend using :meth:`GenoDistrib.from_dict` as it will call this helper as well.
+    """
+    return _geno_config_to_matrix(_dict_to_numba(geno_dict))
+
+
+@lru_cache(maxsize=None)
+def geno_to_alleles(gene: Gene) -> List[Allele]:
+    """
+    Get the alleles that stem from a single gene.
+    Note that here "allele" is conflated to represent pairs of such alleles at the same
+    gene locus.
+    :param gene: the gene
+    :returns: the alleles
+    """
+    dominant = gene.upper()
+    recessive = gene.lower()
+    return [recessive, dominant + recessive, dominant]
+
+
+# -------------- GenoDistrib class ---------------
+# If this code looks nasty, please remember the following:
+# 1. Numba's jitclass is very experimental
+# 2. Forget about OOP, static methods (they do exist but are inaccessible inside a no-object
+#    pipeline), variable arguments, Union types (isinstance is broken) etc.
+# 3. Castings must always be explicit!
+# 4. Until https://github.com/numba/numba/pull/5877 gets merged, there is no overload support for jitclass (oddly
+#    enough, except for __getitem__ and __setitem__). Thus, the result is going to be very Java-esque. We could also
+#    install that PR but that'd be a pain for the CI...
 
 # the store is an k x 3 array representing populations.
 # To make the maths easier: the order is always a, A, Aa
@@ -173,8 +228,6 @@ class GenoDistrib:
     The interpretation is the following:
     a genotype is made of distinct genes, each of them appearing in at most 3 different modes:
     recessive (e.g. a), homozygous dominant (e.g. A), heterozygous dominant (e.g. Aa).
-    In theory all combinations can occur (e.g. ABbcDEe -> dom. A, het. dom. B, rec. c,
-    dom. D, het. dom. e) but we chose not to consider joint probabilities here to save.
 
     The value of this distribution at a specific allele is the number of lice that possess
     that trait. Note that a magnitude change in one allele will result in a change in others.
@@ -182,13 +235,24 @@ class GenoDistrib:
     Assuming all genes are i.i.d. we allocate O(k) space.
     """
 
-    def __init__(self, num_alleles: int, default_probs: np.ndarray):
+    def __init__(
+        self, num_alleles: int, default_probs: np.ndarray, _no_init: bool = False
+    ):
         """
+        Creates an empty `GenoDistrib`. An "empty" genotype distribution is a distribution
+        with zero lice but preallocated data structures, therefore both k and the
+        default ratios are required in advance.
+
+
         :param num_alleles: the number of alleles to generate. Please keep this value below 5
         :param default_probs: if the number of lice for a bucket is 0, use this array as a "normalised" probability
+        :param _no_init: (ADVANCED) if provided do not fill the store matrix with 0.
         """
         self.num_alleles = num_alleles
-        self._store = np.zeros((num_alleles, 3), dtype=np.float64)
+        if _no_init:
+            self._store = np.empty((num_alleles, 3), dtype=np.float64)
+        else:
+            self._store = np.zeros((num_alleles, 3), dtype=np.float64)
         self._default_probs = default_probs
         self._gross = 0.0
 
@@ -212,23 +276,27 @@ class GenoDistrib:
         self._store[geno_id][allele_variant] = value
         for i in range(self.num_alleles):
             if i != geno_id:
-                self._normalise_single_gene(i, self.gross)
+                self._store[i] = self._normalise_single_gene(i, self.gross)
 
-    def _normalise_single_gene(self, gene_idx: int, population: float):
+    def _normalise_single_gene(self, gene_idx: int, population: float) -> np.ndarray:
         gene_store = self._store[gene_idx]
         current_gene_gross = np.sum(gene_store)
         if current_gene_gross == 0.0:
-            normalised_store = self._default_probs * population
+            normalised_store = largest_remainder(
+                self._default_probs[gene_idx] * population
+            )
         else:
-            normalised_store = (gene_store / current_gene_gross) * population
-        self._store[gene_idx] = largest_remainder(normalised_store)
+            normalised_store = largest_remainder(
+                (gene_store / current_gene_gross) * population
+            )
+
+        return normalised_store
 
     def _normalise_to(self, population: float):
         new_store = np.empty_like(self._store)
         for idx in range(self.num_alleles):
-            line = self._store[idx]
-            store_normalised = largest_remainder(line / np.sum(line) * population)
-            new_store[idx] = store_normalised
+            normalised = self._normalise_single_gene(idx, population)
+            new_store[idx] = normalised
 
         return new_store
 
@@ -321,16 +389,19 @@ class GenoDistrib:
 
     def equals(self, other: Self):
         """Overloaded eq operator"""
-        # this is mainly useful for simple testing
         return self._store == other._store
 
+    def equals_dict(self, other: GenoDistribDict):
+        """Overloaded eq operator for dicts"""
+        return self.to_json_dict() == other
+
     def is_positive(self) -> bool:
-        """:returns True if all the bins are positive."""
+        """:returns: `True` if all the bins are positive."""
         return all(v >= 0 for v in self._store)
 
     def values(self):
         """
-        Get a copy of the store.
+        :returns: a reference of the store
         """
         return self._store
 
@@ -346,6 +417,32 @@ class GenoDistrib:
 
         return to_return
 
+    @staticmethod
+    def batch_sum(batches: List[GenoDistrib]) -> GenoDistrib:
+        """
+        Calculate the sum of multiple :class:`GenoDistrib` instances.
+        This function is a bit faster than manually invoking a folding operation
+        due to reduced overhead.
+
+        The caller must ensure the list of batches is non-empty and homogeneous.
+        The default rates used for the generation are the same of the first element.
+
+        :param batches: either a list of distribution or a list of dictionaries (useful for pandas)
+        :returns: a :class:`GenoDistrib`
+        """
+
+        x = np.zeros_like(batches[0]._store)
+        for batch in batches:
+            x += batch._store
+
+        num_alleles = batches[0].num_alleles
+        default_distrib = batches[0]._default_probs
+
+        res = GenoDistrib(num_alleles, default_distrib)
+        res._store = x
+
+        return res
+
     def _truncate_negatives(self):
         for idx in range(self.num_alleles):
             for allele in range(3):
@@ -355,14 +452,30 @@ class GenoDistrib:
                 self._gross += delta
 
         # Ensure consistency across all stages
-        for idx in range(self.num_alleles):
-            self._normalise_single_gene(idx, self._gross)
+        self._store = self.normalise_to(self._gross)
 
 
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
 
 
-@njit
+def _dict_to_numba(x: GenoDistribDict):
+    p_numba = NumbaDict.empty(unicode_type, float64)
+    for k, v in x.items():
+        p_numba[k] = v
+
+    return p_numba
+
+
+@njit()
+def _from_ratios_rng(p_numba, n, rng):
+    probas = _geno_config_to_matrix(p_numba)
+    values = np.stack([rng.multinomial(n, proba) for proba in probas])
+    res = GenoDistrib(len(probas), probas)
+    res._store = values
+    res._gross = n
+    return res
+
+
 def from_ratios_rng(
     n: int, p: GenoDistribDict, rng: np.random.Generator
 ) -> GenoDistrib:
@@ -377,15 +490,20 @@ def from_ratios_rng(
     :returns: the new GenoDistrib
     """
 
-    probas = geno_config_to_matrix(p)
-    values = np.stack([rng.multinomial(n, proba) for proba in probas])
-    res = GenoDistrib(len(probas), probas)
-    res._store = values
-    res._gross = n
-    return res
+    p_numba = _dict_to_numba(p)
+    return _from_ratios_rng(p_numba, n, rng)
 
 
 @njit
+def _from_ratios(p_numba, n):
+    config_matrix = _geno_config_to_matrix(p_numba)
+    probas = config_matrix / np.sum(config_matrix, axis=1)
+    res = GenoDistrib(len(probas), probas)
+    if n > -1:
+        return res.normalise_to(n)
+    return res
+
+
 def from_ratios(p: GenoDistribDict, n: int = -1) -> GenoDistrib:
     """
     Create a :class:`GenoDistrib` with a given number of lice and fixed ratios.
@@ -397,11 +515,21 @@ def from_ratios(p: GenoDistribDict, n: int = -1) -> GenoDistrib:
     :param n: if not -1, set the distribution so that the gross value is equal to n
     :returns: the new GenoDistrib
     """
-    probas = geno_config_to_matrix(p)
-    res = GenoDistrib(len(probas), probas)
-    if n > -1:
-        return res.normalise_to(n)
-    return res
+
+    p_numba = _dict_to_numba(p)
+    return _from_ratios(p_numba, n)
+
+
+def empty_geno_from_cfg(cfg: Config):
+    """
+    Generate an empty GenoDistrib with the correct default rates and number alleles.
+
+    :param cfg: the current configuration
+
+    :returns: an empty GenoDistrib
+    """
+
+    return from_ratios(cfg.initial_genetic_ratios)
 
 
 # See https://stackoverflow.com/a/7760938
