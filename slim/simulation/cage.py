@@ -1119,13 +1119,11 @@ class Cage(LoggableMixin):
         :param entering_lice: the number of lice in the _prev_stage=>cur_stage_ progression. If _prev_stage_ is a a string, _entering_lice_ must be an _int_
         """
         if isinstance(prev_stage, str):
-            if entering_lice is not None:
-                prev_stage_geno = self.lice_population.geno_by_lifestage[prev_stage]
-                entering_geno_distrib = prev_stage_geno.normalise_to(entering_lice)
-            else:
-                raise ValueError(
-                    "entering_lice must be an int when prev_stage is a str"
-                )
+            assert (
+                entering_lice is not None
+            ), "entering_lice must be an int when prev_stage is a str"
+            prev_stage_geno = self.lice_population.geno_by_lifestage[prev_stage]
+            entering_geno_distrib = prev_stage_geno.normalise_to(entering_lice)
         else:
             entering_geno_distrib = prev_stage
         cur_stage_geno = self.lice_population.geno_by_lifestage[cur_stage]
@@ -1135,7 +1133,6 @@ class Cage(LoggableMixin):
             leaving_geno_distrib
         )
 
-        # update gross population. This is a bit hairy but I cannot think of anything simpler.
         self.lice_population.geno_by_lifestage[cur_stage] = cur_stage_geno
 
     def update_deltas(

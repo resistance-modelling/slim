@@ -7,8 +7,8 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   slim.types.queue
    slim.types.policies
+   slim.types.queue
    slim.types.treatments
 
 Module contents

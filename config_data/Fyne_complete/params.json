@@ -9,7 +9,7 @@
     "genetic_ratios": {
         "A": 0.005,
         "a": 0.99,
-        "A,a": 0.005
+        "Aa": 0.005
     },
     "genetic_learning_rate": 0.001,
     "aggregation_rate_threshold": 2.0,

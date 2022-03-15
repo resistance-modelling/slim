@@ -40,8 +40,6 @@ __all__ = [
 from functools import lru_cache
 from typing import NamedTuple, List, TYPE_CHECKING, Union
 
-from numba.core.extending import overload
-
 from slim import logger
 
 
@@ -169,23 +167,20 @@ def geno_to_str(gene_idx, allele_idx):
         return gene_str.upper() + gene_str
 
 
-@njit
-def _geno_config_to_matrix(geno_dict: GenoDistribDict) -> np.ndarray:
-    num_genes = len(geno_dict) // 3
-    matrix = np.empty((num_genes, 3), dtype=np.float64)
-    for k, v in geno_dict.items():
-        gene, allele = geno_to_idx(k)
-        matrix[gene, allele] = v
-    return matrix
-
-
 def geno_config_to_matrix(geno_dict: GenoDistribDict) -> np.ndarray:
     """
     Convert a dictionary of genes into a matrix.
 
     We recommend using :meth:`GenoDistrib.from_dict` as it will call this helper as well.
     """
-    return _geno_config_to_matrix(_dict_to_numba(geno_dict))
+    num_genes = len(geno_dict) // 3
+    translation_dict = _alleles_to_geno_dict(num_genes)
+    matrix = np.empty((num_genes, 3), dtype=np.float64)
+    for k, v in translation_dict.items():
+        row = v // 3
+        col = v % 3
+        matrix[row, col] = geno_dict[k]
+    return matrix
 
 
 @lru_cache(maxsize=None)
@@ -203,6 +198,16 @@ def geno_to_alleles(gene: Union[Gene, int]) -> List[Allele]:
     dominant = gene[0].upper()
     recessive = gene[0].lower()
     return [recessive, dominant + recessive, dominant]
+
+
+@lru_cache(maxsize=None)
+def _alleles_to_geno_dict(num_genes):
+    geno_dict = {}
+    for i in range(num_genes):
+        keys = geno_to_alleles(i)
+        for j, k in enumerate(keys):
+            geno_dict[k] = i * 3 + j
+    return geno_dict
 
 
 @njit
@@ -419,7 +424,7 @@ class GenoDistrib:
         return res
 
     def equals(self, other: Self):
-        """Overloaded eq operator"""
+        """Overloalice_populationded eq operator"""
         return self._store == other._store
 
     def equals_dict(self, other: GenoDistribDict):
@@ -539,7 +544,7 @@ def from_ratios(p: Union[GenoDistribDict, GenoRates], n: int = -1) -> GenoDistri
     :returns: the new GenoDistrib
     """
     if isinstance(p, dict):
-        p = _geno_config_to_matrix(_dict_to_numba(p))
+        p = geno_config_to_matrix(p)
     return _from_ratios(p, n)
 
 
@@ -629,9 +634,6 @@ class LicePopulation:
 
     def __getitem__(self, stage: LifeStage) -> int:
         return int(self.geno_by_lifestage[stage].gross)
-
-    def __delitem__(self, stage: LifeStage):
-        raise NotImplementedError()
 
     def __len__(self) -> int:
         return len(self.geno_by_lifestage)

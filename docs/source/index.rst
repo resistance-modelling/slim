@@ -13,6 +13,7 @@ Welcome to SLIM's documentation!
    intro
    getting-started
    model
+   reinforcement-learning
    config
 
 .. toctree::
@@ -20,6 +21,7 @@ Welcome to SLIM's documentation!
    :caption: Development guide:
 
    contributing
+   optimisation
    testing
    modules
 
