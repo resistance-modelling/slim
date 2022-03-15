@@ -37,8 +37,6 @@ __all__ = [
     "genorates_to_dict",
 ]
 
-import types
-import unicodedata
 from functools import lru_cache
 from typing import NamedTuple, List, TYPE_CHECKING, Union
 
@@ -191,7 +189,7 @@ def geno_config_to_matrix(geno_dict: GenoDistribDict) -> np.ndarray:
 
 
 @lru_cache(maxsize=None)
-def geno_to_alleles(gene: Gene) -> List[Allele]:
+def geno_to_alleles(gene: Union[Gene, int]) -> List[Allele]:
     """
     Get the alleles that stem from a single gene.
     Note that here "allele" is conflated to represent pairs of such alleles at the same
@@ -199,8 +197,11 @@ def geno_to_alleles(gene: Gene) -> List[Allele]:
     :param gene: the gene
     :returns: the alleles
     """
-    dominant = gene.upper()
-    recessive = gene.lower()
+    if isinstance(gene, int):
+        gene = geno_to_str(gene, 0)
+
+    dominant = gene[0].upper()
+    recessive = gene[0].lower()
     return [recessive, dominant + recessive, dominant]
 
 
@@ -208,6 +209,9 @@ def geno_to_alleles(gene: Gene) -> List[Allele]:
 def genorates_to_dict(store: GenoRates) -> GenoDistribSerialisable:
     """
     Get a JSON representation of the geno rates.
+
+    :param store: an array of genotype rates as plain matrix
+    :returns: a JSON representation
     """
     to_return = dict()
     num_alleles = store.shape[0]
@@ -292,6 +296,10 @@ class GenoDistrib:
         for i in range(self.num_alleles):
             if i != geno_id:
                 self._store[i] = self._normalise_single_gene(i, self.gross)
+
+    def setcounts(self, counts: np.ndarray):
+        self._store = counts
+        self._gross = np.sum(self._store[0])
 
     def _normalise_single_gene(self, gene_idx: int, population: float) -> np.ndarray:
         gene_store = self._store[gene_idx]
@@ -420,7 +428,13 @@ class GenoDistrib:
 
     def is_positive(self) -> bool:
         """:returns: `True` if all the bins are positive."""
-        return all(v >= 0 for v in self._store)
+        return bool(np.all(self._store >= 0))
+
+    def keys(self):
+        """
+        :returns the list of keys
+        """
+        return [geno_to_str(i, j) for j in range(3) for i in range(self.num_alleles)]
 
     def values(self):
         """
@@ -469,7 +483,7 @@ class GenoDistrib:
                 self._gross += delta
 
         # Ensure consistency across all stages
-        self._store = self.normalise_to(self._gross)
+        self._store = self._normalise_to(self._gross)
 
 
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
@@ -481,18 +495,6 @@ def _dict_to_numba(x: GenoDistribDict):
         p_numba[k] = v
 
     return p_numba
-
-
-def _to_proba(_: Union[GenoDistribDict, GenoRates]) -> GenoRates:
-    return np.array()
-
-
-@overload(_to_proba, nogil=True)
-def _jit_to_proba(p):
-    if isinstance(p, Array):
-        return lambda p: p
-    else:
-        return lambda p: _geno_config_to_matrix(p)
 
 
 def from_ratios_rng(n: int, pvals: GenoRates, rng: np.random.Generator) -> GenoDistrib:
@@ -515,9 +517,9 @@ def from_ratios_rng(n: int, pvals: GenoRates, rng: np.random.Generator) -> GenoD
     return res
 
 
-@njit
+# @njit
 def _from_ratios(p, n):
-    config_matrix = _to_proba(p)
+    config_matrix = p
     probas = config_matrix / np.sum(config_matrix, axis=1)
     res = GenoDistrib(probas, False)
     if n > -1:
@@ -537,8 +539,15 @@ def from_ratios(p: Union[GenoDistribDict, GenoRates], n: int = -1) -> GenoDistri
     :returns: the new GenoDistrib
     """
     if isinstance(p, dict):
-        p = _dict_to_numba(p)
+        p = _geno_config_to_matrix(_dict_to_numba(p))
     return _from_ratios(p, n)
+
+
+def from_counts(counts: np.ndarray, cfg: Config):
+    default_probs = geno_config_to_matrix(cfg.initial_genetic_ratios)
+    geno = GenoDistrib(default_probs)
+    geno.setcounts(counts)
+    return geno
 
 
 def empty_geno_from_cfg(cfg: Config):
@@ -643,7 +652,7 @@ class LicePopulation:
 
     @property
     def available_dams(self) -> GenoDistrib:
-        return self.geno_by_lifestage["L5f"] - self.busy_dams
+        return self.geno_by_lifestage["L5f"].sub(self.busy_dams)
 
     @property
     def busy_dams(self) -> GenoDistrib:
@@ -660,7 +669,7 @@ class LicePopulation:
         ) / 2
 
     def remove_negatives(self):
-        for _, distrib in self.geno_by_lifestage.values():
+        for distrib in self.geno_by_lifestage.values():
             distrib._truncate_negatives()
 
     @staticmethod

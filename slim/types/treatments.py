@@ -15,6 +15,7 @@ from slim.simulation.lice_population import (
     Allele,
     GenoTreatmentDistrib,
     Gene,
+    geno_to_alleles,
 )
 
 
@@ -194,12 +195,10 @@ class EMB(ChemicalTreatment):
         return self.durability_temp_ratio / average_temperature
 
     def get_lice_treatment_mortality_rate(self, _temperature=None):
-        geno_treatment_distrib = {
-            geno: GenoTreatmentValue(0.0, self.susceptible_stages)
-            for geno in GenoDistrib.alleles
-        }
+        geno_treatment_distrib = {}
 
-        for geno in GenoDistrib.alleles_from_gene(self.gene):
+        for geno in geno_to_alleles(self.gene):
+            # TODO: we could optimise this
             trait = self.get_allele_heterozygous_trait(self.gene, geno)
             susceptibility_factor = 1.0 - self.pheno_resistance[trait]
             geno_treatment_distrib[geno] = GenoTreatmentValue(

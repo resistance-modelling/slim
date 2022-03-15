@@ -20,6 +20,7 @@ from .lice_population import (
     empty_geno_from_cfg,
     geno_config_to_matrix,
     GenoRates,
+    from_ratios,
 )
 from slim.types.queue import pop_from_queue, FarmResponse, SamplingResponse
 
@@ -51,7 +52,7 @@ class Organisation:
         self.name: str = cfg.name
         self.cfg = cfg
         self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
-        self.genetic_ratios = empty_geno_from_cfg(cfg)
+        self.genetic_ratios = geno_config_to_matrix(cfg.initial_genetic_ratios)
         self.external_pressure_ratios = geno_config_to_matrix(
             cfg.initial_genetic_ratios
         )
@@ -70,13 +71,16 @@ class Organisation:
         if offspring.gross > 0:
             self.genetic_ratios = (
                 self.genetic_ratios
-                + (offspring.mul_by_scalar(1 / offspring.gross))
+                + (offspring.mul_by_scalar(1 / offspring.gross).values())
                 * self.cfg.genetic_learning_rate
             )
-        self.external_pressure_ratios = self.cfg.rng.dirichlet(
-            self.genetic_ratios.values().flatten(),
-            size=(self.genetic_ratios.num_alleles, 3),
-        )
+
+        # TODO: vectorise this
+        alphas = np.empty_like(self.genetic_ratios)
+        for i in range(len(self.genetic_ratios)):
+            alphas[i] = self.cfg.rng.dirichlet(self.genetic_ratios[i])
+
+        self.external_pressure_ratios = alphas
 
     def get_external_pressure(self) -> Tuple[int, GenoRates]:
         """

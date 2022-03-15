@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 import datetime as dt
 import json
 import math
@@ -32,6 +32,8 @@ from slim.simulation.lice_population import (
     from_ratios_rng,
     from_ratios,
     GenoRates,
+    from_counts,
+    geno_to_alleles,
 )
 from slim.types.queue import (
     DamAvailabilityBatch,
@@ -255,7 +257,7 @@ class Cage(LoggableMixin):
             logger.debug("\t\tfinal fish population = {}".format(self.num_fish))
             egg_distrib = new_egg_batch.geno_distrib
             hatch_date = new_egg_batch.hatch_date
-            logger.debug("\t\tlice offspring = {}".format(sum(egg_distrib.values())))
+            logger.debug("\t\tlice offspring = {}".format(egg_distrib.gross))
 
         assert egg_distrib.is_positive()
         return egg_distrib, hatch_date, cost
@@ -292,7 +294,8 @@ class Cage(LoggableMixin):
         #    return geno_treatment_distrib
 
         # TODO: this is very fragile
-        geno_treatment_distribs = {geno: (0, []) for geno in GenoDistrib.alleles}
+        geno_treatment_distribs = defaultdict(lambda: GenoTreatmentValue(0, []))
+
         for treatment in self.effective_treatments:
             treatment_type = treatment.treatment_type
             ave_temp = self.get_temperature(cur_date)
@@ -306,6 +309,7 @@ class Cage(LoggableMixin):
             geno_treatment_distrib = self.cfg.get_treatment(
                 treatment_type
             ).get_lice_treatment_mortality_rate(ave_temp)
+            # assumption: all treatments act on different genes
             for k, v in geno_treatment_distrib.items():
                 geno_treatment_distribs[k] = v
 
@@ -825,21 +829,26 @@ class Cage(LoggableMixin):
 
         assert sire_distrib.gross == dam_distrib.gross
 
-        keys = [("A",), ("a",), ("A", "a")]
-        x1, y1, z1 = tuple(sire_distrib[k] for k in keys)
-        x2, y2, z2 = tuple(dam_distrib[k] for k in keys)
+        proba_dict = np.empty_like(sire_distrib.values(), dtype=np.float64)
 
-        N_A = (x1 + 1 / 2 * z1) * (x2 + 1 / 2 * z2)
-        N_a = (y1 + 1 / 2 * z1) * (y2 + 1 / 2 * z2)
-        denom = sire_distrib.gross * dam_distrib.gross
-        N_Aa = denom - N_A - N_a
+        for gene in range(sire_distrib.num_alleles):
+            rec, het_dom, dom = geno_to_alleles(gene)
+            keys = [dom, rec, het_dom]
+            x1, y1, z1 = tuple(sire_distrib[k] for k in keys)
+            x2, y2, z2 = tuple(dam_distrib[k] for k in keys)
 
-        if denom == 0:
-            return empty_geno_from_cfg(self.cfg)
+            N_A = (x1 + 1 / 2 * z1) * (x2 + 1 / 2 * z2)
+            N_a = (y1 + 1 / 2 * z1) * (y2 + 1 / 2 * z2)
+            denom = sire_distrib.gross * dam_distrib.gross
+            N_Aa = denom - N_A - N_a
 
-        # We need to follow GenoDistrib's ordering now
-        p = np.array([N_A, N_a, N_Aa]) / denom
-        proba_dict = dict(zip(keys, p))
+            if denom == 0:
+                return empty_geno_from_cfg(self.cfg)
+
+            # We need to follow GenoDistrib's ordering now
+
+            p = np.array([N_a, N_Aa, N_A]) / denom
+            proba_dict[gene] = p
 
         return from_ratios_rng(number_eggs, proba_dict, self.cfg.rng)
 
@@ -864,10 +873,13 @@ class Cage(LoggableMixin):
         :param eggs: the genotype distribution of the newly produced eggs
         :param mutation_rate: the rate of mutation with respect to the number of eggs.
         """
+        return eggs
+
+        # TODO
         if mutation_rate == 0:
             return eggs
 
-        mutations = self.cfg.rng.poisson(mutation_rate * sum(eggs.values()))
+        mutations = self.cfg.rng.poisson(mutation_rate * eggs.gross)
 
         # generate a "swap" matrix
         # rationale: since ('a',) actually represents a pair of genes ('a', 'a')
@@ -914,16 +926,23 @@ class Cage(LoggableMixin):
         :param num_lice: the wished number of dams to sample
         """
         # TODO: this function is flexible enough to be renamed and used elsewhere
-        if sum(distrib_lice_available.values()) <= num_lice:
+        if distrib_lice_available.gross <= num_lice:
             return distrib_lice_available.copy()
 
         # "we need to select k lice from the given population broken down into different allele
-        # bins and subtract" -> "select :math:`n` balls from the following :math`N_1, ..., N_k` bins without
+        # bins and subtract" -> "select n balls from the following N_1, ..., N_k bins without
         # replacement -> use a multivariate hypergeometric distribution
-        lice_as_list = self.cfg.multivariate_hypergeometric(
-            np.fromiter(distrib_lice_available.values(), np.int64), num_lice
-        )
-        selected_lice = GenoDistrib()
+
+        # TODO: Vectorise this
+
+        counts = distrib_lice_available.values()
+        lice_as_lists = np.empty_like(counts, np.int64)
+        for i in range(len(counts)):
+            count = counts[i]
+            lice_as_lists[i] = self.cfg.multivariate_hypergeometric(
+                count.astype(np.int64), num_lice
+            )
+        selected_lice = from_counts(lice_as_lists.astype(np.float64), self.cfg)
 
         return selected_lice
 
@@ -1112,7 +1131,9 @@ class Cage(LoggableMixin):
         cur_stage_geno = self.lice_population.geno_by_lifestage[cur_stage]
 
         leaving_geno_distrib = cur_stage_geno.normalise_to(leaving_lice)
-        cur_stage_geno = cur_stage_geno + entering_geno_distrib - leaving_geno_distrib
+        cur_stage_geno = cur_stage_geno.add(entering_geno_distrib).sub(
+            leaving_geno_distrib
+        )
 
         # update gross population. This is a bit hairy but I cannot think of anything simpler.
         self.lice_population.geno_by_lifestage[cur_stage] = cur_stage_geno
@@ -1159,16 +1180,17 @@ class Cage(LoggableMixin):
         for affected_stage, reduction in dead_lice_by_fish_death.items():
             dead_lice_dist[affected_stage] += reduction
 
-        for stage in self.lice_population:
+        for stage in LicePopulation.lice_stages:
             # update background mortality
             bg_delta = self.lice_population[stage] - dead_lice_dist[stage]
             self.lice_population[stage] = max(0, bg_delta)
 
             # update population due to treatment
             # TODO: __isub__ here is broken
-            self.lice_population.geno_by_lifestage[stage] = (
-                self.lice_population.geno_by_lifestage[stage]
-                - treatment_mortality[stage]
+            self.lice_population.geno_by_lifestage[
+                stage
+            ] = self.lice_population.geno_by_lifestage[stage].sub(
+                treatment_mortality[stage]
             )
 
         self.lice_population.remove_negatives()
@@ -1185,8 +1207,8 @@ class Cage(LoggableMixin):
         self.lice_population.remove_negatives()
 
         # in absence of wildlife genotype, simply upgrade accordingly
-        self.lice_population.geno_by_lifestage["L2"] += lice_from_reservoir["L2"]
-        self.lice_population.geno_by_lifestage["L1"] += lice_from_reservoir["L1"]
+        self.lice_population.geno_by_lifestage["L2"].iadd(lice_from_reservoir["L2"])
+        self.lice_population.geno_by_lifestage["L1"].iadd(lice_from_reservoir["L1"])
 
         if delta_dams_batch:
             self.lice_population.add_busy_dams_batch(delta_dams_batch)
@@ -1213,7 +1235,7 @@ class Cage(LoggableMixin):
         for hatch_date in arrivals_dict:
 
             # skip if there are no eggs in the dictionary
-            if sum(arrivals_dict[hatch_date].values()) == 0:
+            if arrivals_dict[hatch_date].gross == 0:
                 continue
 
             # create new travelling batch and update the queue
