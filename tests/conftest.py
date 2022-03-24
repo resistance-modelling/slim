@@ -10,11 +10,20 @@ import builtins
 
 builtins.__dict__["profile"] = lambda x: x
 
+# Disable numba's jitting for now
+import os
+
+os.environ["NUMBA_DISABLE_JIT"] = "2"
+
 from slim.simulation.config import Config
 from slim.simulation.organisation import Organisation
 from slim.simulation.simulator import get_env, SimulatorPZEnv
 from slim.types.queue import EggBatch
-from slim.simulation.lice_population import LicePopulation, GenoDistrib
+from slim.simulation.lice_population import (
+    LicePopulation,
+    GenoDistrib,
+    empty_geno_from_cfg, geno_config_to_matrix, from_ratios_rng,
+)
 
 
 @pytest.fixture
@@ -89,13 +98,14 @@ def cur_day(first_cage):
 
 
 @pytest.fixture
-def null_offspring_distrib():
-    return GenoDistrib()
+def null_offspring_distrib(farm_config):
+    return empty_geno_from_cfg(farm_config)
 
 
 @pytest.fixture
-def sample_offspring_distrib():
-    return GenoDistrib()
+def sample_offspring_distrib(null_offspring_distrib):
+    # just an alias
+    return null_offspring_distrib
 
 
 @pytest.fixture
@@ -119,8 +129,8 @@ def null_egg_batch(null_offspring_distrib, first_farm):
 
 
 @pytest.fixture
-def null_dams_batch(null_offspring_distrib, first_farm):
-    return DamAvailabilityBatch(first_farm.start_date, null_offspring_distrib)
+def null_dams_batch():
+    return 0
 
 
 @pytest.fixture
@@ -129,26 +139,44 @@ def sample_eggs_by_hatch_date(sample_offspring_distrib, first_farm):
 
 
 @pytest.fixture
-def null_treatment_mortality():
-    return LicePopulation.get_empty_geno_distrib()
+def empty_distrib(farm_config):
+    return empty_geno_from_cfg(farm_config)
+
+
+@pytest.fixture
+def empty_distrib_v2(farm_config):
+    farm_config.initial_genetic_ratios = {
+        "A": 0.25,
+        "a": 0.25,
+        "Aa": 0.5,
+        "B": 0.1,
+        "b": 0.8,
+        "Bb": 0.1,
+    }
+    return empty_geno_from_cfg(farm_config)
+
+
+@pytest.fixture
+def null_treatment_mortality(farm_config):
+    return LicePopulation.get_empty_geno_distrib(farm_config)
 
 
 @pytest.fixture
 def sample_treatment_mortality(
-    first_cage, first_cage_population, null_offspring_distrib
+    farm_config, first_cage, first_cage_population, null_offspring_distrib, empty_distrib
 ):
-    mortality = first_cage_population.get_empty_geno_distrib()
+    mortality = first_cage_population.get_empty_geno_distrib(farm_config)
 
     # create a custom rng to avoid breaking other tests
     rng = np.random.default_rng(0)
 
-    probs = dict(zip(GenoDistrib.alleles, [0.01, 0.9, 0.09]))
+    probs = np.array([[0.01, 0.9, 0.09]])
 
     # create n stages
     target_mortality = {"L1": 0, "L2": 0, "L3": 10, "L4": 10, "L5m": 5, "L5f": 5}
 
     for stage, target in target_mortality.items():
-        mortality[stage] = GenoDistrib.from_ratios(
+        mortality[stage] = from_ratios_rng(
             min(target, first_cage_population[stage]), probs, rng
         )
 
@@ -156,17 +184,17 @@ def sample_treatment_mortality(
 
 
 @pytest.fixture
-def planctonic_only_population(first_cage):
+def planctonic_only_population(farm_config, first_cage):
     lice_pop = {"L1": 100, "L2": 200, "L3": 0, "L4": 0, "L5f": 0, "L5m": 0}
-    geno = {stage: GenoDistrib() for stage in lice_pop.keys()}
+    geno = {stage: empty_geno_from_cfg(farm_config) for stage in lice_pop.keys()}
     geno["L1"][("a",)] = 100
     geno["L2"][("a",)] = 200
-    return LicePopulation(geno, first_cage.cfg.initial_genetic_ratios)
+    return LicePopulation(geno, first_cage.cfg.initial_genetic_ratios, 0.0)
 
 
 @pytest.fixture
 def initial_external_ratios(farm_config):
-    return farm_config.initial_genetic_ratios
+    return geno_config_to_matrix(farm_config.initial_genetic_ratios)
 
 
 @pytest.fixture

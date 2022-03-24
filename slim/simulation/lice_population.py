@@ -34,6 +34,7 @@ __all__ = [
     "LicePopulation",
     "from_ratios",
     "from_ratios_rng",
+    "from_dict",
     "genorates_to_dict",
 ]
 
@@ -97,7 +98,7 @@ GenoDistribSerialisable = Dict[Allele, float]
 GrossLiceDistrib = Dict[LifeStage, int]
 #: These are used when GenoDistrib is not available
 GenoDistribDict = Dict[Allele, float]
-GenoRates = float64[:, :]
+GenoRates = np.ndarray
 
 
 class GenoTreatmentValue(NamedTuple):
@@ -171,11 +172,11 @@ def geno_config_to_matrix(geno_dict: GenoDistribDict) -> np.ndarray:
     """
     Convert a dictionary of genes into a matrix.
 
-    We recommend using :meth:`GenoDistrib.from_dict` as it will call this helper as well.
+    We recommend using :func:`from_dict` as it will call this helper as well.
     """
     num_genes = len(geno_dict) // 3
     translation_dict = _alleles_to_geno_dict(num_genes)
-    matrix = np.empty((num_genes, 3), dtype=np.float64)
+    matrix = np.zeros((num_genes, 3), dtype=np.float64)
     for k, v in translation_dict.items():
         row = v // 3
         col = v % 3
@@ -197,7 +198,7 @@ def geno_to_alleles(gene: Union[Gene, int]) -> List[Allele]:
 
     dominant = gene[0].upper()
     recessive = gene[0].lower()
-    return [recessive, dominant + recessive, dominant]
+    return [recessive, dominant, dominant + recessive]
 
 
 @lru_cache(maxsize=None)
@@ -346,7 +347,7 @@ class GenoDistrib:
         new_geno._gross = population
         return new_geno
 
-    def set(self, population: int) -> Self:
+    def set(self, population: float) -> Self:
         """This is the inplace version of :meth:`normalise_to`.
 
         :param population: the new population
@@ -381,16 +382,47 @@ class GenoDistrib:
         self._store += other._store
         self._gross += other.gross
 
+    def iadd_scalar(self, other: float):
+        self.set(self.gross + other)
+
+    def __iadd__(self, other):
+        """Overloaded inplace add operator.
+        Note: available only when the JIT is disabled.
+        """
+
+        if isinstance(other, float):
+            self.iadd_scalar(other)
+        else:
+            self.iadd(other)
+
     def add_to_scalar(self, other: float):
         """Add to scalar."""
         return self.normalise_to(self.gross + other)
 
+    def __add__(self, other: Union[Self, float]):
+        """Overloaded add operator.
+
+        Note: available only when the JIT is disabled.
+        """
+
+        if isinstance(other, float):
+            return self.add_to_scalar(other)
+        return self.add(other)
+
     def sub(self, other: Self) -> Self:
         """Overload sub operation"""
         res = GenoDistrib(self._default_probs, False)
-        res._store = self._store + other._store
+        res._store = self._store - other._store
         res._gross = self.gross - other.gross
         return res
+
+    def __sub__(self, other):
+        """
+        Overloaded sub operator
+
+        Note: available only when the JIT is disabled.
+        """
+        return self.sub(other)
 
     def mul(self, other: Self) -> Self:
         """Multiply a distribution by another distribution.
@@ -418,18 +450,41 @@ class GenoDistrib:
 
         res = GenoDistrib(self._default_probs, False)
         res._store = self._store * other
+        res._gross = self._gross * other
         if truncate:
-            res._store = self._normalise_to(res._gross * other)
-        res._gross = np.sum(res._store)
+            res._store = self._normalise_to(res._gross)
         return res
 
+    def __mul__(self, other: Union[Self, float]):
+        """Overloaded mul operator.
+
+        Note: available only when the JIT is disabled.
+        """
+
+        if isinstance(other, float):
+            return self.mul_by_scalar(other)
+        return self.mul(other)
+
     def equals(self, other: Self):
-        """Overloalice_populationded eq operator"""
-        return self._store == other._store
+        """Overloaded eq operator"""
+        return np.all(self._store == other._store)
 
     def equals_dict(self, other: GenoDistribDict):
-        """Overloaded eq operator for dicts"""
+        """Overloaded eq operator for dicts.
+        Note: this is mainly meant for testing. Be sure to test without the JIT on,
+        otherwise you may have to manually allocate a numba dict.
+        """
         return self.to_json_dict() == other
+
+    def __eq__(self, other: Union[Self, GenoDistribDict]):
+        """Overloaded eq operator.
+
+        Note: this function is currently inaccessible as long as JIT is enabled.
+        Use this function for testing only.
+        """
+        if isinstance(other, dict):
+            return self.equals_dict(other)
+        return self.equals(other)
 
     def is_positive(self) -> bool:
         """:returns: `True` if all the bins are positive."""
@@ -453,6 +508,10 @@ class GenoDistrib:
         """
         return genorates_to_dict(self._store)
 
+    def __repr__(self):
+        """Note: only works when no JIT-ing occurs. Mainly intended for testing"""
+        return "GenoDistrib(" + repr(self.to_json_dict()) + ")"
+
     @staticmethod
     def batch_sum(batches: List[GenoDistrib]) -> GenoDistrib:
         """
@@ -468,14 +527,17 @@ class GenoDistrib:
         """
 
         x = np.zeros_like(batches[0]._store)
+        gross = 0.0
         for batch in batches:
             x += batch._store
+            gross += batch.gross
 
-        num_alleles = batches[0].num_alleles
+
         default_distrib = batches[0]._default_probs
 
         res = GenoDistrib(default_distrib, False)
         res._store = x
+        res._gross = gross
 
         return res
 
@@ -509,7 +571,7 @@ def from_ratios_rng(n: int, pvals: GenoRates, rng: np.random.Generator) -> GenoD
     If you prefer a faster but deterministic alternative consider :func:`from_ratios` .
 
     :param n: the number of lice
-    :param p: the probability of each genotype
+    :param pvals: the probability of each genotype
     :param rng: the random number generator to use for sampling.
     :returns: the new GenoDistrib
     """
@@ -525,7 +587,8 @@ def from_ratios_rng(n: int, pvals: GenoRates, rng: np.random.Generator) -> GenoD
 # @njit
 def _from_ratios(p, n):
     config_matrix = p
-    probas = config_matrix / np.sum(config_matrix, axis=1)
+    sums = np.sum(config_matrix, axis=1)[:, np.newaxis]
+    probas = config_matrix / sums
     res = GenoDistrib(probas, False)
     if n > -1:
         return res.normalise_to(n)
@@ -546,6 +609,19 @@ def from_ratios(p: Union[GenoDistribDict, GenoRates], n: int = -1) -> GenoDistri
     if isinstance(p, dict):
         p = geno_config_to_matrix(p)
     return _from_ratios(p, n)
+
+
+def from_dict(p: GenoDistribDict) -> GenoDistrib:
+    """
+    Generate a GenoDistrib from a dictionary.
+
+    The default rates will be assumed to be the same as the current population arranged by gene.
+
+    Useful for testing and quick prototyping.
+    """
+    keys = ["a", "A", "Aa"]
+    population = sum(p[k] for k in keys)
+    return from_ratios(p, population)
 
 
 def from_counts(counts: np.ndarray, cfg: Config):
@@ -571,6 +647,14 @@ def empty_geno_from_cfg(cfg: Config):
 class LicePopulation:
     """
     Wrapper to keep the global population and genotype information updated.
+
+    This class provides both a gross-based and a geno-based view of a lice population.
+    It also manages busy dam distributions when mating is involved.
+
+    The stages population can be accessed via either dictionary access (gross) or via
+    the ``geno_by_lifestage` attribute (detailed).
+    Additionally we provide two "virtual" stages ("L5f_busy" and "L5f_free") as read-only
+    convenience accessors in place of the verbose `busy_dams` and `available_dams` attributes.
     """
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
@@ -601,7 +685,7 @@ class LicePopulation:
         """
         :param geno_data: the default genetic ratios
         :param generic_ratios: a config to use
-        :param busy_dam_waiting_time: the average pregnancy period for dams
+        :param busy_dam_waiting_time: the average pregnancy period for dams (in days)
         """
         self.geno_by_lifestage = geno_data.copy()
         self.genetic_ratios = generic_ratios
@@ -633,7 +717,13 @@ class LicePopulation:
             )
 
     def __getitem__(self, stage: LifeStage) -> int:
-        return int(self.geno_by_lifestage[stage].gross)
+        if stage == "L5f_busy":
+            geno = self.busy_dams
+        elif stage == "L5f_free":
+            geno = self.available_dams
+        else:
+            geno = self.geno_by_lifestage[stage]
+        return int(geno.gross)
 
     def __len__(self) -> int:
         return len(self.geno_by_lifestage)
@@ -645,8 +735,16 @@ class LicePopulation:
         return f"LicePopulation(" + str(self.as_dict()) + ")"
 
     def as_dict(self) -> Dict[LifeStage, int]:
-        return {
+        to_return = {
             stage: distrib.gross for stage, distrib in self.geno_by_lifestage.items()
+        }
+
+        return to_return
+
+    def as_full_dict(self):
+        return {
+            stage: distrib.to_json_dict()
+            for stage, distrib in self.geno_by_lifestage.items()
         }
 
     def clear_busy_dams(self):
@@ -665,10 +763,10 @@ class LicePopulation:
 
     def add_busy_dams_batch(self, num_dams: int):
         # To "emulate" a queue we perform a very simple weighted mean over time
+        assert num_dams <= self["L5f"], "Busy dam overflow detected"
         self._busy_dam_arrival_rate = (
-            (1 - 1 / self._busy_dam_waiting_time) * self._busy_dam_arrival_rate
-            + (1 / self._busy_dam_waiting_time) * num_dams
-        ) / 2
+            1 - 1 / self._busy_dam_waiting_time
+        ) * self._busy_dam_arrival_rate + (1 / self._busy_dam_waiting_time) * num_dams
 
     def remove_negatives(self):
         for distrib in self.geno_by_lifestage.values():
@@ -680,3 +778,10 @@ class LicePopulation:
 
     def to_json_dict(self) -> GenoDistribSerialisable:
         return self.as_dict()
+
+    def __eq__(self, other):
+        """Note: only works when not JIT-ing"""
+        return self.to_json_dict() == other
+
+    def values(self):
+        return [int(geno.gross) for geno in self.geno_by_lifestage.values()]

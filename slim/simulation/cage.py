@@ -136,9 +136,7 @@ class Cage(LoggableMixin):
         # whenever possible,
         filtered_vars["egg_genotypes"] = self.egg_genotypes.to_json_dict()
         filtered_vars["lice_population"] = self.lice_population.to_json_dict()
-        filtered_vars[
-            "geno_by_lifestage"
-        ] = self.lice_population.geno_by_lifestage.to_json_dict()
+        filtered_vars["geno_by_lifestage"] = self.lice_population.as_full_dict()
         filtered_vars["genetic_mechanism"] = str(filtered_vars["genetic_mechanism"])[
             len("GeneticMechanism.") :
         ]
@@ -342,15 +340,20 @@ class Cage(LoggableMixin):
                     [
                         self.lice_population.geno_by_lifestage[stage][geno]
                         for stage in susc_stages
-                    ]
+                    ],
+                    dtype=np.int64,
                 )
                 num_susc = np.sum(population_by_stages)
                 num_dead_lice = round(mortality_rate * num_susc)
                 num_dead_lice = min(num_dead_lice, num_susc)
 
-                dead_lice_nums = self.cfg.multivariate_hypergeometric(
-                    population_by_stages, num_dead_lice
-                ).tolist()
+                dead_lice_nums = (
+                    self.cfg.multivariate_hypergeometric(
+                        population_by_stages, num_dead_lice
+                    )
+                    .astype(np.float64)
+                    .tolist()
+                )
                 for stage, dead_lice_num in zip(
                     LicePopulation.susceptible_stages, dead_lice_nums
                 ):
@@ -736,10 +739,10 @@ class Cage(LoggableMixin):
             return 0
 
         # VMR: variance-mean ratio; VMR = m/k + 1 -> k = m / (VMR - 1) with k being an "aggregation factor"
-        mean = (males + females) / self.get_mean_infected_fish("L5m", "L5f")
+        mean = (males + females) / self.get_mean_infected_fish("L5m", "L5f_free")
 
         n = self.num_fish
-        k = self.get_infecting_population("L5m", "L5f")
+        k = self.get_infecting_population("L5m", "L5f_free")
         variance = self.get_variance_infected_fish(n, k)
         vmr = variance / mean
         if vmr <= 1.0:
@@ -832,7 +835,7 @@ class Cage(LoggableMixin):
         proba_dict = np.empty_like(sire_distrib.values(), dtype=np.float64)
 
         for gene in range(sire_distrib.num_alleles):
-            rec, het_dom, dom = geno_to_alleles(gene)
+            rec, dom, het_dom = geno_to_alleles(gene)
             keys = [dom, rec, het_dom]
             x1, y1, z1 = tuple(sire_distrib[k] for k in keys)
             x2, y2, z2 = tuple(dam_distrib[k] for k in keys)
@@ -847,14 +850,13 @@ class Cage(LoggableMixin):
 
             # We need to follow GenoDistrib's ordering now
 
-            p = np.array([N_a, N_Aa, N_A]) / denom
+            p = np.array([N_a, N_A, N_Aa]) / denom
             proba_dict[gene] = p
 
         return from_ratios_rng(number_eggs, proba_dict, self.cfg.rng)
 
-    @staticmethod
     def generate_eggs_maternal_batch(
-        dams: GenoDistrib, number_eggs: int
+        self, dams: GenoDistrib, number_eggs: int
     ) -> GenoDistrib:
         """Get number of eggs based on maternal genetic mechanism.
 
@@ -864,6 +866,8 @@ class Cage(LoggableMixin):
         :param number_eggs: the number of eggs produced
         :return: genomics distribution of eggs produced
         """
+        if dams.gross == 0:
+            return empty_geno_from_cfg(self.cfg)
         return dams.normalise_to(number_eggs)
 
     def mutate(self, eggs: GenoDistrib, mutation_rate: float) -> GenoDistrib:

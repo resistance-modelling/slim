@@ -228,6 +228,6 @@ class Thermolicer(ThermalTreatment):
             geno: GenoTreatmentValue(efficacy, self.susceptible_stages)
             # TODO
             # for geno in GenoDistrib.alleles_from_gene(self.gene)
-            for geno in GenoDistrib.alleles
+            for geno in geno_to_alleles(0)
         }
         return geno_treatment_distrib
