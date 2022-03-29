@@ -4,7 +4,7 @@ import json
 import numpy as np
 import pytest
 
-from slim.simulation.lice_population import LicePopulation
+from slim.simulation.lice_population import LicePopulation, from_dict, geno_to_alleles
 from slim.simulation.cage import Cage
 from slim.simulation.config import to_dt
 from slim.types.treatments import Treatment
@@ -83,46 +83,53 @@ class TestFarm:
             first_farm.get_cage_pressures()
 
     @pytest.mark.parametrize(
-        "eggs_by_hatch_date,nbins",
+        "eggs_by_hatch_date",
         [
-            (
-                {
-                    to_dt("2017-02-01 00:00:00"): {
-                        ("A",): 100,
-                        ("a",): 200,
-                        ("A", "a"): 300,
-                    },
-                    to_dt("2017-02-10 00:00:00"): {
-                        ("A",): 100,
-                        ("a",): 200,
-                        ("A", "a"): 300,
-                    },
-                },
-                10,
-            ),
-            ({}, 10),
+            {
+                to_dt("2017-02-01 00:00:00"): from_dict(
+                    {
+                        "A": 100,
+                        "a": 200,
+                        "Aa": 300,
+                    }
+                ),
+                to_dt("2017-02-10 00:00:00"): from_dict(
+                    {
+                        "A": 100,
+                        "a": 200,
+                        "Aa": 300,
+                    }
+                ),
+            },
+            {},
         ],
     )
-    def test_get_cage_allocation(self, first_farm, eggs_by_hatch_date, nbins):
+    def test_get_cage_allocation(self, first_farm, eggs_by_hatch_date):
 
-        allocation = first_farm.get_cage_allocation(nbins, eggs_by_hatch_date)
+        allocation = first_farm.get_cage_allocation(6, eggs_by_hatch_date)
 
+        # Originally, this would extract the allocation for each gene
         allocation_list = [
-            n
+            np.sum(n)
             for bin_dict in allocation
             for hatch_dict in bin_dict.values()
             for n in hatch_dict.values()
         ]
-        sum_eggs_by_hatch_date = sum(
-            [
-                n
-                for hatch_dict in eggs_by_hatch_date.values()
-                for n in hatch_dict.values()
-            ]
-        )
+        if eggs_by_hatch_date == {}:
+            sum_eggs_by_hatch_date = 0
+        else:
+            sum_eggs_by_hatch_date = sum(
+                sum(
+                    [
+                        n
+                        for hatch_dict in eggs_by_hatch_date.values()
+                        for n in hatch_dict.values()
+                    ]
+                )
+            )
 
         assert sum(allocation_list) == sum_eggs_by_hatch_date
-        assert len(allocation) == 10
+        assert len(allocation) == len(first_farm.cages)
 
         for n in allocation_list:
             assert n >= 0
@@ -131,11 +138,6 @@ class TestFarm:
         hatch_keys = list(eggs_by_hatch_date.keys())
         for allocation_keys in allocation_keys_list:
             assert allocation_keys == hatch_keys
-
-    @pytest.mark.parametrize("nbins", [0, (-10)])
-    def test_get_cage_allocation_nonpositive_bins(self, first_farm, nbins):
-        with pytest.raises(Exception):
-            first_farm.get_cage_allocation(nbins, {})
 
     def test_get_farm_allocation(
         self, first_farm, second_farm, sample_offspring_distrib
@@ -152,7 +154,7 @@ class TestFarm:
             farm_eggs_by_date[first_farm.start_date].keys()
             == total_eggs_by_date[first_farm.start_date].keys()
         )
-        for geno in total_eggs_by_date[first_farm.start_date]:
+        for geno in geno_to_alleles("a"):
             assert (
                 farm_eggs_by_date[first_farm.start_date][geno]
                 <= total_eggs_by_date[first_farm.start_date][geno]
@@ -165,11 +167,13 @@ class TestFarm:
     def test_disperse_offspring(self, first_farm, second_farm):
         farms = [first_farm, second_farm]
         eggs_by_hatch_date = {
-            to_dt("2017-01-05 00:00:00"): {
-                ("A",): 100,
-                ("a",): 100,
-                ("A", "a"): 100,
-            }
+            to_dt("2017-01-05 00:00:00"): from_dict(
+                {
+                    "A": 100,
+                    "a": 100,
+                    "Aa": 100,
+                }
+            )
         }
         cur_date = to_dt("2017-01-01 00:00:00")
 
@@ -189,29 +193,37 @@ class TestFarm:
         next_day = cur_day + dt.timedelta(1)
 
         cage_1 = {
-            cur_day: {
-                ("A",): 10,
-                ("a",): 10,
-                ("A", "a"): 10,
-            },
-            next_day: {
-                ("A",): 10,
-                ("a",): 10,
-                ("A", "a"): 20,
-            },
+            cur_day: from_dict(
+                {
+                    "A": 10,
+                    "a": 10,
+                    "Aa": 10,
+                }
+            ),
+            next_day: from_dict(
+                {
+                    "A": 10,
+                    "a": 10,
+                    "Aa": 20,
+                }
+            ),
         }
 
         cage_2 = {
-            cur_day: {
-                ("A",): 5,
-                ("a",): 5,
-                ("A", "a"): 5,
-            },
-            next_day: {
-                ("A",): 5,
-                ("a",): 5,
-                ("A", "a"): 10,
-            },
+            cur_day: from_dict(
+                {
+                    "A": 5,
+                    "a": 5,
+                    "Aa": 5,
+                }
+            ),
+            next_day: from_dict(
+                {
+                    "A": 5,
+                    "a": 5,
+                    "Aa": 10,
+                }
+            ),
         }
 
         arrivals = [cage_1, cage_2]
@@ -267,7 +279,7 @@ class TestFarm:
         for hatch_date in eggs_by_hatch_date:
             assert hatch_date > test_farm.start_date
 
-            for geno in eggs_by_hatch_date[hatch_date]:
+            for geno in geno_to_alleles("a"):
                 assert eggs_by_hatch_date[hatch_date][geno] > 0
 
         # TODO: need to check that the second farm has a positive infrastructure cost

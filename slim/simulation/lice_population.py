@@ -39,7 +39,7 @@ __all__ = [
 ]
 
 from functools import lru_cache
-from typing import NamedTuple, List, TYPE_CHECKING, Union
+from typing import NamedTuple, List, TYPE_CHECKING, Union, Optional
 
 from slim import logger
 
@@ -58,9 +58,6 @@ from numba.typed.typeddict import Dict as NumbaDict
 
 if TYPE_CHECKING:
     from slim.simulation.config import Config
-
-    # Needed as numba's decorator breaks the type checker
-    from typing_extensions import Self
 
 # Cache by default
 def njit(*args, **kwargs):
@@ -299,7 +296,7 @@ class GenoDistrib:
         geno_id, allele_variant = geno_to_idx(key)
         self._gross = self.gross + (value - self._store[geno_id][allele_variant])
         self._store[geno_id][allele_variant] = value
-        for i in range(self.num_alleles):
+        for i in range(self.num_genes):
             if i != geno_id:
                 self._store[i] = self._normalise_single_gene(i, self.gross)
 
@@ -323,13 +320,13 @@ class GenoDistrib:
 
     def _normalise_to(self, population: float):
         new_store = np.empty_like(self._store)
-        for idx in range(self.num_alleles):
+        for idx in range(self.num_genes):
             normalised = self._normalise_single_gene(idx, population)
             new_store[idx] = normalised
 
         return new_store
 
-    def normalise_to(self, population: float) -> Self:
+    def normalise_to(self, population: float):
         """
         Transform the distribution so that the overall sum changes to the given number
         but the ratios are preserved.
@@ -347,7 +344,7 @@ class GenoDistrib:
         new_geno._gross = population
         return new_geno
 
-    def set(self, population: float) -> Self:
+    def set(self, population: float):
         """This is the inplace version of :meth:`normalise_to`.
 
         :param population: the new population
@@ -360,7 +357,7 @@ class GenoDistrib:
         return self._gross
 
     @property
-    def num_alleles(self):
+    def num_genes(self):
         return len(self._store)
 
     def copy(self):
@@ -370,14 +367,14 @@ class GenoDistrib:
         new_geno._gross = self.gross
         return new_geno
 
-    def add(self, other: Self) -> Self:
+    def add(self, other):
         """Add operation between GenoDistrib and GenoDistrib"""
         res = GenoDistrib(self._default_probs, False)
         res._store = self._store + other._store
         res._gross = self.gross + other.gross
         return res
 
-    def iadd(self, other: Self):
+    def iadd(self, other):
         """Inplace add operation between GenoDistrib and GenoDistrib"""
         self._store += other._store
         self._gross += other.gross
@@ -399,7 +396,7 @@ class GenoDistrib:
         """Add to scalar."""
         return self.normalise_to(self.gross + other)
 
-    def __add__(self, other: Union[Self, float]):
+    def __add__(self, other: Union[GenoDistrib, float]):
         """Overloaded add operator.
 
         Note: available only when the JIT is disabled.
@@ -409,7 +406,7 @@ class GenoDistrib:
             return self.add_to_scalar(other)
         return self.add(other)
 
-    def sub(self, other: Self) -> Self:
+    def sub(self, other: GenoDistrib) -> GenoDistrib:
         """Overload sub operation"""
         res = GenoDistrib(self._default_probs, False)
         res._store = self._store - other._store
@@ -424,7 +421,7 @@ class GenoDistrib:
         """
         return self.sub(other)
 
-    def mul(self, other: Self) -> Self:
+    def mul(self, other: GenoDistrib) -> GenoDistrib:
         """Multiply a distribution by another distribution.
 
         :param other: a similar distribution
@@ -435,7 +432,7 @@ class GenoDistrib:
         res._gross = self.gross * other.gross
         return res
 
-    def mul_by_scalar(self, other: float) -> Self:
+    def mul_by_scalar(self, other: float) -> GenoDistrib:
         """
         Multiply a distribution by a scalar.
 
@@ -455,7 +452,7 @@ class GenoDistrib:
             res._store = self._normalise_to(res._gross)
         return res
 
-    def __mul__(self, other: Union[Self, float]):
+    def __mul__(self, other: Union[GenoDistrib, float]):
         """Overloaded mul operator.
 
         Note: available only when the JIT is disabled.
@@ -465,7 +462,7 @@ class GenoDistrib:
             return self.mul_by_scalar(other)
         return self.mul(other)
 
-    def equals(self, other: Self):
+    def equals(self, other: GenoDistrib):
         """Overloaded eq operator"""
         return np.all(self._store == other._store)
 
@@ -476,7 +473,7 @@ class GenoDistrib:
         """
         return self.to_json_dict() == other
 
-    def __eq__(self, other: Union[Self, GenoDistribDict]):
+    def __eq__(self, other: Union[GenoDistrib, GenoDistribDict]):
         """Overloaded eq operator.
 
         Note: this function is currently inaccessible as long as JIT is enabled.
@@ -494,7 +491,7 @@ class GenoDistrib:
         """
         :returns the list of keys
         """
-        return [geno_to_str(i, j) for j in range(3) for i in range(self.num_alleles)]
+        return [geno_to_str(i, j) for j in range(3) for i in range(self.num_genes)]
 
     def values(self):
         """
@@ -532,7 +529,6 @@ class GenoDistrib:
             x += batch._store
             gross += batch.gross
 
-
         default_distrib = batches[0]._default_probs
 
         res = GenoDistrib(default_distrib, False)
@@ -542,7 +538,7 @@ class GenoDistrib:
         return res
 
     def _truncate_negatives(self):
-        for idx in range(self.num_alleles):
+        for idx in range(self.num_genes):
             for allele in range(3):
                 clamped = max(self._store[idx][allele], 0.0)
                 delta = self._store[idx][allele] - clamped
@@ -551,6 +547,51 @@ class GenoDistrib:
 
         # Ensure consistency across all stages
         self._store = self._normalise_to(self._gross)
+
+    def mutate(self):
+        pass
+
+    def mutate(self, mutations: int):
+        """
+        Mutate the genotype distribution in-place.
+
+        There are only three directions: R->ID, ID->D, ID->R, D->ID. Note that
+        R->D or D->R are impossible via a single mutation, and the probability
+        of a double mutation is low enough to be ignored. Self-mutations are ignored.
+
+        The function uses a best-effort algorithm to derive mutations.
+
+        :param mutations: the number of mutations to perform
+        """
+
+        # Thus, our objective is to sample in such a way that:
+        # Na' = Na + x - y
+        # NA' = NA + z - w
+        # NAa' = NAa + (y + w) - (x + z)
+        # Na', NA', NAa' >= 0
+        # 0 <= x, y, z
+        # x + y + z <= n
+
+        # The algorithm here is a probabilistic algorithm that attempts mutation in the general case,
+        # or removes selectively from one bin if the others are empty (e.g. when starting a simulation)
+
+        p = np.array([1 / 4, 1 / 4, 1 / 4, 1 / 4], dtype=np.float64)
+        for gene in range(self.num_genes):
+            gene_array = self._store[gene]
+            for i in range(10):
+                # Note: numba does not support random states
+                swaps = np.random.multinomial(mutations, p)
+                # Does destructuring work in numba?
+                x = swaps[0]
+                y = swaps[1]
+                z = swaps[2]
+                w = swaps[3]
+
+                new_array = gene_array + np.array(
+                    [x - y, z - w, y + w - x - z], dtype=np.float64
+                )
+                if np.all(new_array >= 0.0):
+                    self._store[gene] = new_array
 
 
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
@@ -620,7 +661,7 @@ def from_dict(p: GenoDistribDict) -> GenoDistrib:
     Useful for testing and quick prototyping.
     """
     keys = ["a", "A", "Aa"]
-    population = sum(p[k] for k in keys)
+    population = int(sum(p[k] for k in keys))
     return from_ratios(p, population)
 
 
@@ -715,6 +756,16 @@ class LicePopulation:
             self.geno_by_lifestage[stage] = self.geno_by_lifestage[stage].normalise_to(
                 value
             )
+
+            # When L5f lice die the arrival rate should drop
+            # TODO: should we replace the arrival rate with the inverted load?
+            if stage == "L5f":
+                self._busy_dam_arrival_rate = min(
+                    [
+                        self["L5f"] / self._busy_dam_waiting_time - 1,
+                        self._busy_dam_arrival_rate,
+                    ]
+                )
 
     def __getitem__(self, stage: LifeStage) -> int:
         if stage == "L5f_busy":

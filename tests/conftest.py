@@ -22,7 +22,10 @@ from slim.types.queue import EggBatch
 from slim.simulation.lice_population import (
     LicePopulation,
     GenoDistrib,
-    empty_geno_from_cfg, geno_config_to_matrix, from_ratios_rng,
+    empty_geno_from_cfg,
+    geno_config_to_matrix,
+    from_ratios_rng,
+    from_dict,
 )
 
 
@@ -105,7 +108,13 @@ def null_offspring_distrib(farm_config):
 @pytest.fixture
 def sample_offspring_distrib(null_offspring_distrib):
     # just an alias
-    return null_offspring_distrib
+    return from_dict(
+        {
+            "A": 100,
+            "a": 200,
+            "Aa": 300,
+        }
+    )
 
 
 @pytest.fixture
@@ -163,7 +172,11 @@ def null_treatment_mortality(farm_config):
 
 @pytest.fixture
 def sample_treatment_mortality(
-    farm_config, first_cage, first_cage_population, null_offspring_distrib, empty_distrib
+    farm_config,
+    first_cage,
+    first_cage_population,
+    null_offspring_distrib,
+    empty_distrib,
 ):
     mortality = first_cage_population.get_empty_geno_distrib(farm_config)
 

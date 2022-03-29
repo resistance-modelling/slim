@@ -149,7 +149,7 @@ class Farm(LoggableMixin):
             for (
                 stage,
                 value,
-            ) in cage.lice_population.geno_by_lifestage.as_dict().items():
+            ) in cage.lice_population.geno_by_lifestage.items():
                 genomics[stage] = genomics[stage] + value
 
         return {k: v.to_json_dict() for k, v in genomics.items()}
@@ -400,7 +400,7 @@ class Farm(LoggableMixin):
         :return: Updated dictionary of genotype distributions based on hatch date
         """
 
-        farm_allocation = eggs_by_hatch_date  # copy.deepcopy(eggs_by_hatch_date)
+        farm_allocation = eggs_by_hatch_date.copy()
 
         for hatch_date, geno_dict in farm_allocation.items():
             # get the interfarm travel probability between the two farms
@@ -423,8 +423,7 @@ class Farm(LoggableMixin):
         :return: List of dictionaries of genotype distributions based on hatch date per bin
         """
 
-        if ncages < 1:
-            raise Exception("Number of bins must be positive.")
+        assert ncages >= 1, "Number of bins must be positive."
 
         # dummy implementation - assumes equal probabilities
         # for both intercage and interfarm travel
@@ -502,8 +501,8 @@ class Farm(LoggableMixin):
             for cage in farm.cages:
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
-    @staticmethod
     def get_cage_arrivals_stats(
+        self,
         cage_arrivals: CageAllocation,
     ) -> Tuple[int, List[int], List[GenoDistrib]]:
         """Get stats about the cage arrivals for logging
@@ -515,7 +514,9 @@ class Farm(LoggableMixin):
 
         # Basically ignore the hatch dates and sum up the batches
         geno_by_cage = [
-            cast(GenoDistrib, GenoDistrib.batch_sum(list(hatch_dict.values())))
+            GenoDistrib.batch_sum(list(hatch_dict.values()))
+            if len(hatch_dict.values())
+            else empty_geno_from_cfg(self.cfg)
             for hatch_dict in cage_arrivals
         ]
         gross_by_cage = [geno.gross for geno in geno_by_cage]

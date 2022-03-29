@@ -3,7 +3,13 @@ import json
 
 import numpy as np
 
-from slim.simulation.lice_population import GenoDistrib
+from slim.simulation.lice_population import (
+    GenoDistrib,
+    geno_config_to_matrix,
+    empty_geno_from_cfg,
+    from_dict,
+    geno_to_alleles,
+)
 from slim.types.policies import NO_ACTION
 
 
@@ -25,51 +31,51 @@ class TestOrganisation:
 
     def test_get_external_pressure_day0(self, organisation, farm_config):
         number, ratios = organisation.get_external_pressure()
+        ratios_parsed = geno_config_to_matrix(farm_config.initial_genetic_ratios)
         assert number == farm_config.min_ext_pressure
-        assert ratios == organisation.external_pressure_ratios
-        assert (
-            organisation.external_pressure_ratios == farm_config.initial_genetic_ratios
-        )
+        assert np.all(ratios == organisation.external_pressure_ratios)
+        assert np.all(organisation.external_pressure_ratios == ratios_parsed)
 
     def test_update_external_pressure(self, organisation):
         # we witness an increase of nonresistant offspring
-        new_offspring = GenoDistrib()
+        new_offspring = from_dict({"A": 1, "a": 100, "Aa": 1})
         old_ratios = organisation.external_pressure_ratios.copy()
         organisation.update_genetic_ratios(new_offspring)
         new_ratios = organisation.external_pressure_ratios.copy()
-        assert old_ratios != new_ratios
-        assert np.isclose(sum(new_ratios.values()), 1.0)
+        assert np.any(old_ratios != new_ratios)
+        assert np.isclose(np.sum(new_ratios), 1.0)
         # changes are now less abrupt, this can't work :|
         # assert max(new_ratios.values()) == new_ratios[('a',)]
 
     def test_update_external_pressure_constant(self, organisation):
-        new_offspring = GenoDistrib()
+        new_offspring = from_dict({"A": 10, "a": 10, "Aa": 10})
         for i in range(30):
             organisation.update_genetic_ratios(new_offspring)
         new_ratios = organisation.external_pressure_ratios
 
         # roughly equal
-        assert np.isclose(sum(new_ratios.values()), 1.0)
-        assert all(new_ratio >= 0.29 for new_ratio in new_ratios.values())
+        assert np.isclose(np.sum(new_ratios), 1.0)
+        assert np.all(new_ratios >= 0.29)
 
         for i in range(300):
             organisation.update_genetic_ratios(new_offspring)
         new_ratios = organisation.external_pressure_ratios
 
         # roughly equal
-        assert np.isclose(sum(new_ratios.values()), 1.0)
-        assert all(new_ratio >= 0.3 for new_ratio in new_ratios.values())
+        assert np.isclose(np.sum(new_ratios), 1.0)
+        assert np.all(new_ratios >= 0.3)
 
     def test_update_external_pressure_periodic(self, cur_day, organisation):
         phases = np.array([0, np.pi / 3, 2 * np.pi / 3])
         for i in range(900):
             deg = i / 30 * np.pi
             values = np.rint(100 * (1.0 + np.sin(deg + phases))).tolist()
-            offspring = GenoDistrib()
-            organisation.offspring_queue.append(
+            alleles = geno_to_alleles("a")
+            offspring = from_dict(dict(zip(alleles, values)))
+            organisation.update_offspring_average(
                 [{cur_day + dt.timedelta(days=i): offspring}]
             )
-            organisation.update_genetic_ratios(organisation.offspring_queue.average)
+            organisation.update_genetic_ratios(organisation.averaged_offspring)
 
     """
     def test_intervene_when_needed(self, no_prescheduled_organisation, no_prescheduled_farm, no_prescheduled_cage, cur_day):

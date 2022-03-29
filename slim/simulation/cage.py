@@ -834,7 +834,7 @@ class Cage(LoggableMixin):
 
         proba_dict = np.empty_like(sire_distrib.values(), dtype=np.float64)
 
-        for gene in range(sire_distrib.num_alleles):
+        for gene in range(sire_distrib.num_genes):
             rec, dom, het_dom = geno_to_alleles(gene)
             keys = [dom, rec, het_dom]
             x1, y1, z1 = tuple(sire_distrib[k] for k in keys)
@@ -877,43 +877,14 @@ class Cage(LoggableMixin):
         :param eggs: the genotype distribution of the newly produced eggs
         :param mutation_rate: the rate of mutation with respect to the number of eggs.
         """
-        return eggs
 
-        # TODO
         if mutation_rate == 0:
             return eggs
 
+        new_eggs = eggs.copy()
         mutations = self.cfg.rng.poisson(mutation_rate * eggs.gross)
-
-        # generate a "swap" matrix
-        # rationale: since ('a',) actually represents a pair of genes ('a', 'a')
-        # there are only three directions: R->ID, ID->D, ID->R, D->ID. Note that
-        # R->D or D->R are impossible via a single mutation.
-        # Self-mutations are ignored.
-        # To model this, we create a "masking" swapping matrix and force to 0 masked entries
-        # and make sure they cannot be selected.
-
-        alleles = [("a",), ("A",), ("A", "a")]
-        n = len(alleles)
-        mask_matrix = np.array([[0, 0, 1], [0, 0, 1], [1, 1, 0]])
-
-        p = mask_matrix.flatten() / np.sum(mask_matrix)
-
-        # since I can't really be bothered to avoid negative mutations, we simply roll the dice every time until we get
-        # a favourable outcome, unless no mutation is possible
-
-        for i in range(10):
-            swap_matrix = self.cfg.rng.multinomial(mutations, p).reshape(n, n)
-            result = eggs.copy()
-            for idx, allele in enumerate(alleles):
-                to_add = np.sum(swap_matrix[idx, :]) - np.sum(swap_matrix[:, idx])
-                result[allele] += to_add
-                if result[allele] == 0:
-                    del result[allele]
-            if result.is_positive():
-                return result
-
-        return eggs  # no mutation could be found
+        new_eggs.mutate(mutations)
+        return new_eggs
 
     def select_lice(
         self, distrib_lice_available: GenoDistrib, num_lice: int
@@ -1063,13 +1034,12 @@ class Cage(LoggableMixin):
         # as potentially able to survive and find a new host.
         # Only a fixed proportion can survive.
 
-        if self.get_infecting_population() == 0 or self.num_infected_fish == 0:
+        infecting_lice = self.get_infecting_population()
+        infected = self.num_infected_fish
+        if infecting_lice * infected == 0:
             return {}
 
-        affected_lice_gross = round(
-            self.get_infecting_population() * num_dead_fish / self.num_infected_fish
-        )
-        infecting_lice = self.get_infecting_population()
+        affected_lice_gross = round(infecting_lice * num_dead_fish / infected)
 
         affected_lice_quotas = np.array(
             [

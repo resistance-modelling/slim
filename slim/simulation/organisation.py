@@ -153,9 +153,14 @@ class Organisation:
 
         to_add = []
         for farm_offspring in offspring_per_farm:
-            to_add.append(GenoDistrib.batch_sum(list(farm_offspring.values())))
+            if len(farm_offspring):
+                to_add.append(GenoDistrib.batch_sum(list(farm_offspring.values())))
 
-        new_batch = GenoDistrib.batch_sum(to_add)
+        if len(to_add):
+            new_batch = GenoDistrib.batch_sum(to_add)
+        else:
+            new_batch = empty_geno_from_cfg(self.cfg)
+
         self.averaged_offspring = self.averaged_offspring.mul_by_scalar(
             (t - 1) / t
         ).add(new_batch.mul_by_scalar(1 / t))

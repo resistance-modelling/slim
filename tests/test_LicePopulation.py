@@ -58,7 +58,7 @@ class TestGenoDistrib:
 
     def test_GenoDistrib_init(self, farm_config):
         x = empty_geno_from_cfg(farm_config)
-        assert x.num_alleles == 1
+        assert x.num_genes == 1
         assert np.all(x._default_probs == [0.25, 0.25, 0.5])
         assert x.gross == 0
         assert x == {"A": 0, "a": 0, "Aa": 0}
