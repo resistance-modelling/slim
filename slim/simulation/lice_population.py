@@ -238,14 +238,14 @@ def genorates_to_dict(store: GenoRates) -> GenoDistribSerialisable:
 
 # the store is an k x 3 array representing populations.
 # To make the maths easier: the order is always a, A, Aa
-GenoDistribV2_spec = [
+GenoDistrib_spec = [
     ("_store", float64[:, :]),
     ("_gross", float64),
     ("_default_probs", float64[:, :]),
 ]
 
 
-@jitclass(GenoDistribV2_spec)
+@jitclass(GenoDistrib_spec)
 class GenoDistrib:
     """
     An enriched Dictionary-style container of a statistical population of sea lice arranged by gene.
@@ -537,19 +537,9 @@ class GenoDistrib:
 
         return res
 
-    def _truncate_negatives(self):
-        for idx in range(self.num_genes):
-            for allele in range(3):
-                clamped = max(self._store[idx][allele], 0.0)
-                delta = self._store[idx][allele] - clamped
-                self._store[idx] = clamped
-                self._gross += delta
-
-        # Ensure consistency across all stages
-        self._store = self._normalise_to(self._gross)
-
-    def mutate(self):
-        pass
+    def truncate_negatives(self):
+        self._store = np.maximum(self._store, 0.0)
+        self._gross = np.sum(self._store[0])
 
     def mutate(self, mutations: int):
         """
@@ -592,6 +582,13 @@ class GenoDistrib:
                 )
                 if np.all(new_array >= 0.0):
                     self._store[gene] = new_array
+
+    def __hash__(self):  # pragma: no cover
+        # Numba relies on Python's MRO to determine which methods are implemented.
+        # In Python 3.8 for default methods such as __hash__ getmro() returns None, causing
+        # confusion in Numba.
+        # At least now one can use a GenoDistrib as a dictionary key.
+        return hash(self.to_json_dict())
 
 
 GenoLifeStageDistrib = Dict[LifeStage, GenoDistrib]
@@ -730,7 +727,7 @@ class LicePopulation:
         """
         self.geno_by_lifestage = geno_data.copy()
         self.genetic_ratios = generic_ratios
-        self._busy_dam_arrival_rate = 0.0
+        self._busy_dam_load_rate = 0.0
         self._busy_dam_waiting_time = busy_dam_waiting_time
 
     def __setitem__(self, stage: LifeStage, value: int):
@@ -758,14 +755,6 @@ class LicePopulation:
             )
 
             # When L5f lice die the arrival rate should drop
-            # TODO: should we replace the arrival rate with the inverted load?
-            if stage == "L5f":
-                self._busy_dam_arrival_rate = min(
-                    [
-                        self["L5f"] / self._busy_dam_waiting_time - 1,
-                        self._busy_dam_arrival_rate,
-                    ]
-                )
 
     def __getitem__(self, stage: LifeStage) -> int:
         if stage == "L5f_busy":
@@ -799,7 +788,7 @@ class LicePopulation:
         }
 
     def clear_busy_dams(self):
-        self._busy_dam_arrival_rate = 0.0
+        self._busy_dam_load_rate = 0.0
 
     @property
     def available_dams(self) -> GenoDistrib:
@@ -808,20 +797,32 @@ class LicePopulation:
     @property
     def busy_dams(self) -> GenoDistrib:
         # Little's law
-        return self.geno_by_lifestage["L5f"].normalise_to(
-            round(self._busy_dam_waiting_time * self._busy_dam_arrival_rate)
+        l5f = self.geno_by_lifestage["L5f"]
+        return l5f.normalise_to(
+            round(
+                np.clip(
+                    self._busy_dam_waiting_time * self._busy_dam_load_rate, 0.0, 1.0
+                )
+                * l5f.gross,
+            )
         )
 
     def add_busy_dams_batch(self, num_dams: int):
         # To "emulate" a queue we perform a very simple weighted mean over time
-        assert num_dams <= self["L5f"], "Busy dam overflow detected"
-        self._busy_dam_arrival_rate = (
-            1 - 1 / self._busy_dam_waiting_time
-        ) * self._busy_dam_arrival_rate + (1 / self._busy_dam_waiting_time) * num_dams
+        gross = self["L5f"]
+        assert num_dams <= gross, "Busy dam overflow detected"
+        load_rate = num_dams / gross
+
+        self._busy_dam_load_rate = np.clip(
+            (1 - 1 / self._busy_dam_waiting_time) * self._busy_dam_load_rate
+            + (1 / self._busy_dam_waiting_time) * load_rate,
+            0.0,
+            1.0,
+        )
 
     def remove_negatives(self):
         for distrib in self.geno_by_lifestage.values():
-            distrib._truncate_negatives()
+            distrib.truncate_negatives()
 
     @staticmethod
     def get_empty_geno_distrib(cfg: Config) -> GenoLifeStageDistrib:
@@ -836,3 +837,13 @@ class LicePopulation:
 
     def values(self):
         return [int(geno.gross) for geno in self.geno_by_lifestage.values()]
+
+    def is_positive(self):
+        return all(geno.is_positive() for geno in self.geno_by_lifestage.values())
+
+    def copy(self):
+        return LicePopulation(
+            self.geno_by_lifestage,
+            self.genetic_ratios.copy(),
+            self._busy_dam_waiting_time,
+        )

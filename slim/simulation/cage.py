@@ -230,6 +230,8 @@ class Cage(LoggableMixin):
             fish_deaths_natural,
         )
 
+        old_lice_pop = self.lice_population.copy()
+
         self.update_deltas(
             dead_lice_dist,
             treatment_mortality,
@@ -1175,11 +1177,11 @@ class Cage(LoggableMixin):
         self.promote_population(new_offspring_distrib, "L1", new_L2, None)
         self.promote_population(hatched_arrivals_dist, "L1", 0, None)
 
-        self.lice_population.remove_negatives()
-
         # in absence of wildlife genotype, simply upgrade accordingly
         self.lice_population.geno_by_lifestage["L2"].iadd(lice_from_reservoir["L2"])
         self.lice_population.geno_by_lifestage["L1"].iadd(lice_from_reservoir["L1"])
+
+        self.lice_population.remove_negatives()
 
         if delta_dams_batch:
             self.lice_population.add_busy_dams_batch(delta_dams_batch)

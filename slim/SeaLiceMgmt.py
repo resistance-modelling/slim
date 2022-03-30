@@ -12,7 +12,6 @@ from pathlib import Path
 if sys.gettrace() is None or sys.gettrace():
     os.environ["NUMBA_DISABLE_JIT"] = "1"
 
-
 from slim import logger, create_logger
 from slim.simulation.simulator import Simulator, reload
 from slim.simulation.config import Config, to_dt

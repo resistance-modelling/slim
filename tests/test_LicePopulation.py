@@ -64,6 +64,7 @@ class TestGenoDistrib:
         assert x == {"A": 0, "a": 0, "Aa": 0}
 
     def test_GenoDistrib_ops(self, empty_distrib, empty_distrib_v2):
+        # TODO: split these tests
         empty_distrib["a"] = 50.0
         empty_distrib["A"] = 50.0
         empty_distrib["Aa"] = 100.0
@@ -132,6 +133,11 @@ class TestGenoDistrib:
             "Bb": 4,
         }
 
+    def test_truncate(self):
+        distrib = from_dict({"Aa": -2000, "a": -10, "A": -2})
+        distrib.truncate_negatives()
+        assert distrib == {"A": 0, "a": 0, "Aa": 0}
+
     def test_from_dict(self):
         d = {"A": 1, "Aa": 2, "a": 3}
         assert from_dict(d) == d
@@ -184,7 +190,8 @@ class TestLicePopulation:
         first_cage_population.add_busy_dams_batch(3)
         assert first_cage_population.available_dams.gross < 5
         # Note: there's no concept of "freeing dams": the arrival rate should approach 3
-        assert 2.0 < first_cage_population._busy_dam_arrival_rate < 3.0
+        # meaning the loading rate approaches 3/10 = 0.3
+        assert 0.1 < first_cage_population._busy_dam_load_rate < 0.3
 
         first_cage_population.clear_busy_dams()
 
@@ -194,3 +201,10 @@ class TestLicePopulation:
             assert first_cage_population.available_dams.is_positive()
 
         assert 2 <= first_cage_population.available_dams.gross <= 4
+
+    def test_busy_dams_dying(self, first_cage_population):
+        for i in range(10):
+            first_cage_population.add_busy_dams_batch(4)
+
+        first_cage_population["L5f"] = 3
+        assert first_cage_population.busy_dams.is_positive()
