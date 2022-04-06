@@ -18,6 +18,7 @@ dependencies:
   - qtconsole=5.1.1
   - matplotlib=3.4.3
   - mypy_extensions=0.4.3
+  - typing-extensions=4.1.1
   - sphinx=4.2.0
   - scikit-learn=1.0.1
   - sphinx-tabs=3.2.0
@@ -28,6 +29,7 @@ dependencies:
   - sphinx-jsonschema=1.17.2
   - beautifulsoup4=4.10.0
   - wget=1.20.3
+  - numba=0.54.1
   - pip:
     - convertbng==0.6.36
     - pytype==2022.01.07

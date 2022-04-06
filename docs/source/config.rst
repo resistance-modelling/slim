@@ -13,6 +13,8 @@ The schema is used for both validation and parsing purposes.
 
 .. jsonschema:: ../../config_data/config.schema.json
 
+.. _Environment Config:
+
 Environment-specific configuration schema
 *****************************************
 

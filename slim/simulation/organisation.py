@@ -11,9 +11,17 @@ import json
 
 from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator, Union
 
+import numpy as np
+
 from .farm import Farm
 from slim.JSONEncoders import CustomFarmEncoder
-from .lice_population import GenoDistrib
+from .lice_population import (
+    GenoDistrib,
+    empty_geno_from_cfg,
+    geno_config_to_matrix,
+    GenoRates,
+    from_ratios,
+)
 from slim.types.queue import pop_from_queue, FarmResponse, SamplingResponse
 
 if TYPE_CHECKING:
@@ -44,11 +52,11 @@ class Organisation:
         self.name: str = cfg.name
         self.cfg = cfg
         self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
-        self.genetic_ratios = GenoDistrib(cfg.initial_genetic_ratios)
-        self.external_pressure_ratios = cfg.initial_genetic_ratios.copy()
-        self.offspring_queue = OffspringAveragingQueue(
-            self.cfg.reservoir_offspring_average
+        self.genetic_ratios = geno_config_to_matrix(cfg.initial_genetic_ratios)
+        self.external_pressure_ratios = geno_config_to_matrix(
+            cfg.initial_genetic_ratios
         )
+        self.averaged_offspring = empty_geno_from_cfg(cfg)
 
     def update_genetic_ratios(self, offspring: GenoDistrib):
         """
@@ -63,29 +71,32 @@ class Organisation:
         if offspring.gross > 0:
             self.genetic_ratios = (
                 self.genetic_ratios
-                + (offspring * (1 / offspring.gross)) * self.cfg.genetic_learning_rate
+                + (offspring.mul_by_scalar(1 / offspring.gross).values())
+                * self.cfg.genetic_learning_rate
             )
-        multinomial_probas = self.cfg.rng.dirichlet(
-            tuple(self.genetic_ratios.values())
-        ).tolist()
-        keys = self.genetic_ratios.keys()
-        self.external_pressure_ratios = dict(zip(keys, multinomial_probas))
 
-    def get_external_pressure(self) -> Tuple[int, GenoDistribDict]:
+        # TODO: vectorise this
+        alphas = np.empty_like(self.genetic_ratios)
+        for i in range(len(self.genetic_ratios)):
+            alphas[i] = self.cfg.rng.dirichlet(self.genetic_ratios[i])
+
+        self.external_pressure_ratios = alphas
+
+    def get_external_pressure(self) -> Tuple[int, GenoRates]:
         """
         Get the external pressure. Callers of this function should then invoke
         some distribution to sample the obtained number of lice that respects the probabilities.
 
         For example:
 
+        >>> org = Organisation(...)
         >>> n, p = org.get_external_pressure()
-        >>> new_lice = GenoDistrib.from_ratios(n, p)
-
+        >>> new_lice = lice_population.from_ratios(p, n)
 
         :returns: a pair (number of new lice from reservoir, the ratios to sample from)
         """
-        number = (
-            self.offspring_queue.offspring_sum.gross
+        number = int(
+            self.averaged_offspring.gross
             * self.cfg.reservoir_offspring_integration_ratio
             + self.cfg.min_ext_pressure
         )
@@ -121,7 +132,7 @@ class Organisation:
             # TODO: if we take current fish population into account then what happens to the infrastructure cost?
             payoffs.append(farm.get_profit(cur_date) - cost)
 
-        # once all of the offspring is collected
+        # once all the offspring is collected
         # it can be dispersed (interfarm and intercage movement)
         # note: this is done on organisation level because it requires access to
         # other farms - and will allow multiprocessing of the main update
@@ -130,11 +141,29 @@ class Organisation:
             self.farms[farm_ix].disperse_offspring(offspring, self.farms, cur_date)
 
         total_offspring = list(offspring_dict.values())
-        self.offspring_queue.append(total_offspring)
-
-        self.update_genetic_ratios(self.offspring_queue.average)
+        self.update_offspring_average(total_offspring)
+        self.update_genetic_ratios(self.averaged_offspring)
 
         return payoffs
+
+    def update_offspring_average(
+        self, offspring_per_farm: List[GenoDistribByHatchDate]
+    ):
+        t = self.cfg.reservoir_offspring_average
+
+        to_add = []
+        for farm_offspring in offspring_per_farm:
+            if len(farm_offspring):
+                to_add.append(GenoDistrib.batch_sum(list(farm_offspring.values())))
+
+        if len(to_add):
+            new_batch = GenoDistrib.batch_sum(to_add)
+        else:
+            new_batch = empty_geno_from_cfg(self.cfg)
+
+        self.averaged_offspring = self.averaged_offspring.mul_by_scalar(
+            (t - 1) / t
+        ).add(new_batch.mul_by_scalar(1 / t))
 
     def to_json(self, **kwargs):
         json_dict = kwargs.copy()
@@ -171,42 +200,3 @@ class Organisation:
                     other_farm.ask_for_treatment()
 
         pop_from_queue(farm.farm_to_org, cur_date, cts)
-
-
-class OffspringAveragingQueue:
-    """Helper class to compute a rolling average"""
-
-    def __init__(self, rolling_average: int):
-        """
-        :param rolling_average: the maximum length to consider
-        """
-        self._queue = Deque[GenoDistrib](  # pytype: disable=not-callable
-            maxlen=rolling_average
-        )
-        self.offspring_sum = GenoDistrib()
-
-    def __len__(self):
-        return len(self._queue)
-
-    @property
-    def rolling_average_factor(self):
-        return self._queue.maxlen
-
-    def append(self, offspring_per_farm: List[GenoDistribByHatchDate]):
-        """Add an element to our rolling average. This will automatically pop elements on the left."""
-        to_add = GenoDistrib()
-        for farm_offspring in offspring_per_farm:
-            to_add = to_add + GenoDistrib.batch_sum(list(farm_offspring.values()))
-        if len(self) == self.rolling_average_factor:
-            self.popleft()
-        self._queue.append(to_add)
-        self.offspring_sum += to_add
-
-    def popleft(self) -> GenoDistrib:
-        element = self._queue.popleft()
-        self.offspring_sum = self.offspring_sum - element
-        return element
-
-    @property
-    def average(self):
-        return self.offspring_sum * (1 / self.rolling_average_factor)

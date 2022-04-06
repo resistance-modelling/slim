@@ -1,8 +1,10 @@
 [![codecov](https://codecov.io/gh/resistance-modelling/slim/branch/master/graph/badge.svg?token=ykA9vESc7B)](https://codecov.io/gh/resistance-modelling/slim)
+[![Documentation Status](https://readthedocs.org/projects/slim/badge/?version=latest)](https://slim.readthedocs.io/en/latest/?badge=latest)
 
 <p align="center">
 <img src="https://github.com/resistance-modelling/slim/raw/master/res/logo_transparent.png" width="60%"/>
 </p>
+
 
 # SLIM: Sea Lice Modelling
 

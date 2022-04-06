@@ -25,6 +25,9 @@ from slim.simulation.lice_population import (
     GrossLiceDistrib,
     GenoDistrib,
     GenoDistribDict,
+    GenoRates,
+    genorates_to_dict,
+    empty_geno_from_cfg,
 )
 from slim.types.queue import *
 from slim.types.policies import TREATMENT_NO
@@ -140,13 +143,14 @@ class Farm(LoggableMixin):
     def lice_genomics(self):
         """Return the overall lice population indexed by geno distribution and stage."""
 
-        genomics = defaultdict(lambda: GenoDistrib())
+        # TODO: this is broken for now
+        genomics = defaultdict(lambda: empty_geno_from_cfg(self.cfg))
         for cage in self.cages:
             for (
                 stage,
                 value,
-            ) in cage.lice_population.geno_by_lifestage.as_dict().items():
-                genomics[stage] = genomics[stage] + value
+            ) in cage.lice_population.geno_by_lifestage.items():
+                genomics[stage] = genomics[stage].add(value)
 
         return {k: v.to_json_dict() for k, v in genomics.items()}
 
@@ -297,7 +301,7 @@ class Farm(LoggableMixin):
         self,
         cur_date: dt.datetime,
         ext_influx: int,
-        ext_pressure_ratios: GenoDistribDict,
+        ext_pressure_ratios: GenoRates,
     ) -> Tuple[GenoDistribByHatchDate, float]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites. Also distribute the offspring across cages.
@@ -321,7 +325,7 @@ class Farm(LoggableMixin):
         )
         self.log(
             "\tReservoir lice genetic ratios: %s",
-            new_reservoir_lice_ratios=ext_pressure_ratios,
+            new_reservoir_lice_ratios=genorates_to_dict(ext_pressure_ratios),
         )
 
         self._handle_events(cur_date)
@@ -337,7 +341,7 @@ class Farm(LoggableMixin):
 
         # collate egg batches by hatch time
         eggs_by_hatch_date: GenoDistribByHatchDate = {}
-        eggs_log = GenoDistrib()
+        eggs_log = empty_geno_from_cfg(self.cfg)
 
         for cage in self.cages:
 
@@ -349,11 +353,11 @@ class Farm(LoggableMixin):
             if hatch_date:
                 # update the total offspring info
                 if hatch_date in eggs_by_hatch_date:
-                    eggs_by_hatch_date[hatch_date] += egg_distrib
+                    eggs_by_hatch_date[hatch_date].iadd(egg_distrib)
                 else:
                     eggs_by_hatch_date[hatch_date] = egg_distrib
 
-                eggs_log += egg_distrib
+                eggs_log = eggs_log.add(egg_distrib)
 
             total_cost += cost
 
@@ -388,30 +392,23 @@ class Farm(LoggableMixin):
 
         The probability accounts for interfarm water movement (currents) as well as lice egg survival.
 
+        Note: for efficiency reasons this class *modifies* eggs_by_hatch_date in-place.
+
         :param target_farm: Farm the eggs are travelling to
         :param eggs_by_hatch_date: Dictionary of genotype distributions based on hatch date
 
         :return: Updated dictionary of genotype distributions based on hatch date
         """
 
-        # base the new survived arrival dictionary on the offspring one
-        farm_allocation = copy.deepcopy(eggs_by_hatch_date)
+        farm_allocation = eggs_by_hatch_date.copy()
 
         for hatch_date, geno_dict in farm_allocation.items():
-            for genotype, n in geno_dict.items():
-
-                # get the interfarm travel probability between the two farms
-                travel_prob = self.cfg.interfarm_probs[self.id_][target_farm.id_]
-
-                # calculate number of arrivals based on the probability and total
-                # number of offspring
-                # NOTE: This works only when the travel probabilities are very low.
-                #       Otherwise there is possibility that total number of arrivals
-                #       would be higher than total number of offspring.
-                arrivals = self.cfg.rng.poisson(travel_prob * n)
-
-                # update the arrival dict
-                farm_allocation[hatch_date][genotype] = arrivals
+            # get the interfarm travel probability between the two farms
+            travel_prob = self.cfg.interfarm_probs[self.id_][target_farm.id_]
+            n = geno_dict.gross
+            arrivals = min(self.cfg.rng.poisson(travel_prob * n), n)
+            new_geno = geno_dict.normalise_to(arrivals)
+            farm_allocation[hatch_date] = new_geno
 
         return farm_allocation
 
@@ -426,8 +423,7 @@ class Farm(LoggableMixin):
         :return: List of dictionaries of genotype distributions based on hatch date per bin
         """
 
-        if ncages < 1:
-            raise Exception("Number of bins must be positive.")
+        assert ncages >= 1, "Number of bins must be positive."
 
         # dummy implementation - assumes equal probabilities
         # for both intercage and interfarm travel
@@ -437,13 +433,14 @@ class Farm(LoggableMixin):
 
         # preconstruct the data structure
         hatch_list: CageAllocation = [
-            {hatch_date: GenoDistrib() for hatch_date in eggs_by_hatch_date}
-            for n in range(ncages)
+            {
+                hatch_date: empty_geno_from_cfg(self.cfg)
+                for hatch_date in eggs_by_hatch_date
+            }
+            for _ in range(ncages)
         ]
         for hatch_date, geno_dict in eggs_by_hatch_date.items():
-            for genotype in geno_dict:
-                # generate the bin distribution of this genotype with
-                # this hatch date
+            for genotype in geno_dict.keys():
                 genotype_per_bin = self.cfg.rng.multinomial(
                     geno_dict[genotype], probs_per_bin, size=1
                 )[0]
@@ -504,8 +501,8 @@ class Farm(LoggableMixin):
             for cage in farm.cages:
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
-    @staticmethod
     def get_cage_arrivals_stats(
+        self,
         cage_arrivals: CageAllocation,
     ) -> Tuple[int, List[int], List[GenoDistrib]]:
         """Get stats about the cage arrivals for logging
@@ -517,7 +514,9 @@ class Farm(LoggableMixin):
 
         # Basically ignore the hatch dates and sum up the batches
         geno_by_cage = [
-            cast(GenoDistrib, GenoDistrib.batch_sum(list(hatch_dict.values())))
+            GenoDistrib.batch_sum(list(hatch_dict.values()))
+            if len(hatch_dict.values())
+            else empty_geno_from_cfg(self.cfg)
             for hatch_dict in cage_arrivals
         ]
         gross_by_cage = [geno.gross for geno in geno_by_cage]

@@ -54,7 +54,7 @@
     "reservoir_offspring_integration_ratio": 1e-6,
     "reservoir_offspring_average": 30,
     "genetic_mechanism": "discrete",
-    "geno_mutation_rate": 1e-5,
+    "geno_mutation_rate": 1e-3,
     "male_detachment_rate": 0.7,
     "treatments": [
         {

@@ -1,5 +1,5 @@
-slim.types.QueueTypes module
-============================
+slim.types.queue module
+=======================
 
 .. automodule:: slim.types.queue
    :members:

@@ -26,7 +26,7 @@ import tqdm
 
 from slim import logger, LoggableMixin
 from .farm import MAX_NUM_CAGES, MAX_NUM_APPLICATIONS
-from .lice_population import GenoDistrib
+from .lice_population import GenoDistrib, from_dict
 from .organisation import Organisation
 from slim.types.policies import (
     ACTION_SPACE,
@@ -438,8 +438,8 @@ def dump_as_dataframe(
 
     # extract cumulative geno info regardless of the stage
     def aggregate_geno(data):
-        data_to_sum = [elem for elem in data if isinstance(elem, dict)]
-        return GenoDistrib.batch_sum(data_to_sum, True)
+        data_to_sum = [from_dict(elem) for elem in data if isinstance(elem, dict)]
+        return GenoDistrib.batch_sum(data_to_sum).to_json_dict()
 
     aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
     dataframe["eggs"] = dataframe["eggs"].apply(lambda x: x.gross)

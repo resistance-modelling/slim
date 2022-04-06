@@ -171,10 +171,7 @@ class Config(RuntimeConfig):
 
         # Experiment-specific genetic ratios
         self.min_ext_pressure = data["ext_pressure"]
-        self.initial_genetic_ratios: GenoDistribDict = {
-            tuple(sorted(key.split(","))): val
-            for key, val in data["genetic_ratios"].items()
-        }
+        self.initial_genetic_ratios: GenoDistribDict = data["genetic_ratios"]
         self.genetic_learning_rate: float = data["genetic_learning_rate"]
         self.monthly_cost: float = data["monthly_cost"]
         self.gain_per_kg: float = data["gain_per_kg"]

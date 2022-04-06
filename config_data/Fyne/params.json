@@ -7,7 +7,7 @@
     "genetic_ratios": {
         "A": 0.0001,
         "a": 0.999,
-        "A,a": 0.0009
+        "Aa": 0.0009
     },
     "gain_per_kg": 4.39,
     "infection_discount": 0.0001,
