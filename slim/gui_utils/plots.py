@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import datetime as dt
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING, List
+from typing import Optional, TYPE_CHECKING, List, Dict
 
 import numpy as np
 import pandas as pd
@@ -37,7 +37,12 @@ from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget, mkBrush,
 from pyqtgraph.exporters import ImageExporter, SVGExporter
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
 
-from slim.simulation.lice_population import LicePopulation, GenoDistrib
+from slim.simulation.lice_population import (
+    LicePopulation,
+    GenoDistrib,
+    geno_to_idx,
+    geno_to_alleles,
+)
 from slim.gui_utils.model import (
     SimulatorSingleRunState,
     SimulatorOptimiserState,
@@ -322,6 +327,10 @@ class LightModeMixin:
         return glasbey_light
 
     @property
+    def _monocolourPen(self):
+        return {"colour": self._colorPalette[0], "width": 1.5}
+
+    @property
     def paperMode(self):
         return self._paperMode
 
@@ -462,13 +471,17 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             row=num_farms,
             col=0,
         )
-        self.extPressureRatios = self.pqgPlotContainer.addSmoothedPlot(
-            title="External pressure ratios",
-            bottom="days",
-            left="Probability",
-            row=num_farms,
-            col=1,
-        )
+
+        self.extPressureRatioPlots = [
+            self.pqgPlotContainer.addSmoothedPlot(
+                title="External pressure ratios",
+                bottom="days",
+                left="Probability",
+                row=num_farms + 1,
+                col=i,
+            )
+            for i in range(self._getNumGenes())
+        ]
 
         # add grid, synchronise Y-range
         for plot in self.licePopulationPlots + self.fishPopulationPlots:
@@ -595,163 +608,42 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         for farm_idx, farm_name in enumerate(farm_list):
             farm_df = df[df["farm_id"] == farm_name]
 
-            # Show fish population
-            num_fish = farm_df["num_fish"].to_numpy()
-
             # Report info
             farm_geo_name = self._farmNames[farm_idx]
             report_df = self.state.report_df
             if report_df is not None:
                 report_farm = report_df[report_df["site_name"] == farm_geo_name]
 
-            monocolour_pen = {"colour": self._colorPalette[0], "width": 1.5}
-
-            # TODO: set derivativeMode instead
-            if self.showFishPopulationDx.isChecked():
-                num_fish_dx = -np.diff(num_fish)
-                self.fishPopulationPlots[farm_idx].plot(num_fish_dx, pen=monocolour_pen)
-            else:
-                self.fishPopulationPlots[farm_idx].plot(
-                    num_fish, pen=monocolour_pen, name="Simulation output"
-                )
-                if report_df is not None:
-                    self.fishPopulationPlots[farm_idx].plot(
-                        x=report_farm["date"],
-                        y=report_farm["survived_fish"],
-                        pen=self._colorPalette[2],
-                        name="Ground truth",
-                    )
-
             stages = farm_df[LicePopulation.lice_stages].applymap(
                 lambda geno_data: sum(geno_data.values())
             )
 
-            allele_names = GenoDistrib.allele_labels.values()
-            allele_colours = dict(
-                zip(allele_names, self._colorPalette[: len(allele_names)])
+            self._plotFishPop(
+                farm_df, farm_idx, report_farm if report_df is not None else None
             )
 
             # Genotype information
             if self.showDetailedGenotypeCheckBox.isChecked():
-                allele_data = {
-                    allele: farm_df[allele].to_numpy() for allele in allele_names
-                }
-
-                for style, (allele_name, stage_value) in enumerate(
-                    allele_data.items(), 1
-                ):
-                    pen = {
-                        "color": allele_colours[allele_name],
-                        "width": monocolour_pen["width"],
-                        "style": style,
-                    }
-
-                    allele_orig = tuple(allele_name)  # this is horrible
-                    allele_label_bio = GenoDistrib.allele_labels_bio[allele_orig]
-                    self.licePopulationPlots[farm_idx].plot(
-                        stage_value, name=allele_label_bio, pen=pen
-                    )
+                self._plotLicePopByGeno(farm_df, farm_idx)
 
             # Stage information
             else:
-                # TODO: eggs and ExtP are not stages but graphically speaking they are.
-                # render per stage
-                stages_num = len(LicePopulation.lice_stages)
-                extra_palette = self._colorPalette[stages_num:]
+                self._plotLicePopGross(farm_df, farm_idx, stages)
 
-                for stage, series in stages.items():
-                    if getattr(self.selected_curve, stage):
-                        self.licePopulationPlots[farm_idx].plot(
-                            series.to_numpy(), stage=stage
-                        )
-
-                if self.selected_curve.Eggs:
-                    pen = {"color": extra_palette[0], "width": monocolour_pen["width"]}
-                    self.licePopulationPlots[farm_idx].plot(
-                        farm_df["eggs"], name="Eggs", pen=pen
-                    )
-                if self.selected_curve.ExtP:
-                    pen = {"color": extra_palette[1], "width": monocolour_pen["width"]}
-                    self.licePopulationPlots[farm_idx].plot(
-                        farm_df["new_reservoir_lice"], name="External Pressure", pen=pen
-                    )
-                if self.selected_curve.sum_:
-                    pen = {"color": extra_palette[2], "width": monocolour_pen["width"]}
-                    data = np.stack([series.to_numpy() for _, series in stages.items()])
-                    summed_data = np.sum(data, axis=0)
-                    self.licePopulationPlots[farm_idx].plot(
-                        summed_data, name="Overall", pen=pen
-                    )
-
-                if self.showOffspringDistribution.isChecked():
-                    # get gross arrivals
-                    pen = {**monocolour_pen, "color": extra_palette[0]}
-                    if self.selected_curve.ExtP:
-                        arrivals_gross = (
-                            farm_df["arrivals_per_cage"]
-                            .apply(
-                                lambda cages: sum(
-                                    [sum(cage.values()) for cage in cages]
-                                )
-                            )
-                            .to_numpy()
-                        )
-                        self.licePopulationPlots[farm_idx].plot(
-                            arrivals_gross, name="Offspring (L1+L2)", pen=pen
-                        )
-
-            aggregation_rate = stages["L5f"].to_numpy() / num_fish
-            self.aggregationRatePlot[farm_idx].plot(
-                aggregation_rate, pen=monocolour_pen, name="Expected"
+            self._plotAggregationRate(
+                farm_df,
+                farm_idx,
+                stages,
+                report_farm if report_df is not None else None,
             )
 
-            # extract from report
-            if report_df is not None:
-                self.aggregationRatePlot[farm_idx].plot(
-                    x=report_farm["date"],
-                    y=report_farm["lice_count"].to_numpy(),
-                    pen=self._colorPalette[2],
-                    name="Ground truth",
-                )
-
-            # Plot treatments
-            # note: PG does not allow to reuse the same
-            treatment_lri = self._getTreatmentRegions(farm_df, 5)
-            if len(treatment_lri) > 0:
-                for lri in treatment_lri:
-                    self.licePopulationPlots[farm_idx].addItem(lri[0])
-                    self.fishPopulationPlots[farm_idx].addItem(lri[1])
-                    self.aggregationRatePlot[farm_idx].addItem(lri[2])
-
-                    # Multiple treatment regions may overlap this way, is this okay?
-                    self.payoffPlot.addItem(lri[3])
-                    self.extPressureRatios.addItem(lri[4])
-
+            self._plotTreatments(farm_df, farm_idx)
         # END FARM PLOTTING
 
         # because of the leaky scope, this is going to be something
-        payoffs = farm_df["payoff"].to_numpy()
-        self.payoffPlot.plot(payoffs, pen=self._colorPalette[0])
+        self._plotPayoff(farm_df)
 
-        # External pressure ratios
-        # TODO: fix this
-        external_pressure_ratios = {
-            geno: farm_df["new_reservoir_lice_ratios"].apply(lambda x: x[geno])
-            for geno in GenoDistrib.alleles
-        }
-        for style, (geno, extp_ratios) in enumerate(
-            external_pressure_ratios.items(), 1
-        ):
-            allele_name = GenoDistrib.allele_labels[geno]
-            allele_name_bio = GenoDistrib.allele_labels_bio[geno]
-            pen = {
-                "color": allele_colours[allele_name],
-                "width": monocolour_pen["width"],
-                "style": style,
-            }
-
-            self.extPressureRatios.plot(extp_ratios, name=allele_name_bio, pen=pen)
-
+        self._plotExternalPressure(farm_df)
         for plot in self.licePopulationPlots:
             plot.setLogMode(False, True)
 
@@ -763,16 +655,194 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         ):
             plot.vb.setLimits(yMin=0)
 
-        # for plot in self.fishPopulationPlots:
-        #    plot.setYRange(0, 100000)
+        for plot in self.extPressureRatioPlots:
+            plot.vb.setLimits(yMin=0, yMax=1)
 
-        self.extPressureRatios.vb.setLimits(yMin=0, yMax=1)
+    def _plotFishPop(
+        self, farm_df: pd.DataFrame, farm_idx: int, report_farm: Optional[pd.DataFrame]
+    ):
+        num_fish = farm_df["num_fish"].to_numpy()
+        monocolour_pen = self._monocolourPen
+
+        # TODO: set derivativeMode instead
+        if self.showFishPopulationDx.isChecked():
+            num_fish_dx = -np.diff(num_fish)
+            self.fishPopulationPlots[farm_idx].plot(num_fish_dx, pen=monocolour_pen)
+        else:
+            self.fishPopulationPlots[farm_idx].plot(
+                num_fish, pen=monocolour_pen, name="Simulation output"
+            )
+            if report_farm is not None:
+                self.fishPopulationPlots[farm_idx].plot(
+                    x=report_farm["date"],
+                    y=report_farm["survived_fish"],
+                    pen=self._colorPalette[2],
+                    name="Ground truth",
+                )
+
+    def _plotLicePopByGeno(self, farm_df: pd.DataFrame, farm_idx: int):
+        allele_names = self._getAlleles()
+        allele_colours = dict(
+            zip(allele_names, self._colorPalette[: len(allele_names)])
+        )
+        allele_labels_bio = self._getBioAlleleNames()
+
+        allele_data = {allele: farm_df[allele].to_numpy() for allele in allele_names}
+
+        for style, (allele_name, stage_value) in enumerate(allele_data.items(), 1):
+            pen = {
+                "color": allele_colours[allele_name],
+                "width": self._monocolourPen["width"],
+                "style": style,
+            }
+            gene_from_allele = chr(ord("a") + geno_to_idx(allele_name)[0])
+
+            allele_label_bio = (
+                allele_labels_bio[allele_name] + "of gene " + gene_from_allele
+            )
+            self.licePopulationPlots[farm_idx].plot(
+                stage_value, name=allele_label_bio, pen=pen
+            )
+
+    def _plotLicePopGross(self, farm_df, farm_idx, stages):
+        # TODO: eggs and ExtP are not stages but graphically speaking they are.
+        # render per stage
+
+        pen_width = self._monocolourPen["width"]
+        stages_num = len(LicePopulation.lice_stages)
+        extra_palette = self._colorPalette[stages_num:]
+
+        for stage, series in stages.items():
+            if getattr(self.selected_curve, stage):
+                self.licePopulationPlots[farm_idx].plot(series.to_numpy(), stage=stage)
+
+        if self.selected_curve.Eggs:
+            pen = {"color": extra_palette[0], "width": pen_width}
+            self.licePopulationPlots[farm_idx].plot(
+                farm_df["eggs"], name="Eggs", pen=pen
+            )
+        if self.selected_curve.ExtP:
+            pen = {"color": extra_palette[1], "width": pen_width}
+            self.licePopulationPlots[farm_idx].plot(
+                farm_df["new_reservoir_lice"], name="External Pressure", pen=pen
+            )
+        if self.selected_curve.sum_:
+            pen = {"color": extra_palette[2], "width": pen_width}
+            data = np.stack([series.to_numpy() for _, series in stages.items()])
+            summed_data = np.sum(data, axis=0)
+            self.licePopulationPlots[farm_idx].plot(
+                summed_data, name="Overall", pen=pen
+            )
+
+        if self.showOffspringDistribution.isChecked():
+            # get gross arrivals
+            pen = {**self._monocolourPen, "color": extra_palette[0]}
+            if self.selected_curve.ExtP:
+                arrivals_gross = (
+                    farm_df["arrivals_per_cage"]
+                    .apply(lambda cages: sum([sum(cage.values()) for cage in cages]))
+                    .to_numpy()
+                )
+                self.licePopulationPlots[farm_idx].plot(
+                    arrivals_gross, name="Offspring (L1+L2)", pen=pen
+                )
+
+    def _plotAggregationRate(
+        self,
+        farm_df: Optional[pd.DataFrame],
+        farm_idx: int,
+        stages: Dict[str, pd.DataFrame],
+        report_farm: Optional[pd.DataFrame],
+    ):
+        num_fish = farm_df["num_fish"].to_numpy()  # TODO: recycle this maybe?
+        aggregation_rate = stages["L5f"].to_numpy() / num_fish
+        self.aggregationRatePlot[farm_idx].plot(
+            aggregation_rate, pen=self._monocolourPen, name="Expected"
+        )
+
+        # extract from report
+        if report_farm is not None:
+            self.aggregationRatePlot[farm_idx].plot(
+                x=report_farm["date"],
+                y=report_farm["lice_count"].to_numpy(),
+                pen=self._colorPalette[2],
+                name="Ground truth",
+            )
+
+    def _plotTreatments(self, farm_df, farm_idx):
+        # note: PG does not allow to reuse the same
+        treatment_lri = self._getTreatmentRegions(farm_df, 5)
+        if len(treatment_lri) > 0:
+            for lri in treatment_lri:
+                self.licePopulationPlots[farm_idx].addItem(lri[0])
+                self.fishPopulationPlots[farm_idx].addItem(lri[1])
+                self.aggregationRatePlot[farm_idx].addItem(lri[2])
+
+                # Multiple treatment regions may overlap this way, is this okay?
+                self.payoffPlot.addItem(lri[3])
+                for plot in self.extPressureRatioPlots:
+                    plot.addItem(lri[4])
+
+    def _plotExternalPressure(self, farm_df):
+        # External pressure ratios
+        allele_names = self._getAlleles()
+        allele_bio_names = self._getBioAlleleNames()
+        allele_colours = dict(
+            zip(allele_names, self._colorPalette[: len(allele_names)])
+        )
+
+        external_pressure_ratios = {
+            geno: farm_df["new_reservoir_lice_ratios"].apply(lambda x: x[geno])
+            for geno in self._getAlleles()  # TODO: cache this?
+        }
+
+        for gene_idx in range(self._getNumGenes()):
+            alleles = geno_to_alleles(gene_idx)
+            for style_idx, allele in enumerate(alleles, 1):  # style 0 = no line
+                extp_ratios = external_pressure_ratios[allele]
+                bio_name = allele_bio_names[allele]
+
+                pen = {
+                    "color": allele_colours[allele],
+                    "width": self._monocolourPen["width"],
+                    "style": style_idx,
+                }
+
+                self.extPressureRatioPlots[gene_idx].plot(
+                    extp_ratios, name=bio_name, pen=pen
+                )
+
+    def _plotPayoff(self, farm_df):
+        # because of the leaky scope, this is going to be something
+        payoffs = farm_df["payoff"].to_numpy()
+        self.payoffPlot.plot(payoffs, pen=self._colorPalette[0])
 
     def _convolve(self, signal):
         kernel_size = self.convolutionKernelSizeBox.value()
         # TODO: support multiple rolling averages?
         kernel = np.full(kernel_size, 1 / kernel_size)
         return scipy.ndimage.convolve(signal, kernel, mode="nearest")
+
+    def _getAlleles(self):
+        return list(self.state.cfg.initial_genetic_ratios.keys())
+
+    def _getBioAlleleNames(self):
+        # TODO: this seems useful, should we move it into lice_population?
+        # also, I am not a fan of index hardcoding
+
+        description = [
+            "Homozygous recessive",
+            "Homozygous dominant",
+            "Heterozygous dominant",
+        ]
+        return {
+            allele: description[geno_to_idx(allele)[1]] for allele in self._getAlleles()
+        }
+
+    def _getNumGenes(self):
+        if self.state:
+            return len(self.state.cfg.initial_genetic_ratios.keys()) // 3
+        return 0
 
     def _getTreatmentRegions(
         self, farm_df: pd.DataFrame, shape: int

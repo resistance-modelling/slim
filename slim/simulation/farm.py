@@ -150,7 +150,7 @@ class Farm(LoggableMixin):
                 stage,
                 value,
             ) in cage.lice_population.geno_by_lifestage.items():
-                genomics[stage] = genomics[stage] + value
+                genomics[stage] = genomics[stage].add(value)
 
         return {k: v.to_json_dict() for k, v in genomics.items()}
 
