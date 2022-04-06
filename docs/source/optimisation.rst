@@ -53,8 +53,10 @@ meaning a lot of work still needs to be done.
 
 See `this issue <https://github.com/resistance-modelling/slim/issues/209>`_ for details.
 
-Numba is automatically enabled, but if you wished to disable it you can set the ``NUMBA_DISABLE_JIT``
-env var to 1 (see `<https://numba.pydata.org/numba-doc/dev/reference/envvars.html#envvar-NUMBA_DISABLE_JIT>`_ .
+Because Numba support is still heavily experimental we chose to keep it disabled by default.
+Since Numba can only be enabled or disabled by setting the ``NUMBA_DISABLE_JIT``
+env var to 1 (see `<https://numba.pydata.org/numba-doc/dev/reference/envvars.html#envvar-NUMBA_DISABLE_JIT>`_
+we came up with a similar flag ``SLIM_ENABLE_NUMBA`` which does the opposite.
 During debugging sessions it is automatically disabled.
 
 Writing style

@@ -2,6 +2,15 @@ import logging
 
 # one-stop entry point for logging
 from typing import Any, Dict
+import os, sys
+
+if (
+    sys.gettrace() is None
+    or sys.gettrace()
+    or os.environ.get("SLIM_ENABLE_NUMBA") != "1"
+):
+    os.environ["NUMBA_DISABLE_JIT"] = "1"
+
 
 logger = logging.getLogger("SeaLiceManagementGame")
 
