@@ -37,3 +37,4 @@ dependencies:
     - tabula-py==2.3.0
     - pettingzoo==1.15.0
     - stable-baselines==2.10.2
+    - ray==1.9.0

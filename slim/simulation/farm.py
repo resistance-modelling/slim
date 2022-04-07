@@ -9,13 +9,15 @@ A Farm is a fundamental agent in this simulation. It has a number of functions:
 
 from __future__ import annotations
 
-import copy
 import json
+import logging
 from collections import Counter, defaultdict
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from mypy_extensions import TypedDict
+from ray.util.client import ray
+from ray.util.queue import Queue as RayQueue
 
 from slim import LoggableMixin, logger
 from slim.simulation.cage import Cage
@@ -83,8 +85,7 @@ class Farm(LoggableMixin):
         self._preemptively_assign_treatments(self.farm_cfg.treatment_dates)
 
         # Queues
-        self.command_queue: PriorityQueue[FarmCommand] = PriorityQueue()
-        self.farm_to_org: PriorityQueue[FarmResponse] = PriorityQueue()
+        # TODO: command queue and farm_to_org need to be moved away and passed by the org
         self.__sampling_events: PriorityQueue[SamplingEvent] = PriorityQueue()
         self._asked_to_treat = False
 
@@ -143,7 +144,6 @@ class Farm(LoggableMixin):
     def lice_genomics(self):
         """Return the overall lice population indexed by geno distribution and stage."""
 
-        # TODO: this is broken for now
         genomics = defaultdict(lambda: empty_geno_from_cfg(self.cfg))
         for cage in self.cages:
             for (
@@ -290,7 +290,11 @@ class Farm(LoggableMixin):
         self._asked_to_treat = True
 
     def apply_action(self, cur_date: dt.datetime, action: int):
-        """Apply an action"""
+        """Apply an action
+
+        :param cur_date: the date when the action was issued
+        :param action: the action identifier as defined in :mod:`slim.types.Treatments`
+        """
         if action < len(Treatment):
             picked_treatment = list(Treatment)[action]
             self.add_treatment(picked_treatment, cur_date)
@@ -302,6 +306,7 @@ class Farm(LoggableMixin):
         cur_date: dt.datetime,
         ext_influx: int,
         ext_pressure_ratios: GenoRates,
+        farm_to_org: RayQueue,
     ) -> Tuple[GenoDistribByHatchDate, float]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites. Also distribute the offspring across cages.
@@ -309,9 +314,12 @@ class Farm(LoggableMixin):
         :param cur_date: Current date
         :param ext_influx: the amount of lice that enter a cage
         :param ext_pressure_ratios: the ratio to use for the external pressure
+        :param farm_to_org a queue to send a sampling response, if due
 
         :returns: a pair of (dictionary of genotype distributions based on hatch date, cost of the update)
         """
+
+        # TODO: why not simply returning a possible event as an extra element?
 
         self.clear_log()
 
@@ -328,7 +336,7 @@ class Farm(LoggableMixin):
             new_reservoir_lice_ratios=genorates_to_dict(ext_pressure_ratios),
         )
 
-        self._handle_events(cur_date)
+        self._report_sample(cur_date, farm_to_org)
 
         # reset the number of treatments
         if ((cur_date - self.start_date).days + 1) % 365 == 0:
@@ -575,22 +583,75 @@ class Farm(LoggableMixin):
             "asked_to_treat": np.array([self._asked_to_treat], dtype=np.int8),
         }
 
-    def _handle_events(self, cur_date: dt.datetime):
-        def cts_command_queue(command):
-            if isinstance(command, SampleRequestCommand):
-                self.__sampling_events.put(SamplingEvent(command.request_date))
-
-        pop_from_queue(self.command_queue, cur_date, cts_command_queue)
-
-        self._report_sample(cur_date)
-
     @property
     def aggregation_rate(self):
         return max(cage.aggregation_rate for cage in self.cages)
 
-    def _report_sample(self, cur_date):
+    def _report_sample(self, cur_date, farm_to_org):
         def cts(_):
             # report the worst across cages
-            self.farm_to_org.put(SamplingResponse(cur_date, self.aggregation_rate))
+            farm_to_org.put(SamplingResponse(cur_date, self.aggregation_rate))
 
         pop_from_queue(self.__sampling_events, cur_date, cts)
+
+
+@ray.remote(max_concurrency=10)
+class FarmActor:
+    """
+    A wrapper for Ray
+    """
+
+    def __init__(
+        self, id: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None
+    ):
+        self.farm = Farm(id, cfg, initial_lice_pop)
+        # ugly hack: modify the global logger here. TODO: revert to the logging singleton
+        # Because this runs on a separate memory space the logger will not be affected.
+        global logger
+        logger = logging.getLogger(f"SLIM-Farm-{id}")
+        logger.setLevel(logging.DEBUG)
+
+    def run(self, org2farm_q: RayQueue, farm2org_q: RayQueue):
+        """
+        :param org2farm_q: an organisation-to-farm queue to send `FarmCommand` events (currently only Step is supported)
+        :param farm2org_q: a farm-to-organisation queue to send `FarmResponse` events
+        """
+
+        while True:
+            # This should be called before the beginning of each day
+            command: FarmCommand = org2farm_q.get()
+            if isinstance(command, StepCommand):
+                cur_date = command.request_date
+                action = command.action
+                ext_influx = command.ext_influx
+                ext_pressure_ratios = command.ext_pressure_ratios
+                # Be sure to clear any flags before this point
+                # Then we need to make the
+                self.farm.apply_action(cur_date, action)
+                # TODO: why can't we merge cost and profit?
+                eggs, cost = self.farm.update(
+                    cur_date, ext_influx, ext_pressure_ratios, farm2org_q
+                )
+                profit = self.farm.get_profit(cur_date)
+
+                farm2org_q.put(StepResponse(cur_date, eggs, profit, cost))
+
+            elif isinstance(command, DisperseCommand):
+                self.farm.disperse_offspring(command.request_date, command.offspring)
+
+            elif isinstance(command, AskForTreatmentCommand):
+                self.farm.ask_for_treatment()
+
+            elif isinstance(command, ClearFlags):
+                self.farm.clear_flags()
+
+            elif isinstance(command, DoneCommand):
+                return
+
+    def get_gym_space(self):
+        """
+        Wrapper to access the gym space from the inner farm
+
+        Note: this is not thread-safe. It should not be a problem
+        """
+        return self.farm.get_gym_space()

@@ -8,7 +8,7 @@ from slim.simulation.lice_population import LicePopulation, from_dict, geno_to_a
 from slim.simulation.cage import Cage
 from slim.simulation.config import to_dt
 from slim.types.treatments import Treatment
-from slim.types.queue import SampleRequestCommand
+from slim.types.queue import SampleCommand
 
 
 class TestFarm:
@@ -327,8 +327,8 @@ class TestFarm:
     def test_handle_reporting_event(self, first_farm, cur_day):
         first_farm._Farm__sampling_events.queue = []
         assert first_farm.farm_to_org.qsize() == 0
-        first_farm.command_queue.put(SampleRequestCommand(cur_day))
-        first_farm._handle_events(cur_day)
+        first_farm.command_queue.put(SampleCommand(cur_day))
+        first_farm._report_sample(cur_day)
         assert first_farm.farm_to_org.qsize() == 1
 
     """

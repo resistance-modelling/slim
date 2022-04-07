@@ -8,6 +8,8 @@ import cProfile
 import sys
 from pathlib import Path
 
+import ray
+
 from slim import logger, create_logger
 from slim.simulation.simulator import Simulator, reload
 from slim.simulation.config import Config, to_dt
@@ -33,6 +35,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--quiet",
         help="Don't log to console or file.",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--local-mode",
+        help="(DEBUG) Start the ray cluster in single-threaded (local mode).",
         default=False,
         action="store_true",
     )
@@ -65,6 +73,7 @@ if __name__ == "__main__":
 
     args, unknown = parser.parse_known_args()
 
+    ray.init(local_mode=args.local_mode)
     # set up config class and logger (logging to file and screen.)
     create_logger()
 

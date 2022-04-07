@@ -9,24 +9,33 @@ __all__ = ["Organisation"]
 import datetime as dt
 import json
 
-from typing import List, Optional, Tuple, Deque, TYPE_CHECKING, Iterator, Union
+from typing import List, Tuple, TYPE_CHECKING
 
 import numpy as np
+import ray
+from ray.util.queue import Queue as RayQueue, Empty
 
-from .farm import Farm
+from .farm import Farm, FarmActor
 from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import (
     GenoDistrib,
     empty_geno_from_cfg,
     geno_config_to_matrix,
     GenoRates,
-    from_ratios,
 )
-from slim.types.queue import pop_from_queue, FarmResponse, SamplingResponse
+from slim.types.queue import (
+    pop_from_queue,
+    FarmResponse,
+    SamplingResponse,
+    ClearFlags,
+    StepCommand,
+    StepResponse,
+    DisperseCommand,
+    AskForTreatmentCommand,
+)
 
 if TYPE_CHECKING:
     from .config import Config
-    from .lice_population import GenoDistribDict
     from .farm import GenoDistribByHatchDate
     from slim.types.policies import SAMPLED_ACTIONS
 
@@ -51,12 +60,23 @@ class Organisation:
         """
         self.name: str = cfg.name
         self.cfg = cfg
-        self.farms = [Farm(i, cfg, *args) for i in range(cfg.nfarms)]
+        # Note: pickling won't be fun.
+        self.org2farm_queues = [RayQueue() for _ in cfg.nfarms]
+        self.farm2org_queues = [RayQueue() for _ in cfg.nfarms]
+
+        self.farm_actors = [FarmActor(i, cfg, *args) for i in range(cfg.nfarms)]
         self.genetic_ratios = geno_config_to_matrix(cfg.initial_genetic_ratios)
         self.external_pressure_ratios = geno_config_to_matrix(
             cfg.initial_genetic_ratios
         )
         self.averaged_offspring = empty_geno_from_cfg(cfg)
+
+        # start the actors
+        self._futures = []
+        for actor, producer, consumer in zip(
+            self.farm_actors, self.org2farm_queues, self.farm2org_queues
+        ):
+            self._futures.append(actor.run.remote(producer, consumer))
 
     def update_genetic_ratios(self, offspring: GenoDistrib):
         """
@@ -104,6 +124,22 @@ class Organisation:
 
         return number, ratios
 
+    def _send_command(self, farm_idx: int, command: type, *args, **kwargs):
+        queue = self.org2farm_queues[farm_idx]
+        queue.put(command(*args, **kwargs))
+
+    def _broadcast_command(self, command: type, *args, **kwargs):
+        for i in range(len(self.farm_actors)):
+            self._send_command(i, command, *args, **kwargs)
+
+    def _receive_outputs(self, farm_idx):
+        queue = self.farm2org_queues[farm_idx]
+        response: StepResponse = queue.get()
+        return response
+
+    def _reduce(self) -> List[StepResponse]:
+        return [self._receive_outputs(i) for i in range(len(self.farm_actors))]
+
     def step(self, cur_date, actions: SAMPLED_ACTIONS) -> List[float]:
         """
         Perform an update across all farms.
@@ -116,21 +152,22 @@ class Organisation:
         """
 
         # update the farms and get the offspring
-        for farm in self.farms:
-            farm.clear_flags()
-            self.handle_farm_messages(cur_date, farm)
-        for farm, action in zip(self.farms, actions):
-            farm.apply_action(cur_date, action)
+        self._broadcast_command(ClearFlags)
+        for farm_queue in self.org2farm_queues:
+            self.handle_farm_messages(farm_queue)
 
         offspring_dict = {}
         payoffs = []
-        for farm in self.farms:
-            offspring, cost = farm.update(cur_date, *self.get_external_pressure())
-            offspring_dict[farm.id_] = offspring
-            # TODO: take into account other types of disadvantages, not just the mere treatment cost
-            # e.g. how are environmental factors measured? Are we supposed to add some coefficients here?
-            # TODO: if we take current fish population into account then what happens to the infrastructure cost?
-            payoffs.append(farm.get_profit(cur_date) - cost)
+
+        for farm_idx, action in enumerate(actions):
+            self._send_command(
+                farm_idx, StepCommand, cur_date, action, *self.get_external_pressure()
+            )
+
+        results = self._reduce()
+        for idx, response in enumerate(results):
+            offspring_dict[idx] = response.eggs_by_hatch_date
+            payoffs.append(response.profit - response.cost)
 
         # once all the offspring is collected
         # it can be dispersed (interfarm and intercage movement)
@@ -138,7 +175,7 @@ class Organisation:
         # other farms - and will allow multiprocessing of the main update
 
         for farm_ix, offspring in offspring_dict.items():
-            self.farms[farm_ix].disperse_offspring(offspring, self.farms, cur_date)
+            self._send_command(farm_ix, DisperseCommand, cur_date, offspring)
 
         total_offspring = list(offspring_dict.values())
         self.update_offspring_average(total_offspring)
@@ -171,32 +208,33 @@ class Organisation:
         return json.dumps(json_dict, cls=CustomFarmEncoder, indent=4)
 
     def to_json_dict(self):
-        return {"name": self.name, "farms": self.farms}
+        return {"name": self.name}
 
     def __repr__(self):
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
-    def handle_farm_messages(self, cur_date: dt.datetime, farm: Farm):
+    def handle_farm_messages(self, farm_queue: RayQueue):
         """
         Handle the messages sent in the farm-to-organisation queue.
         Currently, only one type of message is implemented: :class:`slim.types.QueueTypes.SamplingResponse`.
 
         If the lice aggregation rate detected and reported on that farm exceeds the configured threshold
-        then all the farms will be asked to treat, and the offending farm **can not** defect.
-        Note however that this does not mean that treatment will be applied anyway due
-        to eligibility requirements. See :meth:`.farm.Farm.ask_for_treatment` for details.
+        then all the farms will be asked to treat.
 
         :param cur_date: the current day
         :param farm: the farm that sent the message
         """
 
-        def cts(farm_response: FarmResponse):
-            if (
-                isinstance(farm_response, SamplingResponse)
-                and farm_response.detected_rate >= self.cfg.aggregation_rate_threshold
-            ):
-                # send a treatment command to everyone
-                for other_farm in self.farms:
-                    other_farm.ask_for_treatment()
+        try:
+            while True:
+                farm_response = farm_queue.get_nowait()
+                assert isinstance(
+                    farm_response, SamplingResponse
+                ), f"Out of sync! Expected a SamplingResponse, got a {type(farm_response)}"
 
-        pop_from_queue(farm.farm_to_org, cur_date, cts)
+                if farm_response.detected_rate >= self.cfg.aggregation_rate_threshold:
+                    # send a treatment command to everyone
+                    self._broadcast_command(AskForTreatmentCommand)
+
+        except Empty:
+            pass

@@ -13,8 +13,10 @@ from queue import PriorityQueue
 
 from typing import Callable, TypeVar, TYPE_CHECKING
 
+from slim.simulation.farm import GenoDistribByHatchDate
+
 if TYPE_CHECKING:
-    from slim.simulation.lice_population import GenoDistrib
+    from slim.simulation.lice_population import GenoDistrib, GenoRates
     from slim.types.treatments import Treatment
 
 
@@ -116,6 +118,9 @@ class SamplingEvent(Event):
     sampling_date: dt.datetime
 
 
+# TODO: As we start deprecating PriorityQueues we should also deprecate the datetime parameter
+
+
 @dataclass(order=True)
 class FarmResponse(Event):
     """Base class for all farm activities that require some communication with the organisation."""
@@ -124,13 +129,52 @@ class FarmResponse(Event):
 
 
 @dataclass
-class SampleRequestCommand(FarmCommand):
+class StepCommand(FarmCommand):
+    """Orders the farm to step."""
+
+    action: int
+    ext_influx: int
+    ext_pressure_ratios: GenoRates
+
+
+@dataclass
+class DisperseCommand(FarmCommand):
+    """Orders to disperse the offsprings coming from other farms"""
+
+    offspring: GenoDistribByHatchDate
+
+
+@dataclass
+class AskForTreatmentCommand(FarmCommand):
+    """Asks the farm to apply a treatment (i.e. set the "asked_for_treatment" flag to 1)"""
+
+    pass
+
+
+@dataclass
+class ClearFlags(FarmCommand):
+    """Clears any flag. To be sent before each day."""
+
+    pass
+
+
+@dataclass
+class DoneCommand(FarmCommand):
+    """Orders the farm to stop. Used to gracefully exit the actor process."""
+
     pass
 
 
 @dataclass
 class SamplingResponse(FarmResponse):
     detected_rate: float
+
+
+@dataclass
+class StepResponse(FarmResponse):
+    eggs_by_hatch_date: GenoDistribByHatchDate
+    profit: float
+    total_cost: float
 
 
 EventT = TypeVar("EventT", CageEvent, FarmCommand, FarmResponse, SamplingEvent)
