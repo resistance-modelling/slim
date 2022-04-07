@@ -13,9 +13,9 @@ from queue import PriorityQueue
 
 from typing import Callable, TypeVar, TYPE_CHECKING
 
-from slim.simulation.farm import GenoDistribByHatchDate
 
 if TYPE_CHECKING:
+    from slim.simulation.farm import GenoDistribByHatchDate
     from slim.simulation.lice_population import GenoDistrib, GenoRates
     from slim.types.treatments import Treatment
 

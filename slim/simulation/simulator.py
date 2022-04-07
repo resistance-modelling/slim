@@ -22,6 +22,7 @@ from typing import List, Optional, Tuple, Iterator
 
 import dill as pickle
 import pandas as pd
+import ray
 import tqdm
 
 from slim import logger, LoggableMixin
@@ -188,7 +189,9 @@ class SimulatorPZEnv(AECEnv):
                 zip(self.possible_agents, self.organisation.step(self.cur_day, actions))
             )
             for agent_ in self.agents:
-                self.observations[agent_] = self._agent_to_farm[agent].get_gym_space()
+                self.observations[agent_] = ray.get(
+                    self._agent_to_farm[agent].get_gym_space.remote()
+                )
             self.cur_day += dt.timedelta(days=1)
         else:
             self._clear_rewards()
@@ -199,7 +202,7 @@ class SimulatorPZEnv(AECEnv):
         self.organisation = Organisation(self.cfg)
         # Gym/PZ assume the agents are a dict
         self._agent_to_farm = {
-            f"farm_{i}": farm for i, farm in enumerate(self.organisation.farms)
+            f"farm_{i}": farm for i, farm in enumerate(self.organisation.farm_actors)
         }
         self.possible_agents = list(self._agent_to_farm.keys())
         self.agents = self.possible_agents[:]

@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from mypy_extensions import TypedDict
-from ray.util.client import ray
+import ray
 from ray.util.queue import Queue as RayQueue
 
 from slim import LoggableMixin, logger
@@ -595,7 +595,7 @@ class Farm(LoggableMixin):
         pop_from_queue(self.__sampling_events, cur_date, cts)
 
 
-@ray.remote(max_concurrency=10)
+@ray.remote
 class FarmActor:
     """
     A wrapper for Ray
@@ -611,10 +611,15 @@ class FarmActor:
         logger = logging.getLogger(f"SLIM-Farm-{id}")
         logger.setLevel(logging.DEBUG)
 
-    def run(self, org2farm_q: RayQueue, farm2org_q: RayQueue):
+    def run(
+        self,
+        org2farm_q: RayQueue,
+        farm2org_step_q: RayQueue,
+        farm2org_sample_q: RayQueue,
+    ):
         """
         :param org2farm_q: an organisation-to-farm queue to send `FarmCommand` events (currently only Step is supported)
-        :param farm2org_q: a farm-to-organisation queue to send `FarmResponse` events
+        :param farm2org_step_q: a farm-to-organisation queue to send `FarmResponse` events
         """
 
         while True:
@@ -630,11 +635,11 @@ class FarmActor:
                 self.farm.apply_action(cur_date, action)
                 # TODO: why can't we merge cost and profit?
                 eggs, cost = self.farm.update(
-                    cur_date, ext_influx, ext_pressure_ratios, farm2org_q
+                    cur_date, ext_influx, ext_pressure_ratios, farm2org_sample_q
                 )
                 profit = self.farm.get_profit(cur_date)
 
-                farm2org_q.put(StepResponse(cur_date, eggs, profit, cost))
+                farm2org_step_q.put(StepResponse(cur_date, eggs, profit, cost))
 
             elif isinstance(command, DisperseCommand):
                 self.farm.disperse_offspring(command.request_date, command.offspring)
@@ -650,8 +655,6 @@ class FarmActor:
 
     def get_gym_space(self):
         """
-        Wrapper to access the gym space from the inner farm
-
-        Note: this is not thread-safe. It should not be a problem
+        Wrapper to access gym spaces from the inner farm
         """
         return self.farm.get_gym_space()

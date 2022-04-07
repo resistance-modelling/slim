@@ -56,15 +56,21 @@ class Organisation:
     def __init__(self, cfg: Config, *args):
         """
         :param cfg: a Configuration
-        :param \*args: other constructing parameters passed to the underlying :class:`.farm.Farm` s.
+        :param \\*args: other constructing parameters passed to the underlying :class:`.farm.Farm` s.
         """
         self.name: str = cfg.name
         self.cfg = cfg
         # Note: pickling won't be fun.
-        self.org2farm_queues = [RayQueue() for _ in cfg.nfarms]
-        self.farm2org_queues = [RayQueue() for _ in cfg.nfarms]
+        self.org2farm_queues = [RayQueue() for _ in range(cfg.nfarms)]
+        # Yes, this is bad. I should replace this with a future for the samples (if any?)
+        # or maybe just flip the hierarchy
+        self.farm2org_step_queues = [RayQueue() for _ in range(cfg.nfarms)]
+        self.farm2org_sample_queues = [RayQueue() for _ in range(cfg.nfarms)]
 
-        self.farm_actors = [FarmActor(i, cfg, *args) for i in range(cfg.nfarms)]
+        self.farm_actors = [
+            FarmActor.options(max_concurrency=3).remote(i, cfg, *args)
+            for i in range(cfg.nfarms)
+        ]
         self.genetic_ratios = geno_config_to_matrix(cfg.initial_genetic_ratios)
         self.external_pressure_ratios = geno_config_to_matrix(
             cfg.initial_genetic_ratios
@@ -73,10 +79,15 @@ class Organisation:
 
         # start the actors
         self._futures = []
-        for actor, producer, consumer in zip(
-            self.farm_actors, self.org2farm_queues, self.farm2org_queues
+        for actor, producer, consumer_step, consumer_sample in zip(
+            self.farm_actors,
+            self.org2farm_queues,
+            self.farm2org_step_queues,
+            self.farm2org_sample_queues,
         ):
-            self._futures.append(actor.run.remote(producer, consumer))
+            self._futures.append(
+                actor.run.remote(producer, consumer_step, consumer_sample)
+            )
 
     def update_genetic_ratios(self, offspring: GenoDistrib):
         """
@@ -133,8 +144,8 @@ class Organisation:
             self._send_command(i, command, *args, **kwargs)
 
     def _receive_outputs(self, farm_idx):
-        queue = self.farm2org_queues[farm_idx]
-        response: StepResponse = queue.get()
+        queue = self.farm2org_step_queues[farm_idx]
+        response: StepResponse = queue.get(timeout=1.0)
         return response
 
     def _reduce(self) -> List[StepResponse]:
@@ -152,8 +163,8 @@ class Organisation:
         """
 
         # update the farms and get the offspring
-        self._broadcast_command(ClearFlags)
-        for farm_queue in self.org2farm_queues:
+        self._broadcast_command(ClearFlags, cur_date)
+        for farm_queue in self.farm2org_step_queues:
             self.handle_farm_messages(farm_queue)
 
         offspring_dict = {}
@@ -167,7 +178,7 @@ class Organisation:
         results = self._reduce()
         for idx, response in enumerate(results):
             offspring_dict[idx] = response.eggs_by_hatch_date
-            payoffs.append(response.profit - response.cost)
+            payoffs.append(response.profit - response.total_cost)
 
         # once all the offspring is collected
         # it can be dispersed (interfarm and intercage movement)

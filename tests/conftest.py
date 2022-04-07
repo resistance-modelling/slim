@@ -8,6 +8,8 @@ import datetime
 # ignore profiling
 import builtins
 
+import ray
+
 builtins.__dict__["profile"] = lambda x: x
 
 # Disable numba's jitting for now
@@ -27,6 +29,13 @@ from slim.simulation.lice_population import (
     from_ratios_rng,
     from_dict,
 )
+
+
+@pytest.fixture(autouse=True, scope="session")
+def run_destroy():
+    ray.init(local_mode=True, num_cpus=1, num_gpus=0)
+    yield
+    ray.shutdown()
 
 
 @pytest.fixture
