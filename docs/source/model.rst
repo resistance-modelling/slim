@@ -245,8 +245,8 @@ with the following formulae:
     \begin{split}
     &t' = t + \lambda (d_{i,j}) \\
     &n_j = \min (\lambda (N^{Egg}_i * r_{i,j}), N^{Egg}_i) \\
-    &n_jk = Multinomial(n_j) \\
-    &G^{Eggs}_{t'jk} = G^{Egg}_i \cdot \frac{n_jk}{N^{Egg}_i}
+    &n_{jk} = Multinomial(n_j) \\
+    &G^{Eggs}_{t'jk} = G^{Egg}_i \cdot \frac{n_{jk}}{N^{Egg}_i}
     \end{split}
 
 Where :math:`\lambda` is the Poisson distribution.

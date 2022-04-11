@@ -11,10 +11,10 @@ from dataclasses import dataclass, field, asdict
 from functools import singledispatch
 from queue import PriorityQueue
 
-from typing import Callable, TypeVar, TYPE_CHECKING, Optional
+from typing import Callable, TypeVar, TYPE_CHECKING, Optional, Tuple, List, Dict
 
 if TYPE_CHECKING:
-    from slim.simulation.farm import GenoDistribByHatchDate
+    from slim.simulation.farm import GenoDistribByHatchDate, CageAllocation
     from slim.simulation.lice_population import GenoDistrib, GenoRates
     from slim.types.treatments import Treatment
 
@@ -123,8 +123,7 @@ class SamplingEvent(Event):
 @dataclass(order=True)
 class FarmResponse(Event):
     """Base class for all farm activities that require some communication with the organisation."""
-
-    response_date: dt.datetime
+    pass
 
 
 @dataclass
@@ -138,9 +137,17 @@ class StepCommand(FarmCommand):
 
 @dataclass
 class DisperseCommand(FarmCommand):
-    """Orders to disperse the offsprings coming from other farms"""
-
+    """Orders the farms to calculate the farm-to-farm and farm-to-cage offsprings. The result of the command is the
+    contribution of this farm to all the cages of the other farms.
+    It's up to the organisation to combine these contributions.
+    """
     offspring: GenoDistribByHatchDate
+
+
+@dataclass
+class DistributeCageOffspring(FarmCommand):
+    """Orders to disperse the offsprings """
+    allocations: List[Tuple[CageAllocation, dt.datetime]]
 
 
 @dataclass
@@ -174,6 +181,11 @@ class StepResponse(FarmResponse):
     eggs_by_hatch_date: GenoDistribByHatchDate
     profit: float
     total_cost: float
+
+
+@dataclass
+class DisperseResponse(FarmResponse):
+    arrivals_per_farm_cage: List[Tuple[CageAllocation, dt.datetime]]
 
 
 EventT = TypeVar("EventT", CageEvent, FarmCommand, FarmResponse, SamplingEvent)

@@ -21,7 +21,7 @@ from ray.util.queue import Queue as RayQueue
 
 from slim import LoggableMixin, logger
 from slim.simulation.cage import Cage
-from slim.simulation.config import Config
+from slim.simulation.config import Config, FarmConfig
 from slim.JSONEncoders import CustomFarmEncoder
 from slim.simulation.lice_population import (
     GrossLiceDistrib,
@@ -422,7 +422,7 @@ class Farm(LoggableMixin):
 
     def get_cage_allocation(
         self, ncages: int, eggs_by_hatch_date: GenoDistribByHatchDate
-    ) -> CageAllocation:
+    ):
         """Return allocation of eggs for given number of cages.
 
         :param ncages: Number of bins to allocate to
@@ -440,7 +440,7 @@ class Farm(LoggableMixin):
         probs_per_bin = np.full(ncages, 1 / ncages)
 
         # preconstruct the data structure
-        hatch_list: CageAllocation = [
+        hatch_list = [
             {
                 hatch_date: empty_geno_from_cfg(self.cfg)
                 for hatch_date in eggs_by_hatch_date
@@ -456,12 +456,12 @@ class Farm(LoggableMixin):
                 for bin_ix, n in enumerate(genotype_per_bin):
                     hatch_list[bin_ix][hatch_date][genotype] = n
 
+
         return hatch_list
 
     def disperse_offspring(
         self,
         eggs_by_hatch_date: GenoDistribByHatchDate,
-        farms: List[Farm],
         cur_date: dt.datetime,
     ):
         """Allocate new offspring between the farms and cages.
@@ -469,24 +469,25 @@ class Farm(LoggableMixin):
         Assumes the lice can float freely across a given farm so that
         they are not bound to a single cage while not attached to a fish.
 
-        NOTE: This method is not multiprocessing safe. (why?)
-
         :param eggs_by_hatch_date: Dictionary of genotype distributions based on hatch date
-        :param farms: List of Farm objects
         :param cur_date: Current date of the simulation
         """
 
         logger.debug("\tDispersing total offspring Farm {}".format(self.id_))
+        arrivals_per_farm_cage = []
 
-        for farm in farms:
-            if farm.id_ == self.id_:
-                logger.debug("\t\tFarm {} (current):".format(farm.id_))
-            else:
-                logger.debug("\t\tFarm {}:".format(farm.id_))
+        farms = self.cfg.farms
+
+        for idx, farm in enumerate(farms):
+            ncages = farm.n_cages
+            logger.debug(f"\t\tFarm {idx}{'(current)' if idx == self.id_ else ''}")
 
             # allocate eggs to cages
-            farm_arrivals = self.get_farm_allocation(farm.id_, eggs_by_hatch_date)
-            arrivals_per_cage = self.get_cage_allocation(len(farm.cages), farm_arrivals)
+            farm_arrivals = self.get_farm_allocation(idx, eggs_by_hatch_date)
+            logger.debug(f"\t\t\tFarm allocation is {farm_arrivals}")
+
+            arrivals_per_cage = self.get_cage_allocation(ncages, farm_arrivals)
+            logger.debug(f"\t\t\tCage allocation is {arrivals_per_cage}")
 
             total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(
                 arrivals_per_cage
@@ -501,12 +502,16 @@ class Farm(LoggableMixin):
             # get the arrival time of the egg batch at the allocated
             # destination
             travel_time = self.cfg.rng.poisson(
-                self.cfg.interfarm_times[self.id_][farm.id_]
+                self.cfg.interfarm_times[self.id_][idx]
             )
             arrival_date = cur_date + dt.timedelta(days=travel_time)
 
-            for cage in farm.cages:
-                cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
+            arrivals_per_farm_cage.append((arrivals_per_cage, arrival_date))
+
+            #for cage in farm.cages:
+            #    cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
+        logger.debug(f"Returning {arrivals_per_farm_cage}")
+        return arrivals_per_farm_cage
 
     def get_cage_arrivals_stats(
         self,
@@ -520,14 +525,21 @@ class Farm(LoggableMixin):
         """
 
         # Basically ignore the hatch dates and sum up the batches
+
+        logger.debug(f"get_cage_arrivals_stats's cage_arrivals: {cage_arrivals}")
         geno_by_cage = [
             GenoDistrib.batch_sum(list(hatch_dict.values()))
             if len(hatch_dict.values())
             else empty_geno_from_cfg(self.cfg)
             for hatch_dict in cage_arrivals
         ]
+        logger.debug(f"geno_by_cage = {geno_by_cage}")
         gross_by_cage = [geno.gross for geno in geno_by_cage]
         return sum(gross_by_cage), gross_by_cage, geno_by_cage
+
+    def _update_arrivals(self, cage_allocations: CageAllocation, time: dt.datetime):
+        for cage, cage_allocation in zip(self.cages, cage_allocations):
+            cage.update_arrivals(cage_allocation, time)
 
     def get_profit(self, cur_date: dt.datetime) -> float:
         """
@@ -603,13 +615,16 @@ class FarmActor:
     def __init__(
         self, id: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None
     ):
-        self.farm = Farm(id, cfg, initial_lice_pop)
         # ugly hack: modify the global logger here. TODO: revert to the logging singleton
         # Because this runs on a separate memory space the logger will not be affected.
-        print("Created an actor process here...")
         global logger
         logger = logging.getLogger(f"SLIM-Farm-{id}")
-        logger.setLevel(logging.DEBUG)
+        # for some reason logger.setLevel is not enough...
+        logging.basicConfig(level=logging.INFO)
+        logger.setLevel(logging.INFO)
+
+        self.farm = Farm(id, cfg, initial_lice_pop)
+
 
     def run(
         self,
@@ -624,48 +639,62 @@ class FarmActor:
 
         # Should I put a barrier here?
         while True:
-            # This should be called before the beginning of each day
-            # print(f"{self.farm.id_} Waiting for command")
-            command: FarmCommand = org2farm_q.get(block=True)
-            # print(command)
-            # print(f"{self.farm.id_} received {command}")
-            if isinstance(command, StepCommand):
-                print(f"{self.farm.id_} Received step command")
-                cur_date = command.request_date
-                action = command.action
-                ext_influx = command.ext_influx
-                ext_pressure_ratios = command.ext_pressure_ratios
-                # Be sure to clear any flags before this point
-                # Then we need to make the
-                self.farm.apply_action(cur_date, action)
-                # TODO: why can't we merge cost and profit?
-                eggs, cost = self.farm.update(
-                    cur_date, ext_influx, ext_pressure_ratios, farm2org_sample_q
-                )
-                profit = self.farm.get_profit(cur_date)
+            try:
+                # This should be called before the beginning of each day
+                # print(f"{self.farm.id_} Waiting for command")
+                command: FarmCommand = org2farm_q.get(block=True)
+                # print(command)
+                # print(f"{self.farm.id_} received {command}")
+                if isinstance(command, StepCommand):
+                    logger.debug(f"{self.farm.id_} Received step command")
+                    cur_date = command.request_date
+                    action = command.action
+                    ext_influx = command.ext_influx
+                    ext_pressure_ratios = command.ext_pressure_ratios
+                    # Be sure to clear any flags before this point
+                    # Then we need to make the
+                    self.farm.apply_action(cur_date, action)
+                    # TODO: why can't we merge cost and profit?
+                    eggs, cost = self.farm.update(
+                        cur_date, ext_influx, ext_pressure_ratios, farm2org_sample_q
+                    )
+                    profit = self.farm.get_profit(cur_date)
 
-                # print("Adding a command to this queue")
-                farm2org_step_q.put(StepResponse(cur_date, eggs, profit, cost))
+                    # print("Adding a command to this queue")
+                    farm2org_step_q.put(StepResponse(eggs, profit, cost))
 
-            # TODO: Refactor disperse_offspring first...
-            # elif isinstance(command, DisperseCommand):
-            #    print(f"{self.farm.id_} Received disperse command")
-            #    self.farm.disperse_offspring(command.request_date, command.offspring)
+                elif isinstance(command, DisperseCommand):
+                    logger.debug(f"{self.farm.id_} Received disperse command")
+                    response = self.farm.disperse_offspring(command.offspring, command.request_date)
+                    farm2org_step_q.put(DisperseResponse(response))
+                    logger.debug(f"{self.farm.id_} pushed response: {response}")
 
-            elif isinstance(command, AskForTreatmentCommand):
-                print(f"{self.farm.id_} Received askfortreatment command")
-                self.farm.ask_for_treatment()
+                elif isinstance(command, DistributeCageOffspring):
+                    for arrival in command.allocations:
+                        self.farm._update_arrivals(arrival[0], arrival[1])
 
-            elif isinstance(command, ClearFlags):
-                print(f"{self.farm.id_} Received clear command")
-                self.farm.clear_flags()
+                elif isinstance(command, AskForTreatmentCommand):
+                    #print(f"{self.farm.id_} Received askfortreatment command")
+                    self.farm.ask_for_treatment()
 
-            elif isinstance(command, DoneCommand):
-                print(f"{self.farm.id_} Sayonara")
-                return
+                elif isinstance(command, ClearFlags):
+                    logger.debug(f"{self.farm.id_} Received clear command")
+                    self.farm.clear_flags()
+
+                elif isinstance(command, DoneCommand):
+                    return
+            except:
+                logging.exception("Found an exception! Bailing out, you are on your own...")
 
     def get_gym_space(self):
         """
         Wrapper to access gym spaces from the inner farm
         """
         return self.farm.get_gym_space()
+
+
+# TODO: selectively enable/disable multiprocessing and hide the ray interface
+#  as ray doesn't support local mode with async actors
+class FarmActorWrapper:
+    def __init__(self):
+        pass

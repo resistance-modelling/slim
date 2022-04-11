@@ -9,7 +9,7 @@ __all__ = ["Organisation"]
 import datetime as dt
 import json
 
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Tuple, TYPE_CHECKING, cast, Union
 
 import numpy as np
 import ray
@@ -24,7 +24,6 @@ from .lice_population import (
     GenoRates,
 )
 from slim.types.queue import (
-    pop_from_queue,
     FarmResponse,
     SamplingResponse,
     ClearFlags,
@@ -32,7 +31,7 @@ from slim.types.queue import (
     StepResponse,
     DisperseCommand,
     AskForTreatmentCommand,
-    DoneCommand,
+    DoneCommand, DisperseResponse, DistributeCageOffspring,
 )
 
 from slim.types.policies import no_observation
@@ -122,14 +121,49 @@ class Organisation:
             self._send_command(i, command, *args, **kwargs)
 
     def _receive_outputs(self, farm_idx):
-        print(f"Popping from {farm_idx}")
         queue = self._farm2org_step_queues[farm_idx]
-        response: StepResponse = queue.get(timeout=2.0)
-        assert isinstance(response, StepResponse)
+        response = queue.get()
+        #assert isinstance(response, StepResponse)
         return response
 
     def _reduce(self) -> List[StepResponse]:
         return [self._receive_outputs(i) for i in range(len(self._farm_actors))]
+
+    def _for(self, command, arg_list: Union[dict, list], *extra_args):
+        # The lack of currying is a tad annoying
+        # TODO: make this look nicer?
+        if isinstance(arg_list, list):
+            for farm_idx, elem in enumerate(arg_list):
+                if isinstance(elem, tuple):
+                    self._send_command(farm_idx, command, *elem, *extra_args)
+                else:
+                    self._send_command(farm_idx, command, elem, *extra_args)
+
+        else:
+            for farm_idx, elem in arg_list.items():
+                if isinstance(elem, tuple):
+                    self._send_command(farm_idx, command, *elem, *extra_args)
+                else:
+                    self._send_command(farm_idx, command, elem, *extra_args)
+
+
+    def _map(self, command, arg_list: Union[dict, list], *extra_args):
+        self._for(command, arg_list, *extra_args)
+        return self._reduce()
+
+    def _disperse(self, cur_date: dt.datetime, offspring_list):
+        param = [(cur_date, offspring) for offspring in offspring_list]
+        dispersed = cast(List[DisperseResponse], self._map(DisperseCommand, param))
+
+        allocations_per_farm = {i: (cur_date, []) for i in range(self.cfg.nfarms)}
+
+        for from_farm in dispersed:
+            for to_farm_idx, to_farm_cages in enumerate(from_farm.arrivals_per_farm_cage):
+                allocations_per_farm[to_farm_idx][1].append(to_farm_cages)
+
+
+        self._for(DistributeCageOffspring, allocations_per_farm)
+
 
     def step(self, cur_date, actions: SAMPLED_ACTIONS) -> List[float]:
         """
@@ -150,19 +184,13 @@ class Organisation:
         # for farm_queue in self.farm2org_sample_queues:
         #    self.handle_farm_messages(farm_queue)
 
-        offspring_dict = {}
+        offspring_per_farm = []
         payoffs = []
 
-        print("Sending commands")
-        for farm_idx, action in enumerate(actions):
-            print(f"To {farm_idx}: {action}")
-            self._send_command(
-                farm_idx, StepCommand, cur_date, action, *self.get_external_pressure()
-            )
-
-        results = self._reduce()
+        params = [(cur_date, action) for action in actions]
+        results = self._map(StepCommand, params, *self.get_external_pressure())
         for idx, response in enumerate(results):
-            offspring_dict[idx] = response.eggs_by_hatch_date
+            offspring_per_farm.append(response.eggs_by_hatch_date)
             payoffs.append(response.profit - response.total_cost)
 
         # once all the offspring is collected
@@ -173,8 +201,8 @@ class Organisation:
         # for farm_ix, offspring in offspring_dict.items():
         #    self._send_command(farm_ix, DisperseCommand, cur_date, offspring)
 
-        total_offspring = list(offspring_dict.values())
-        self.update_offspring_average(total_offspring)
+        self._disperse(cur_date, offspring_per_farm)
+        self.update_offspring_average(offspring_per_farm)
         self.update_genetic_ratios(self.averaged_offspring)
 
         return payoffs

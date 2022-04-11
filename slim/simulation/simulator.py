@@ -194,6 +194,9 @@ class SimulatorPZEnv(AECEnv):
         self.agent_selection = self._agent_selector.next()
         self._chosen_actions = {agent: -1 for agent in self.agents}
 
+    def stop(self):
+        self.organisation.stop()
+
 
 class BernoullianPolicy:
     """
@@ -328,27 +331,35 @@ class Simulator:  # pragma: no cover
 
         self.env.reset()
 
-        num_days = (self.cfg.end_date - self.cur_day).days
-        for day in tqdm.trange(num_days):
-            logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
-            for agent in self.env.agents:
-                action = self.policy.predict(self.env.observe(agent), agent)
-                self.env.step(action)
+        try:
 
-            reward = self.env.rewards
-            self.payoff += sum(reward.values())
+            num_days = (self.cfg.end_date - self.cur_day).days
+            for day in tqdm.trange(num_days):
+                logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
+                for agent in self.env.agents:
+                    action = self.policy.predict(self.env.observe(agent), agent)
+                    self.env.step(action)
 
-            # Save the model snapshot either when checkpointing or during the last iteration
-            if not resume:
-                if (
-                    self.cfg.save_rate
-                    and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate
-                    == 0
-                ) or day == num_days - 1:
-                    pickle.dump(self, compressed_stream)
-            self.cur_day += dt.timedelta(days=1)
+                reward = self.env.rewards
+                self.payoff += sum(reward.values())
 
-        if not resume:
+                # Save the model snapshot either when checkpointing or during the last iteration
+                if not resume:
+                    if (
+                        self.cfg.save_rate
+                        and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate
+                        == 0
+                    ) or day == num_days - 1:
+                        pickle.dump(self, compressed_stream)
+                self.cur_day += dt.timedelta(days=1)
+
+        except KeyboardInterrupt:
+            env = self.env
+            while not isinstance(env, SimulatorPZEnv):
+                env = env.env
+            env.stop()
+
+        finally:
             compressed_stream.close()
             data_file.close()
 
