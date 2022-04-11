@@ -11,8 +11,7 @@ from dataclasses import dataclass, field, asdict
 from functools import singledispatch
 from queue import PriorityQueue
 
-from typing import Callable, TypeVar, TYPE_CHECKING
-
+from typing import Callable, TypeVar, TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from slim.simulation.farm import GenoDistribByHatchDate
@@ -107,7 +106,7 @@ class TreatmentEvent(CageEvent):
 class FarmCommand(Event):
     """Base class for all commands sent from the Organisation to a Farm"""
 
-    request_date: dt.datetime
+    request_date: Optional[dt.datetime]
 
 
 @dataclass(order=True)

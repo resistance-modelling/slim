@@ -15,7 +15,7 @@ import numpy as np
 import ray
 from ray.util.queue import Queue as RayQueue, Empty
 
-from .farm import Farm, FarmActor
+from .farm import Farm, FarmActor, MAX_NUM_CAGES
 from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import (
     GenoDistrib,
@@ -32,12 +32,15 @@ from slim.types.queue import (
     StepResponse,
     DisperseCommand,
     AskForTreatmentCommand,
+    DoneCommand,
 )
+
+from slim.types.policies import no_observation
 
 if TYPE_CHECKING:
     from .config import Config
     from .farm import GenoDistribByHatchDate
-    from slim.types.policies import SAMPLED_ACTIONS
+    from slim.types.policies import SAMPLED_ACTIONS, ObservationSpace, SimulatorSpace
 
 
 class Organisation:
@@ -60,34 +63,9 @@ class Organisation:
         """
         self.name: str = cfg.name
         self.cfg = cfg
-        # Note: pickling won't be fun.
-        self.org2farm_queues = [RayQueue() for _ in range(cfg.nfarms)]
-        # Yes, this is bad. I should replace this with a future for the samples (if any?)
-        # or maybe just flip the hierarchy
-        self.farm2org_step_queues = [RayQueue() for _ in range(cfg.nfarms)]
-        self.farm2org_sample_queues = [RayQueue() for _ in range(cfg.nfarms)]
+        self.extra_farm_args = args
 
-        self.farm_actors = [
-            FarmActor.options(max_concurrency=3).remote(i, cfg, *args)
-            for i in range(cfg.nfarms)
-        ]
-        self.genetic_ratios = geno_config_to_matrix(cfg.initial_genetic_ratios)
-        self.external_pressure_ratios = geno_config_to_matrix(
-            cfg.initial_genetic_ratios
-        )
-        self.averaged_offspring = empty_geno_from_cfg(cfg)
-
-        # start the actors
-        self._futures = []
-        for actor, producer, consumer_step, consumer_sample in zip(
-            self.farm_actors,
-            self.org2farm_queues,
-            self.farm2org_step_queues,
-            self.farm2org_sample_queues,
-        ):
-            self._futures.append(
-                actor.run.remote(producer, consumer_step, consumer_sample)
-            )
+        self.reset()
 
     def update_genetic_ratios(self, offspring: GenoDistrib):
         """
@@ -136,20 +114,22 @@ class Organisation:
         return number, ratios
 
     def _send_command(self, farm_idx: int, command: type, *args, **kwargs):
-        queue = self.org2farm_queues[farm_idx]
+        queue = self._org2farm_queues[farm_idx]
         queue.put(command(*args, **kwargs))
 
     def _broadcast_command(self, command: type, *args, **kwargs):
-        for i in range(len(self.farm_actors)):
+        for i in range(len(self._farm_actors)):
             self._send_command(i, command, *args, **kwargs)
 
     def _receive_outputs(self, farm_idx):
-        queue = self.farm2org_step_queues[farm_idx]
-        response: StepResponse = queue.get(timeout=1.0)
+        print(f"Popping from {farm_idx}")
+        queue = self._farm2org_step_queues[farm_idx]
+        response: StepResponse = queue.get(timeout=2.0)
+        assert isinstance(response, StepResponse)
         return response
 
     def _reduce(self) -> List[StepResponse]:
-        return [self._receive_outputs(i) for i in range(len(self.farm_actors))]
+        return [self._receive_outputs(i) for i in range(len(self._farm_actors))]
 
     def step(self, cur_date, actions: SAMPLED_ACTIONS) -> List[float]:
         """
@@ -162,15 +142,20 @@ class Organisation:
         :returns: the cumulated reward from all the farm updates.
         """
 
+        if not self.is_running:
+            self.start()
+
         # update the farms and get the offspring
-        self._broadcast_command(ClearFlags, cur_date)
-        for farm_queue in self.farm2org_step_queues:
-            self.handle_farm_messages(farm_queue)
+        # self._broadcast_command(ClearFlags, cur_date)
+        # for farm_queue in self.farm2org_sample_queues:
+        #    self.handle_farm_messages(farm_queue)
 
         offspring_dict = {}
         payoffs = []
 
+        print("Sending commands")
         for farm_idx, action in enumerate(actions):
+            print(f"To {farm_idx}: {action}")
             self._send_command(
                 farm_idx, StepCommand, cur_date, action, *self.get_external_pressure()
             )
@@ -185,8 +170,8 @@ class Organisation:
         # note: this is done on organisation level because it requires access to
         # other farms - and will allow multiprocessing of the main update
 
-        for farm_ix, offspring in offspring_dict.items():
-            self._send_command(farm_ix, DisperseCommand, cur_date, offspring)
+        # for farm_ix, offspring in offspring_dict.items():
+        #    self._send_command(farm_ix, DisperseCommand, cur_date, offspring)
 
         total_offspring = list(offspring_dict.values())
         self.update_offspring_average(total_offspring)
@@ -224,7 +209,80 @@ class Organisation:
     def __repr__(self):
         return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
-    def handle_farm_messages(self, farm_queue: RayQueue):
+    def start(self):
+        # Note: pickling won't be fun.
+        cfg = self.cfg
+        self._org2farm_queues = [RayQueue() for _ in range(cfg.nfarms)]
+        # Yes, this is bad. I should replace this with a future for the samples (if any?)
+        # or maybe just flip the hierarchy
+        self._farm2org_step_queues = [RayQueue() for _ in range(cfg.nfarms)]
+        self._farm2org_sample_queues = [RayQueue() for _ in range(cfg.nfarms)]
+
+        self._farm_actors = []
+
+        for i in range(cfg.nfarms):
+            # concurrency is needed to call gym space.
+            # TODO: we could likely add another event in the command queue...
+            self._farm_actors.append(
+                FarmActor.options(max_concurrency=2).remote(
+                    i, cfg, *self.extra_farm_args
+                )
+            )
+
+        for actor, producer, consumer_step, consumer_sample in zip(
+            self._farm_actors,
+            self._org2farm_queues,
+            self._farm2org_step_queues,
+            self._farm2org_sample_queues,
+        ):
+            self._futures.append(
+                actor.run.remote(producer, consumer_step, consumer_sample)
+            )
+
+    def stop(self):
+        print("Stopping farms")
+        self._broadcast_command(DoneCommand, None)
+        ray.get(self._futures)
+        # TODO: implement process resuming?
+        #  In principle, if the queues are empty reentrancy should be possible right?
+
+    @property
+    def is_running(self):
+        return hasattr(self, "_farm_actors") and len(self._farm_actors) > 0
+
+    def reset(self):
+        cfg = self.cfg
+
+        if self.is_running:
+            self.stop()
+
+        self._farm_actors: List[FarmActor] = []
+        self._farm2org_sample_queues: List[RayQueue] = []
+        self._farm2org_step_queues: List[RayQueue] = []
+        self._org2farm_queues: List[RayQueue] = []
+        self._futures = []
+
+        self.genetic_ratios = geno_config_to_matrix(cfg.initial_genetic_ratios)
+        self.external_pressure_ratios = geno_config_to_matrix(
+            cfg.initial_genetic_ratios
+        )
+        self.averaged_offspring = empty_geno_from_cfg(cfg)
+
+    def get_gym_space(self) -> SimulatorSpace:
+        """
+        Get a gym space for all the agents
+        """
+        nfarms = self.cfg.nfarms
+        names = [f"farm_{i}" for i in range(nfarms)]
+        if self.is_running:
+            spaces: List[ObservationSpace] = ray.get(
+                [actor.get_gym_space.remote() for actor in self._farm_actors]
+            )
+            return dict(zip(names, spaces))
+        else:
+            return {farm_name: no_observation(MAX_NUM_CAGES) for farm_name in names}
+
+    def handle_farm_messages(self, farm_sample_queue: RayQueue):
         """
         Handle the messages sent in the farm-to-organisation queue.
         Currently, only one type of message is implemented: :class:`slim.types.QueueTypes.SamplingResponse`.
@@ -238,7 +296,7 @@ class Organisation:
 
         try:
             while True:
-                farm_response = farm_queue.get_nowait()
+                farm_response = farm_sample_queue.get_nowait()
                 assert isinstance(
                     farm_response, SamplingResponse
                 ), f"Out of sync! Expected a SamplingResponse, got a {type(farm_response)}"
@@ -248,4 +306,5 @@ class Organisation:
                     self._broadcast_command(AskForTreatmentCommand)
 
         except Empty:
+            print("No sampling events, skipping")
             pass

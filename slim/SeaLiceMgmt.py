@@ -73,6 +73,7 @@ if __name__ == "__main__":
 
     args, unknown = parser.parse_known_args()
 
+    ray.init()
     # set up config class and logger (logging to file and screen.)
     create_logger()
 

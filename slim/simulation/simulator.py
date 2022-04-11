@@ -32,9 +32,11 @@ from .organisation import Organisation
 from slim.types.policies import (
     ACTION_SPACE,
     CURRENT_TREATMENTS,
-    ObservationType,
+    ObservationSpace,
     NO_ACTION,
     TREATMENT_NO,
+    no_observation,
+    get_observation_space_schema,
 )
 from slim.types.treatments import Treatment
 
@@ -117,22 +119,9 @@ class SimulatorPZEnv(AECEnv):
         self._action_spaces = {agent: ACTION_SPACE for agent in self.agents}
 
         # TODO: Question: would it be better to model distinct cage pops?
-        self._observation_spaces = {
-            agent: spaces.Dict(
-                {
-                    "aggregation": spaces.Box(
-                        low=0, high=20, shape=(20,), dtype=np.float32
-                    ),
-                    "fish_population": spaces.Box(
-                        low=0, high=1e6, shape=(20,), dtype=np.int64
-                    ),
-                    "current_treatments": CURRENT_TREATMENTS,
-                    "allowed_treatments": spaces.Discrete(MAX_NUM_APPLICATIONS),
-                    "asked_to_treat": spaces.MultiBinary(1),  # Yes or no
-                }
-            )
-            for agent in self.agents
-        }
+        self._observation_spaces = get_observation_space_schema(
+            self.agents, MAX_NUM_APPLICATIONS
+        )
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
@@ -148,15 +137,8 @@ class SimulatorPZEnv(AECEnv):
         pass
 
     @property
-    @functools.lru_cache(maxsize=None)
     def no_observation(self):
-        return {
-            "aggregation": np.zeros((MAX_NUM_CAGES,), dtype=np.float32),
-            "fish_population": np.zeros((MAX_NUM_CAGES,), dtype=np.int64),
-            "current_treatments": np.zeros((self.treatment_no + 1,), dtype=np.int8),
-            "allowed_treatments": 0,
-            "asked_to_treat": np.zeros((1,), dtype=np.int8),
-        }
+        return no_observation(MAX_NUM_CAGES)
 
     def observe(self, agent):
         return self.observations[agent]
@@ -188,10 +170,8 @@ class SimulatorPZEnv(AECEnv):
             self.rewards = dict(
                 zip(self.possible_agents, self.organisation.step(self.cur_day, actions))
             )
-            for agent_ in self.agents:
-                self.observations[agent_] = ray.get(
-                    self._agent_to_farm[agent].get_gym_space.remote()
-                )
+
+            self.observations = self.organisation.get_gym_space()
             self.cur_day += dt.timedelta(days=1)
         else:
             self._clear_rewards()
@@ -199,12 +179,10 @@ class SimulatorPZEnv(AECEnv):
         self._accumulate_rewards()
 
     def reset(self):
+        self.organisation.reset()
         self.organisation = Organisation(self.cfg)
         # Gym/PZ assume the agents are a dict
-        self._agent_to_farm = {
-            f"farm_{i}": farm for i, farm in enumerate(self.organisation.farm_actors)
-        }
-        self.possible_agents = list(self._agent_to_farm.keys())
+        self.possible_agents = [f"farm_{i}" for i in range(self.cfg.nfarms)]
         self.agents = self.possible_agents[:]
         self.rewards = {agent: 0 for agent in self.agents}
         self.dones = {agent: False for agent in self.agents}
@@ -252,7 +230,7 @@ class BernoullianPolicy:
         )
         return picked_treatment
 
-    def predict(self, observation: ObservationType, agent: str):
+    def predict(self, observation: ObservationSpace, agent: str):
         if isinstance(observation, spaces.Box):
             raise NotImplementedError("Only dict spaces are supported for now")
 
@@ -282,7 +260,7 @@ class MosaicPolicy:
     def __init__(self, cfg: Config):
         self.last_action = [0] * len(cfg.farms)
 
-    def predict(self, observation: ObservationType, agent: str):
+    def predict(self, observation: ObservationSpace, agent: str):
         if not observation["asked_to_treat"]:
             return NO_ACTION
 

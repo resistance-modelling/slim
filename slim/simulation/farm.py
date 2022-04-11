@@ -32,7 +32,7 @@ from slim.simulation.lice_population import (
     empty_geno_from_cfg,
 )
 from slim.types.queue import *
-from slim.types.policies import TREATMENT_NO
+from slim.types.policies import TREATMENT_NO, ObservationSpace
 from slim.types.treatments import Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
@@ -336,7 +336,7 @@ class Farm(LoggableMixin):
             new_reservoir_lice_ratios=genorates_to_dict(ext_pressure_ratios),
         )
 
-        self._report_sample(cur_date, farm_to_org)
+        # self._report_sample(cur_date, farm_to_org)
 
         # reset the number of treatments
         if ((cur_date - self.start_date).days + 1) % 365 == 0:
@@ -393,7 +393,7 @@ class Farm(LoggableMixin):
         )
 
     def get_farm_allocation(
-        self, target_farm: Farm, eggs_by_hatch_date: GenoDistribByHatchDate
+        self, target_farm_id: int, eggs_by_hatch_date: GenoDistribByHatchDate
     ) -> GenoDistribByHatchDate:
         """Return farm allocation of arrivals, that is a dictionary of genotype distributions based
         on hatch date updated to take into account probability of making it to the target farm.
@@ -402,7 +402,7 @@ class Farm(LoggableMixin):
 
         Note: for efficiency reasons this class *modifies* eggs_by_hatch_date in-place.
 
-        :param target_farm: Farm the eggs are travelling to
+        :param target_farm_id: Farm the eggs are travelling to
         :param eggs_by_hatch_date: Dictionary of genotype distributions based on hatch date
 
         :return: Updated dictionary of genotype distributions based on hatch date
@@ -412,7 +412,7 @@ class Farm(LoggableMixin):
 
         for hatch_date, geno_dict in farm_allocation.items():
             # get the interfarm travel probability between the two farms
-            travel_prob = self.cfg.interfarm_probs[self.id_][target_farm.id_]
+            travel_prob = self.cfg.interfarm_probs[self.id_][target_farm_id]
             n = geno_dict.gross
             arrivals = min(self.cfg.rng.poisson(travel_prob * n), n)
             new_geno = geno_dict.normalise_to(arrivals)
@@ -485,7 +485,7 @@ class Farm(LoggableMixin):
                 logger.debug("\t\tFarm {}:".format(farm.id_))
 
             # allocate eggs to cages
-            farm_arrivals = self.get_farm_allocation(farm, eggs_by_hatch_date)
+            farm_arrivals = self.get_farm_allocation(farm.id_, eggs_by_hatch_date)
             arrivals_per_cage = self.get_cage_allocation(len(farm.cages), farm_arrivals)
 
             total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(
@@ -505,7 +505,6 @@ class Farm(LoggableMixin):
             )
             arrival_date = cur_date + dt.timedelta(days=travel_time)
 
-            # update the cages
             for cage in farm.cages:
                 cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
 
@@ -557,7 +556,7 @@ class Farm(LoggableMixin):
             current_treatments.update(cage.current_treatments)
         return list(current_treatments)
 
-    def get_gym_space(self):
+    def get_gym_space(self) -> ObservationSpace:
         """
         :returns: a Gym space for the agent that controls this farm.
         """
@@ -607,6 +606,7 @@ class FarmActor:
         self.farm = Farm(id, cfg, initial_lice_pop)
         # ugly hack: modify the global logger here. TODO: revert to the logging singleton
         # Because this runs on a separate memory space the logger will not be affected.
+        print("Created an actor process here...")
         global logger
         logger = logging.getLogger(f"SLIM-Farm-{id}")
         logger.setLevel(logging.DEBUG)
@@ -622,10 +622,15 @@ class FarmActor:
         :param farm2org_step_q: a farm-to-organisation queue to send `FarmResponse` events
         """
 
+        # Should I put a barrier here?
         while True:
             # This should be called before the beginning of each day
-            command: FarmCommand = org2farm_q.get()
+            # print(f"{self.farm.id_} Waiting for command")
+            command: FarmCommand = org2farm_q.get(block=True)
+            # print(command)
+            # print(f"{self.farm.id_} received {command}")
             if isinstance(command, StepCommand):
+                print(f"{self.farm.id_} Received step command")
                 cur_date = command.request_date
                 action = command.action
                 ext_influx = command.ext_influx
@@ -639,18 +644,24 @@ class FarmActor:
                 )
                 profit = self.farm.get_profit(cur_date)
 
+                # print("Adding a command to this queue")
                 farm2org_step_q.put(StepResponse(cur_date, eggs, profit, cost))
 
-            elif isinstance(command, DisperseCommand):
-                self.farm.disperse_offspring(command.request_date, command.offspring)
+            # TODO: Refactor disperse_offspring first...
+            # elif isinstance(command, DisperseCommand):
+            #    print(f"{self.farm.id_} Received disperse command")
+            #    self.farm.disperse_offspring(command.request_date, command.offspring)
 
             elif isinstance(command, AskForTreatmentCommand):
+                print(f"{self.farm.id_} Received askfortreatment command")
                 self.farm.ask_for_treatment()
 
             elif isinstance(command, ClearFlags):
+                print(f"{self.farm.id_} Received clear command")
                 self.farm.clear_flags()
 
             elif isinstance(command, DoneCommand):
+                print(f"{self.farm.id_} Sayonara")
                 return
 
     def get_gym_space(self):
