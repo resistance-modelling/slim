@@ -72,6 +72,38 @@ All stages are subject to the following:
 
 In all stages but AM or AF lice can evolve. Evolution from PA will result in roughly 50% split between AM and AF.
 
+Gene encoding
+*************
+
+Let :math:`\mathbb{G}` be the set of genes. Each gene :math:`g` can appear in at 3 forms (*alleles*): *dominant*
+(represented as :math:`G`), *recessive* (:math:`g`) and *heterozygous dominant* (:math:`Gg`), typically grouped in
+the set :math:`\mathbb{A_g}`. :math:`A2G(G) = g` gives the representative gene of an allele.
+
+We represent the genotype distribution of the population :math:`m`, time :math:`t`, farm :math:`f` and cage :math:`c`
+as :math:`G^m_{tfc}`.
+
+This function is defined as :math:`\mathbb{Allele} \rightarrow \mathbb{N}`, that is it associate
+alleles to a discrete number.
+
+The frequency of a single allele :math:`x` is represented by :math:`G^m_{tfc}(X=x)`, with the following constraints:
+
+* All the frequencies of the alleles belonging to the same gene must sum to the same gross count
+* All the frequencies of distinct genes must coincide - i.e. they provide different yet consistent views on the same
+  distribution
+* All the frequencies must be positive integers.
+
+In symbols:
+
+.. math::
+     \begin{split}
+     &S_g(G^m_{tfc}) = \sum_{x \in \mathbb{A_g}} G^m_{tfc}(X=x) = N^m_{tfc} \\
+     &\forall g \in \mathbb{G}. S_g(G^m_{tfc}) = N^m_{tfc} \\
+     &\forall x \in A. G^m_{tfc} \in \mathbb{N}
+     \end{split}
+
+One can see the different genes as independently identically distributed (i.i.d.) variables with no correlation or
+whatsoever.
+
 Treatment
 *********
 
@@ -193,8 +225,34 @@ To accommodate the need for fast processing, we use double counting to consider 
 matches, then use a multinomial distribution to generate the bespoke genotype distribution given
 such (normalised) pairings.
 
+
+Offspring distribution
+**********************
+
+There are two mechanisms that distribute the offspring: farm-to-farm movements and external pressure integration.
+
+Farm-to-Farm movements
+----------------------
+
+The majority of lice offsprings is typically lost, some are transmitted to neighbouring farms and very few are
+reintegrated into the reservoir. For each pair of farms :math:`f_i` and :math:`f_j` we have data on the travel distance
+:math:`d_{i,j}` and lice rate :math:`r_{i,j}`.
+
+If a farm :math:`f_i` generates :math:`N^{Egg}_i` eggs with genotype distribution :math:`G^{Egg}_i` these will be distributed to the farm :math:`f_j`
+with the following formulae:
+
+.. math::
+    \begin{split}
+    &t' = t + \lambda (d_{i,j}) \\
+    &n_j = \min (\lambda (N^{Egg}_i * r_{i,j}), N^{Egg}_i) \\
+    &n_jk = Multinomial(n_j) \\
+    &G^{Eggs}_{t'jk} = G^{Egg}_i \cdot \frac{n_jk}{N^{Egg}_i}
+    \end{split}
+
+Where :math:`\lambda` is the Poisson distribution.
+
 External Pressure
-*****************
+-----------------
 
 Quite differently from previous authors, we only model the external pressure without modelling a reservoir
 *as a special cage*. Instead, we consider the reservoir as an infinite, _dynamic_ generator of new lice.
@@ -211,7 +269,7 @@ As for the second, we use a Dirichlet-Multinomial Bayesian process to infer the 
 The objective is to guarantee a _reserve_ of each genotype (even rare ones) while favouring the most prolific trait.
 
 Footnote
---------
+=========
 
 .. [1] https://www.marine.ie/Home/site-area/areas-activity/aquaculture/sea-lice
 .. [#Aldrin17] `"A stage-structured Bayesian hierarchical model for salmon lice populations at individual salmon farms – Estimated from multiple farm data sets" by Aldrin et al. 2017 <https://doi.org/10.1016/j.ecolmodel.2017.05.019>`_
