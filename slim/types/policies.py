@@ -25,7 +25,7 @@ __all__ = [
     "ObservationSpace",
     "SimulatorSpace",
     "get_observation_space_schema",
-    "no_observation"
+    "no_observation",
 ]
 
 # 0 - (treatment_no - 1): treatment code
@@ -44,23 +44,21 @@ SAMPLED_ACTIONS = Union[List[ActionType], np.ndarray]
 # Each of those bits is 1 if that treatment is performed.
 CURRENT_TREATMENTS = MultiBinary(TREATMENT_NO + 1)
 
+
 class ObservationSpace(TypedDict):
     aggregation: np.ndarray
     fish_population: np.ndarray
     current_treatments: np.ndarray
     allowed_treatments: int
-    asked_to_treat: np.ndarray # gym doesn't like bools
+    asked_to_treat: np.ndarray  # gym doesn't like bools
+
 
 def get_observation_space_schema(agents: List[str], num_applications: int):
     return {
         agent: GymDict(
             {
-                "aggregation": Box(
-                    low=0, high=20, shape=(20,), dtype=np.float32
-                ),
-                "fish_population": Box(
-                    low=0, high=1e6, shape=(20,), dtype=np.int64
-                ),
+                "aggregation": Box(low=0, high=20, shape=(20,), dtype=np.float32),
+                "fish_population": Box(low=0, high=1e6, shape=(20,), dtype=np.int64),
                 "current_treatments": CURRENT_TREATMENTS,
                 "allowed_treatments": Discrete(num_applications),
                 "asked_to_treat": MultiBinary(1),  # Yes or no
@@ -68,6 +66,7 @@ def get_observation_space_schema(agents: List[str], num_applications: int):
         )
         for agent in agents
     }
+
 
 @functools.lru_cache(maxsize=None)
 def no_observation(ncages) -> ObservationSpace:
@@ -85,5 +84,6 @@ def no_observation(ncages) -> ObservationSpace:
         "allowed_treatments": 0,
         "asked_to_treat": np.zeros((1,), dtype=np.int8),
     }
+
 
 SimulatorSpace = Dict[str, ObservationSpace]

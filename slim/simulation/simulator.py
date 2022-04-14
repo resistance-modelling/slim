@@ -347,7 +347,8 @@ class Simulator:  # pragma: no cover
                 if not resume:
                     if (
                         self.cfg.save_rate
-                        and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate
+                        and (self.cur_day - self.cfg.start_date).days
+                        % self.cfg.save_rate
                         == 0
                     ) or day == num_days - 1:
                         pickle.dump(self, compressed_stream)

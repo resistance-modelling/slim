@@ -456,7 +456,6 @@ class Farm(LoggableMixin):
                 for bin_ix, n in enumerate(genotype_per_bin):
                     hatch_list[bin_ix][hatch_date][genotype] = n
 
-
         return hatch_list
 
     def disperse_offspring(
@@ -501,14 +500,12 @@ class Farm(LoggableMixin):
 
             # get the arrival time of the egg batch at the allocated
             # destination
-            travel_time = self.cfg.rng.poisson(
-                self.cfg.interfarm_times[self.id_][idx]
-            )
+            travel_time = self.cfg.rng.poisson(self.cfg.interfarm_times[self.id_][idx])
             arrival_date = cur_date + dt.timedelta(days=travel_time)
 
             arrivals_per_farm_cage.append((arrivals_per_cage, arrival_date))
 
-            #for cage in farm.cages:
+            # for cage in farm.cages:
             #    cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
         logger.debug(f"Returning {arrivals_per_farm_cage}")
         return arrivals_per_farm_cage
@@ -615,7 +612,7 @@ class FarmActor:
     def __init__(
         self, id: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None
     ):
-        # ugly hack: modify the global logger here. TODO: revert to the logging singleton
+        # ugly hack: modify the global logger here.
         # Because this runs on a separate memory space the logger will not be affected.
         global logger
         logger = logging.getLogger(f"SLIM-Farm-{id}")
@@ -624,7 +621,6 @@ class FarmActor:
         logger.setLevel(logging.INFO)
 
         self.farm = Farm(id, cfg, initial_lice_pop)
-
 
     def run(
         self,
@@ -637,7 +633,6 @@ class FarmActor:
         :param farm2org_step_q: a farm-to-organisation queue to send `FarmResponse` events
         """
 
-        # Should I put a barrier here?
         while True:
             try:
                 # This should be called before the beginning of each day
@@ -665,7 +660,9 @@ class FarmActor:
 
                 elif isinstance(command, DisperseCommand):
                     logger.debug(f"{self.farm.id_} Received disperse command")
-                    response = self.farm.disperse_offspring(command.offspring, command.request_date)
+                    response = self.farm.disperse_offspring(
+                        command.offspring, command.request_date
+                    )
                     farm2org_step_q.put(DisperseResponse(response))
                     logger.debug(f"{self.farm.id_} pushed response: {response}")
 
@@ -674,7 +671,7 @@ class FarmActor:
                         self.farm._update_arrivals(arrival[0], arrival[1])
 
                 elif isinstance(command, AskForTreatmentCommand):
-                    #print(f"{self.farm.id_} Received askfortreatment command")
+                    # print(f"{self.farm.id_} Received askfortreatment command")
                     self.farm.ask_for_treatment()
 
                 elif isinstance(command, ClearFlags):
@@ -684,7 +681,9 @@ class FarmActor:
                 elif isinstance(command, DoneCommand):
                     return
             except:
-                logging.exception("Found an exception! Bailing out, you are on your own...")
+                logging.exception(
+                    "Found an exception! Bailing out, you are on your own..."
+                )
 
     def get_gym_space(self):
         """

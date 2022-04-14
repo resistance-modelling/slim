@@ -31,7 +31,9 @@ from slim.types.queue import (
     StepResponse,
     DisperseCommand,
     AskForTreatmentCommand,
-    DoneCommand, DisperseResponse, DistributeCageOffspring,
+    DoneCommand,
+    DisperseResponse,
+    DistributeCageOffspring,
 )
 
 from slim.types.policies import no_observation
@@ -123,7 +125,7 @@ class Organisation:
     def _receive_outputs(self, farm_idx):
         queue = self._farm2org_step_queues[farm_idx]
         response = queue.get()
-        #assert isinstance(response, StepResponse)
+        # assert isinstance(response, StepResponse)
         return response
 
     def _reduce(self) -> List[StepResponse]:
@@ -146,7 +148,6 @@ class Organisation:
                 else:
                     self._send_command(farm_idx, command, elem, *extra_args)
 
-
     def _map(self, command, arg_list: Union[dict, list], *extra_args):
         self._for(command, arg_list, *extra_args)
         return self._reduce()
@@ -158,12 +159,12 @@ class Organisation:
         allocations_per_farm = {i: (cur_date, []) for i in range(self.cfg.nfarms)}
 
         for from_farm in dispersed:
-            for to_farm_idx, to_farm_cages in enumerate(from_farm.arrivals_per_farm_cage):
+            for to_farm_idx, to_farm_cages in enumerate(
+                from_farm.arrivals_per_farm_cage
+            ):
                 allocations_per_farm[to_farm_idx][1].append(to_farm_cages)
 
-
         self._for(DistributeCageOffspring, allocations_per_farm)
-
 
     def step(self, cur_date, actions: SAMPLED_ACTIONS) -> List[float]:
         """
@@ -201,6 +202,7 @@ class Organisation:
         # for farm_ix, offspring in offspring_dict.items():
         #    self._send_command(farm_ix, DisperseCommand, cur_date, offspring)
 
+        # TODO: merge egg dispersion with stepping, only perform cage assignments separately...
         self._disperse(cur_date, offspring_per_farm)
         self.update_offspring_average(offspring_per_farm)
         self.update_genetic_ratios(self.averaged_offspring)

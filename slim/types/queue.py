@@ -123,6 +123,7 @@ class SamplingEvent(Event):
 @dataclass(order=True)
 class FarmResponse(Event):
     """Base class for all farm activities that require some communication with the organisation."""
+
     pass
 
 
@@ -141,12 +142,14 @@ class DisperseCommand(FarmCommand):
     contribution of this farm to all the cages of the other farms.
     It's up to the organisation to combine these contributions.
     """
+
     offspring: GenoDistribByHatchDate
 
 
 @dataclass
 class DistributeCageOffspring(FarmCommand):
-    """Orders to disperse the offsprings """
+    """Orders to disperse the offsprings"""
+
     allocations: List[Tuple[CageAllocation, dt.datetime]]
 
 
