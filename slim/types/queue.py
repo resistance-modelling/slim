@@ -137,16 +137,6 @@ class StepCommand(FarmCommand):
 
 
 @dataclass
-class DisperseCommand(FarmCommand):
-    """Orders the farms to calculate the farm-to-farm and farm-to-cage offsprings. The result of the command is the
-    contribution of this farm to all the cages of the other farms.
-    It's up to the organisation to combine these contributions.
-    """
-
-    offspring: GenoDistribByHatchDate
-
-
-@dataclass
 class DistributeCageOffspring(FarmCommand):
     """Orders to disperse the offsprings"""
 
@@ -181,14 +171,10 @@ class SamplingResponse(FarmResponse):
 
 @dataclass
 class StepResponse(FarmResponse):
-    eggs_by_hatch_date: GenoDistribByHatchDate
+    arrivals_per_farm_cage: List[Tuple[CageAllocation, dt.datetime]]
+    total_offspring: GenoDistrib
     profit: float
     total_cost: float
-
-
-@dataclass
-class DisperseResponse(FarmResponse):
-    arrivals_per_farm_cage: List[Tuple[CageAllocation, dt.datetime]]
 
 
 EventT = TypeVar("EventT", CageEvent, FarmCommand, FarmResponse, SamplingEvent)

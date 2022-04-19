@@ -655,16 +655,17 @@ class FarmActor:
                     )
                     profit = self.farm.get_profit(cur_date)
 
-                    # print("Adding a command to this queue")
-                    farm2org_step_q.put(StepResponse(eggs, profit, cost))
+                    allocations = self.farm.disperse_offspring(eggs, cur_date)
 
-                elif isinstance(command, DisperseCommand):
-                    logger.debug(f"{self.farm.id_} Received disperse command")
-                    response = self.farm.disperse_offspring(
-                        command.offspring, command.request_date
-                    )
-                    farm2org_step_q.put(DisperseResponse(response))
-                    logger.debug(f"{self.farm.id_} pushed response: {response}")
+                    # print("Adding a command to this queue")
+
+                    # TODO: we could likely just return the final egg distribution...
+                    if len(eggs):
+                        final_eggs = GenoDistrib.batch_sum(list(eggs.values()))
+                    else:
+                        final_eggs = empty_geno_from_cfg(self.cfg)
+
+                    farm2org_step_q.put(StepResponse(allocations, final_eggs, profit, cost))
 
                 elif isinstance(command, DistributeCageOffspring):
                     for arrival in command.allocations:

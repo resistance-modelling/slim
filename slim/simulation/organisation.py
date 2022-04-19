@@ -15,7 +15,7 @@ import numpy as np
 import ray
 from ray.util.queue import Queue as RayQueue, Empty
 
-from .farm import Farm, FarmActor, MAX_NUM_CAGES
+from .farm import Farm, FarmActor, MAX_NUM_CAGES, CageAllocation
 from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import (
     GenoDistrib,
@@ -23,18 +23,8 @@ from .lice_population import (
     geno_config_to_matrix,
     GenoRates,
 )
-from slim.types.queue import (
-    FarmResponse,
-    SamplingResponse,
-    ClearFlags,
-    StepCommand,
-    StepResponse,
-    DisperseCommand,
-    AskForTreatmentCommand,
-    DoneCommand,
-    DisperseResponse,
-    DistributeCageOffspring,
-)
+
+from slim.types.queue import *
 
 from slim.types.policies import no_observation
 
@@ -42,7 +32,6 @@ if TYPE_CHECKING:
     from .config import Config
     from .farm import GenoDistribByHatchDate
     from slim.types.policies import SAMPLED_ACTIONS, ObservationSpace, SimulatorSpace
-
 
 class Organisation:
     """
@@ -152,16 +141,11 @@ class Organisation:
         self._for(command, arg_list, *extra_args)
         return self._reduce()
 
-    def _disperse(self, cur_date: dt.datetime, offspring_list):
-        param = [(cur_date, offspring) for offspring in offspring_list]
-        dispersed = cast(List[DisperseResponse], self._map(DisperseCommand, param))
-
+    def _disperse(self, cur_date: dt.datetime, eggs_per_cage: List[List[Tuple[CageAllocation, dt.datetime]]]):
         allocations_per_farm = {i: (cur_date, []) for i in range(self.cfg.nfarms)}
 
-        for from_farm in dispersed:
-            for to_farm_idx, to_farm_cages in enumerate(
-                from_farm.arrivals_per_farm_cage
-            ):
+        for from_farm in eggs_per_cage:
+            for to_farm_idx, to_farm_cages in enumerate(from_farm):
                 allocations_per_farm[to_farm_idx][1].append(to_farm_cages)
 
         self._for(DistributeCageOffspring, allocations_per_farm)
@@ -181,17 +165,20 @@ class Organisation:
             self.start()
 
         # update the farms and get the offspring
-        # self._broadcast_command(ClearFlags, cur_date)
-        # for farm_queue in self.farm2org_sample_queues:
-        #    self.handle_farm_messages(farm_queue)
+        self._broadcast_command(ClearFlags, cur_date)
+        for farm_queue in self._farm2org_sample_queues:
+            self.handle_farm_messages(farm_queue)
 
+        arrivals = []
         offspring_per_farm = []
         payoffs = []
 
         params = [(cur_date, action) for action in actions]
         results = self._map(StepCommand, params, *self.get_external_pressure())
-        for idx, response in enumerate(results):
-            offspring_per_farm.append(response.eggs_by_hatch_date)
+
+        for response in results:
+            arrivals.append(response.arrivals_per_farm_cage)
+            offspring_per_farm.append(response.total_offspring)
             payoffs.append(response.profit - response.total_cost)
 
         # once all the offspring is collected
@@ -199,34 +186,22 @@ class Organisation:
         # note: this is done on organisation level because it requires access to
         # other farms - and will allow multiprocessing of the main update
 
-        # for farm_ix, offspring in offspring_dict.items():
-        #    self._send_command(farm_ix, DisperseCommand, cur_date, offspring)
-
-        # TODO: merge egg dispersion with stepping, only perform cage assignments separately...
-        self._disperse(cur_date, offspring_per_farm)
+        self._disperse(cur_date, arrivals)
         self.update_offspring_average(offspring_per_farm)
         self.update_genetic_ratios(self.averaged_offspring)
 
         return payoffs
 
     def update_offspring_average(
-        self, offspring_per_farm: List[GenoDistribByHatchDate]
+        self, offspring_per_farm: List[GenoDistrib]
     ):
         t = self.cfg.reservoir_offspring_average
 
-        to_add = []
-        for farm_offspring in offspring_per_farm:
-            if len(farm_offspring):
-                to_add.append(GenoDistrib.batch_sum(list(farm_offspring.values())))
-
-        if len(to_add):
-            new_batch = GenoDistrib.batch_sum(to_add)
-        else:
-            new_batch = empty_geno_from_cfg(self.cfg)
+        total_offsprings = GenoDistrib.batch_sum(offspring_per_farm)
 
         self.averaged_offspring = self.averaged_offspring.mul_by_scalar(
             (t - 1) / t
-        ).add(new_batch.mul_by_scalar(1 / t))
+        ).add(total_offsprings.mul_by_scalar(1 / t))
 
     def to_json(self, **kwargs):
         json_dict = kwargs.copy()
@@ -252,9 +227,10 @@ class Organisation:
 
         for i in range(cfg.nfarms):
             # concurrency is needed to call gym space.
-            # TODO: we could likely add another event in the command queue...
+            # TODO: we could likely add another event in the command queue or merely have the
+            #  gym space returned and cached after a step command...
             self._farm_actors.append(
-                FarmActor.options(max_concurrency=2).remote(
+                FarmActor.options(name=f"FarmActor-{i}", max_concurrency=2).remote(
                     i, cfg, *self.extra_farm_args
                 )
             )
@@ -324,17 +300,14 @@ class Organisation:
         :param farm: the farm that sent the message
         """
 
-        try:
-            while True:
-                farm_response = farm_sample_queue.get_nowait()
-                assert isinstance(
-                    farm_response, SamplingResponse
-                ), f"Out of sync! Expected a SamplingResponse, got a {type(farm_response)}"
+        # Because this is launched before actors are started we don't have to care about locking the queue
+        # besides, farms are pure producers so in the worst case we are skipping a day...
+        if farm_sample_queue.qsize() > 0:
+            farm_response = farm_sample_queue.get_nowait()
+            assert isinstance(
+                farm_response, SamplingResponse
+            ), f"Out of sync! Expected a SamplingResponse, got a {type(farm_response)}"
 
-                if farm_response.detected_rate >= self.cfg.aggregation_rate_threshold:
-                    # send a treatment command to everyone
-                    self._broadcast_command(AskForTreatmentCommand)
-
-        except Empty:
-            print("No sampling events, skipping")
-            pass
+            if farm_response.detected_rate >= self.cfg.aggregation_rate_threshold:
+                # send a treatment command to everyone
+                self._broadcast_command(AskForTreatmentCommand)
