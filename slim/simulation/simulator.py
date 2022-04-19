@@ -167,11 +167,12 @@ class SimulatorPZEnv(AECEnv):
                 id = int(k[len("farm_") :])
                 actions[id] = v
 
-            self.rewards = dict(
-                zip(self.possible_agents, self.organisation.step(self.cur_day, actions))
-            )
+            payoffs = self.organisation.step(self.cur_day, actions)
+            id_to_gym = {i: f"farm_{i}" for i in range(len(self.possible_agents))}
 
-            self.observations = self.organisation.get_gym_space()
+            self.rewards = {id_to_gym[i]: payoff for i, payoff in payoffs.items()}
+
+            self.observations = self.organisation.get_gym_space
             self.cur_day += dt.timedelta(days=1)
         else:
             self._clear_rewards()

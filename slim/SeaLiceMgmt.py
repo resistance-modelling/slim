@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     args, unknown = parser.parse_known_args()
 
-    ray.init()
+    ray.init(local_mode=False)
     # set up config class and logger (logging to file and screen.)
     create_logger()
 
@@ -120,3 +120,5 @@ if __name__ == "__main__":
         profile_output_path = output_folder / f"profile_{simulation_id}.bin"
         # atexit.register(lambda prof=prof: prof.print_stats(output_unit=1e-3))
         cProfile.run("sim.run_model()", str(profile_output_path))
+
+    ray.timeline("outputs/timeline.json")

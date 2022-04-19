@@ -199,6 +199,7 @@ class Config(RuntimeConfig):
 
         # driver-specific settings
         self.save_rate = save_rate
+        self.farms_per_process = data.get("farms_per_process", self.nfarms)
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
         return [self.emb, self.thermolicer][treatment_type.value]

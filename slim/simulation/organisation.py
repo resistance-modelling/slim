@@ -9,13 +9,20 @@ __all__ = ["Organisation"]
 import datetime as dt
 import json
 
-from typing import List, Tuple, TYPE_CHECKING, cast, Union
+from typing import List, Tuple, TYPE_CHECKING, cast, Union, Any, ChainMap
 
 import numpy as np
 import ray
 from ray.util.queue import Queue as RayQueue, Empty
+from typeguard import check_type
 
-from .farm import Farm, FarmActor, MAX_NUM_CAGES, CageAllocation
+from .farm import (
+    Farm,
+    FarmActor,
+    MAX_NUM_CAGES,
+    CageAllocation,
+    DispersedOffspringPerFarm,
+)
 from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import (
     GenoDistrib,
@@ -32,6 +39,7 @@ if TYPE_CHECKING:
     from .config import Config
     from .farm import GenoDistribByHatchDate
     from slim.types.policies import SAMPLED_ACTIONS, ObservationSpace, SimulatorSpace
+
 
 class Organisation:
     """
@@ -103,54 +111,44 @@ class Organisation:
 
         return number, ratios
 
-    def _send_command(self, farm_idx: int, command: type, *args, **kwargs):
-        queue = self._org2farm_queues[farm_idx]
-        queue.put(command(*args, **kwargs))
-
-    def _broadcast_command(self, command: type, *args, **kwargs):
-        for i in range(len(self._farm_actors)):
-            self._send_command(i, command, *args, **kwargs)
-
-    def _receive_outputs(self, farm_idx):
-        queue = self._farm2org_step_queues[farm_idx]
-        response = queue.get()
-        # assert isinstance(response, StepResponse)
-        return response
-
-    def _reduce(self) -> List[StepResponse]:
-        return [self._receive_outputs(i) for i in range(len(self._farm_actors))]
-
-    def _for(self, command, arg_list: Union[dict, list], *extra_args):
-        # The lack of currying is a tad annoying
-        # TODO: make this look nicer?
-        if isinstance(arg_list, list):
-            for farm_idx, elem in enumerate(arg_list):
-                if isinstance(elem, tuple):
-                    self._send_command(farm_idx, command, *elem, *extra_args)
-                else:
-                    self._send_command(farm_idx, command, elem, *extra_args)
-
+    def _broadcast(
+        self,
+        f: Callable[[FarmActor, Optional[dict]], Any],
+        vals: Optional[Dict[int, Any]] = None,
+    ):
+        # mimic an actor pool API, but works on dicts
+        future = []
+        if vals:
+            val_ref = ray.put(vals)
+            for farm in self._farm_actors:
+                future.append(f(farm, val_ref))
         else:
-            for farm_idx, elem in arg_list.items():
-                if isinstance(elem, tuple):
-                    self._send_command(farm_idx, command, *elem, *extra_args)
-                else:
-                    self._send_command(farm_idx, command, elem, *extra_args)
+            for farm in self._farm_actors:
+                future.append(f(farm))
 
-    def _map(self, command, arg_list: Union[dict, list], *extra_args):
-        self._for(command, arg_list, *extra_args)
-        return self._reduce()
+        res = ray.get(future)
+        to_return = {}
+        for r in res:
+            if r:
+                to_return.update(r)
 
-    def _disperse(self, cur_date: dt.datetime, eggs_per_cage: List[List[Tuple[CageAllocation, dt.datetime]]]):
-        allocations_per_farm = {i: (cur_date, []) for i in range(self.cfg.nfarms)}
+        return to_return
 
-        for from_farm in eggs_per_cage:
+    def _disperse_eggs(self, eggs_per_cage: Dict[int, DispersedOffspringPerFarm]):
+        allocations_per_farm: Dict[int, List[Tuple[CageAllocation, dt.datetime]]] = {
+            i: [] for i in range(self.cfg.nfarms)
+        }
+        for from_farm in eggs_per_cage.values():
             for to_farm_idx, to_farm_cages in enumerate(from_farm):
-                allocations_per_farm[to_farm_idx][1].append(to_farm_cages)
+                allocations_per_farm[to_farm_idx].append(to_farm_cages)
 
-        self._for(DistributeCageOffspring, allocations_per_farm)
+        gym_spaces = self._broadcast(
+            (lambda f, v: f.distribute_cage_offspring.remote(v)), allocations_per_farm
+        )
 
-    def step(self, cur_date, actions: SAMPLED_ACTIONS) -> List[float]:
+        self._gym_space = {f"farm_{i}": space for i, space in gym_spaces.items()}
+
+    def step(self, cur_date, actions: SAMPLED_ACTIONS) -> Dict[int, float]:
         """
         Perform an update across all farms.
         After that, some offspring will be distributed into the farms while others will be dispersed into
@@ -165,39 +163,41 @@ class Organisation:
             self.start()
 
         # update the farms and get the offspring
-        self._broadcast_command(ClearFlags, cur_date)
-        for farm_queue in self._farm2org_sample_queues:
-            self.handle_farm_messages(farm_queue)
+        self._broadcast(lambda f: f.clear_flags.remote())
+        self.handle_aggregation_rate()
 
-        arrivals = []
-        offspring_per_farm = []
-        payoffs = []
+        arrivals: Dict[int, DispersedOffspringPerFarm] = {}
+        offspring_per_farm: Dict[int, GenoDistrib] = {}
+        payoffs: Dict[int, float] = {}
 
-        params = [(cur_date, action) for action in actions]
-        results = self._map(StepCommand, params, *self.get_external_pressure())
+        params = {
+            i: (cur_date, action, *self.get_external_pressure())
+            for i, action in enumerate(actions)
+        }
+        results: Dict[
+            int, Tuple[DispersedOffspringPerFarm, GenoDistrib, float, float]
+        ] = self._broadcast(lambda f, v: f.step.remote(v), params)
 
-        for response in results:
-            arrivals.append(response.arrivals_per_farm_cage)
-            offspring_per_farm.append(response.total_offspring)
-            payoffs.append(response.profit - response.total_cost)
+        for k, v in results.items():
+            arrivals.update({k: v[0]})
+            offspring_per_farm.update({k: v[1]})
+            payoffs.update({k: v[2] - v[3]})
 
         # once all the offspring is collected
         # it can be dispersed (interfarm and intercage movement)
         # note: this is done on organisation level because it requires access to
         # other farms - and will allow multiprocessing of the main update
 
-        self._disperse(cur_date, arrivals)
+        self._disperse_eggs(arrivals)
         self.update_offspring_average(offspring_per_farm)
         self.update_genetic_ratios(self.averaged_offspring)
 
         return payoffs
 
-    def update_offspring_average(
-        self, offspring_per_farm: List[GenoDistrib]
-    ):
+    def update_offspring_average(self, offspring_per_farm: Dict[int, GenoDistrib]):
         t = self.cfg.reservoir_offspring_average
 
-        total_offsprings = GenoDistrib.batch_sum(offspring_per_farm)
+        total_offsprings = GenoDistrib.batch_sum(list(offspring_per_farm.values()))
 
         self.averaged_offspring = self.averaged_offspring.mul_by_scalar(
             (t - 1) / t
@@ -216,41 +216,25 @@ class Organisation:
 
     def start(self):
         # Note: pickling won't be fun.
+        # TODO: remove queues
         cfg = self.cfg
-        self._org2farm_queues = [RayQueue() for _ in range(cfg.nfarms)]
-        # Yes, this is bad. I should replace this with a future for the samples (if any?)
-        # or maybe just flip the hierarchy
-        self._farm2org_step_queues = [RayQueue() for _ in range(cfg.nfarms)]
-        self._farm2org_sample_queues = [RayQueue() for _ in range(cfg.nfarms)]
-
         self._farm_actors = []
 
-        for i in range(cfg.nfarms):
+        batch_pools = np.array_split(np.arange(0, cfg.nfarms), cfg.farms_per_process)
+
+        for actor_idx, farm_ids in enumerate(batch_pools):
             # concurrency is needed to call gym space.
             # TODO: we could likely add another event in the command queue or merely have the
             #  gym space returned and cached after a step command...
             self._farm_actors.append(
-                FarmActor.options(name=f"FarmActor-{i}", max_concurrency=2).remote(
-                    i, cfg, *self.extra_farm_args
-                )
-            )
-
-        for actor, producer, consumer_step, consumer_sample in zip(
-            self._farm_actors,
-            self._org2farm_queues,
-            self._farm2org_step_queues,
-            self._farm2org_sample_queues,
-        ):
-            self._futures.append(
-                actor.run.remote(producer, consumer_step, consumer_sample)
+                FarmActor.options(
+                    name=f"FarmActor-{actor_idx}", max_concurrency=2
+                ).remote(farm_ids, cfg, *self.extra_farm_args)
             )
 
     def stop(self):
         print("Stopping farms")
-        self._broadcast_command(DoneCommand, None)
-        ray.get(self._futures)
-        # TODO: implement process resuming?
-        #  In principle, if the queues are empty reentrancy should be possible right?
+        self._farm_actors = []  # out-of-scope actors will be purged
 
     @property
     def is_running(self):
@@ -262,33 +246,25 @@ class Organisation:
         if self.is_running:
             self.stop()
 
+        nfarms = self.cfg.nfarms
+        names = [f"farm_{i}" for i in range(nfarms)]
         self._farm_actors: List[FarmActor] = []
-        self._farm2org_sample_queues: List[RayQueue] = []
-        self._farm2org_step_queues: List[RayQueue] = []
-        self._org2farm_queues: List[RayQueue] = []
-        self._futures = []
-
+        self._gym_space: SimulatorSpace = {farm_name: no_observation(MAX_NUM_CAGES) for farm_name in names}
         self.genetic_ratios = geno_config_to_matrix(cfg.initial_genetic_ratios)
         self.external_pressure_ratios = geno_config_to_matrix(
             cfg.initial_genetic_ratios
         )
         self.averaged_offspring = empty_geno_from_cfg(cfg)
 
+    @property
     def get_gym_space(self) -> SimulatorSpace:
         """
         Get a gym space for all the agents
         """
-        nfarms = self.cfg.nfarms
-        names = [f"farm_{i}" for i in range(nfarms)]
-        if self.is_running:
-            spaces: List[ObservationSpace] = ray.get(
-                [actor.get_gym_space.remote() for actor in self._farm_actors]
-            )
-            return dict(zip(names, spaces))
-        else:
-            return {farm_name: no_observation(MAX_NUM_CAGES) for farm_name in names}
 
-    def handle_farm_messages(self, farm_sample_queue: RayQueue):
+        return self._gym_space
+
+    def handle_aggregation_rate(self):
         """
         Handle the messages sent in the farm-to-organisation queue.
         Currently, only one type of message is implemented: :class:`slim.types.QueueTypes.SamplingResponse`.
@@ -300,14 +276,11 @@ class Organisation:
         :param farm: the farm that sent the message
         """
 
-        # Because this is launched before actors are started we don't have to care about locking the queue
-        # besides, farms are pure producers so in the worst case we are skipping a day...
-        if farm_sample_queue.qsize() > 0:
-            farm_response = farm_sample_queue.get_nowait()
-            assert isinstance(
-                farm_response, SamplingResponse
-            ), f"Out of sync! Expected a SamplingResponse, got a {type(farm_response)}"
-
-            if farm_response.detected_rate >= self.cfg.aggregation_rate_threshold:
+        farm_responses = self._broadcast(lambda f: f.reported_aggregation_rate.remote())
+        to_broadcast = False
+        for farm_response in farm_responses.values():
+            if farm_response >= self.cfg.aggregation_rate_threshold:
                 # send a treatment command to everyone
-                self._broadcast_command(AskForTreatmentCommand)
+                to_broadcast = True
+        if to_broadcast:
+            self._broadcast(lambda f: f.ask_for_treatment.remote())

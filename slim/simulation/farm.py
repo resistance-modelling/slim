@@ -37,6 +37,9 @@ from slim.types.treatments import Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
+ArrivalDate = dt.datetime
+DispersedOffspring = Tuple[CageAllocation, ArrivalDate]
+DispersedOffspringPerFarm = List[Tuple[CageAllocation, ArrivalDate]]
 LocationTemps = TypedDict(
     "LocationTemps", {"northing": int, "temperatures": List[float]}
 )
@@ -75,6 +78,8 @@ class Farm(LoggableMixin):
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.available_treatments = farm_cfg.max_num_treatments
+        self.reported_aggregation = 0.0
+
         self.cages = [
             Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)
         ]  # pytype: disable=wrong-arg-types
@@ -306,7 +311,6 @@ class Farm(LoggableMixin):
         cur_date: dt.datetime,
         ext_influx: int,
         ext_pressure_ratios: GenoRates,
-        farm_to_org: RayQueue,
     ) -> Tuple[GenoDistribByHatchDate, float]:
         """Update the status of the farm given the growth of fish and change
         in population of parasites. Also distribute the offspring across cages.
@@ -314,12 +318,9 @@ class Farm(LoggableMixin):
         :param cur_date: Current date
         :param ext_influx: the amount of lice that enter a cage
         :param ext_pressure_ratios: the ratio to use for the external pressure
-        :param farm_to_org a queue to send a sampling response, if due
 
         :returns: a pair of (dictionary of genotype distributions based on hatch date, cost of the update)
         """
-
-        # TODO: why not simply returning a possible event as an extra element?
 
         self.clear_log()
 
@@ -422,7 +423,7 @@ class Farm(LoggableMixin):
 
     def get_cage_allocation(
         self, ncages: int, eggs_by_hatch_date: GenoDistribByHatchDate
-    ):
+    ) -> CageAllocation:
         """Return allocation of eggs for given number of cages.
 
         :param ncages: Number of bins to allocate to
@@ -440,7 +441,7 @@ class Farm(LoggableMixin):
         probs_per_bin = np.full(ncages, 1 / ncages)
 
         # preconstruct the data structure
-        hatch_list = [
+        hatch_list: CageAllocation = [
             {
                 hatch_date: empty_geno_from_cfg(self.cfg)
                 for hatch_date in eggs_by_hatch_date
@@ -462,7 +463,7 @@ class Farm(LoggableMixin):
         self,
         eggs_by_hatch_date: GenoDistribByHatchDate,
         cur_date: dt.datetime,
-    ):
+    ) -> List[DispersedOffspring]:
         """Allocate new offspring between the farms and cages.
 
         Assumes the lice can float freely across a given farm so that
@@ -534,9 +535,11 @@ class Farm(LoggableMixin):
         gross_by_cage = [geno.gross for geno in geno_by_cage]
         return sum(gross_by_cage), gross_by_cage, geno_by_cage
 
-    def _update_arrivals(self, cage_allocations: CageAllocation, time: dt.datetime):
+    def distribute_cage_offspring(
+        self, cage_allocations: CageAllocation, arrival_time: dt.datetime
+    ):
         for cage, cage_allocation in zip(self.cages, cage_allocations):
-            cage.update_arrivals(cage_allocation, time)
+            cage.update_arrivals(cage_allocation, arrival_time)
 
     def get_profit(self, cur_date: dt.datetime) -> float:
         """
@@ -595,10 +598,10 @@ class Farm(LoggableMixin):
     def aggregation_rate(self):
         return max(cage.aggregation_rate for cage in self.cages)
 
-    def _report_sample(self, cur_date, farm_to_org):
+    def _report_sample(self, cur_date):
         def cts(_):
             # report the worst across cages
-            farm_to_org.put(SamplingResponse(cur_date, self.aggregation_rate))
+            self.reported_aggregation = self.aggregation_rate
 
         pop_from_queue(self.__sampling_events, cur_date, cts)
 
@@ -606,95 +609,82 @@ class Farm(LoggableMixin):
 @ray.remote
 class FarmActor:
     """
-    A wrapper for Ray
+    A Ray-based wrapper for farms.
     """
 
     def __init__(
-        self, id: int, cfg: Config, initial_lice_pop: Optional[GrossLiceDistrib] = None
+        self,
+        ids: List[int],
+        cfg: Config,
+        initial_lice_pop: Optional[GrossLiceDistrib] = None,
     ):
         # ugly hack: modify the global logger here.
         # Because this runs on a separate memory space the logger will not be affected.
         global logger
-        logger = logging.getLogger(f"SLIM-Farm-{id}")
+        logger = logging.getLogger(f"SLIM-Farm-{ids}")
         # for some reason logger.setLevel is not enough...
         logging.basicConfig(level=logging.INFO)
         logger.setLevel(logging.INFO)
 
-        self.farm = Farm(id, cfg, initial_lice_pop)
+        self.ids = ids
+        self.farms = [Farm(id_, cfg, initial_lice_pop) for id_ in ids]
 
-    def run(
-        self,
-        org2farm_q: RayQueue,
-        farm2org_step_q: RayQueue,
-        farm2org_sample_q: RayQueue,
+    def step(
+        self, payload: Dict[int, Tuple[dt.datetime, int, int, GenoRates]]
+    ) -> Dict[int, Tuple[DispersedOffspringPerFarm, GenoDistrib, float, float]]:
+        to_return = {}
+        for farm in self.farms:
+            command = payload[farm.id_]
+            cur_date, action, ext_influx, ext_pressure_ratios = command
+            # Be sure to clear any flags before this point
+            # Then we need to make the
+            farm.apply_action(cur_date, action)
+            # TODO: why can't we merge cost and profit?
+            eggs, cost = farm.update(cur_date, ext_influx, ext_pressure_ratios)
+            profit = farm.get_profit(cur_date)
+
+            allocations = farm.disperse_offspring(eggs, cur_date)
+
+            # TODO: we could likely just return the final egg distribution...
+            if len(eggs):
+                final_eggs = GenoDistrib.batch_sum(list(eggs.values()))
+            else:
+                final_eggs = empty_geno_from_cfg(self.cfg)
+
+            to_return[farm.id_] = (allocations, final_eggs, profit, cost)
+
+        return to_return
+
+    # TODO: there is an org-less approach to do this
+    #  make each allocation push to a queue corresponding to the farm you are sending to,
+    #  then pop from your wished farm queue. This requires no organisation arbitration.
+    #  Alternatively, we could use a semaphore to implement a barrier. Is it possible in Ray?
+    def distribute_cage_offspring(
+        self, allocations: Dict[int, List[Tuple[CageAllocation, dt.datetime]]]
     ):
-        """
-        :param org2farm_q: an organisation-to-farm queue to send `FarmCommand` events (currently only Step is supported)
-        :param farm2org_step_q: a farm-to-organisation queue to send `FarmResponse` events
-        """
+        for farm in self.farms:
+            for arrival in allocations[farm.id_]:
+                farm.distribute_cage_offspring(*arrival)
 
-        while True:
-            try:
-                # This should be called before the beginning of each day
-                # print(f"{self.farm.id_} Waiting for command")
-                command: FarmCommand = org2farm_q.get(block=True)
-                # print(command)
-                # print(f"{self.farm.id_} received {command}")
-                if isinstance(command, StepCommand):
-                    logger.debug(f"{self.farm.id_} Received step command")
-                    cur_date = command.request_date
-                    action = command.action
-                    ext_influx = command.ext_influx
-                    ext_pressure_ratios = command.ext_pressure_ratios
-                    # Be sure to clear any flags before this point
-                    # Then we need to make the
-                    self.farm.apply_action(cur_date, action)
-                    # TODO: why can't we merge cost and profit?
-                    eggs, cost = self.farm.update(
-                        cur_date, ext_influx, ext_pressure_ratios, farm2org_sample_q
-                    )
-                    profit = self.farm.get_profit(cur_date)
+        return {farm.id_: farm.get_gym_space() for farm in self.farms}
 
-                    allocations = self.farm.disperse_offspring(eggs, cur_date)
+    def ask_for_treatment(self):
+        for farm in self.farms:
+            farm.ask_for_treatment()
 
-                    # print("Adding a command to this queue")
-
-                    # TODO: we could likely just return the final egg distribution...
-                    if len(eggs):
-                        final_eggs = GenoDistrib.batch_sum(list(eggs.values()))
-                    else:
-                        final_eggs = empty_geno_from_cfg(self.cfg)
-
-                    farm2org_step_q.put(StepResponse(allocations, final_eggs, profit, cost))
-
-                elif isinstance(command, DistributeCageOffspring):
-                    for arrival in command.allocations:
-                        self.farm._update_arrivals(arrival[0], arrival[1])
-
-                elif isinstance(command, AskForTreatmentCommand):
-                    # print(f"{self.farm.id_} Received askfortreatment command")
-                    self.farm.ask_for_treatment()
-
-                elif isinstance(command, ClearFlags):
-                    logger.debug(f"{self.farm.id_} Received clear command")
-                    self.farm.clear_flags()
-
-                elif isinstance(command, DoneCommand):
-                    return
-            except:
-                logging.exception(
-                    "Found an exception! Bailing out, you are on your own..."
-                )
+    def clear_flags(self):
+        for farm in self.farms:
+            farm.clear_flags()
 
     def get_gym_space(self):
         """
-        Wrapper to access gym spaces from the inner farm
+        Wrapper to access gym spaces from the inner farms
         """
-        return self.farm.get_gym_space()
+        return {farm.id_: farm.get_gym_space() for farm in self.farms}
 
-
-# TODO: selectively enable/disable multiprocessing and hide the ray interface
-#  as ray doesn't support local mode with async actors
-class FarmActorWrapper:
-    def __init__(self):
-        pass
+    def reported_aggregation_rate(self):
+        """
+        Wrapper to access the reported aggregation rate from inner farms
+        TODO: does this matter? Why not simply reading the aggregation rate from the gym space once a T?
+        """
+        return {farm.id_: farm.reported_aggregation for farm in self.farms}

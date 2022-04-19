@@ -127,54 +127,14 @@ class FarmResponse(Event):
     pass
 
 
-@dataclass
-class StepCommand(FarmCommand):
-    """Orders the farm to step."""
-
-    action: int
-    ext_influx: int
-    ext_pressure_ratios: GenoRates
-
-
-@dataclass
-class DistributeCageOffspring(FarmCommand):
-    """Orders to disperse the offsprings"""
-
-    allocations: List[Tuple[CageAllocation, dt.datetime]]
-
-
-@dataclass
-class AskForTreatmentCommand(FarmCommand):
-    """Asks the farm to apply a treatment (i.e. set the "asked_for_treatment" flag to 1)"""
-
-    pass
-
-
-@dataclass
-class ClearFlags(FarmCommand):
-    """Clears any flag. To be sent before each day."""
-
-    pass
-
-
-@dataclass
-class DoneCommand(FarmCommand):
-    """Orders the farm to stop. Used to gracefully exit the actor process."""
-
-    pass
-
-
-@dataclass
-class SamplingResponse(FarmResponse):
-    detected_rate: float
-
-
+"""
 @dataclass
 class StepResponse(FarmResponse):
     arrivals_per_farm_cage: List[Tuple[CageAllocation, dt.datetime]]
     total_offspring: GenoDistrib
     profit: float
     total_cost: float
+"""
 
 
 EventT = TypeVar("EventT", CageEvent, FarmCommand, FarmResponse, SamplingEvent)
