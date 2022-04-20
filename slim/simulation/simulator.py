@@ -58,8 +58,6 @@ def get_env(cfg: Config) -> wrappers.OrderEnforcingWrapper:
     :returns: the wrapped environment
     """
     env = SimulatorPZEnv(cfg)
-    # This wrapper is only for environments which print results to the terminal
-    env = wrappers.CaptureStdoutWrapper(env)
     # this wrapper helps error handling for discrete action spaces
     env = wrappers.AssertOutOfBoundsWrapper(env)
     # Provides a wide variety of helpful user errors

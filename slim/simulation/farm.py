@@ -627,11 +627,14 @@ class FarmActor:
         logger.setLevel(logging.INFO)
 
         self.ids = ids
+        self.cfg = cfg
         self.farms = [Farm(id_, cfg, initial_lice_pop) for id_ in ids]
 
     def step(
-        self, payload: Dict[int, Tuple[dt.datetime, int, int, GenoRates]]
-    ) -> Dict[int, Tuple[DispersedOffspringPerFarm, GenoDistrib, float, float]]:
+        self,
+        payload: Dict[int, Tuple[dt.datetime, int, int, GenoRates]],
+        offspring_queues: List[RayQueue],
+    ) -> Dict[int, Tuple[GenoDistrib, float, float, ObservationSpace]]:
         to_return = {}
         for farm in self.farms:
             command = payload[farm.id_]
@@ -644,29 +647,27 @@ class FarmActor:
             profit = farm.get_profit(cur_date)
 
             allocations = farm.disperse_offspring(eggs, cur_date)
+            for other_farm_ix, allocation in enumerate(allocations):
+                # small trick to save a queue op
+                if other_farm_ix != farm.id_:
+                    offspring_queues[other_farm_ix].put(allocation)
+                else:
+                    farm.distribute_cage_offspring(*allocation)
 
             # TODO: we could likely just return the final egg distribution...
-            if len(eggs):
-                final_eggs = GenoDistrib.batch_sum(list(eggs.values()))
-            else:
-                final_eggs = empty_geno_from_cfg(self.cfg)
+            final_eggs = GenoDistrib.batch_sum(list(eggs.values()))
+            to_return[farm.id_] = (final_eggs, profit, cost)
 
-            to_return[farm.id_] = (allocations, final_eggs, profit, cost)
+        # Each farm i will produce an update for the j-th farm,
+        # thus there are Nfarms updates to pop every day.
+        # But we subtract one thanks to the trick above
+        for id_, farm in zip(self.ids, self.farms):
+            for _ in range(self.cfg.nfarms - 1):
+                arrival: DispersedOffspring = offspring_queues[id_].get()
+                farm.distribute_cage_offspring(*arrival)
+            to_return[id_] = (*to_return[id_], farm.get_gym_space())
 
         return to_return
-
-    # TODO: there is an org-less approach to do this
-    #  make each allocation push to a queue corresponding to the farm you are sending to,
-    #  then pop from your wished farm queue. This requires no organisation arbitration.
-    #  Alternatively, we could use a semaphore to implement a barrier. Is it possible in Ray?
-    def distribute_cage_offspring(
-        self, allocations: Dict[int, List[Tuple[CageAllocation, dt.datetime]]]
-    ):
-        for farm in self.farms:
-            for arrival in allocations[farm.id_]:
-                farm.distribute_cage_offspring(*arrival)
-
-        return {farm.id_: farm.get_gym_space() for farm in self.farms}
 
     def ask_for_treatment(self):
         for farm in self.farms:
@@ -675,16 +676,3 @@ class FarmActor:
     def clear_flags(self):
         for farm in self.farms:
             farm.clear_flags()
-
-    def get_gym_space(self):
-        """
-        Wrapper to access gym spaces from the inner farms
-        """
-        return {farm.id_: farm.get_gym_space() for farm in self.farms}
-
-    def reported_aggregation_rate(self):
-        """
-        Wrapper to access the reported aggregation rate from inner farms
-        TODO: does this matter? Why not simply reading the aggregation rate from the gym space once a T?
-        """
-        return {farm.id_: farm.reported_aggregation for farm in self.farms}
