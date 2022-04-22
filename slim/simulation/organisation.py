@@ -13,6 +13,7 @@ from typing import List, Tuple, TYPE_CHECKING, cast, Union, Any, ChainMap
 
 import numpy as np
 import ray
+from line_profiler_pycharm import profile
 from ray.util.queue import Queue as RayQueue, Empty
 from typeguard import check_type
 
@@ -135,6 +136,7 @@ class Organisation:
 
         return to_return
 
+    @profile
     def step(self, cur_date, actions: SAMPLED_ACTIONS) -> Dict[int, float]:
         """
         Perform an update across all farms.
@@ -150,6 +152,7 @@ class Organisation:
             self.start()
 
         # update the farms and get the offspring
+        # TODO: the "clean" command is pretty useless and must be removed...
         self._broadcast(lambda f: f.clear_flags.remote())
         self.handle_aggregation_rate()
 
@@ -164,7 +167,7 @@ class Organisation:
         results: Dict[
             int, Tuple[GenoDistrib, float, float, ObservationSpace]
         ] = self._broadcast(
-            lambda f, v, qs: f.step.remote(v, qs), params, self._offspring_queues
+            lambda f, v: f.step.remote(v), params
         )
 
         for k, v in results.items():
@@ -211,11 +214,18 @@ class Organisation:
         farms_per_process = cfg.farms_per_process
 
         self._farm_actors = []
+        self._offspring_queues = {}
 
         if farms_per_process == 1:
             batch_pools = np.arange(0, nfarms).reshape((-1, 1))
         else:
-            batch_pools = np.array_split(np.arange(0, nfarms), farms_per_process)
+            batch_pools = np.array_split(np.arange(0, nfarms), nfarms // farms_per_process)
+
+
+        for pool in batch_pools:
+            q = RayQueue()
+            for id_ in pool:
+                self._offspring_queues[id_] = q
 
         for actor_idx, farm_ids in enumerate(batch_pools):
             # concurrency is needed to call gym space.
@@ -223,11 +233,10 @@ class Organisation:
             #  gym space returned and cached after a step command...
             self._farm_actors.append(
                 FarmActor.options(
-                    name=f"FarmActor-{actor_idx}", max_concurrency=2
-                ).remote(farm_ids, cfg, *self.extra_farm_args)
+                    name=f"FarmActor-{actor_idx}"
+                ).remote(farm_ids, cfg, self._offspring_queues, *self.extra_farm_args)
             )
 
-        self._offspring_queues = [RayQueue() for _ in range(nfarms)]
 
     def stop(self):
         print("Stopping farms")

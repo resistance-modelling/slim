@@ -464,7 +464,10 @@ class Farm(LoggableMixin):
         eggs_by_hatch_date: GenoDistribByHatchDate,
         cur_date: dt.datetime,
     ) -> List[DispersedOffspring]:
-        """Allocate new offspring between the farms and cages.
+        """
+        DEPRECATED: this function is not multiprocessing-friendly.
+
+        Allocate new offspring between the farms and cages.
 
         Assumes the lice can float freely across a given farm so that
         they are not bound to a single cage while not attached to a fish.
@@ -511,6 +514,53 @@ class Farm(LoggableMixin):
             #    cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
         logger.debug("Returning %s", arrivals_per_farm_cage)
         return arrivals_per_farm_cage
+
+    def disperse_offspring_v2(
+        self,
+        eggs_by_hatch_date: GenoDistribByHatchDate,
+        cur_date: dt.datetime,
+    ) -> DispersedOffspring:
+        """Allocate new offspring within the farm
+
+        Assumes the lice can float freely across a given farm so that
+        they are not bound to a single cage while not attached to a fish.
+
+        :param eggs_by_hatch_date: Dictionary of genotype distributions based on hatch date
+        :param cur_date: Current date of the simulation
+        """
+
+        logger.debug("\tDispersing total offspring Farm %d", self.id_)
+        idx = self.id_
+
+        ncages = len(self.cages)
+        logger.debug("\t\tFarm %d%s", idx, ' current' if idx == self.id_ else '')
+
+        # allocate eggs to cages
+        farm_arrivals = self.get_farm_allocation(self.id_, eggs_by_hatch_date)
+        logger.debug("\t\t\tFarm allocation is %s", farm_arrivals)
+
+        # TODO: why can't arrivals_per_cage be computed later?
+        arrivals_per_cage = self.get_cage_allocation(ncages, farm_arrivals)
+        logger.debug("\t\t\tCage allocation is %s", arrivals_per_cage)
+
+        total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(
+            arrivals_per_cage
+        )
+        logger.debug("\t\t\tTotal new eggs = %d", total)
+        logger.debug("\t\t\tPer cage distribution = %s", str(by_cage))
+        self.log(
+            "\t\t\tPer cage distribution (as geno) = %s",
+            arrivals_per_cage=by_geno_cage,
+        )
+
+        # get the arrival time of the egg batch at the allocated
+        # destination
+        travel_time = self.cfg.rng.poisson(self.cfg.interfarm_times[self.id_][idx])
+        arrival_date = cur_date + dt.timedelta(days=travel_time)
+
+        self.distribute_cage_offspring(arrivals_per_cage, arrival_date)
+
+        return arrivals_per_cage, arrival_date
 
     def get_cage_arrivals_stats(
         self,
@@ -615,6 +665,7 @@ class FarmActor:
         self,
         ids: List[int],
         cfg: Config,
+        allocation_queues: Dict[int, RayQueue],
         initial_lice_pop: Optional[GrossLiceDistrib] = None,
     ):
         # ugly hack: modify the global logger here.
@@ -628,13 +679,35 @@ class FarmActor:
         self.ids = ids
         self.cfg = cfg
         self.farms = [Farm(id_, cfg, initial_lice_pop) for id_ in ids]
+        self.allocation_queues = allocation_queues
+
+    def _select(self, id_):
+        return next(farm for farm in self.farms if farm.id_ == id_)
+
+    def _disperse_offspring(self, cur_date, eggs_per_farm: List[GenoDistribByHatchDate]):
+        nfarms = self.cfg.nfarms
+        for eggs in eggs_per_farm:
+            for idx in range(nfarms):
+                # trick to save a queue operation
+                if idx in self.ids:
+                    self._select(idx).disperse_offspring_v2(eggs, cur_date)
+                else:
+                    self.allocation_queues[idx].put((idx, eggs))
+
+        # Each farm i will produce an update for the j-th farm, except when i=j
+        # thus there are N-1 farms updates to pop every day
+        # if batching is enabled the same queues are recycled.
+        for i in range(nfarms - 1):
+            farm_id, eggs = self.allocation_queues[self.ids[0]].get()
+            self._select(farm_id).disperse_offspring_v2(eggs, cur_date)
 
     def step(
         self,
         payload: Dict[int, Tuple[dt.datetime, int, int, GenoRates]],
-        offspring_queues: List[RayQueue],
     ) -> Dict[int, Tuple[GenoDistrib, float, float, ObservationSpace]]:
         to_return = {}
+        eggs_per_farm = []
+
         for farm in self.farms:
             command = payload[farm.id_]
             cur_date, action, ext_influx, ext_pressure_ratios = command
@@ -643,28 +716,18 @@ class FarmActor:
             farm.apply_action(cur_date, action)
             # TODO: why can't we merge cost and profit?
             eggs, cost = farm.update(cur_date, ext_influx, ext_pressure_ratios)
+            eggs_per_farm.append(eggs)
+            final_eggs = GenoDistrib.batch_sum(list(eggs.values()))
+
             profit = farm.get_profit(cur_date)
 
-            allocations = farm.disperse_offspring(eggs, cur_date)
-            for other_farm_ix, allocation in enumerate(allocations):
-                # small trick to save a queue op
-                if other_farm_ix != farm.id_:
-                    offspring_queues[other_farm_ix].put(allocation)
-                else:
-                    farm.distribute_cage_offspring(*allocation)
-
             # TODO: we could likely just return the final egg distribution...
-            final_eggs = GenoDistrib.batch_sum(list(eggs.values()))
             to_return[farm.id_] = (final_eggs, profit, cost)
 
-        # Each farm i will produce an update for the j-th farm,
-        # thus there are Nfarms updates to pop every day.
-        # But we subtract one thanks to the trick above
-        for id_, farm in zip(self.ids, self.farms):
-            for _ in range(self.cfg.nfarms - 1):
-                arrival: DispersedOffspring = offspring_queues[id_].get()
-                farm.distribute_cage_offspring(*arrival)
-            to_return[id_] = (*to_return[id_], farm.get_gym_space())
+        self._disperse_offspring(cur_date, eggs_per_farm)
+
+        for farm in self.farms:
+            to_return[farm.id_] = (*to_return[farm.id_], farm.get_gym_space())
 
         return to_return
 
