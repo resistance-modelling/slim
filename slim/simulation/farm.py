@@ -251,7 +251,7 @@ class Farm(LoggableMixin):
         """
 
         logger.debug(
-            "\t\tFarm {} requests treatment {}".format(self.id_, str(treatment_type))
+            "\t\tFarm %d requests treatment %s", self.id_, str(treatment_type)
         )
         if self.available_treatments <= 0:
             return False
@@ -291,7 +291,7 @@ class Farm(LoggableMixin):
         The farm is not obliged to tell the organisation whether treatment is being performed.
         """
 
-        logger.debug("Asking farm {} to treat".format(self.id_))
+        logger.debug("Asking farm %d to treat", self.id_)
         self._asked_to_treat = True
 
     def apply_action(self, cur_date: dt.datetime, action: int):
@@ -325,9 +325,9 @@ class Farm(LoggableMixin):
         self.clear_log()
 
         if cur_date >= self.start_date:
-            logger.debug("Updating farm {}".format(self.id_))
+            logger.debug("Updating farm %d", self.id_)
         else:
-            logger.debug("Updating farm {} (non-operational)".format(self.id_))
+            logger.debug("Updating farm %d (non-operational)", self.id_)
 
         self.log(
             "\tAdding %r new lice from the reservoir", new_reservoir_lice=ext_influx
@@ -473,27 +473,28 @@ class Farm(LoggableMixin):
         :param cur_date: Current date of the simulation
         """
 
-        logger.debug("\tDispersing total offspring Farm {}".format(self.id_))
+        logger.debug("\tDispersing total offspring Farm %d", self.id_)
         arrivals_per_farm_cage = []
 
         farms = self.cfg.farms
 
         for idx, farm in enumerate(farms):
             ncages = farm.n_cages
-            logger.debug(f"\t\tFarm {idx}{'(current)' if idx == self.id_ else ''}")
+            logger.debug("\t\tFarm %d%s", idx, ' current' if idx == self.id_ else '')
 
             # allocate eggs to cages
             farm_arrivals = self.get_farm_allocation(idx, eggs_by_hatch_date)
-            logger.debug(f"\t\t\tFarm allocation is {farm_arrivals}")
+            logger.debug("\t\t\tFarm allocation is %s", farm_arrivals)
 
+            # TODO: why can't arrivals_per_cage be computed later?
             arrivals_per_cage = self.get_cage_allocation(ncages, farm_arrivals)
-            logger.debug(f"\t\t\tCage allocation is {arrivals_per_cage}")
+            logger.debug("\t\t\tCage allocation is %s", arrivals_per_cage)
 
             total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(
                 arrivals_per_cage
             )
-            logger.debug("\t\t\tTotal new eggs = {}".format(total))
-            logger.debug("\t\t\tPer cage distribution = {}".format(by_cage))
+            logger.debug("\t\t\tTotal new eggs = %d", total)
+            logger.debug("\t\t\tPer cage distribution = %s", str(by_cage))
             self.log(
                 "\t\t\tPer cage distribution (as geno) = %s",
                 arrivals_per_cage=by_geno_cage,
@@ -508,7 +509,7 @@ class Farm(LoggableMixin):
 
             # for cage in farm.cages:
             #    cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
-        logger.debug(f"Returning {arrivals_per_farm_cage}")
+        logger.debug("Returning %s", arrivals_per_farm_cage)
         return arrivals_per_farm_cage
 
     def get_cage_arrivals_stats(
@@ -524,14 +525,12 @@ class Farm(LoggableMixin):
 
         # Basically ignore the hatch dates and sum up the batches
 
-        logger.debug(f"get_cage_arrivals_stats's cage_arrivals: {cage_arrivals}")
         geno_by_cage = [
             GenoDistrib.batch_sum(list(hatch_dict.values()))
             if len(hatch_dict.values())
             else empty_geno_from_cfg(self.cfg)
             for hatch_dict in cage_arrivals
         ]
-        logger.debug(f"geno_by_cage = {geno_by_cage}")
         gross_by_cage = [geno.gross for geno in geno_by_cage]
         return sum(gross_by_cage), gross_by_cage, geno_by_cage
 

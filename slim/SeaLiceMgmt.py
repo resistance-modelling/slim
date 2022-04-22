@@ -38,18 +38,24 @@ if __name__ == "__main__":
         default=False,
         action="store_true",
     )
-    parser.add_argument(
-        "--local-mode",
-        help="(DEBUG) Start the ray cluster in single-threaded (local mode).",
-        default=False,
-        action="store_true",
-    )
+
     parser.add_argument(
         "--profile",
-        help="(DEBUG) Dump cProfile stats. The output path is your_simulation_path/profile.bin.",
+        help="(DEBUG) Dump cProfile stats. The output path is your_simulation_path/profile.bin. Recommended to run together with --local-mode",
         default=False,
         action="store_true",
     )
+
+    ray_group = parser.add_argument_group()
+    ray_group.add_argument(
+        "--address",
+        help="Address of a ray cluster address",
+    )
+    ray_group.add_argument(
+        "--redis_password",
+        help="Password for the ray cluster",
+    )
+
 
     resume_group = parser.add_mutually_exclusive_group()
     resume_group.add_argument(
@@ -73,7 +79,8 @@ if __name__ == "__main__":
 
     args, unknown = parser.parse_known_args()
 
-    ray.init(local_mode=False)
+    ray.init(address=args.address, _redis_password=args.redis_password)
+
     # set up config class and logger (logging to file and screen.)
     create_logger()
 
