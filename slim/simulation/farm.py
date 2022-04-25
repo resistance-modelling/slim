@@ -81,7 +81,7 @@ class Farm(LoggableMixin):
         self.loc_y = farm_cfg.farm_location[1]
         self.start_date = farm_cfg.farm_start
         self.available_treatments = farm_cfg.max_num_treatments
-        self.reported_aggregation = 0.0
+        self._reported_aggregation = 0.0
 
         self.cages = [
             Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)
@@ -97,10 +97,6 @@ class Farm(LoggableMixin):
         self._asked_to_treat = False
 
         self.generate_sampling_events()
-
-    def clear_flags(self):
-        """Call this method before the main update method."""
-        self._asked_to_treat = False
 
     def __str__(self):
         """
@@ -372,6 +368,8 @@ class Farm(LoggableMixin):
 
         self.log("\t\tGenerated eggs by farm %d: %s", self.id_, eggs=eggs_log)
 
+        self._asked_to_treat = False
+
         return eggs_by_hatch_date, total_cost
 
     def get_cage_pressures(self, external_inflow: int) -> List[int]:
@@ -465,7 +463,8 @@ class Farm(LoggableMixin):
         cur_date: dt.datetime,
     ) -> List[DispersedOffspring]:
         """
-        DEPRECATED: this function is not multiprocessing-friendly.
+        DEPRECATED: it shouldn't be within a farm's responbility to calculate cage arrivals
+        within other farms.
 
         Allocate new offspring between the farms and cages.
 
@@ -641,6 +640,16 @@ class Farm(LoggableMixin):
             "asked_to_treat": np.array([self._asked_to_treat], dtype=np.int8),
         }
 
+    def get_aggregation_rate(self):
+        """Get the maximum aggregation rate updated to last time it was sampled.
+        This operation "consumes" the aggregation rate by setting it to -1 after returning
+        the actual value, and is updated once a sampling event occurs.
+        This is more efficient than using queues.
+        """
+        to_return = self._reported_aggregation
+        self._reported_aggregation = 0.0
+        return to_return
+
     @property
     def aggregation_rate(self):
         return max(cage.aggregation_rate for cage in self.cages)
@@ -648,7 +657,7 @@ class Farm(LoggableMixin):
     def _report_sample(self, cur_date):
         def cts(_):
             # report the worst across cages
-            self.reported_aggregation = self.aggregation_rate
+            self._reported_aggregation = self.aggregation_rate
 
         pop_from_queue(self.__sampling_events, cur_date, cts)
 
@@ -734,7 +743,3 @@ class FarmActor:
     def ask_for_treatment(self):
         for farm in self.farms:
             farm.ask_for_treatment()
-
-    def clear_flags(self):
-        for farm in self.farms:
-            farm.clear_flags()

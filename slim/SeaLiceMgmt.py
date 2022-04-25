@@ -48,11 +48,11 @@ if __name__ == "__main__":
 
     ray_group = parser.add_argument_group()
     ray_group.add_argument(
-        "--address",
+        "--ray-address",
         help="Address of a ray cluster address",
     )
     ray_group.add_argument(
-        "--redis_password",
+        "--ray--redis_password",
         help="Password for the ray cluster",
     )
 
@@ -77,8 +77,6 @@ if __name__ == "__main__":
     )
 
     args, unknown = parser.parse_known_args()
-
-    ray.init(address=args.address, _redis_password=args.redis_password)
 
     # set up config class and logger (logging to file and screen.)
     create_logger()
@@ -105,7 +103,7 @@ if __name__ == "__main__":
     config_args = config_parser.parse_args(unknown)
 
     # create the config object
-    cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate)
+    cfg = Config(cfg_path, args.param_dir, **vars(args), **vars(config_args))
 
     # run the simulation
     resume = True

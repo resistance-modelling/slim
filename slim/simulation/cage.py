@@ -1078,9 +1078,7 @@ class Cage(LoggableMixin):
         dying_lice = affected_lice - surviving_lice
 
         dying_lice_distrib = {k: int(v) for k, v in dying_lice.items() if v > 0}
-        logger.debug(
-            "\t\tLice mortality due t%s", dying_lice_distrib, dying_lice_distrib
-        )
+        logger.debug("\t\tLice mortality due to fish mortality: %s", dying_lice_distrib)
         return dying_lice_distrib
 
     def promote_population(
