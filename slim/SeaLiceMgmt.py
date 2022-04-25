@@ -56,7 +56,6 @@ if __name__ == "__main__":
         help="Password for the ray cluster",
     )
 
-
     resume_group = parser.add_mutually_exclusive_group()
     resume_group.add_argument(
         "--resume",

@@ -68,3 +68,5 @@ html_favicon = "../../res/logo.png"
 html_theme_options = {"style_nav_header_background": "black"}
 
 jsonschema_options = {"lift_description": True}
+
+python_use_unqualified_type_names = True

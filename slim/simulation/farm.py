@@ -9,6 +9,9 @@ A Farm is a fundamental agent in this simulation. It has a number of functions:
 
 from __future__ import annotations
 
+# FarmActor won't show up. See https://github.com/ray-project/ray/issues/2658
+__all__ = ["Farm", "FarmActor"]
+
 import json
 import logging
 from collections import Counter, defaultdict
@@ -90,7 +93,6 @@ class Farm(LoggableMixin):
         self._preemptively_assign_treatments(self.farm_cfg.treatment_dates)
 
         # Queues
-        # TODO: command queue and farm_to_org need to be moved away and passed by the org
         self.__sampling_events: PriorityQueue[SamplingEvent] = PriorityQueue()
         self._asked_to_treat = False
 
@@ -250,9 +252,7 @@ class Farm(LoggableMixin):
         :returns: whether the treatment has been added to at least one cage or not.
         """
 
-        logger.debug(
-            "\t\tFarm %d requests treatment %s", self.id_, str(treatment_type)
-        )
+        logger.debug("\t\tFarm %d requests treatment %s", self.id_, str(treatment_type))
         if self.available_treatments <= 0:
             return False
 
@@ -483,7 +483,7 @@ class Farm(LoggableMixin):
 
         for idx, farm in enumerate(farms):
             ncages = farm.n_cages
-            logger.debug("\t\tFarm %d%s", idx, ' current' if idx == self.id_ else '')
+            logger.debug("\t\tFarm %d%s", idx, " current" if idx == self.id_ else "")
 
             # allocate eggs to cages
             farm_arrivals = self.get_farm_allocation(idx, eggs_by_hatch_date)
@@ -533,7 +533,7 @@ class Farm(LoggableMixin):
         idx = self.id_
 
         ncages = len(self.cages)
-        logger.debug("\t\tFarm %d%s", idx, ' current' if idx == self.id_ else '')
+        logger.debug("\t\tFarm %d%s", idx, " current" if idx == self.id_ else "")
 
         # allocate eggs to cages
         farm_arrivals = self.get_farm_allocation(self.id_, eggs_by_hatch_date)
@@ -543,9 +543,7 @@ class Farm(LoggableMixin):
         arrivals_per_cage = self.get_cage_allocation(ncages, farm_arrivals)
         logger.debug("\t\t\tCage allocation is %s", arrivals_per_cage)
 
-        total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(
-            arrivals_per_cage
-        )
+        total, by_cage, by_geno_cage = self.get_cage_arrivals_stats(arrivals_per_cage)
         logger.debug("\t\t\tTotal new eggs = %d", total)
         logger.debug("\t\t\tPer cage distribution = %s", str(by_cage))
         self.log(
@@ -684,7 +682,9 @@ class FarmActor:
     def _select(self, id_):
         return next(farm for farm in self.farms if farm.id_ == id_)
 
-    def _disperse_offspring(self, cur_date, eggs_per_farm: List[GenoDistribByHatchDate]):
+    def _disperse_offspring(
+        self, cur_date, eggs_per_farm: List[GenoDistribByHatchDate]
+    ):
         nfarms = self.cfg.nfarms
         for eggs in eggs_per_farm:
             for idx in range(nfarms):

@@ -33,7 +33,8 @@ from slim.simulation.lice_population import (
 
 @pytest.fixture(autouse=True, scope="session")
 def run_destroy():
-    ray.init(local_mode=True, num_cpus=1, num_gpus=0)
+    # async actors cannot use local mode
+    ray.init(local_mode=False, num_cpus=1, num_gpus=0)
     yield
     ray.shutdown()
 

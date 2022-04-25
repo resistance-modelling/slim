@@ -169,8 +169,7 @@ class Cage(LoggableMixin):
             logger.debug("\t\tinitial fish population = %d", self.num_fish)
         else:
             logger.debug(
-                "\tUpdating farm %d / cage %d (non-operational)",
-                    self.farm_id, self.id
+                "\tUpdating farm %d / cage %d (non-operational)", self.farm_id, self.id
             )
 
         logger.debug("\t\tinitial lice population = %s", self.lice_population)
@@ -191,7 +190,9 @@ class Cage(LoggableMixin):
 
         # Lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure, ext_pressure_ratio)
-        logger.debug("\t\tExternal pressure lice distribution = %s", lice_from_reservoir)
+        logger.debug(
+            "\t\tExternal pressure lice distribution = %s", lice_from_reservoir
+        )
 
         if cur_date < self.start_date or self.is_fallowing:
             # Values that are not used before the start date
@@ -300,7 +301,9 @@ class Cage(LoggableMixin):
 
             logger.debug(
                 "\t\ttreating farm %d/cage %d on date %s",
-                    self.farm_id, self.id, cur_date
+                self.farm_id,
+                self.id,
+                cur_date,
             )
 
             geno_treatment_distrib = self.cfg.get_treatment(
@@ -360,7 +363,9 @@ class Cage(LoggableMixin):
 
                 logger.debug(
                     "\t\tdistribution of dead lice on farm %d/cage %d = %s",
-                        self.farm_id, self.id, dead_lice_dist
+                    self.farm_id,
+                    self.id,
+                    dead_lice_dist,
                 )
 
         # Compute cost
@@ -502,7 +507,9 @@ class Cage(LoggableMixin):
 
         logger.debug(
             "\t\t\tdistribution of new lice lifecycle stages on farm %s/cage %s = %s",
-                self.farm_id, self.id, lice_dist
+            self.farm_id,
+            self.id,
+            lice_dist,
         )
 
         return new_L2, new_L4, new_females, new_males
@@ -611,7 +618,8 @@ class Cage(LoggableMixin):
 
         logger.debug(
             "\t\t\tnumber of fish deaths: background = %d, from lice = %d",
-                fish_deaths_natural, fish_deaths_from_lice
+            fish_deaths_natural,
+            fish_deaths_from_lice,
         )
 
         return fish_deaths_natural, fish_deaths_from_lice
@@ -1070,7 +1078,9 @@ class Cage(LoggableMixin):
         dying_lice = affected_lice - surviving_lice
 
         dying_lice_distrib = {k: int(v) for k, v in dying_lice.items() if v > 0}
-        logger.debug("\t\tLice mortality due t%s", dying_lice_distrib, dying_lice_distrib)
+        logger.debug(
+            "\t\tLice mortality due t%s", dying_lice_distrib, dying_lice_distrib
+        )
         return dying_lice_distrib
 
     def promote_population(
@@ -1232,8 +1242,7 @@ class Cage(LoggableMixin):
             dead_lice_dist[stage] = mortality
 
         logger.debug(
-            "\t\tbackground mortality distribution of dead lice = %s",
-                dead_lice_dist
+            "\t\tbackground mortality distribution of dead lice = %s", dead_lice_dist
         )
         return dead_lice_dist
 
@@ -1273,9 +1282,7 @@ class Cage(LoggableMixin):
         new_L2 = from_ratios_rng(new_L2_gross, external_pressure_ratios, self.cfg.rng)
 
         new_lice_dist = {"L1": new_L1, "L2": new_L2}
-        logger.debug(
-            "\t\tdistribution of new lice from reservoir = %s", new_lice_dist
-        )
+        logger.debug("\t\tdistribution of new lice from reservoir = %s", new_lice_dist)
         return new_lice_dist
 
     def fallow(self):

@@ -13,16 +13,11 @@ from typing import List, Tuple, TYPE_CHECKING, cast, Union, Any, ChainMap
 
 import numpy as np
 import ray
-from line_profiler_pycharm import profile
 from ray.util.queue import Queue as RayQueue, Empty
-from typeguard import check_type
 
 from .farm import (
-    Farm,
     FarmActor,
     MAX_NUM_CAGES,
-    CageAllocation,
-    DispersedOffspringPerFarm,
 )
 from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import (
@@ -136,7 +131,6 @@ class Organisation:
 
         return to_return
 
-    @profile
     def step(self, cur_date, actions: SAMPLED_ACTIONS) -> Dict[int, float]:
         """
         Perform an update across all farms.
@@ -166,9 +160,7 @@ class Organisation:
         }
         results: Dict[
             int, Tuple[GenoDistrib, float, float, ObservationSpace]
-        ] = self._broadcast(
-            lambda f, v: f.step.remote(v), params
-        )
+        ] = self._broadcast(lambda f, v: f.step.remote(v), params)
 
         for k, v in results.items():
             offspring_per_farm.update({k: v[0]})
@@ -219,8 +211,9 @@ class Organisation:
         if farms_per_process == 1:
             batch_pools = np.arange(0, nfarms).reshape((-1, 1))
         else:
-            batch_pools = np.array_split(np.arange(0, nfarms), nfarms // farms_per_process)
-
+            batch_pools = np.array_split(
+                np.arange(0, nfarms), nfarms // farms_per_process
+            )
 
         for pool in batch_pools:
             q = RayQueue()
@@ -232,11 +225,10 @@ class Organisation:
             # TODO: we could likely add another event in the command queue or merely have the
             #  gym space returned and cached after a step command...
             self._farm_actors.append(
-                FarmActor.options(
-                    name=f"FarmActor-{actor_idx}"
-                ).remote(farm_ids, cfg, self._offspring_queues, *self.extra_farm_args)
+                FarmActor.options(name=f"FarmActor-{actor_idx}").remote(
+                    farm_ids, cfg, self._offspring_queues, *self.extra_farm_args
+                )
             )
-
 
     def stop(self):
         print("Stopping farms")
