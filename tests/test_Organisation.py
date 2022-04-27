@@ -72,9 +72,7 @@ class TestOrganisation:
             values = np.rint(100 * (1.0 + np.sin(deg + phases))).tolist()
             alleles = geno_to_alleles("a")
             offspring = from_dict(dict(zip(alleles, values)))
-            organisation.update_offspring_average(
-                [{cur_day + dt.timedelta(days=i): offspring}]
-            )
+            organisation.update_offspring_average({0: offspring})
             organisation.update_genetic_ratios(organisation.averaged_offspring)
 
     """

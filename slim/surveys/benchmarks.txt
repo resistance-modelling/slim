@@ -1,0 +1,51 @@
+Fyne_complete with policy=bernoulli
+
+Note: results of the first run only, may not be stable!
+
+master branch:
+
+30 days: 3.00 it/s
+60 days: 2.82 it/s
+180 days: 2.02 it/s
+365 days: 2.20 it/s
+
+multiprocessing + queues (one farm per actor)
+
+30 days: 2.03 it/s
+60 days: 1.86 it/s
+180 days: 1.09 s/it (0.91 it/s)
+365 days: 1.39 it/s
+
+multiprocessing without queues (1 farm per actor = full multiprocessing)
+30 days: 2.43 it/s
+60 days: 2.08 it/s
+180 days: 1.08 it/s
+365: days: 1.40 it/s
+
+multiprocessing without queues (3 farm per actor)
+30 days: 2.50 it/s
+60 days: 2.43 it/s
+180 days: 1.0 it/s
+365 days: 1.41 it/s
+
+Problem:
+Queues were overall pretty useless. However, removing them made the code a lot easier to debug.
+
+multiprocessing without queues, barrier, recycle gym spaces (1 farm per second)
+30 days: 4.9 it/s
+365 days: 4.1 it/s
+180 days: 3.74 it/s
+365 days: 3.76 it/s
+
+multiprocessing without queues, added "barrier" (3 farms per process):
+30 days: 3.00 it/s
+60 days: 2.50 it/s
+180 days: 2.40 it/s (1.15s)
+365 days: 1.98 it/s
+
+
+multiprocessing without queues, barrier, recycle gym spaces (1 farm per second)
+30 days: 5.2 it/s
+365 days: 5.2 it/s
+180 days: 4.17 it/s
+365 days: 4.45 it/s

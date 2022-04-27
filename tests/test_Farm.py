@@ -147,7 +147,7 @@ class TestFarm:
 
         total_eggs_by_date = {first_farm.start_date: sample_offspring_distrib}
         farm_eggs_by_date = first_farm.get_farm_allocation(
-            second_farm, total_eggs_by_date
+            second_farm.id_, total_eggs_by_date
         )
 
         assert len(farm_eggs_by_date) == len(total_eggs_by_date)
@@ -183,11 +183,14 @@ class TestFarm:
         farms[0].cages = farms[0].cages[:2]
         farms[1].cages = farms[1].cages[:2]
 
-        farms[0].disperse_offspring(eggs_by_hatch_date, farms, cur_date)
+        arrivals_farm0 = farms[0].disperse_offspring(eggs_by_hatch_date, cur_date)
+        arrivals_farm1 = farms[1].disperse_offspring(eggs_by_hatch_date, cur_date)
+        farms[0].update_arrivals(arrivals_farm0[0])
+        farms[0].update_arrivals(arrivals_farm1[0])
 
-        for farm in farms:
-            for cage in farm.cages:
-                assert cage.arrival_events.qsize() == 1
+        # Only for the calling cage
+        for cage in first_farm.cages:
+            assert cage.arrival_events.qsize() >= 1
 
     def test_get_cage_arrivals_stats(self, first_farm, cur_day):
 
@@ -308,22 +311,17 @@ class TestFarm:
         assert first_farm.available_treatments == 0
 
     def test_prescheduled_sampling_events(self, first_farm, cur_day):
-        assert first_farm.farm_to_org.qsize() == 0
         first_farm._report_sample(cur_day)
-        assert first_farm.farm_to_org.qsize() == 1
-        assert first_farm.farm_to_org.queue[0].detected_rate <= 0.1
-
-        first_farm.farm_to_org.get()
+        assert first_farm.get_aggregation_rate() <= 0.1
 
         # One test today, one test in 14 days, another test in 28 days
         # The first has already been consumed
         first_farm._report_sample(cur_day + dt.timedelta(days=21))
-        assert first_farm.farm_to_org.qsize() == 1
-        first_farm.farm_to_org.get()
+        assert first_farm.get_aggregation_rate() > 0.0
 
         # The second too
         first_farm._report_sample(cur_day + dt.timedelta(days=28))
-        assert first_farm.farm_to_org.qsize() == 1
+        assert first_farm.get_aggregation_rate() > 0.0
 
     """
     def test_ask_for_treatment_no_defection(

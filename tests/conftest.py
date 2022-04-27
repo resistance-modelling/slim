@@ -39,6 +39,7 @@ def run_destroy():
     yield
     ray.shutdown()
 
+
 @pytest.fixture
 def initial_lice_population():
     return {"L1": 150, "L2": 0, "L3": 30, "L4": 30, "L5f": 10, "L5m": 10}

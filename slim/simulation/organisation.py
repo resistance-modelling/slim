@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 import datetime as dt
 import json
 
-from typing import List, Tuple, TYPE_CHECKING, cast, Union, Any, ChainMap
+from typing import TYPE_CHECKING
 
 import numpy as np
 import ray
@@ -34,6 +34,8 @@ from slim.types.queue import *
 from slim.types.policies import no_observation
 
 if TYPE_CHECKING:
+    from typing import Dict
+    from typing import List, Tuple, TYPE_CHECKING, Any, Dict, Callable, Optional
     from .config import Config
     from .farm import GenoDistribByHatchDate
     from slim.types.policies import SAMPLED_ACTIONS, ObservationSpace, SimulatorSpace
@@ -69,6 +71,7 @@ class SingleProcFarmPool(FarmPool):
     def __init__(self, cfg: Config, *args):
         nfarms = cfg.nfarms
         self.threshold = cfg.aggregation_rate_threshold
+        self.cfg = cfg
         self._farms = [Farm(i, cfg, *args) for i in range(nfarms)]
 
     def __getitem__(self, i: int):
@@ -119,10 +122,16 @@ class SingleProcFarmPool(FarmPool):
         # other farms - and will allow multiprocessing of the main update
 
         for farm_ix, offspring in offspring_dict.items():
-            self._farms[farm_ix].disperse_offspring(offspring, cur_date)
+            offspring_per_farm = self._farms[farm_ix].disperse_offspring(
+                offspring, cur_date
+            )
+            for dest_farm, offspring in zip(self._farms, offspring_per_farm):
+                dest_farm.update_arrivals(offspring)
 
         total_offspring = {
             i: GenoDistrib.batch_sum(list(offspring_dict[i].values()))
+            if len(offspring_dict[i]) > 0
+            else empty_geno_from_cfg(self.cfg)
             for i in range(len(self))
         }
 
@@ -217,8 +226,8 @@ class MultiProcFarmPool(FarmPool):
 
         names = [f"farm_{i}" for i in range(self.cfg.nfarms)]
         self._farm_actors: List[FarmActor] = []
-        self._offspring_queues: List[RayQueue] = []
-        self._gym_space: SimulatorSpace = {
+        self._offspring_queues: Dict[int, RayQueue] = {}
+        self._gym_space = {
             farm_name: no_observation(MAX_NUM_CAGES) for farm_name in names
         }
 
@@ -389,6 +398,9 @@ class Organisation:
             self.cfg.initial_genetic_ratios
         )
         self.averaged_offspring = empty_geno_from_cfg(self.cfg)
+
+    def stop(self):
+        self.farms.stop()
 
     @property
     def get_gym_space(self):

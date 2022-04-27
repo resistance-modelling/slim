@@ -238,7 +238,7 @@ class BernoullianPolicy:
 
         agent_id = int(agent[len("farm_") :])
         asked_to_treat = bool(observation["asked_to_treat"])
-        return self._predict(asked_to_treat, observation["aggregation"], agent_id)
+        return self._predict(asked_to_treat, observation["aggregation"].item(), agent_id)
 
     def reset(self):
         self.rng = np.random.default_rng(self.seed)

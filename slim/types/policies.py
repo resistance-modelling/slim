@@ -6,7 +6,7 @@ Spaces are _not_ containers but rather container descriptions.
 
 """
 import functools
-from typing import List, Union, TypedDict, Dict
+from typing import List, Union, TypedDict, Dict, Any
 
 import numpy as np
 
@@ -80,7 +80,7 @@ def no_observation(ncages) -> ObservationSpace:
     return {
         "aggregation": np.zeros((ncages,), dtype=np.float32),
         "fish_population": np.zeros((ncages,), dtype=np.int64),
-        "current_treatments": np.zeros((TREATMENT_NO,), dtype=np.int8),
+        "current_treatments": np.zeros((TREATMENT_NO + 1,), dtype=np.int8),
         "allowed_treatments": 0,
         "asked_to_treat": np.zeros((1,), dtype=np.int8),
     }

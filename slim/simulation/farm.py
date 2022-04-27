@@ -84,8 +84,8 @@ class Farm(LoggableMixin):
         self._reported_aggregation = 0.0
 
         self.cages = [
-            Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages)
-        ]  # pytype: disable=wrong-arg-types
+            Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages) # pytype: disable=wrong-arg-types
+        ]
 
         self.year_temperatures = self._initialise_temperatures(cfg.loch_temperatures)
 
@@ -392,7 +392,7 @@ class Farm(LoggableMixin):
         )
 
     def get_farm_allocation(
-        self, target_farm_id: int, eggs_by_hatch_date: GenoDistribByHatchDate
+        self, target_farm: int, eggs_by_hatch_date: GenoDistribByHatchDate
     ) -> GenoDistribByHatchDate:
         """Return farm allocation of arrivals, that is a dictionary of genotype distributions based
         on hatch date updated to take into account probability of making it to the target farm.
@@ -411,7 +411,7 @@ class Farm(LoggableMixin):
 
         for hatch_date, geno_dict in farm_allocation.items():
             # get the interfarm travel probability between the two farms
-            travel_prob = self.cfg.interfarm_probs[self.id_][target_farm_id]
+            travel_prob = self.cfg.interfarm_probs[self.id_][target_farm]
             n = geno_dict.gross
             arrivals = min(self.cfg.rng.poisson(travel_prob * n), n)
             new_geno = geno_dict.normalise_to(arrivals)
@@ -509,7 +509,7 @@ class Farm(LoggableMixin):
 
             arrivals_per_farm_cage.append((arrivals_per_cage, arrival_date))
 
-            # for cage in farm.cages:
+            # for cage in self.cages:
             #    cage.update_arrivals(arrivals_per_cage[cage.id], arrival_date)
         logger.debug("Returning %s", arrivals_per_farm_cage)
         return arrivals_per_farm_cage
@@ -538,7 +538,6 @@ class Farm(LoggableMixin):
         farm_arrivals = self.get_farm_allocation(self.id_, eggs_by_hatch_date)
         logger.debug("\t\t\tFarm allocation is %s", farm_arrivals)
 
-        # TODO: why can't arrivals_per_cage be computed later?
         arrivals_per_cage = self.get_cage_allocation(ncages, farm_arrivals)
         logger.debug("\t\t\tCage allocation is %s", arrivals_per_cage)
 
@@ -558,6 +557,13 @@ class Farm(LoggableMixin):
         self.distribute_cage_offspring(arrivals_per_cage, arrival_date)
 
         return arrivals_per_cage, arrival_date
+
+    def update_arrivals(self, arrivals: DispersedOffspring):
+        # DEPRECATED
+        arrivals_per_cage = arrivals[0]
+        arrival_time = arrivals[1]
+        for cage, arrival in zip(self.cages, arrivals_per_cage):
+            cage.update_arrivals(arrival, arrival_time)
 
     def get_cage_arrivals_stats(
         self,
@@ -650,14 +656,12 @@ class Farm(LoggableMixin):
         self._reported_aggregation = 0.0
         return to_return
 
-    @property
-    def aggregation_rate(self):
-        return max(cage.aggregation_rate for cage in self.cages)
-
     def _report_sample(self, cur_date):
         def cts(_):
             # report the worst across cages
-            self._reported_aggregation = self.aggregation_rate
+            self._reported_aggregation = max(
+                cage.aggregation_rate for cage in self.cages
+            )
 
         pop_from_queue(self.__sampling_events, cur_date, cts)
 
@@ -714,6 +718,7 @@ class FarmActor:
         self,
         payload: Dict[int, Tuple[dt.datetime, int, int, GenoRates]],
     ) -> Dict[int, Tuple[GenoDistrib, float, float, ObservationSpace]]:
+        temp = {}
         to_return = {}
         eggs_per_farm = []
 
@@ -731,12 +736,12 @@ class FarmActor:
             profit = farm.get_profit(cur_date)
 
             # TODO: we could likely just return the final egg distribution...
-            to_return[farm.id_] = (final_eggs, profit, cost)
+            temp[farm.id_] = (final_eggs, profit, cost)
 
         self._disperse_offspring(cur_date, eggs_per_farm)
 
         for farm in self.farms:
-            to_return[farm.id_] = (*to_return[farm.id_], farm.get_gym_space())
+            to_return[farm.id_] = (*temp[farm.id_], farm.get_gym_space())
 
         return to_return
 

@@ -103,13 +103,6 @@ class TreatmentEvent(CageEvent):
 
 
 @dataclass(order=True)
-class FarmCommand(Event):
-    """Base class for all commands sent from the Organisation to a Farm"""
-
-    request_date: Optional[dt.datetime]
-
-
-@dataclass(order=True)
 class SamplingEvent(Event):
     """Internal sampling event used inside farm"""
 
@@ -118,13 +111,6 @@ class SamplingEvent(Event):
 
 
 # TODO: As we start deprecating PriorityQueues we should also deprecate the datetime parameter
-
-
-@dataclass(order=True)
-class FarmResponse(Event):
-    """Base class for all farm activities that require some communication with the organisation."""
-
-    pass
 
 
 """
@@ -137,7 +123,7 @@ class StepResponse(FarmResponse):
 """
 
 
-EventT = TypeVar("EventT", CageEvent, FarmCommand, FarmResponse, SamplingEvent)
+EventT = TypeVar("EventT", CageEvent, SamplingEvent)
 
 
 def pop_from_queue(
@@ -168,16 +154,8 @@ def pop_from_queue(
     # have mypy ignore redefinitions of '_'
     # see https://github.com/python/mypy/issues/2904 for details
     @access_time_lt.register  # type: ignore[no-redef]
-    def _(arg: FarmCommand, _cur_time: dt.datetime):
-        return arg.request_date <= _cur_time  # pragma: no cover
-
-    @access_time_lt.register  # type: ignore[no-redef]
     def _(arg: SamplingEvent, _cur_time: dt.datetime):
         return arg.sampling_date <= _cur_time  # pragma: no cover
-
-    @access_time_lt.register  # type: ignore[no-redef]
-    def _(arg: FarmResponse, _cur_time: dt.datetime):
-        return arg.response_date <= _cur_time  # pragma: no cover
 
     while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
         event = queue.get()
