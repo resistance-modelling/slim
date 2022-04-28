@@ -83,9 +83,12 @@ class Farm(LoggableMixin):
         self.available_treatments = farm_cfg.max_num_treatments
         self._reported_aggregation = 0.0
 
+        # fmt: off
         self.cages = [
-            Cage(i, cfg, self, initial_lice_pop) for i in range(farm_cfg.n_cages) # pytype: disable=wrong-arg-types
+            Cage(i, cfg, self, initial_lice_pop) # pytype: disable=wrong-arg-types
+            for i in range(farm_cfg.n_cages)
         ]
+        # fmt: on
 
         self.year_temperatures = self._initialise_temperatures(cfg.loch_temperatures)
 
@@ -333,8 +336,6 @@ class Farm(LoggableMixin):
             new_reservoir_lice_ratios=genorates_to_dict(ext_pressure_ratios),
         )
 
-        # self._report_sample(cur_date, farm_to_org)
-
         # reset the number of treatments
         if ((cur_date - self.start_date).days + 1) % 365 == 0:
             self.available_treatments = self.farm_cfg.max_num_treatments
@@ -367,7 +368,9 @@ class Farm(LoggableMixin):
             total_cost += cost
 
         self.log("\t\tGenerated eggs by farm %d: %s", self.id_, eggs=eggs_log)
-
+        self.log("\t\tPayoff: %f", payoff=(self.get_profit(cur_date) - total_cost))
+        self.log("\tNew population: %r", farm_population=self.lice_genomics)
+        self.log("Total fish population: %d", num_fish=self.num_fish)
         self._asked_to_treat = False
 
         return eggs_by_hatch_date, total_cost
@@ -717,7 +720,7 @@ class FarmActor:
     def step(
         self,
         payload: Dict[int, Tuple[dt.datetime, int, int, GenoRates]],
-    ) -> Dict[int, Tuple[GenoDistrib, float, float, ObservationSpace]]:
+    ) -> Dict[int, StepResponse]:
         temp = {}
         to_return = {}
         eggs_per_farm = []
@@ -741,7 +744,9 @@ class FarmActor:
         self._disperse_offspring(cur_date, eggs_per_farm)
 
         for farm in self.farms:
-            to_return[farm.id_] = (*temp[farm.id_], farm.get_gym_space())
+            to_return[farm.id_] = StepResponse(
+                *temp[farm.id_], farm.get_gym_space(), farm.logged_data
+            )
 
         return to_return
 

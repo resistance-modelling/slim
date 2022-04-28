@@ -18,7 +18,7 @@ import os
 
 import lz4.frame
 from pathlib import Path
-from typing import List, Optional, Tuple, Iterator
+from typing import List, Optional, Tuple, Iterator, Union, cast
 
 import dill as pickle
 import pandas as pd
@@ -112,6 +112,7 @@ class SimulatorPZEnv(AECEnv):
         self.organisation = Organisation(cfg)
         self.payoff = 0.0
         self.treatment_no = len(Treatment)
+        self.last_logs = {}
         self.reset()
 
         self._action_spaces = {agent: ACTION_SPACE for agent in self.agents}
@@ -165,7 +166,8 @@ class SimulatorPZEnv(AECEnv):
                 id = int(k[len("farm_") :])
                 actions[id] = v
 
-            payoffs = self.organisation.step(self.cur_day, actions)
+            payoffs, logs = self.organisation.step(self.cur_day, actions)
+            self.last_logs = logs
             id_to_gym = {i: f"farm_{i}" for i in range(len(self.possible_agents))}
 
             self.rewards = {id_to_gym[i]: payoff for i, payoff in payoffs.items()}
@@ -214,7 +216,7 @@ class BernoullianPolicy:
         self.seed = cfg.seed
         self.reset()
 
-    def _predict(self, asked_to_treat, agg_rate: float, agent: int):
+    def _predict(self, asked_to_treat, agg_rate: np.ndarray, agent: int):
         if not asked_to_treat and np.any(agg_rate < self.treatment_threshold):
             return NO_ACTION
 
@@ -238,7 +240,7 @@ class BernoullianPolicy:
 
         agent_id = int(agent[len("farm_") :])
         asked_to_treat = bool(observation["asked_to_treat"])
-        return self._predict(asked_to_treat, observation["aggregation"].item(), agent_id)
+        return self._predict(asked_to_treat, observation["aggregation"], agent_id)
 
     def reset(self):
         self.rng = np.random.default_rng(self.seed)
@@ -270,6 +272,24 @@ class MosaicPolicy:
         action = self.last_action[agent_id]
         self.last_action[agent_id] = (action + 1) % TREATMENT_NO
         return action
+
+
+@ray.remote
+class DumpingActor:
+    """Takes an output log and serialises it"""
+
+    def __init__(self, dump_path: Path):
+        self.data_file = dump_path.open(mode="wb")
+        self.compressed_stream = lz4.frame.open(
+            self.data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
+        )
+
+    def dump(self, logs):
+        pickle.dump(logs, self.compressed_stream)
+
+    def teardown(self):
+        self.compressed_stream.close()
+        self.data_file.close()
 
 
 class Simulator:  # pragma: no cover
@@ -323,15 +343,12 @@ class Simulator:  # pragma: no cover
             )
 
         if not resume:
-            data_file = self.output_dump_path.open(mode="wb")
-            compressed_stream = lz4.frame.open(
-                data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
-            )
+            serialiser = DumpingActor.remote(self.output_dump_path)
+            serialiser.dump.remote(self.cfg)
 
         self.env.reset()
 
         try:
-
             num_days = (self.cfg.end_date - self.cur_day).days
             for day in tqdm.trange(num_days):
                 logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
@@ -342,7 +359,7 @@ class Simulator:  # pragma: no cover
                 reward = self.env.rewards
                 self.payoff += sum(reward.values())
 
-                # Save the model snapshot either when checkpointing or during the last iteration
+                # TODO: checkpointing is currently broken.
                 if not resume:
                     if (
                         self.cfg.save_rate
@@ -350,7 +367,17 @@ class Simulator:  # pragma: no cover
                         % self.cfg.save_rate
                         == 0
                     ) or day == num_days - 1:
-                        pickle.dump(self, compressed_stream)
+                        # Find a way to implement merging
+                        expanded_logs = {"timestamp": self.cur_day, "farms": {}}
+                        farm_logs = self.env.unwrapped.last_logs
+                        for agent in self.env.possible_agents:
+                            expanded_logs["farms"][agent] = {
+                                **self.env.observe(agent),
+                                **farm_logs[agent],
+                            }
+
+                        # Note: this _may_ cause out-of-order writes but it doesn't matter that much
+                        serialiser.dump.remote(expanded_logs)
                 self.cur_day += dt.timedelta(days=1)
 
         except KeyboardInterrupt:
@@ -360,8 +387,7 @@ class Simulator:  # pragma: no cover
             env.stop()
 
         finally:
-            compressed_stream.close()
-            data_file.close()
+            serialiser.teardown.remote()
 
 
 def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
@@ -373,13 +399,14 @@ def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
 
 def reload_all_dump(
     path: Path, sim_id: str
-) -> Iterator[Tuple[Simulator, dt.datetime]]:  # pragma: no cover
+) -> Iterator[Union[dict, Config]]:  # pragma: no cover
     """Reload a simulator.
 
     :param path: the folder containing the artifact
     :param sim_id: the simulation id
 
-    :returns: an iterator of pairs (sim_state, time)
+    :returns: an iterator. The first row is a ``Config``. After this come the serialised logs (as dict),
+    one per serialised day.
     """
     logger.info("Loading from a dump...")
     data_file = _get_simulation_path(path, sim_id)
@@ -388,14 +415,13 @@ def reload_all_dump(
     ) as fp:
         while True:
             try:
-                sim_state: Simulator = pickle.load(fp)
-                yield sim_state, sim_state.cur_day
+                yield pickle.load(fp)
             except EOFError:
                 break
 
 
 def dump_as_dataframe(
-    states_times_it: Iterator[Tuple[Simulator, dt.datetime]]
+    states_times_it: Iterator[Union[dict, Config]],
 ) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:  # pragma: no cover
     """
     Convert a dump into a pandas dataframe
@@ -410,21 +436,18 @@ def dump_as_dataframe(
     farm_data = {}
     times = []
     cfg = None
-    for state, time in states_times_it:
-        times.append(time)
-        if cfg is None:
-            cfg = state.cfg
+    for state in states_times_it:
+        if isinstance(state, Config):
+            cfg = state
+            continue
 
-        for farm in state.env.unwrapped.organisation.farms:
-            key = (time, "farm_" + str(farm.id_))
-            is_treating = farm.is_treating
-            farm_data[key] = {
-                **farm.lice_genomics,
-                **farm.logged_data,
-                "num_fish": farm.num_fish,
-                "is_treating": is_treating,
-                "payoff": float(state.payoff),
-            }
+        time = state["timestamp"]
+        times.append(time)
+
+        for agent, values in state["farms"].items():
+            key = (time, agent)
+            farm_pop = values.pop("farm_population")
+            farm_data[key] = {**values, **farm_pop}
 
     dataframe = pd.DataFrame.from_dict(farm_data, orient="index")
 
@@ -438,11 +461,11 @@ def dump_as_dataframe(
 
     dataframe = dataframe.join(aggregate_geno_info)
 
-    return dataframe.rename_axis(("timestamp", "farm_id")), times, cfg
+    return dataframe.rename_axis(("timestamp", "farm_id")), times, cast(Config, cfg)
 
 
 def dump_optimiser_as_pd(states: List[List[Simulator]]):  # pragma: no cover
-    # TODO: maybe more things may be valuable to visualise
+    # TODO: This is currently broken.
     payoff_row = []
     proba_row = {}
     for state_row in states:
@@ -508,7 +531,6 @@ def reload_from_optimiser(path: Path) -> List[List[Simulator]]:  # pragma: no co
                     pickle_path = (
                         path / f"simulation_data_optimisation_{step}_{it}.pickle.lz4"
                     )
-                    print(pickle_path)
                     with pickle_path.open("rb") as f:
                         new_step.append(pickle.load(f))
                 except FileNotFoundError:

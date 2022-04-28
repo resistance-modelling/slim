@@ -860,9 +860,11 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             qtColor = mkColor(color)
 
             treatment_days_df = (
-                farm_df[farm_df["is_treating"].apply(lambda l: treatment_idx in l)][
-                    "timestamp"
-                ]
+                farm_df[
+                    farm_df["current_treatments"].apply(
+                        lambda l: bool(l[treatment_idx])
+                    )
+                ]["timestamp"]
                 - self.state.times[0]
             )
             treatment_days = treatment_days_df.apply(lambda x: x.days).to_numpy()

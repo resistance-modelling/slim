@@ -1,7 +1,6 @@
 """
-Cages, Farms and Organisations communicate via a mix of traditional API and message passing via channels. This allows
-for greater flexibility when there is a need to communicate back and forth. Furthermore, it allows for greater
-multithreading capabilities.
+Cages, Farms and Organisations communicate via a mix of traditional API and message passing via channels.
+Here are some types and tools used to handle such queues.
 """
 from __future__ import annotations
 
@@ -12,6 +11,8 @@ from functools import singledispatch
 from queue import PriorityQueue
 
 from typing import Callable, TypeVar, TYPE_CHECKING, Optional, Tuple, List, Dict
+
+from slim.types.policies import ObservationSpace
 
 if TYPE_CHECKING:
     from slim.simulation.farm import GenoDistribByHatchDate, CageAllocation
@@ -113,14 +114,13 @@ class SamplingEvent(Event):
 # TODO: As we start deprecating PriorityQueues we should also deprecate the datetime parameter
 
 
-"""
 @dataclass
-class StepResponse(FarmResponse):
-    arrivals_per_farm_cage: List[Tuple[CageAllocation, dt.datetime]]
+class StepResponse:
     total_offspring: GenoDistrib
     profit: float
     total_cost: float
-"""
+    observation_space: ObservationSpace
+    loggable: dict  # any extra to log
 
 
 EventT = TypeVar("EventT", CageEvent, SamplingEvent)
