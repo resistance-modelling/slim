@@ -143,6 +143,8 @@ class Config(RuntimeConfig):
         # driver-specific settings
         self.save_rate = kwargs.pop("save_rate", 0)
         self.farms_per_process = kwargs.pop("farms_per_process", -1)
+        if self.farms_per_process is None:
+            self.farms_per_process = -1
 
         super().__init__(config_file, kwargs)
 

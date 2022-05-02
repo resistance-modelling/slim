@@ -48,6 +48,7 @@ CURRENT_TREATMENTS = MultiBinary(TREATMENT_NO + 1)
 class ObservationSpace(TypedDict):
     aggregation: np.ndarray
     fish_population: np.ndarray
+    reported_aggregation: np.ndarray
     current_treatments: np.ndarray
     allowed_treatments: int
     asked_to_treat: np.ndarray  # gym doesn't like bools
@@ -58,6 +59,7 @@ def get_observation_space_schema(agents: List[str], num_applications: int):
         agent: GymDict(
             {
                 "aggregation": Box(low=0, high=20, shape=(20,), dtype=np.float32),
+                "reported_aggregation":Box(low=0, high=20, shape=(1,), dtype=np.float32),
                 "fish_population": Box(low=0, high=1e6, shape=(20,), dtype=np.int64),
                 "current_treatments": CURRENT_TREATMENTS,
                 "allowed_treatments": Discrete(num_applications),
@@ -79,6 +81,7 @@ def no_observation(ncages) -> ObservationSpace:
     """
     return {
         "aggregation": np.zeros((ncages,), dtype=np.float32),
+        "reported_aggregation": np.zeros((1,), dtype=np.float32),
         "fish_population": np.zeros((ncages,), dtype=np.int64),
         "current_treatments": np.zeros((TREATMENT_NO + 1,), dtype=np.int8),
         "allowed_treatments": 0,

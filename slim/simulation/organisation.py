@@ -60,10 +60,13 @@ class FarmPool(ABC):
     ):
         pass
 
-    @property
-    @abstractmethod
-    def get_gym_space(self):
-        pass
+    def handle_aggregation_rate(self, spaces: SimulatorSpace, threshold: float) -> bool:
+        to_broadcast = False
+        for space in spaces.values():
+            if space["reported_aggregation"].item() >= threshold:
+                to_broadcast = True
+
+        return to_broadcast
 
 
 class SingleProcFarmPool(FarmPool):
@@ -87,14 +90,6 @@ class SingleProcFarmPool(FarmPool):
     def stop(self):
         pass
 
-    def handle_reported_aggregation(self):
-        to_report = any(
-            farm.get_aggregation_rate() > self.threshold for farm in self._farms
-        )
-        if to_report:
-            for farm in self._farms:
-                farm.ask_for_treatment()
-
     def step(
         self,
         cur_date: dt.datetime,
@@ -102,7 +97,6 @@ class SingleProcFarmPool(FarmPool):
         ext_influx: int,
         ext_pressure: GenoRates,
     ):
-        self.handle_reported_aggregation()
         for farm, action in zip(self._farms, actions):
             farm.apply_action(cur_date, action)
 
@@ -245,16 +239,10 @@ class MultiProcFarmPool(FarmPool):
 
         return self._gym_space
 
-    def handle_aggregation_rate(self):
-        to_broadcast = False
-        for space in self.get_gym_space.values():
-            if np.max(space["aggregation"]) >= self.cfg.aggregation_rate_threshold:
-                to_broadcast = True
 
-        if to_broadcast:
-            self._broadcast(lambda f: f.ask_for_treatment.remote())
-
-    def step(self, cur_date, actions: SAMPLED_ACTIONS, ext_influx, ext_ratios) -> Tuple[Dict[int, GenoDistrib], Dict[int, float], Dict[int, Any]]:
+    def step(
+        self, cur_date, actions: SAMPLED_ACTIONS, ext_influx, ext_ratios
+    ) -> Tuple[Dict[int, GenoDistrib], Dict[int, float], Dict[int, Any]]:
         """
         Perform an update across all farms.
         After that, some offspring will be distributed into the farms while others will be dispersed into
@@ -267,9 +255,6 @@ class MultiProcFarmPool(FarmPool):
 
         if not self.is_running:
             self.start()
-
-        # update the farms and get the offspring
-        self.handle_aggregation_rate()
 
         offspring_per_farm: Dict[int, GenoDistrib] = {}
         payoffs: Dict[int, float] = {}
@@ -323,6 +308,7 @@ class Organisation:
         else:
             self.farms = MultiProcFarmPool(cfg, *args, **kwargs)
 
+        self._gym_space: SimulatorSpace = {}
         self.reset()
 
     def update_genetic_ratios(self, offspring: GenoDistrib):
@@ -392,7 +378,11 @@ class Organisation:
         self.update_offspring_average(offspring_per_farm)
         self.update_genetic_ratios(self.averaged_offspring)
 
-        self._gym_space = {f"farm_{i}": space for i, space in spaces.items()}
+        to_treat = self.farms.handle_aggregation_rate(spaces, self.cfg.aggregation_rate_threshold)
+        for space in spaces.values():
+            space["asked_to_treat"] = np.array([int(to_treat)], dtype=np.int8)
+
+        self._gym_space = spaces
         logs = {f"farm_{i}": log for i, log in logs.items()}
 
         return payoffs, logs
@@ -411,7 +401,7 @@ class Organisation:
 
     @property
     def get_gym_space(self):
-        return self.farms.get_gym_space
+        return self._gym_space #{f"farm_{i}": space for i, space in self._gym_space.items()}
 
     def update_offspring_average(self, offspring_per_farm: Dict[int, GenoDistrib]):
         t = self.cfg.reservoir_offspring_average

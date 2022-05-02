@@ -97,7 +97,6 @@ class Farm(LoggableMixin):
 
         # Queues
         self.__sampling_events: PriorityQueue[SamplingEvent] = PriorityQueue()
-        self._asked_to_treat = False
 
         self.generate_sampling_events()
 
@@ -280,6 +279,7 @@ class Farm(LoggableMixin):
 
     def ask_for_treatment(self):
         """
+        DEPRECATED: This action is a no-op.
         Ask the farm to perform treatment.
 
         The farm will thus respond in the following way:
@@ -291,7 +291,7 @@ class Farm(LoggableMixin):
         """
 
         logger.debug("Asking farm %d to treat", self.id_)
-        self._asked_to_treat = True
+        # self._asked_to_treat = True
 
     def apply_action(self, cur_date: dt.datetime, action: int):
         """Apply an action
@@ -371,7 +371,8 @@ class Farm(LoggableMixin):
         self.log("\t\tPayoff: %f", payoff=(self.get_profit(cur_date) - total_cost))
         self.log("\tNew population: %r", farm_population=self.lice_genomics)
         self.log("Total fish population: %d", num_fish=self.num_fish)
-        self._asked_to_treat = False
+        # self._asked_to_treat = False
+        self._report_sample(cur_date)
 
         return eggs_by_hatch_date, total_cost
 
@@ -629,6 +630,7 @@ class Farm(LoggableMixin):
         """
         fish_population = np.array([cage.num_fish for cage in self.cages])
         aggregations = np.array([cage.aggregation_rate for cage in self.cages])
+        reported_aggregation = self._get_aggregation_rate()
         current_treatments = self.is_treating
         current_treatments_np = np.zeros((TREATMENT_NO + 1), dtype=np.int8)
         if len(current_treatments):
@@ -640,16 +642,17 @@ class Farm(LoggableMixin):
             "aggregation": np.pad(
                 aggregations, (0, MAX_NUM_CAGES - len(aggregations))
             ).astype(np.float32),
+            "reported_aggregation": np.array([reported_aggregation], dtype=np.float32),
             "fish_population": np.pad(
                 fish_population,
                 (0, MAX_NUM_CAGES - len(fish_population)),
             ),
             "current_treatments": current_treatments_np,
             "allowed_treatments": self.available_treatments,
-            "asked_to_treat": np.array([self._asked_to_treat], dtype=np.int8),
+            "asked_to_treat": np.array([0], dtype=np.int8),
         }
 
-    def get_aggregation_rate(self):
+    def _get_aggregation_rate(self):
         """Get the maximum aggregation rate updated to last time it was sampled.
         This operation "consumes" the aggregation rate by setting it to -1 after returning
         the actual value, and is updated once a sampling event occurs.

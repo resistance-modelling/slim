@@ -312,16 +312,16 @@ class TestFarm:
 
     def test_prescheduled_sampling_events(self, first_farm, cur_day):
         first_farm._report_sample(cur_day)
-        assert first_farm.get_aggregation_rate() <= 0.1
+        assert first_farm._get_aggregation_rate() <= 0.1
 
         # One test today, one test in 14 days, another test in 28 days
         # The first has already been consumed
         first_farm._report_sample(cur_day + dt.timedelta(days=21))
-        assert first_farm.get_aggregation_rate() > 0.0
+        assert first_farm._get_aggregation_rate() > 0.0
 
         # The second too
         first_farm._report_sample(cur_day + dt.timedelta(days=28))
-        assert first_farm.get_aggregation_rate() > 0.0
+        assert first_farm._get_aggregation_rate() > 0.0
 
     """
     def test_ask_for_treatment_no_defection(
