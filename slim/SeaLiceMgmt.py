@@ -40,6 +40,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--save-rate",
+        help="Interval (in days) to log the simulation output. Ignored",
+        type=int,
+        default=1,
+    )
+    parser.add_argument(
         "--profile",
         help="(DEBUG) Dump cProfile stats. The output path is your_simulation_path/profile.bin. Recommended to run together with --local-mode",
         default=False,
@@ -68,10 +74,8 @@ if __name__ == "__main__":
         help="(DEBUG) resume the simulator from a given number of days since the beginning of the simulation. All configuration variables will be ignored.",
     )
     resume_group.add_argument(
-        "--save-rate",
-        help="Interval to dump the simulation state. Useful for visualisation and debugging."
-        + "Warning: saving a run is a slow operation. Saving and resuming at the same time"
-        + "is forbidden. If this is not provided, only the last timestep is serialised",
+        "--checkpoint-rate",
+        help="(DEBUG) Interval to dump the simulation state. Allowed in single-process mode only.",
         type=int,
         required=False,
     )
@@ -125,4 +129,5 @@ if __name__ == "__main__":
         # atexit.register(lambda prof=prof: prof.print_stats(output_unit=1e-3))
         cProfile.run("sim.run_model()", str(profile_output_path))
 
-    ray.timeline("outputs/timeline.json")
+    if not resume:
+        ray.timeline("outputs/timeline.json")

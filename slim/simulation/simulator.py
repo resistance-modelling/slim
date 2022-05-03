@@ -15,10 +15,11 @@ __all__ = ["get_env", "Simulator", "SimulatorPZEnv", "BernoullianPolicy"]
 import datetime as dt
 import json
 import os
+from io import BytesIO
 
 import lz4.frame
 from pathlib import Path
-from typing import List, Optional, Tuple, Iterator, Union, cast
+from typing import List, Optional, Tuple, Iterator, Union, cast, BinaryIO
 
 import dill as pickle
 import pandas as pd
@@ -278,27 +279,47 @@ class MosaicPolicy:
 class DumpingActor:
     """Takes an output log and serialises it"""
 
-    def __init__(self, dump_path: Path):
+    def __init__(self, dump_path: Path, pickled_path: Optional[Path] = None):
         self.data_file = dump_path.open(mode="wb")
+        self.sim_state_file = pickled_path.open(mode="wb")
         self.compressed_stream = lz4.frame.open(
             self.data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
         )
-        self.buffer = []
+        self.sim_state_stream = lz4.frame.open(
+            self.sim_state_file,
+            "wb",
+            compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC,
+        )
 
-    def _flush(self):
-        for log in self.buffer:
-            pickle.dump(log, self.compressed_stream)
-        self.buffer = []
+        self.log_buffer = BytesIO()
+        self.sim_buffer = BytesIO()
 
-    def dump(self, logs):
-        self.buffer.append(logs)
-        if len(self.buffer) >= 30:  # wasn't this parametrised a while ago?
-            self._flush()
+    def _flush(self, buffer: BytesIO, stream):
+        stream.write(buffer.getvalue())
+        buffer.truncate()
+
+    def _save(self, data: bytes, buffer: BytesIO, stream: BinaryIO):
+        buffer.write(data)
+        if len(data) >= (1 << 19):  # ~ 512 KiB
+            self._flush(buffer, stream)
+
+    def dump(self, logs: dict):
+        self._save(pickle.dumps(logs), self.log_buffer, self.data_file)
+
+    def save_sim(self, sim_state: bytes):
+        # Note: Simulator cannot be serialised by pickle but by dill,
+        # but ray uses (a fork of) pickle internally...
+        self._save(sim_state, self.sim_buffer, self.sim_state_stream)
 
     def teardown(self):
-        self._flush()
+        self._flush(self.log_buffer, self.compressed_stream)
+        self._flush(self.sim_buffer, self.sim_state_stream)
+        self.log_buffer.close()
+        self.sim_buffer.close()
         self.compressed_stream.close()
+        self.sim_state_stream.close()
         self.data_file.close()
+        self.sim_state_file.close()
 
 
 class Simulator:  # pragma: no cover
@@ -328,7 +349,9 @@ class Simulator:  # pragma: no cover
         else:
             raise ValueError("Unsupported strategy")
 
-        self.output_dump_path = _get_simulation_path(output_dir, sim_id)
+        self.output_dump_path, self.output_dump_pickle = _get_simulation_path(
+            output_dir, sim_id
+        )
         self.cur_day = cfg.start_date
         self.payoff = 0.0
 
@@ -343,16 +366,21 @@ class Simulator:  # pragma: no cover
         if not resume:
             logger.info("running simulation, saving to %s", self.output_dir)
         else:
-            logger.info("resuming simulation", self.output_dir)
+            logger.info("resuming simulation from %s", self.output_dir)
 
         # create a file to store the population data from our simulation
-        if resume and not self.output_dump_path.exists():
+        if resume and not self.output_dump_pickle.exists():
             logger.warning(
-                f"{self.output_dump_path} could not be found! Creating a new log file."
+                f"{self.output_dump_pickle} could not be found! Creating a new log file."
             )
 
         if not resume:
-            serialiser = DumpingActor.remote(self.output_dump_path)
+            if self.cfg.checkpoint_rate:
+                serialiser = DumpingActor.remote(
+                    self.output_dump_path, self.output_dump_pickle
+                )
+            else:
+                serialiser = DumpingActor.remote(self.output_dump_path)
             serialiser.dump.remote(self.cfg)
 
         self.env.reset()
@@ -368,7 +396,6 @@ class Simulator:  # pragma: no cover
                 reward = self.env.rewards
                 self.payoff += sum(reward.values())
 
-                # TODO: checkpointing is currently broken.
                 if not resume:
                     if (
                         self.cfg.save_rate
@@ -376,7 +403,6 @@ class Simulator:  # pragma: no cover
                         % self.cfg.save_rate
                         == 0
                     ) or day == num_days - 1:
-                        # Find a way to implement merging
                         expanded_logs = {"timestamp": self.cur_day, "farms": {}}
                         farm_logs = self.env.unwrapped.last_logs
                         for agent in self.env.possible_agents:
@@ -385,8 +411,16 @@ class Simulator:  # pragma: no cover
                                 **farm_logs[agent],
                             }
 
-                        # Note: this _may_ cause out-of-order writes but it doesn't matter that much
                         serialiser.dump.remote(expanded_logs)
+
+                    if self.cfg.checkpoint_rate and (
+                        (self.cur_day - self.cfg.start_date).days
+                        % self.cfg.checkpoint_rate
+                        == 0
+                        or day == num_days - 1
+                    ):
+                        serialiser.save_sim.remote(pickle.dumps((self, self.cur_day)))
+
                 self.cur_day += dt.timedelta(days=1)
 
         except KeyboardInterrupt:
@@ -396,14 +430,18 @@ class Simulator:  # pragma: no cover
             env.stop()
 
         finally:
-            serialiser.teardown.remote()
+            if not resume:
+                serialiser.teardown.remote()
 
 
 def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
     if not path.is_dir():
         path.mkdir(parents=True, exist_ok=True)
 
-    return path / f"simulation_data_{sim_id}.pickle.lz4"
+    return (
+        path / f"simulation_data_{sim_id}.pickle.lz4",
+        path / f"checkpoint_{sim_id}.pickle.lz4",
+    )
 
 
 def reload_all_dump(
@@ -418,7 +456,7 @@ def reload_all_dump(
     one per serialised day.
     """
     logger.info("Loading from a dump...")
-    data_file = _get_simulation_path(path, sim_id)
+    _, data_file = _get_simulation_path(path, sim_id)
     with lz4.frame.open(
         data_file, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
     ) as fp:
@@ -505,7 +543,7 @@ def reload(
     for idx, (state, time) in enumerate(reload_all_dump(path, sim_id)):
         if first_time is None:
             first_time = time
-        if resume_after and idx == resume_after:
+        if resume_after and (time - first_time).days >= resume_after:
             return state
         elif timestamp and timestamp >= time:
             return state

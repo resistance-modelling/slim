@@ -358,7 +358,7 @@ class Farm(LoggableMixin):
                 cur_date, pressures_per_cage[cage.id], ext_pressure_ratios
             )
 
-            if hatch_date:
+            if hatch_date and egg_distrib.gross > 0:
                 # update the total offspring info
                 if hatch_date in eggs_by_hatch_date:
                     eggs_by_hatch_date[hatch_date].iadd(egg_distrib)
@@ -494,7 +494,6 @@ class Farm(LoggableMixin):
             farm_arrivals = self.get_farm_allocation(idx, eggs_by_hatch_date)
             logger.debug("\t\t\tFarm allocation is %s", farm_arrivals)
 
-            # TODO: why can't arrivals_per_cage be computed later?
             arrivals_per_cage = self.get_cage_allocation(ncages, farm_arrivals)
             logger.debug("\t\t\tCage allocation is %s", arrivals_per_cage)
 
@@ -695,7 +694,7 @@ class FarmActor:
             logger = logging.getLogger(f"SLIM-Farm-{ids}")
             logging.basicConfig(
                 level=logging.INFO,
-                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                format="[%(funcName)s@%(filename)s:%(lineno)s]%(levelname)s: %(message)s",
             )
             # for some reason logger.setLevel is not enough...
         else:
@@ -748,7 +747,11 @@ class FarmActor:
             # TODO: why can't we merge cost and profit?
             eggs, cost = farm.update(cur_date, ext_influx, ext_pressure_ratios)
             eggs_per_farm.append(eggs)
-            final_eggs = GenoDistrib.batch_sum(list(eggs.values()))
+
+            if len(eggs) > 0:
+                final_eggs = GenoDistrib.batch_sum(list(eggs.values()))
+            else:
+                final_eggs = empty_geno_from_cfg(self.cfg)
 
             profit = farm.get_profit(cur_date)
 

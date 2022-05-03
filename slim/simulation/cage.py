@@ -229,8 +229,6 @@ class Cage(LoggableMixin):
             fish_deaths_natural,
         )
 
-        old_lice_pop = self.lice_population.copy()
-
         self.update_deltas(
             dead_lice_dist,
             treatment_mortality,
@@ -965,7 +963,6 @@ class Cage(LoggableMixin):
         # τE= [β1/(T – 10 + β1β2)]**2  (see equation 8)
         # where β2**(-2) is the average temperature centered at around 10 degrees
         # and β1 is a shaping factor. This function is formally known as Belehrádek’s function
-        cur_month = cur_date.month
         ave_temp = self.get_temperature(cur_date)
 
         beta_1 = self.cfg.delta_m10["L0_stien"]
