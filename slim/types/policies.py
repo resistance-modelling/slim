@@ -59,7 +59,9 @@ def get_observation_space_schema(agents: List[str], num_applications: int):
         agent: GymDict(
             {
                 "aggregation": Box(low=0, high=20, shape=(20,), dtype=np.float32),
-                "reported_aggregation":Box(low=0, high=20, shape=(1,), dtype=np.float32),
+                "reported_aggregation": Box(
+                    low=0, high=20, shape=(1,), dtype=np.float32
+                ),
                 "fish_population": Box(low=0, high=1e6, shape=(20,), dtype=np.int64),
                 "current_treatments": CURRENT_TREATMENTS,
                 "allowed_treatments": Discrete(num_applications),

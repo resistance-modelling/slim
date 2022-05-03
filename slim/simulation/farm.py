@@ -12,6 +12,7 @@ from __future__ import annotations
 # FarmActor won't show up. See https://github.com/ray-project/ray/issues/2658
 __all__ = ["Farm", "FarmActor"]
 
+import copy
 import json
 import logging
 from collections import Counter, defaultdict
@@ -20,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from mypy_extensions import TypedDict
 import ray
+from numpy.random import SeedSequence, default_rng
 from ray.util.queue import Queue as RayQueue
 
 from slim import LoggableMixin, logger
@@ -536,7 +538,6 @@ class Farm(LoggableMixin):
         idx = self.id_
 
         ncages = len(self.cages)
-        logger.debug("\t\tFarm %d%s", idx, " current" if idx == self.id_ else "")
 
         # allocate eggs to cages
         farm_arrivals = self.get_farm_allocation(self.id_, eggs_by_hatch_date)
@@ -682,16 +683,26 @@ class FarmActor:
         self,
         ids: List[int],
         cfg: Config,
+        rng: SeedSequence,
         allocation_queues: Dict[int, RayQueue],
         initial_lice_pop: Optional[GrossLiceDistrib] = None,
     ):
         # ugly hack: modify the global logger here.
         # Because this runs on a separate memory space the logger will not be affected.
-        global logger
-        logger = logging.getLogger(f"SLIM-Farm-{ids}")
-        # for some reason logger.setLevel is not enough...
-        logging.basicConfig(level=logging.INFO)
-        logger.setLevel(logging.INFO)
+        # NOTE: This is undocumented.
+        if ray.worker and ray.worker.global_worker.mode != ray.LOCAL_MODE:
+            global logger
+            logger = logging.getLogger(f"SLIM-Farm-{ids}")
+            logging.basicConfig(
+                level=logging.INFO,
+                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            )
+            # for some reason logger.setLevel is not enough...
+        else:
+            # Avoid sharing the same cfg instance
+            cfg = copy.deepcopy(cfg)
+
+        cfg.rng = default_rng(rng)
 
         self.ids = ids
         self.cfg = cfg

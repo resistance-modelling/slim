@@ -6,6 +6,7 @@ from __future__ import annotations
 
 __all__ = ["Organisation"]
 
+import logging
 from abc import ABC, abstractmethod
 import datetime as dt
 import json
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import ray
+from numpy.random import SeedSequence
 from ray.util.queue import Queue as RayQueue, Empty
 
 from .farm import (
@@ -182,7 +184,6 @@ class MultiProcFarmPool(FarmPool):
         return to_return
 
     def start(self):
-        # Note: pickling won't be fun.
         cfg = self.cfg
         nfarms = cfg.nfarms
         farms_per_process = cfg.farms_per_process
@@ -202,13 +203,15 @@ class MultiProcFarmPool(FarmPool):
             for id_ in pool:
                 self._offspring_queues[id_] = q
 
+        rngs = SeedSequence(self.cfg.seed).spawn(len(batch_pools))
         for actor_idx, farm_ids in enumerate(batch_pools):
-            # concurrency is needed to call gym space.
-            # TODO: we could likely add another event in the command queue or merely have the
-            #  gym space returned and cached after a step command...
             self._farm_actors.append(
                 FarmActor.options(name=f"FarmActor-{actor_idx}").remote(
-                    farm_ids, cfg, self._offspring_queues, *self._extra_farm_args
+                    farm_ids,
+                    cfg,
+                    rngs[actor_idx],
+                    self._offspring_queues,
+                    *self._extra_farm_args,
                 )
             )
 
@@ -238,7 +241,6 @@ class MultiProcFarmPool(FarmPool):
         """
 
         return self._gym_space
-
 
     def step(
         self, cur_date, actions: SAMPLED_ACTIONS, ext_influx, ext_ratios
@@ -378,7 +380,9 @@ class Organisation:
         self.update_offspring_average(offspring_per_farm)
         self.update_genetic_ratios(self.averaged_offspring)
 
-        to_treat = self.farms.handle_aggregation_rate(spaces, self.cfg.aggregation_rate_threshold)
+        to_treat = self.farms.handle_aggregation_rate(
+            spaces, self.cfg.aggregation_rate_threshold
+        )
         for space in spaces.values():
             space["asked_to_treat"] = np.array([int(to_treat)], dtype=np.int8)
 
@@ -401,7 +405,9 @@ class Organisation:
 
     @property
     def get_gym_space(self):
-        return self._gym_space #{f"farm_{i}": space for i, space in self._gym_space.items()}
+        return (
+            self._gym_space
+        )  # {f"farm_{i}": space for i, space in self._gym_space.items()}
 
     def update_offspring_average(self, offspring_per_farm: Dict[int, GenoDistrib]):
         t = self.cfg.reservoir_offspring_average

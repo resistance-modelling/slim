@@ -283,11 +283,20 @@ class DumpingActor:
         self.compressed_stream = lz4.frame.open(
             self.data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
         )
+        self.buffer = []
+
+    def _flush(self):
+        for log in self.buffer:
+            pickle.dump(log, self.compressed_stream)
+        self.buffer = []
 
     def dump(self, logs):
-        pickle.dump(logs, self.compressed_stream)
+        self.buffer.append(logs)
+        if len(self.buffer) >= 30:  # wasn't this parametrised a while ago?
+            self._flush()
 
     def teardown(self):
+        self._flush()
         self.compressed_stream.close()
         self.data_file.close()
 
