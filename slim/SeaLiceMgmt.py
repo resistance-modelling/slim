@@ -111,13 +111,11 @@ if __name__ == "__main__":
 
     # run the simulation
     resume = True
-    if args.resume:
+    if args.resume is not None:
         resume_time = to_dt(args.resume)
-        sim: Simulator = reload(output_folder, simulation_id, timestamp=resume_time)
-    elif args.resume_after:
-        sim: Simulator = reload(
-            output_folder, simulation_id, resume_after=args.resume_after
-        )
+        sim = reload(output_folder, simulation_id, timestamp=resume_time)
+    elif args.resume_after is not None:
+        sim = reload(output_folder, simulation_id, resume_after=args.resume_after)
     else:
         sim = Simulator(output_folder, simulation_id, cfg)
         resume = False

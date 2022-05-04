@@ -281,18 +281,20 @@ class DumpingActor:
 
     def __init__(self, dump_path: Path, pickled_path: Optional[Path] = None):
         self.data_file = dump_path.open(mode="wb")
-        self.sim_state_file = pickled_path.open(mode="wb")
         self.compressed_stream = lz4.frame.open(
             self.data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
         )
-        self.sim_state_stream = lz4.frame.open(
-            self.sim_state_file,
-            "wb",
-            compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC,
-        )
-
         self.log_buffer = BytesIO()
-        self.sim_buffer = BytesIO()
+
+        if pickled_path:
+            self.sim_buffer = BytesIO()
+            self.sim_state_file = pickled_path.open(mode="wb")
+            self.sim_state_stream = lz4.frame.open(
+                self.sim_state_file,
+                "wb",
+                compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC,
+            )
+
 
     def _flush(self, buffer: BytesIO, stream):
         stream.write(buffer.getvalue())
@@ -313,13 +315,14 @@ class DumpingActor:
 
     def teardown(self):
         self._flush(self.log_buffer, self.compressed_stream)
-        self._flush(self.sim_buffer, self.sim_state_stream)
         self.log_buffer.close()
-        self.sim_buffer.close()
         self.compressed_stream.close()
-        self.sim_state_stream.close()
         self.data_file.close()
-        self.sim_state_file.close()
+        if hasattr(self, "sim_buffer"):
+            self._flush(self.sim_buffer, self.sim_state_stream)
+            self.sim_buffer.close()
+            self.sim_state_stream.close()
+            self.sim_state_file.close()
 
 
 class Simulator:  # pragma: no cover
@@ -366,7 +369,7 @@ class Simulator:  # pragma: no cover
         if not resume:
             logger.info("running simulation, saving to %s", self.output_dir)
         else:
-            logger.info("resuming simulation from %s", self.output_dir)
+            logger.info("resuming simulation from %s", self.output_dump_pickle)
 
         # create a file to store the population data from our simulation
         if resume and not self.output_dump_pickle.exists():
@@ -382,8 +385,7 @@ class Simulator:  # pragma: no cover
             else:
                 serialiser = DumpingActor.remote(self.output_dump_path)
             serialiser.dump.remote(self.cfg)
-
-        self.env.reset()
+            self.env.reset()
 
         try:
             num_days = (self.cfg.end_date - self.cur_day).days
@@ -419,6 +421,7 @@ class Simulator:  # pragma: no cover
                         == 0
                         or day == num_days - 1
                     ):
+                        # TODO: Simulator already has a field denoting the day
                         serialiser.save_sim.remote(pickle.dumps((self, self.cur_day)))
 
                 self.cur_day += dt.timedelta(days=1)
@@ -445,20 +448,22 @@ def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
 
 
 def reload_all_dump(
-    path: Path, sim_id: str
-) -> Iterator[Union[dict, Config]]:  # pragma: no cover
+    path: Path, sim_id: str, checkpoint=False
+) -> Iterator[Union[dict, Config, Simulator]]:  # pragma: no cover
     """Reload a simulator.
 
     :param path: the folder containing the artifact
     :param sim_id: the simulation id
+    :param checkpoint: if True, load from the checkpointed simulation state.
 
     :returns: an iterator. The first row is a ``Config``. After this come the serialised logs (as dict),
     one per serialised day.
     """
     logger.info("Loading from a dump...")
-    _, data_file = _get_simulation_path(path, sim_id)
+    data_file, pickle_file = _get_simulation_path(path, sim_id)
+    path = pickle_file if checkpoint else data_file
     with lz4.frame.open(
-        data_file, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
+        path, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
     ) as fp:
         while True:
             try:
@@ -534,18 +539,18 @@ def reload(
     sim_id: str,
     timestamp: Optional[dt.datetime] = None,
     resume_after: Optional[int] = None,
-):  # pragma: no cover
+) -> Simulator:  # pragma: no cover
     """Reload a simulator state from a dump at a given time"""
-    if not (timestamp or resume_after):
+    if timestamp is None and resume_after is None:
         raise ValueError("Resume timestep or range must be provided")
 
     first_time = None
-    for idx, (state, time) in enumerate(reload_all_dump(path, sim_id)):
+    for idx, (state, time) in enumerate(reload_all_dump(path, sim_id, True)):
         if first_time is None:
             first_time = time
-        if resume_after and (time - first_time).days >= resume_after:
+        if resume_after is not None and (time - first_time).days >= resume_after:
             return state
-        elif timestamp and timestamp >= time:
+        elif timestamp is not None and timestamp >= time:
             return state
 
     raise ValueError("Your chosen timestep is too much in the future!")
