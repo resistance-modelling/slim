@@ -354,9 +354,7 @@ class Cage(LoggableMixin):
                     .astype(np.float64)
                     .tolist()
                 )
-                for stage, dead_lice_num in zip(
-                    susc_stages, dead_lice_nums
-                ):
+                for stage, dead_lice_num in zip(susc_stages, dead_lice_nums):
                     dead_lice_dist[stage][geno] = dead_lice_num
 
                 logger.debug(
@@ -1186,7 +1184,6 @@ class Cage(LoggableMixin):
         self.lice_population.geno_by_lifestage["L1"].iadd(lice_from_reservoir["L1"])
 
         self.lice_population.remove_negatives()
-
 
         self.num_fish -= (
             fish_deaths_natural + fish_deaths_from_lice + fish_deaths_from_treatment

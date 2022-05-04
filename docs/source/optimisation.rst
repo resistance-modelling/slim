@@ -71,6 +71,8 @@ is quite hard to use and presents a number of challenges.
 
 In short, refrain from using dictionaries, generators and wrappers whenever possible.
 
+.. _Multiprocessing:
+
 Multiprocessing on farms
 ************************
 

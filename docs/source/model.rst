@@ -268,8 +268,8 @@ As for the first requirement, the overall number of lice is: :math:`N_{EXT}^t = 
 As for the second, we use a Dirichlet-Multinomial Bayesian process to infer the genotype ratio of the new lice.
 The objective is to guarantee a _reserve_ of each genotype (even rare ones) while favouring the most prolific trait.
 
-Footnote
-=========
+Appendix
+........
 
 .. [1] https://www.marine.ie/Home/site-area/areas-activity/aquaculture/sea-lice
 .. [#Aldrin17] `"A stage-structured Bayesian hierarchical model for salmon lice populations at individual salmon farms – Estimated from multiple farm data sets" by Aldrin et al. 2017 <https://doi.org/10.1016/j.ecolmodel.2017.05.019>`_

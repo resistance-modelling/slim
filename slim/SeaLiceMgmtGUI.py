@@ -36,7 +36,7 @@ from PyQt5.QtWidgets import (
 )
 from slim.simulation.simulator import (
     Simulator,
-    reload_all_dump,
+    parse_artifact,
     dump_as_dataframe,
     load_counts,
     reload_from_optimiser,
@@ -298,7 +298,7 @@ class SimulatorLoadingWorker(QThread):
             sim_name = self.dump_path.name[
                 len("simulation_name_") : -len(".pickle.lz4")
             ]
-            states_times_it = reload_all_dump(parent_path, sim_name)
+            states_times_it = parse_artifact(parent_path, sim_name)
             states_as_df, times, cfg = dump_as_dataframe(states_times_it)
             try:
                 report = load_counts(cfg)

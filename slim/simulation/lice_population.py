@@ -690,7 +690,8 @@ class LicePopulation:
     It also manages busy dam distributions when mating is involved.
 
     The stages population can be accessed via either dictionary access (gross) or via
-    the ``geno_by_lifestage` attribute (detailed).
+    the ``geno_by_lifestage`` attribute (detailed).
+
     Additionally we provide two "virtual" stages ("L5f_busy" and "L5f_free") as read-only
     convenience accessors in place of the verbose `busy_dams` and `available_dams` attributes.
     """

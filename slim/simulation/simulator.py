@@ -10,7 +10,15 @@ to worry about stepping or manually instantiating a policy.
 
 from __future__ import annotations
 
-__all__ = ["get_env", "Simulator", "SimulatorPZEnv", "BernoullianPolicy"]
+__all__ = [
+    "get_env",
+    "Simulator",
+    "SimulatorPZEnv",
+    "BernoullianPolicy",
+    "load_artifact",
+    "dump_as_dataframe",
+    "load_counts",
+]
 
 import datetime as dt
 import json
@@ -295,7 +303,6 @@ class DumpingActor:
                 compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC,
             )
 
-
     def _flush(self, buffer: BytesIO, stream):
         stream.write(buffer.getvalue())
         buffer.truncate()
@@ -447,7 +454,7 @@ def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
     )
 
 
-def reload_all_dump(
+def parse_artifact(
     path: Path, sim_id: str, checkpoint=False
 ) -> Iterator[Union[dict, Config, Simulator]]:  # pragma: no cover
     """Reload a simulator.
@@ -516,6 +523,20 @@ def dump_as_dataframe(
     return dataframe.rename_axis(("timestamp", "farm_id")), times, cast(Config, cfg)
 
 
+def load_artifact(
+    path: Path, sim_id: str
+) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
+    """Loads an artifact.
+    Combines :func:`parse_artifact` and :func:`.dump_as_dataframe`
+
+    :param path: the path where the output is
+    :param sim_id: the simulation name
+
+    :returns: the dataframe to dump
+    """
+    return dump_as_dataframe(parse_artifact(path, sim_id))
+
+
 def dump_optimiser_as_pd(states: List[List[Simulator]]):  # pragma: no cover
     # TODO: This is currently broken.
     payoff_row = []
@@ -545,7 +566,7 @@ def reload(
         raise ValueError("Resume timestep or range must be provided")
 
     first_time = None
-    for idx, (state, time) in enumerate(reload_all_dump(path, sim_id, True)):
+    for idx, (state, time) in enumerate(parse_artifact(path, sim_id, True)):
         if first_time is None:
             first_time = time
         if resume_after is not None and (time - first_time).days >= resume_after:
