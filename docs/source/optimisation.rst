@@ -1,3 +1,5 @@
+.. currentmodule:: slim.simulation
+
 Internals Guide
 ===============
 
@@ -15,7 +17,7 @@ to work efficiently we need to rely on fast operations such as:
 * efficient sampling;
 * fast discretisation.
 
-The first cornerstone is obviously the optimised :class:`slim.simulation.lice_population.GenoDistrib`
+The first cornerstone is obviously the optimised :class:`.lice_population.GenoDistrib`
 and numpy/scipy's sampling algorithms.
 
 Multi-threading and Numba
@@ -59,6 +61,7 @@ env var to 1 (see `<https://numba.pydata.org/numba-doc/dev/reference/envvars.htm
 we came up with a similar flag ``SLIM_ENABLE_NUMBA`` which does the opposite.
 During debugging sessions it is automatically disabled.
 
+
 Writing style
 *************
 
@@ -66,11 +69,26 @@ The main crux with numba is that many python-esque features are not available. F
 operator overloading, method overloading, OOP and so on. In particular, the ``jitclass`` feature
 is quite hard to use and presents a number of challenges.
 
-
 In short, refrain from using dictionaries, generators and wrappers whenever possible.
+
+.. _Multiprocessing:
+
+Multiprocessing on farms
+************************
+
+While the lack of true multithreading is a limiting factor, multiprocessing is still usable for long-running tasks
+like farm updates.
+
+Internally, the :class:`.organisation.Organisation` spawns a number of ``FarmActor`` s, each of them owning a variable
+number of farms to update. The driver (in this case, the organisation) schedules step updates and sometimes also
+alerts farms about treatment cooperation opportunities. Each ``FarmActor`` returns a collation of outputs in the form
+of gym spaces, rewards and other metrics.
 
 Multithreading on cages
 ***********************
 
-As farms can have a lot of cages each (e.g. between 6 and 20) multithreading is therefore a requirement.
+As farms can have a lot of cages each (e.g. between 6 and 20) multithreading is therefore a nice feature to have.
 As explained earlier, multithreading on pure python cages is ineffective unless the GIL is released.
+
+However, one could try to make large cage actor pools as it was done for farms - although that might require some
+effort.

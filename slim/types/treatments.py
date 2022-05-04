@@ -9,7 +9,6 @@ import numpy as np
 
 # A few extra general types
 from slim.simulation.lice_population import (
-    LicePopulation,
     GenoDistrib,
     GenoTreatmentValue,
     Allele,

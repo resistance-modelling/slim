@@ -10,18 +10,28 @@ to worry about stepping or manually instantiating a policy.
 
 from __future__ import annotations
 
-__all__ = ["get_env", "Simulator", "SimulatorPZEnv", "BernoullianPolicy"]
+__all__ = [
+    "get_env",
+    "Simulator",
+    "SimulatorPZEnv",
+    "BernoullianPolicy",
+    "load_artifact",
+    "dump_as_dataframe",
+    "load_counts",
+]
 
 import datetime as dt
 import json
 import os
+from io import BytesIO
 
 import lz4.frame
 from pathlib import Path
-from typing import List, Optional, Tuple, Iterator
+from typing import List, Optional, Tuple, Iterator, Union, cast, BinaryIO
 
 import dill as pickle
 import pandas as pd
+import ray
 import tqdm
 
 from slim import logger, LoggableMixin
@@ -31,9 +41,11 @@ from .organisation import Organisation
 from slim.types.policies import (
     ACTION_SPACE,
     CURRENT_TREATMENTS,
-    ObservationType,
+    ObservationSpace,
     NO_ACTION,
     TREATMENT_NO,
+    no_observation,
+    get_observation_space_schema,
 )
 from slim.types.treatments import Treatment
 
@@ -55,8 +67,6 @@ def get_env(cfg: Config) -> wrappers.OrderEnforcingWrapper:
     :returns: the wrapped environment
     """
     env = SimulatorPZEnv(cfg)
-    # This wrapper is only for environments which print results to the terminal
-    env = wrappers.CaptureStdoutWrapper(env)
     # this wrapper helps error handling for discrete action spaces
     env = wrappers.AssertOutOfBoundsWrapper(env)
     # Provides a wide variety of helpful user errors
@@ -111,27 +121,15 @@ class SimulatorPZEnv(AECEnv):
         self.organisation = Organisation(cfg)
         self.payoff = 0.0
         self.treatment_no = len(Treatment)
+        self.last_logs = {}
         self.reset()
 
         self._action_spaces = {agent: ACTION_SPACE for agent in self.agents}
 
         # TODO: Question: would it be better to model distinct cage pops?
-        self._observation_spaces = {
-            agent: spaces.Dict(
-                {
-                    "aggregation": spaces.Box(
-                        low=0, high=20, shape=(20,), dtype=np.float32
-                    ),
-                    "fish_population": spaces.Box(
-                        low=0, high=1e6, shape=(20,), dtype=np.int64
-                    ),
-                    "current_treatments": CURRENT_TREATMENTS,
-                    "allowed_treatments": spaces.Discrete(MAX_NUM_APPLICATIONS),
-                    "asked_to_treat": spaces.MultiBinary(1),  # Yes or no
-                }
-            )
-            for agent in self.agents
-        }
+        self._observation_spaces = get_observation_space_schema(
+            self.agents, MAX_NUM_APPLICATIONS
+        )
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
@@ -147,15 +145,8 @@ class SimulatorPZEnv(AECEnv):
         pass
 
     @property
-    @functools.lru_cache(maxsize=None)
     def no_observation(self):
-        return {
-            "aggregation": np.zeros((MAX_NUM_CAGES,), dtype=np.float32),
-            "fish_population": np.zeros((MAX_NUM_CAGES,), dtype=np.int64),
-            "current_treatments": np.zeros((self.treatment_no + 1,), dtype=np.int8),
-            "allowed_treatments": 0,
-            "asked_to_treat": np.zeros((1,), dtype=np.int8),
-        }
+        return no_observation(MAX_NUM_CAGES)
 
     def observe(self, agent):
         return self.observations[agent]
@@ -184,11 +175,13 @@ class SimulatorPZEnv(AECEnv):
                 id = int(k[len("farm_") :])
                 actions[id] = v
 
-            self.rewards = dict(
-                zip(self.possible_agents, self.organisation.step(self.cur_day, actions))
-            )
-            for agent_ in self.agents:
-                self.observations[agent_] = self._agent_to_farm[agent].get_gym_space()
+            payoffs, logs = self.organisation.step(self.cur_day, actions)
+            self.last_logs = logs
+            id_to_gym = {i: f"farm_{i}" for i in range(len(self.possible_agents))}
+
+            self.rewards = {id_to_gym[i]: payoff for i, payoff in payoffs.items()}
+
+            self.observations = self.organisation.get_gym_space
             self.cur_day += dt.timedelta(days=1)
         else:
             self._clear_rewards()
@@ -196,12 +189,10 @@ class SimulatorPZEnv(AECEnv):
         self._accumulate_rewards()
 
     def reset(self):
+        self.organisation.reset()
         self.organisation = Organisation(self.cfg)
         # Gym/PZ assume the agents are a dict
-        self._agent_to_farm = {
-            f"farm_{i}": farm for i, farm in enumerate(self.organisation.farms)
-        }
-        self.possible_agents = list(self._agent_to_farm.keys())
+        self.possible_agents = [f"farm_{i}" for i in range(self.cfg.nfarms)]
         self.agents = self.possible_agents[:]
         self.rewards = {agent: 0 for agent in self.agents}
         self.dones = {agent: False for agent in self.agents}
@@ -212,6 +203,9 @@ class SimulatorPZEnv(AECEnv):
         self._agent_selector = agent_selector(self.agents)
         self.agent_selection = self._agent_selector.next()
         self._chosen_actions = {agent: -1 for agent in self.agents}
+
+    def stop(self):
+        self.organisation.stop()
 
 
 class BernoullianPolicy:
@@ -231,7 +225,7 @@ class BernoullianPolicy:
         self.seed = cfg.seed
         self.reset()
 
-    def _predict(self, asked_to_treat, agg_rate: float, agent: int):
+    def _predict(self, asked_to_treat, agg_rate: np.ndarray, agent: int):
         if not asked_to_treat and np.any(agg_rate < self.treatment_threshold):
             return NO_ACTION
 
@@ -249,7 +243,7 @@ class BernoullianPolicy:
         )
         return picked_treatment
 
-    def predict(self, observation: ObservationType, agent: str):
+    def predict(self, observation: ObservationSpace, agent: str):
         if isinstance(observation, spaces.Box):
             raise NotImplementedError("Only dict spaces are supported for now")
 
@@ -279,7 +273,7 @@ class MosaicPolicy:
     def __init__(self, cfg: Config):
         self.last_action = [0] * len(cfg.farms)
 
-    def predict(self, observation: ObservationType, agent: str):
+    def predict(self, observation: ObservationSpace, agent: str):
         if not observation["asked_to_treat"]:
             return NO_ACTION
 
@@ -287,6 +281,55 @@ class MosaicPolicy:
         action = self.last_action[agent_id]
         self.last_action[agent_id] = (action + 1) % TREATMENT_NO
         return action
+
+
+@ray.remote
+class DumpingActor:
+    """Takes an output log and serialises it"""
+
+    def __init__(self, dump_path: Path, pickled_path: Optional[Path] = None):
+        self.data_file = dump_path.open(mode="wb")
+        self.compressed_stream = lz4.frame.open(
+            self.data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
+        )
+        self.log_buffer = BytesIO()
+
+        if pickled_path:
+            self.sim_buffer = BytesIO()
+            self.sim_state_file = pickled_path.open(mode="wb")
+            self.sim_state_stream = lz4.frame.open(
+                self.sim_state_file,
+                "wb",
+                compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC,
+            )
+
+    def _flush(self, buffer: BytesIO, stream):
+        stream.write(buffer.getvalue())
+        buffer.truncate()
+
+    def _save(self, data: bytes, buffer: BytesIO, stream: BinaryIO):
+        buffer.write(data)
+        if len(data) >= (1 << 19):  # ~ 512 KiB
+            self._flush(buffer, stream)
+
+    def dump(self, logs: dict):
+        self._save(pickle.dumps(logs), self.log_buffer, self.data_file)
+
+    def save_sim(self, sim_state: bytes):
+        # Note: Simulator cannot be serialised by pickle but by dill,
+        # but ray uses (a fork of) pickle internally...
+        self._save(sim_state, self.sim_buffer, self.sim_state_stream)
+
+    def teardown(self):
+        self._flush(self.log_buffer, self.compressed_stream)
+        self.log_buffer.close()
+        self.compressed_stream.close()
+        self.data_file.close()
+        if hasattr(self, "sim_buffer"):
+            self._flush(self.sim_buffer, self.sim_state_stream)
+            self.sim_buffer.close()
+            self.sim_state_stream.close()
+            self.sim_state_file.close()
 
 
 class Simulator:  # pragma: no cover
@@ -316,7 +359,9 @@ class Simulator:  # pragma: no cover
         else:
             raise ValueError("Unsupported strategy")
 
-        self.output_dump_path = _get_simulation_path(output_dir, sim_id)
+        self.output_dump_path, self.output_dump_pickle = _get_simulation_path(
+            output_dir, sim_id
+        )
         self.cur_day = cfg.start_date
         self.payoff = 0.0
 
@@ -331,79 +376,111 @@ class Simulator:  # pragma: no cover
         if not resume:
             logger.info("running simulation, saving to %s", self.output_dir)
         else:
-            logger.info("resuming simulation", self.output_dir)
+            logger.info("resuming simulation from %s", self.output_dump_pickle)
 
         # create a file to store the population data from our simulation
-        if resume and not self.output_dump_path.exists():
+        if resume and not self.output_dump_pickle.exists():
             logger.warning(
-                f"{self.output_dump_path} could not be found! Creating a new log file."
+                f"{self.output_dump_pickle} could not be found! Creating a new log file."
             )
 
         if not resume:
-            data_file = self.output_dump_path.open(mode="wb")
-            compressed_stream = lz4.frame.open(
-                data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
-            )
+            if self.cfg.checkpoint_rate:
+                serialiser = DumpingActor.remote(
+                    self.output_dump_path, self.output_dump_pickle
+                )
+            else:
+                serialiser = DumpingActor.remote(self.output_dump_path)
+            serialiser.dump.remote(self.cfg)
+            self.env.reset()
 
-        self.env.reset()
+        try:
+            num_days = (self.cfg.end_date - self.cur_day).days
+            for day in tqdm.trange(num_days):
+                logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
+                for agent in self.env.agents:
+                    action = self.policy.predict(self.env.observe(agent), agent)
+                    self.env.step(action)
 
-        num_days = (self.cfg.end_date - self.cur_day).days
-        for day in tqdm.trange(num_days):
-            logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
-            for agent in self.env.agents:
-                action = self.policy.predict(self.env.observe(agent), agent)
-                self.env.step(action)
+                reward = self.env.rewards
+                self.payoff += sum(reward.values())
 
-            reward = self.env.rewards
-            self.payoff += sum(reward.values())
+                if not resume:
+                    if (
+                        self.cfg.save_rate
+                        and (self.cur_day - self.cfg.start_date).days
+                        % self.cfg.save_rate
+                        == 0
+                    ) or day == num_days - 1:
+                        expanded_logs = {"timestamp": self.cur_day, "farms": {}}
+                        farm_logs = self.env.unwrapped.last_logs
+                        for agent in self.env.possible_agents:
+                            expanded_logs["farms"][agent] = {
+                                **self.env.observe(agent),
+                                **farm_logs[agent],
+                            }
 
-            # Save the model snapshot either when checkpointing or during the last iteration
+                        serialiser.dump.remote(expanded_logs)
+
+                    if self.cfg.checkpoint_rate and (
+                        (self.cur_day - self.cfg.start_date).days
+                        % self.cfg.checkpoint_rate
+                        == 0
+                        or day == num_days - 1
+                    ):
+                        # TODO: Simulator already has a field denoting the day
+                        serialiser.save_sim.remote(pickle.dumps((self, self.cur_day)))
+
+                self.cur_day += dt.timedelta(days=1)
+
+        except KeyboardInterrupt:
+            env = self.env
+            while not isinstance(env, SimulatorPZEnv):
+                env = env.env
+            env.stop()
+
+        finally:
             if not resume:
-                if (
-                    self.cfg.save_rate
-                    and (self.cur_day - self.cfg.start_date).days % self.cfg.save_rate
-                    == 0
-                ) or day == num_days - 1:
-                    pickle.dump(self, compressed_stream)
-            self.cur_day += dt.timedelta(days=1)
-
-        if not resume:
-            compressed_stream.close()
-            data_file.close()
+                serialiser.teardown.remote()
 
 
 def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
     if not path.is_dir():
         path.mkdir(parents=True, exist_ok=True)
 
-    return path / f"simulation_data_{sim_id}.pickle.lz4"
+    return (
+        path / f"simulation_data_{sim_id}.pickle.lz4",
+        path / f"checkpoint_{sim_id}.pickle.lz4",
+    )
 
 
-def reload_all_dump(
-    path: Path, sim_id: str
-) -> Iterator[Tuple[Simulator, dt.datetime]]:  # pragma: no cover
+def parse_artifact(
+    path: Path, sim_id: str, checkpoint=False
+) -> Iterator[Union[dict, Config, Simulator]]:  # pragma: no cover
     """Reload a simulator.
 
     :param path: the folder containing the artifact
     :param sim_id: the simulation id
+    :param checkpoint: if True, load from the checkpointed simulation state.
 
-    :returns: an iterator of pairs (sim_state, time)
+    :returns: an iterator. The first row is a ``Config``. After this come the serialised logs (as dict),
+    one per serialised day.
     """
     logger.info("Loading from a dump...")
-    data_file = _get_simulation_path(path, sim_id)
+    data_file, pickle_file = _get_simulation_path(path, sim_id)
+    path = pickle_file if checkpoint else data_file
     with lz4.frame.open(
-        data_file, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
+        path, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
     ) as fp:
         while True:
             try:
-                sim_state: Simulator = pickle.load(fp)
-                yield sim_state, sim_state.cur_day
+                yield pickle.load(fp)
             except EOFError:
                 break
 
 
 def dump_as_dataframe(
-    states_times_it: Iterator[Tuple[Simulator, dt.datetime]]
+    states_times_it: Iterator[Union[dict, Config]],
 ) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:  # pragma: no cover
     """
     Convert a dump into a pandas dataframe
@@ -418,21 +495,18 @@ def dump_as_dataframe(
     farm_data = {}
     times = []
     cfg = None
-    for state, time in states_times_it:
-        times.append(time)
-        if cfg is None:
-            cfg = state.cfg
+    for state in states_times_it:
+        if isinstance(state, Config):
+            cfg = state
+            continue
 
-        for farm in state.env.unwrapped.organisation.farms:
-            key = (time, "farm_" + str(farm.id_))
-            is_treating = farm.is_treating
-            farm_data[key] = {
-                **farm.lice_genomics,
-                **farm.logged_data,
-                "num_fish": farm.num_fish,
-                "is_treating": is_treating,
-                "payoff": float(state.payoff),
-            }
+        time = state["timestamp"]
+        times.append(time)
+
+        for agent, values in state["farms"].items():
+            key = (time, agent)
+            farm_pop = values.pop("farm_population")
+            farm_data[key] = {**values, **farm_pop}
 
     dataframe = pd.DataFrame.from_dict(farm_data, orient="index")
 
@@ -446,11 +520,25 @@ def dump_as_dataframe(
 
     dataframe = dataframe.join(aggregate_geno_info)
 
-    return dataframe.rename_axis(("timestamp", "farm_id")), times, cfg
+    return dataframe.rename_axis(("timestamp", "farm_id")), times, cast(Config, cfg)
+
+
+def load_artifact(
+    path: Path, sim_id: str
+) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
+    """Loads an artifact.
+    Combines :func:`parse_artifact` and :func:`.dump_as_dataframe`
+
+    :param path: the path where the output is
+    :param sim_id: the simulation name
+
+    :returns: the dataframe to dump
+    """
+    return dump_as_dataframe(parse_artifact(path, sim_id))
 
 
 def dump_optimiser_as_pd(states: List[List[Simulator]]):  # pragma: no cover
-    # TODO: maybe more things may be valuable to visualise
+    # TODO: This is currently broken.
     payoff_row = []
     proba_row = {}
     for state_row in states:
@@ -472,18 +560,18 @@ def reload(
     sim_id: str,
     timestamp: Optional[dt.datetime] = None,
     resume_after: Optional[int] = None,
-):  # pragma: no cover
+) -> Simulator:  # pragma: no cover
     """Reload a simulator state from a dump at a given time"""
-    if not (timestamp or resume_after):
+    if timestamp is None and resume_after is None:
         raise ValueError("Resume timestep or range must be provided")
 
     first_time = None
-    for idx, (state, time) in enumerate(reload_all_dump(path, sim_id)):
+    for idx, (state, time) in enumerate(parse_artifact(path, sim_id, True)):
         if first_time is None:
             first_time = time
-        if resume_after and idx == resume_after:
+        if resume_after is not None and (time - first_time).days >= resume_after:
             return state
-        elif timestamp and timestamp >= time:
+        elif timestamp is not None and timestamp >= time:
             return state
 
     raise ValueError("Your chosen timestep is too much in the future!")
@@ -516,7 +604,6 @@ def reload_from_optimiser(path: Path) -> List[List[Simulator]]:  # pragma: no co
                     pickle_path = (
                         path / f"simulation_data_optimisation_{step}_{it}.pickle.lz4"
                     )
-                    print(pickle_path)
                     with pickle_path.open("rb") as f:
                         new_step.append(pickle.load(f))
                 except FileNotFoundError:

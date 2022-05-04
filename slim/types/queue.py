@@ -1,7 +1,6 @@
 """
-Cages, Farms and Organisations communicate via a mix of traditional API and message passing via channels. This allows
-for greater flexibility when there is a need to communicate back and forth. Furthermore, it allows for greater
-multithreading capabilities.
+Cages, Farms and Organisations communicate via a mix of traditional API and message passing via channels.
+Here are some types and tools used to handle such queues.
 """
 from __future__ import annotations
 
@@ -11,10 +10,13 @@ from dataclasses import dataclass, field, asdict
 from functools import singledispatch
 from queue import PriorityQueue
 
-from typing import Callable, TypeVar, TYPE_CHECKING
+from typing import Callable, TypeVar, TYPE_CHECKING, Optional, Tuple, List, Dict
+
+from slim.types.policies import ObservationSpace
 
 if TYPE_CHECKING:
-    from slim.simulation.lice_population import GenoDistrib
+    from slim.simulation.farm import GenoDistribByHatchDate, CageAllocation
+    from slim.simulation.lice_population import GenoDistrib, GenoRates
     from slim.types.treatments import Treatment
 
 
@@ -102,13 +104,6 @@ class TreatmentEvent(CageEvent):
 
 
 @dataclass(order=True)
-class FarmCommand(Event):
-    """Base class for all commands sent from the Organisation to a Farm"""
-
-    request_date: dt.datetime
-
-
-@dataclass(order=True)
 class SamplingEvent(Event):
     """Internal sampling event used inside farm"""
 
@@ -116,24 +111,19 @@ class SamplingEvent(Event):
     sampling_date: dt.datetime
 
 
-@dataclass(order=True)
-class FarmResponse(Event):
-    """Base class for all farm activities that require some communication with the organisation."""
-
-    response_date: dt.datetime
+# TODO: As we start deprecating PriorityQueues we should also deprecate the datetime parameter
 
 
 @dataclass
-class SampleRequestCommand(FarmCommand):
-    pass
+class StepResponse:
+    total_offspring: GenoDistrib
+    profit: float
+    total_cost: float
+    observation_space: ObservationSpace
+    loggable: dict  # any extra to log
 
 
-@dataclass
-class SamplingResponse(FarmResponse):
-    detected_rate: float
-
-
-EventT = TypeVar("EventT", CageEvent, FarmCommand, FarmResponse, SamplingEvent)
+EventT = TypeVar("EventT", CageEvent, SamplingEvent)
 
 
 def pop_from_queue(
@@ -164,16 +154,8 @@ def pop_from_queue(
     # have mypy ignore redefinitions of '_'
     # see https://github.com/python/mypy/issues/2904 for details
     @access_time_lt.register  # type: ignore[no-redef]
-    def _(arg: FarmCommand, _cur_time: dt.datetime):
-        return arg.request_date <= _cur_time  # pragma: no cover
-
-    @access_time_lt.register  # type: ignore[no-redef]
     def _(arg: SamplingEvent, _cur_time: dt.datetime):
         return arg.sampling_date <= _cur_time  # pragma: no cover
-
-    @access_time_lt.register  # type: ignore[no-redef]
-    def _(arg: FarmResponse, _cur_time: dt.datetime):
-        return arg.response_date <= _cur_time  # pragma: no cover
 
     while not queue.empty() and access_time_lt(queue.queue[0], cur_time):
         event = queue.get()

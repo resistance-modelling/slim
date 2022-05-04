@@ -53,6 +53,10 @@
                 "mosaic"
             ]
         },
+        "farms_per_process": {
+            "description": "Number of farms per Ray actor during batch updates. Defaults to ``nfarms`` (i.e. effectively disables multiprocessing)",
+            "type": "number"
+        },
         "farms": {
             "type": "array",
             "description": "Farm-specific configuration",

@@ -8,6 +8,8 @@ import datetime
 # ignore profiling
 import builtins
 
+import ray
+
 builtins.__dict__["profile"] = lambda x: x
 
 # Disable numba's jitting for now
@@ -27,6 +29,15 @@ from slim.simulation.lice_population import (
     from_ratios_rng,
     from_dict,
 )
+
+
+# TODO: make parallel test cases that use this fixture
+@pytest.fixture(scope="session")
+def run_destroy():
+    # async actors cannot use local mode
+    ray.init(local_mode=False, num_cpus=1, num_gpus=0)
+    yield
+    ray.shutdown()
 
 
 @pytest.fixture

@@ -32,8 +32,9 @@ dependencies:
   - numba=0.54.1
   - pip:
     - convertbng==0.6.36
-    - pytype==2022.01.07
+    - pytype==2022.04.26
     - ninja==1.10.2
     - tabula-py==2.3.0
     - pettingzoo==1.15.0
     - stable-baselines==2.10.2
+    - ray==1.11.0

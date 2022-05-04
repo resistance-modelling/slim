@@ -130,13 +130,7 @@ class RuntimeConfig:
 class Config(RuntimeConfig):
     """One-stop class to hold constants, farm setup and other settings."""
 
-    def __init__(
-        self,
-        config_file: str,
-        simulation_dir: str,
-        override_params: Optional[dict] = None,
-        save_rate: Optional[int] = None,
-    ):
+    def __init__(self, config_file: str, simulation_dir: str, **kwargs):
         """Read the configuration from files
 
         :param config_file: Path to the environment JSON file
@@ -146,9 +140,14 @@ class Config(RuntimeConfig):
         :param save_rate: if not null it determines how often (in terms of days) the simulator saves the state.
         """
 
-        if override_params is None:
-            override_params = dict()
-        super().__init__(config_file, override_params)
+        # driver-specific settings
+        self.save_rate = kwargs.pop("save_rate", 0)
+        self.checkpoint_rate = kwargs.pop("checkpoint_rate", 0)
+        self.farms_per_process = kwargs.pop("farms_per_process", -1)
+        if self.farms_per_process is None:
+            self.farms_per_process = -1
+
+        super().__init__(config_file, kwargs)
 
         self.experiment_id = simulation_dir
 
@@ -156,7 +155,7 @@ class Config(RuntimeConfig):
         with open(os.path.join(simulation_dir, "params.json")) as f:
             data = json.load(f)
 
-        override(data, override_params)
+        override(data, kwargs)
 
         with open(os.path.join(simulation_dir, "../params.schema.json")) as f:
             schema = json.load(f)
@@ -196,9 +195,6 @@ class Config(RuntimeConfig):
         self.loch_temperatures = np.loadtxt(
             os.path.join(simulation_dir, "temperatures.csv"), delimiter=","
         )
-
-        # driver-specific settings
-        self.save_rate = save_rate
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
         return [self.emb, self.thermolicer][treatment_type.value]

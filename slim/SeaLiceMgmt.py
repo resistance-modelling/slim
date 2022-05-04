@@ -8,6 +8,8 @@ import cProfile
 import sys
 from pathlib import Path
 
+import ray
+
 from slim import logger, create_logger
 from slim.simulation.simulator import Simulator, reload
 from slim.simulation.config import Config, to_dt
@@ -36,11 +38,28 @@ if __name__ == "__main__":
         default=False,
         action="store_true",
     )
+
+    parser.add_argument(
+        "--save-rate",
+        help="Interval (in days) to log the simulation output. Ignored",
+        type=int,
+        default=1,
+    )
     parser.add_argument(
         "--profile",
-        help="(DEBUG) Dump cProfile stats. The output path is your_simulation_path/profile.bin.",
+        help="(DEBUG) Dump cProfile stats. The output path is your_simulation_path/profile.bin. Recommended to run together with --local-mode",
         default=False,
         action="store_true",
+    )
+
+    ray_group = parser.add_argument_group()
+    ray_group.add_argument(
+        "--ray-address",
+        help="Address of a ray cluster address",
+    )
+    ray_group.add_argument(
+        "--ray--redis_password",
+        help="Password for the ray cluster",
     )
 
     resume_group = parser.add_mutually_exclusive_group()
@@ -55,10 +74,8 @@ if __name__ == "__main__":
         help="(DEBUG) resume the simulator from a given number of days since the beginning of the simulation. All configuration variables will be ignored.",
     )
     resume_group.add_argument(
-        "--save-rate",
-        help="Interval to dump the simulation state. Useful for visualisation and debugging."
-        + "Warning: saving a run is a slow operation. Saving and resuming at the same time"
-        + "is forbidden. If this is not provided, only the last timestep is serialised",
+        "--checkpoint-rate",
+        help="(DEBUG) Interval to dump the simulation state. Allowed in single-process mode only.",
         type=int,
         required=False,
     )
@@ -90,17 +107,15 @@ if __name__ == "__main__":
     config_args = config_parser.parse_args(unknown)
 
     # create the config object
-    cfg = Config(cfg_path, args.param_dir, vars(config_args), args.save_rate)
+    cfg = Config(cfg_path, args.param_dir, **vars(args), **vars(config_args))
 
     # run the simulation
     resume = True
-    if args.resume:
+    if args.resume is not None:
         resume_time = to_dt(args.resume)
-        sim: Simulator = reload(output_folder, simulation_id, timestamp=resume_time)
-    elif args.resume_after:
-        sim: Simulator = reload(
-            output_folder, simulation_id, resume_after=args.resume_after
-        )
+        sim = reload(output_folder, simulation_id, timestamp=resume_time)
+    elif args.resume_after is not None:
+        sim = reload(output_folder, simulation_id, resume_after=args.resume_after)
     else:
         sim = Simulator(output_folder, simulation_id, cfg)
         resume = False
@@ -111,3 +126,6 @@ if __name__ == "__main__":
         profile_output_path = output_folder / f"profile_{simulation_id}.bin"
         # atexit.register(lambda prof=prof: prof.print_stats(output_unit=1e-3))
         cProfile.run("sim.run_model()", str(profile_output_path))
+
+    if not resume:
+        ray.timeline("outputs/timeline.json")

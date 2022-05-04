@@ -23,7 +23,7 @@ copyright = "2021-2022, Anthony O' Hare, Enrico Trombetta, Jessica Enright"
 author = "Anthony O' Hare, Enrico Trombetta, Jessica Enright"
 
 # The full version, including alpha/beta/rc tags
-release = "0.2.3.rc1"
+release = "0.3.0"
 
 
 # -- General configuration ---------------------------------------------------
@@ -68,3 +68,5 @@ html_favicon = "../../res/logo.png"
 html_theme_options = {"style_nav_header_background": "black"}
 
 jsonschema_options = {"lift_description": True}
+
+python_use_unqualified_type_names = True

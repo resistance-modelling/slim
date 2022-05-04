@@ -4,6 +4,8 @@ import logging
 from typing import Any, Dict
 import os, sys
 
+import ray
+
 if (
     sys.gettrace() is None
     or sys.gettrace()

@@ -10,7 +10,7 @@ Run the simulator
 .. tabs::
     .. group-tab:: Command Line
 
-        The easiest way to run this project is from the command line.
+        The easiest way to run SLIM is via the command line.
 
         The main script you'll need to run is SeaLiceMgmt. The general way to launch
         it is the following:
@@ -117,22 +117,33 @@ Parameter Override
 Artifact Saving
 """""""""""""""
 
-The artifacts are saved inside the output folder under the name ``simulation_data_${NAME}.pickle``.
+By default, SLIM generates some artifacts ready to be digested by our visualiser or by any custom pipeline.
 
-For efficiency reasons, slim only saves a checkpoint of the simulation state at the end of the simulation.
+There are two possible types of artifacts:
 
-This has two uses:
+* output logs, saved as ``simulation_data_${NAME}.pickle.lz4``.
+* serialised internal states (also known as *dump* ), saved as ``checkpoint_${NAME}.pickle.lz4``.
 
-* introspecting the simulation output with the GUI;
-* resuming an interrupted simulation.
+In the majority of cases, you do not need to care about dumping and will probably stop reading now.
 
+Thanks to multiprocessing, artifacts are saved by a separate process from the main simulation, therefore
+no slow-down should occur. Therefore, it is safe to let it on (default). To change the frequency of
+writing one can pass ``--save-rate=N`` to the wished frequency (or 0 to disable altogether).
+
+This is a LZ4-compressed series of self-describing Python dictionaries. We provide an extractor for these
+in :func:`slim.simulator.load_artifact`.
+
+The second is available for debugging purposes and has been historically used as our main artifact.
+
+.. note::
+   Dumping is not available in multiprocessing mode.
 
 .. tabs::
     .. group-tab:: Command Line
 
-        To generate a dump every ``n`` days add the ``--save-rate=n`` option. For example:
+        To generate a dump every ``n`` days add the ``--checkpoint-rate=n`` option. For example:
 
-        ``python -m slim.SeaLiceMgmt outputs/sim_1 config_data/Fyne --save-rate=1"``
+        ``python -m slim.SeaLiceMgmt outputs/sim_1 config_data/Fyne --checkpoint-rate=1"``
 
         This will save the output every day.
 
@@ -147,7 +158,7 @@ This has two uses:
     .. group-tab:: Python
 
         To generate a dump every ``n`` days set up an instance of :py:class:`slim.Config.Config` and pass the extra
-        parameter ``save_rate``. The rest follows as usual.
+        parameter ``checkpoint_rate``. The rest follows as usual.
 
         .. code-block:: python
 
@@ -156,7 +167,7 @@ This has two uses:
 
             n = 10 # every 10 days
 
-            cfg = Config("config_data/config.json", "config_data/Fyne", save_rate=n)
+            cfg = Config("config_data/config.json", "config_data/Fyne", checkpoint_rate=n)
             sim = Simulator("output", "Fyne_foobar", cfg)
             sim.run_model()
 
@@ -174,14 +185,29 @@ This has two uses:
             sim = reload("output", "Fyne_foobar", timestamp=timestamp)
             # or alternatively
             # sim = reload("output", "Fyne_foobar", resume_after=365)
+            # Occasionally add breakpoints wherever you wish
             sim.run_model()
 
         Additionally, one can override the config parameters.
 
 .. note::
 
-    Artifacts are opened in read-only mode when resuming. It is not allowed to
-    combine resuming and dumping.
+    Dumps are opened in read-only mode when resuming. It is not allowed to
+    combine resuming and dumping/artifact saving.
+
+Multiprocessing
+"""""""""""""""
+
+.. note::
+
+   The support for multiprocessing is still experimental. Head to :ref:`Multiprocessing` for details.
+
+To enable multiprocessing, you need to know how many farms you are going to simulate and how much parallelism you
+wish to achieve. For example, if simulating an environment with 8 agents in an octa-core system, it is stafe to allocate
+one farm per process. Therefore, you can pass the ``--farms-per-process=1`` option.
+The lower is better (if your system supports it) but 0 (the default) enables *single-process mode*.
+
+
 
 Run the GUI
 ***********
@@ -190,7 +216,7 @@ We also provide a GUI for debugging and visualisation. Its support is still heav
 use with caution.
 
 To run the GUI you need to launch :py:mod:`slim.SeaLiceMgmtGUI`, for example via:
-```python -m slim.SeaLiceMgmtGUI``` and provide your run data (generated via the `--save-rate` option mentioned
-above) from the given menu.
+```python -m slim.SeaLiceMgmtGUI``` and provide your artifact data.
 
-TODO: expand on this?
+.. warning::
+   Do not try to parse a dump. While this has historically been the case, it will no longer work.

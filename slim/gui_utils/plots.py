@@ -5,6 +5,7 @@ This module provides plotting widgets and utils.
 from __future__ import annotations
 
 import datetime as dt
+from math import floor
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING, List, Dict
 
@@ -142,7 +143,6 @@ class SmoothedPlotItemWrap:
             x = self.default_x_axis
 
         x = [(day - self.default_x_axis[0]).days for day in x]
-
         return self.plot_item.plot(
             x=x,
             y=scipy.ndimage.convolve(y / self.average_factor, kernel, mode="nearest"),
@@ -300,7 +300,7 @@ class SmoothedGraphicsLayoutWidget(GraphicsLayoutWidget):
         size: QSize = self.size()
         num_farms = len(self.pane._farmIDs)
         # 9/60 is not the real aspect ratio, but it takes into account padding
-        self.setFixedHeight((num_farms + 1) * size.width() * 9 / 60)
+        self.setFixedHeight(floor((num_farms + 1) * size.width() * 9 / 60))
 
     def setDefaultXAxis(self, timestamps: List[dt.datetime]):
         """
@@ -740,7 +740,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             if self.selected_curve.ExtP:
                 arrivals_gross = (
                     farm_df["arrivals_per_cage"]
-                    .apply(lambda cages: sum([sum(cage.values()) for cage in cages]))
+                    .apply(lambda cages: GenoDistrib.batch_sum(cages).gross)
                     .to_numpy()
                 )
                 self.licePopulationPlots[farm_idx].plot(
@@ -860,9 +860,11 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             qtColor = mkColor(color)
 
             treatment_days_df = (
-                farm_df[farm_df["is_treating"].apply(lambda l: treatment_idx in l)][
-                    "timestamp"
-                ]
+                farm_df[
+                    farm_df["current_treatments"].apply(
+                        lambda l: bool(l[treatment_idx])
+                    )
+                ]["timestamp"]
                 - self.state.times[0]
             )
             treatment_days = treatment_days_df.apply(lambda x: x.days).to_numpy()

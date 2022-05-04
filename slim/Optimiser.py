@@ -166,7 +166,7 @@ if __name__ == "__main__":
     config_args = config_parser.parse_args(unknown)
 
     # create the basic config object
-    cfg = Config(cfg_path, args.param_dir, vars(config_args))
+    cfg = Config(cfg_path, args.param_dir, **vars(config_args))
 
     optimiser = Optimiser(
         cfg, args.iterations, args.repeat_experiment, args.optimiser_seed

@@ -690,7 +690,8 @@ class LicePopulation:
     It also manages busy dam distributions when mating is involved.
 
     The stages population can be accessed via either dictionary access (gross) or via
-    the ``geno_by_lifestage` attribute (detailed).
+    the ``geno_by_lifestage`` attribute (detailed).
+
     Additionally we provide two "virtual" stages ("L5f_busy" and "L5f_free") as read-only
     convenience accessors in place of the verbose `busy_dams` and `available_dams` attributes.
     """
@@ -711,7 +712,10 @@ class LicePopulation:
         )
     )
 
-    susceptible_stages = lice_stages[2:]
+    # Infectious stage: a louse that is physically tethered to the salmon skin
+    # Pathogenic stage: a louse that actively harms the salmon.
+    # We assume chalimus is a less dangerous stage.
+    infectious_stage = lice_stages[2:]
     pathogenic_stages = lice_stages[3:]
 
     def __init__(
