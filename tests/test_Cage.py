@@ -10,7 +10,7 @@ import pytest
 
 from slim.simulation.config import to_dt
 from slim.types.queue import DamAvailabilityBatch, EggBatch, TravellingEggBatch
-from slim.types.treatments import GeneticMechanism, Treatment
+from slim.types.treatments import GeneticMechanism, Treatment, EMB
 from slim.simulation.lice_population import (
     GenoDistrib,
     LicePopulation,
@@ -90,7 +90,7 @@ class TestCage:
         mortality_updates, cost = first_cage.get_lice_treatment_mortality(cur_day)
 
         for stage in LicePopulation.lice_stages:
-            if stage not in LicePopulation.susceptible_stages:
+            if stage not in EMB.susceptible_stages:
                 assert mortality_updates[stage].gross == 0
 
         assert first_cage.effective_treatments[0].affecting_date == cur_day
@@ -814,7 +814,7 @@ class TestCage:
         assert first_cage.get_dying_lice_from_dead_fish(0) == {}
 
     def test_dying_lice_from_dead_no_lice(self, first_cage):
-        for stage in LicePopulation.susceptible_stages:
+        for stage in EMB.susceptible_stages:
             first_cage.lice_population[stage] = 0
 
         for fish in [0, 1, 10, 1000]:
@@ -832,7 +832,7 @@ class TestCage:
         assert dead_lice == dead_lice_target
 
         # An increase in population should cause a proportional number of deaths
-        for stage in LicePopulation.susceptible_stages:
+        for stage in EMB.susceptible_stages:
             first_cage.lice_population[stage] *= 100
 
         dead_lice_target = {"L3": 190, "L4": 124, "L5m": 19, "L5f": 63}
@@ -842,7 +842,7 @@ class TestCage:
 
         # Similarly, an increase in dead_fish should cause the same effect
 
-        for stage in LicePopulation.susceptible_stages:
+        for stage in EMB.susceptible_stages:
             first_cage.lice_population[stage] //= 100
 
         dead_fish *= 100
@@ -876,7 +876,7 @@ class TestCage:
         assert hatch_date is None
         assert all(
             first_cage.lice_population[susceptible_stage] == 0
-            for susceptible_stage in LicePopulation.susceptible_stages
+            for susceptible_stage in EMB.susceptible_stages
         )
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
@@ -894,7 +894,7 @@ class TestCage:
         assert hatch_date is None
         assert all(
             first_cage.lice_population[susceptible_stage] == 0
-            for susceptible_stage in LicePopulation.susceptible_stages
+            for susceptible_stage in EMB.susceptible_stages
         )
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
@@ -933,7 +933,7 @@ class TestCage:
         assert hatch_date is None
         assert all(
             first_cage.lice_population[susceptible_stage] == 0
-            for susceptible_stage in LicePopulation.susceptible_stages
+            for susceptible_stage in EMB.susceptible_stages
         )
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0
@@ -968,7 +968,7 @@ class TestCage:
         assert hatch_date is None
         assert all(
             first_cage.lice_population[susceptible_stage] == 0
-            for susceptible_stage in LicePopulation.susceptible_stages
+            for susceptible_stage in EMB.susceptible_stages
         )
         assert first_cage.num_fish == 4000
         assert first_cage.num_infected_fish == 0

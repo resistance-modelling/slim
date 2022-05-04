@@ -711,7 +711,10 @@ class LicePopulation:
         )
     )
 
-    susceptible_stages = lice_stages[2:]
+    # Infectious stage: a louse that is physically tethered to the salmon skin
+    # Pathogenic stage: a louse that actively harms the salmon.
+    # We assume chalimus is a less dangerous stage.
+    infectious_stage = lice_stages[2:]
     pathogenic_stages = lice_stages[3:]
 
     def __init__(

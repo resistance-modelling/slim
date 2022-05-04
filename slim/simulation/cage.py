@@ -355,7 +355,7 @@ class Cage(LoggableMixin):
                     .tolist()
                 )
                 for stage, dead_lice_num in zip(
-                    LicePopulation.susceptible_stages, dead_lice_nums
+                    susc_stages, dead_lice_nums
                 ):
                     dead_lice_dist[stage][geno] = dead_lice_num
 
@@ -1031,7 +1031,7 @@ class Cage(LoggableMixin):
 
         # Note: no paper actually provides a clear guidance on this.
         # This is mere speculation.
-        # Basically, only consider PA and A males (for L4m = 0.5*L4)
+        # Basically, only consider PA and A males (assume L4m = 0.5*L4)
         # as potentially able to survive and find a new host.
         # Only a fixed proportion can survive.
 
@@ -1045,13 +1045,13 @@ class Cage(LoggableMixin):
         affected_lice_quotas = np.array(
             [
                 self.lice_population[stage] / infecting_lice * affected_lice_gross
-                for stage in LicePopulation.susceptible_stages
+                for stage in LicePopulation.infectious_stage
             ]
         )
         affected_lice_np = largest_remainder(affected_lice_quotas)
 
         affected_lice = Counter(
-            dict(zip(LicePopulation.susceptible_stages, affected_lice_np.tolist()))
+            dict(zip(LicePopulation.infectious_stage, affected_lice_np.tolist()))
         )
 
         surviving_lice_quotas = np.rint(
@@ -1145,7 +1145,12 @@ class Cage(LoggableMixin):
         :param hatched_arrivals_dist: new offspring obtained from arrivals
         """
 
+        # Ensure all non-lice-deaths happen
+        if delta_dams_batch:
+            self.lice_population.add_busy_dams_batch(delta_dams_batch)
+
         # Update dead_lice_dist to include fish-caused death as well
+
         dead_lice_by_fish_death = self.get_dying_lice_from_dead_fish(
             min(fish_deaths_natural + fish_deaths_from_lice, self.num_infected_fish)
         )
@@ -1182,8 +1187,6 @@ class Cage(LoggableMixin):
 
         self.lice_population.remove_negatives()
 
-        if delta_dams_batch:
-            self.lice_population.add_busy_dams_batch(delta_dams_batch)
 
         self.num_fish -= (
             fish_deaths_natural + fish_deaths_from_lice + fish_deaths_from_treatment
