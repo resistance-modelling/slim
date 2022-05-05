@@ -1,3 +1,5 @@
+#!/bin/env python
+
 """
 Simulate effects of sea lice population on salmon population in
 a given body of water.
@@ -126,6 +128,3 @@ if __name__ == "__main__":
         profile_output_path = output_folder / f"profile_{simulation_id}.bin"
         # atexit.register(lambda prof=prof: prof.print_stats(output_unit=1e-3))
         cProfile.run("sim.run_model()", str(profile_output_path))
-
-    if not resume:
-        ray.timeline("outputs/timeline.json")

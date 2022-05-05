@@ -1,3 +1,5 @@
+#!/bin/env python
+
 """
 This script provides the GUI of this project.
 
@@ -6,6 +8,7 @@ For a list of features check `this <https://github.com/resistance-modelling/slim
 The GUI is based on PyQt5 with PyQtgraphs so please make sure those are installed before launching the script.
 
 To launch the script, from the root folder: ``python -m slim.SeaLiceMgmtGUI``.
+Or simply ``slim run`` if slim has been installed with pip.
 
 Known bugs:
 

@@ -6,6 +6,11 @@ import os, sys
 
 import ray
 
+import argparse
+import os.path
+from os import execv
+from pathlib import Path
+
 if (
     sys.gettrace() is None
     or sys.gettrace()
@@ -48,3 +53,22 @@ class LoggableMixin:
 
     def clear_log(self):
         self.logged_data.clear()
+
+
+def launch():
+    parser = argparse.ArgumentParser(prog="SLIM", description="Sea lice simulation")
+    subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("run", help="Run the main simulator.")
+    subparsers.add_parser("gui", help="Run the main GUI")
+
+    x, extra = parser.parse_known_args()
+    self_path = Path(__file__).parent
+
+    if x.command == "run":
+        path = self_path / "SeaLiceMgmt.py"
+    elif x.command == "gui":
+        path = self_path / "SeaLiceMgmtGUI.py"
+    else:
+        parser.print_help()
+        exit(1)
+    execv(str(path), ["command"] + extra)

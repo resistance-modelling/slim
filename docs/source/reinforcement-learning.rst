@@ -59,7 +59,7 @@ For example:
 
         .. code-block:: bash
 
-            python -m slim.SeaLiceMgmt \
+            slim run \
                 output_folder/Loch_Fyne \
                 config_data/Fyne \
                 --treatment-strategy=bernoulli
@@ -69,10 +69,9 @@ For example:
         .. code-block:: python
 
             from slim.simulation.config import Config
-            from slim.simulation.Simulator import Simulator
+            from slim.simulation.simulator import Simulator
 
-            cfg = Config("config_data/config.json", "config_data/Fyne")
-            cfg.treatment_strategy = "bernoulli"
+            cfg = Config("config_data/config.json", "config_data/Fyne", treatment_strategy="bernoulli")
             sim = Simulator("output", "Fyne_foobar", cfg)
             sim.run_model()
 

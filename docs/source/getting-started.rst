@@ -12,18 +12,17 @@ Run the simulator
 
         The easiest way to run SLIM is via the command line.
 
-        The main script you'll need to run is SeaLiceMgmt. The general way to launch
-        it is the following:
+        In general, launching SLIM is as easy as the following:
 
         .. code-block:: bash
 
-            python -m slim.SeaLiceMgmt output_folder/simulation_name simulation_params_directory
+            slim run output_folder/simulation_name simulation_params_directory
 
         For example:
 
         .. code-block:: bash
 
-            python -m slim.SeaLiceMgmt output/Loch_Fyne config_data/Fyne
+            slim run output/Loch_Fyne config_data/Fyne
 
     .. group-tab:: Python
 
@@ -44,7 +43,7 @@ Run the simulator
 Runtime Environment
 *******************
 
-An *environmental setup* consists of a subfolder containing three files:
+An *environmental setup* consists of a folder containing three files:
 
 - ``params.json`` with simulation parameters specific to the organisation;
 - ``interfarm_time.csv`` with travel time of sea lice between any two given farms (as a dense CSV matrix);
@@ -54,7 +53,7 @@ Optionally, an environment may contain a CSV report (called ``report.csv``) of r
 If present, they will be imported by the GUI.
 To see how to generate those reports, check :file:`slim/surveys/scraper.py`.
 
-See ``config_data/Fyne`` for examples.
+See :dir:`config_data/Fyne` for examples.
 
 Additionally, global simulation constants are provided inside ``config_data/config.json``.
 
@@ -83,7 +82,7 @@ Parameter Override
         In general, for  each key in the format ``a_b_c`` an automatic parameter in the format ``--a-b-c`` will be generated.
         For example:
 
-        ``python -m slim.SeaLiceMgmt out/0 config_data/Fyne --seed=0 --genetic-mechanism=discrete``
+        ``slim run out/0 config_data/Fyne --seed=0 --genetic-mechanism=discrete``
 
         For now, nested and list properties are not yet supported.
 
@@ -143,17 +142,17 @@ The second is available for debugging purposes and has been historically used as
 
         To generate a dump every ``n`` days add the ``--checkpoint-rate=n`` option. For example:
 
-        ``python -m slim.SeaLiceMgmt outputs/sim_1 config_data/Fyne --checkpoint-rate=1"``
+        ``slim run outputs/sim_1 config_data/Fyne --checkpoint-rate=1"``
 
         This will save the output every day.
 
         To *resume* a session one can instead pass the `--resume` parameter. Via CLI:
 
-        ``python -m slim.SeaLiceMgmt outputs/sim_1 config_data/Fyne --resume="2017-12-05 00:00:00"``
+        ``slim run outputs/sim_1 config_data/Fyne --resume="2017-12-05 00:00:00"``
 
         If you only know ``n`` days have elapsed since the start use the `--resume-after=n` option. For example:
 
-        ``python -m slim.SeaLiceMgmt outputs/sim_1 config_data/Fyne --resume-after=365``
+        ``slim run outputs/sim_1 config_data/Fyne --resume-after=365``
 
     .. group-tab:: Python
 
@@ -215,8 +214,7 @@ Run the GUI
 We also provide a GUI for debugging and visualisation. Its support is still heavily experimental so please
 use with caution.
 
-To run the GUI you need to launch :py:mod:`slim.SeaLiceMgmtGUI`, for example via:
-```python -m slim.SeaLiceMgmtGUI``` and provide your artifact data.
+To run the GUI simply launch ``slim gui`` and provide your artifact data from the menu.
 
 .. warning::
    Do not try to parse a dump. While this has historically been the case, it will no longer work.
