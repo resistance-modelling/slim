@@ -21,9 +21,11 @@ __all__ = [
 ]
 
 import datetime as dt
+from io import BytesIO
 import json
 import os
-from io import BytesIO
+import sys
+import traceback
 
 import lz4.frame
 from pathlib import Path
@@ -32,6 +34,7 @@ from typing import List, Optional, Tuple, Iterator, Union, cast, BinaryIO
 import dill as pickle
 import pandas as pd
 import ray
+from ray.exceptions import RayError
 import tqdm
 
 from slim import logger, LoggableMixin
@@ -305,15 +308,16 @@ class DumpingActor:
 
     def _flush(self, buffer: BytesIO, stream):
         stream.write(buffer.getvalue())
+        buffer.seek(0)
         buffer.truncate()
 
     def _save(self, data: bytes, buffer: BytesIO, stream: BinaryIO):
         buffer.write(data)
-        if len(data) >= (1 << 19):  # ~ 512 KiB
+        if len(buffer.getvalue()) >= (1 << 19):  # ~ 512 KiB
             self._flush(buffer, stream)
 
     def dump(self, logs: dict):
-        self._save(pickle.dumps(logs), self.log_buffer, self.data_file)
+        self._save(pickle.dumps(logs), self.log_buffer, self.compressed_stream)
 
     def save_sim(self, sim_state: bytes):
         # Note: Simulator cannot be serialised by pickle but by dill,
@@ -439,9 +443,16 @@ class Simulator:  # pragma: no cover
                 env = env.env
             env.stop()
 
+        except RayError:
+            traceback.print_exc(file=sys.stderr)
+            env = self.env
+            while not isinstance(env, SimulatorPZEnv):
+                env = env.env
+            env.stop()
+
         finally:
             if not resume:
-                serialiser.teardown.remote()
+                ray.get(serialiser.teardown.remote())
 
 
 def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
