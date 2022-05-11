@@ -206,7 +206,7 @@ class MultiProcFarmPool(FarmPool):
         rngs = SeedSequence(self.cfg.seed).spawn(len(batch_pools))
         for actor_idx, farm_ids in enumerate(batch_pools):
             self._farm_actors.append(
-                FarmActor.options(name=f"FarmActor-{actor_idx}").remote(
+                FarmActor.remote(
                     farm_ids,
                     cfg,
                     rngs[actor_idx],

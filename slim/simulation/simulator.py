@@ -29,7 +29,7 @@ import traceback
 
 import lz4.frame
 from pathlib import Path
-from typing import List, Optional, Tuple, Iterator, Union, cast, BinaryIO
+from typing import List, Optional, Tuple, Iterator, Union, cast, BinaryIO, Final
 
 import dill as pickle
 import pandas as pd
@@ -48,7 +48,7 @@ from slim.types.policies import (
     NO_ACTION,
     TREATMENT_NO,
     no_observation,
-    get_observation_space_schema,
+    get_observation_space_schema, FALLOW,
 )
 from slim.types.treatments import Treatment
 
@@ -120,7 +120,7 @@ class SimulatorPZEnv(AECEnv):
         """
         super(SimulatorPZEnv).__init__()
         self.cfg = cfg
-        self.cur_day = cfg.start_date
+        self.cur_day: Final[dt.datetime] = cfg.start_date
         self.organisation = Organisation(cfg)
         self.payoff = 0.0
         self.treatment_no = len(Treatment)
@@ -133,6 +133,12 @@ class SimulatorPZEnv(AECEnv):
         self._observation_spaces = get_observation_space_schema(
             self.agents, MAX_NUM_APPLICATIONS
         )
+
+        self._fish_pop = []
+        self._adult_females_agg = []
+
+    def __cur_day(self):
+        return self.cur_day
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
@@ -180,12 +186,15 @@ class SimulatorPZEnv(AECEnv):
 
             payoffs, logs = self.organisation.step(self.cur_day, actions)
             self.last_logs = logs
+
             id_to_gym = {i: f"farm_{i}" for i in range(len(self.possible_agents))}
 
             self.rewards = {id_to_gym[i]: payoff for i, payoff in payoffs.items()}
 
             self.observations = self.organisation.get_gym_space
             self.cur_day += dt.timedelta(days=1)
+            self._fish_pop.append({farm: obs["fish_population"].sum() for farm, obs in self.observations.items()})
+            self._adult_females_agg.append({farm: obs["aggregation"].max() for farm, obs in self.observations.items()})
         else:
             self._clear_rewards()
         self.agent_selection = self._agent_selector.next()
@@ -207,9 +216,16 @@ class SimulatorPZEnv(AECEnv):
         self.agent_selection = self._agent_selector.next()
         self._chosen_actions = {agent: -1 for agent in self.agents}
 
+        self._fish_pop = []
+        self._adult_females_agg = []
+
     def stop(self):
         self.organisation.stop()
 
+    def get_populations(self):
+        """
+        Get the fish and adult lice populations
+        """
 
 class BernoullianPolicy:
     """
@@ -284,6 +300,65 @@ class MosaicPolicy:
         action = self.last_action[agent_id]
         self.last_action[agent_id] = (action + 1) % TREATMENT_NO
         return action
+
+
+class PilotedPolicy:
+    def __init__(self, cfg: Config, weekly_data: pd.DataFrame, monthly_data_collated: pd.DataFrame):
+        # Now, we need to translate each of these actions into treatment objects
+        conversion_map = {
+            "Physical": [Treatment.THERMOLICER.value],
+            "Bath": [Treatment.EMB.value],
+            "Harvesting": [FALLOW],
+            "EoC": [FALLOW],
+            "Bio reduction": [FALLOW],  # TODO: implement thinning (?)
+            "Bath & Physical": [Treatment.EMB.value, Treatment.THERMOLICER.value],
+            "Physical & Harvesting": [Treatment.THERMOLICER.value, FALLOW],
+            'Environmental': [Treatment.EMB.value],
+            'Treatment / Handling': [Treatment.EMB.value],
+            'Handling': [Treatment.EMB.value],
+            'Gill Health/Treatment losses': [Treatment.EMB.value],
+            'Gill Health/Handling': [Treatment.EMB.value],
+            'Sea lice management / Viral disease': [Treatment.EMB.value],
+            'Handling / Sea lice management': [Treatment.EMB.value],
+            'Sea lice management' 'Gill health related': [Treatment.EMB.value]
+        }
+
+        self.map_to_action = {}
+        self.cur_day_per_farm = {}
+        self.expected_lice_aggregation = {}
+        self.expected_fish_population = {}
+
+        for farm_idx, farm in enumerate(cfg.farms):
+            weekly_data_farm = weekly_data[weekly_data["site_name"] == farm.name]
+            monthly_data_farm = monthly_data_collated[monthly_data_collated["site_name"] == farm.name]
+            if len(weekly_data_farm) == 0:
+                data = monthly_data_farm
+                mitigations = data["lice_note"]
+                time = data["date"]
+            else:
+                data = weekly_data_farm
+                mitigations = data["mitigation"]
+                time = data["time"]
+            mitigations = mitigations \
+                .apply(lambda x: conversion_map.get(x, [NO_ACTION]))
+            ops = pd.DataFrame({"time": time.to_list(), "actions": mitigations.to_list()}).set_index("time").to_dict()
+            self.map_to_action[farm_idx] = ops["actions"]
+            self.cur_day_per_farm[farm_idx] = cfg.start_date
+
+    def predict(self, _, agent):
+        farm = int(agent[len("farm_"):])
+        date = self.cur_day_per_farm[farm]
+        self.cur_day_per_farm[farm] += dt.timedelta(days=1)
+        # take the last monday
+        date_to_take = date - dt.timedelta(days=date.weekday())
+        actions = self.map_to_action[farm].get(pd.Timestamp(date_to_take), [NO_ACTION])
+        if NO_ACTION not in actions:
+            print(actions)
+        if len(actions) > date.weekday():
+            actions = actions[date.weekday()]
+        else:
+            actions = NO_ACTION
+        return actions
 
 
 @ray.remote
@@ -361,7 +436,8 @@ class Simulator:  # pragma: no cover
         elif strategy == "mosaic":
             self.policy = MosaicPolicy(self.cfg)
         else:
-            raise ValueError("Unsupported strategy")
+            with open(strategy, "rb") as f:
+                self.policy = pickle.load(f)
 
         self.output_dump_path, self.output_dump_pickle = _get_simulation_path(
             output_dir, sim_id

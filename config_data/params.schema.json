@@ -47,11 +47,7 @@
         },
         "treatment_strategy": {
             "description": "Which treatment strategy to apply. Used during standalone simulation",
-            "enum": [
-                "untreated",
-                "bernoulli",
-                "mosaic"
-            ]
+            "type": "string"
         },
         "farms_per_process": {
             "description": "Number of farms per Ray actor during batch updates. Defaults to ``nfarms`` (i.e. effectively disables multiprocessing)",
