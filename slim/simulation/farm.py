@@ -28,6 +28,7 @@ from slim.simulation.cage import Cage
 from slim.simulation.config import Config
 from slim.simulation.lice_population import (
     GenoDistrib,
+    GenoRates,
     GrossLiceDistrib,
     genorates_to_dict,
     empty_geno_from_cfg,

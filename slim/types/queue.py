@@ -9,7 +9,7 @@ import datetime as dt
 from dataclasses import dataclass, field, asdict
 from functools import singledispatch
 from heapq import heappush, heappop
-from typing import Callable, TypeVar, TYPE_CHECKING
+from typing import Callable, TypeVar, TYPE_CHECKING, Generic
 
 from slim.types.policies import ObservationSpace
 
@@ -123,7 +123,10 @@ class StepResponse:
     loggable: dict  # any extra to log
 
 
-class PriorityQueue:
+T = TypeVar("T")
+
+
+class PriorityQueue(Generic[T]):
     """Mutex-free priority queue. Only use where thread-safety is not required!"""
 
     def __init__(self):

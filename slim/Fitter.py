@@ -10,36 +10,61 @@ import os
 
 import numpy as np
 import pandas as pd
+import tqdm
 from ray import tune
+
 # note: requires hpbandster and ConfigSpace
 # from ray.tune.schedulers import HyperBandForBOHB
 # from ray.tune.suggest.bohb import TuneBOHB
 # Also: it's a bit tricky to use early stopping in our case...
 from ray.tune.suggest.bayesopt import BayesOptSearch
 
-from slim.simulation.simulator import get_env, PilotedPolicy, SimulatorPZEnv, load_counts
+from slim.simulation.simulator import (
+    get_env,
+    PilotedPolicy,
+    SimulatorPZEnv,
+    load_counts,
+)
 from slim.simulation.config import Config
 
 # Let us consider a run of 450 days from January 2018 to March 2019 on Loch Fyne
 # (Then - extend on loch lynne)
 from slim.types.treatments import Treatment, EMB, HeterozygousResistance
 
+
 def load_strategy() -> PilotedPolicy:
     with open("config_data/piloted_fyne.pkl", "rb") as f:
         return pickle.load(f)
 
+
 def load_report(config):
     return load_counts(config)
 
+
 def trainable(config: dict):
-    os.chdir(os.environ["TUNE_ORIG_WORKING_DIR"]) # See: https://github.com/ray-project/ray/pull/22803
-    slim_config = Config("config_data/config.json", "config_data/Fyne_complete", save_rate=0, farms_per_process=1)
+    os.chdir(
+        os.environ["TUNE_ORIG_WORKING_DIR"]
+    )  # See: https://github.com/ray-project/ray/pull/22803
+    slim_config = Config(
+        "config_data/config.json",
+        "config_data/Fyne",
+        save_rate=0,
+        farms_per_process=1,
+    )
+    print(config["fish_mortality_k"])
+    print(config["fish_mortality_center"])
     # TODO: support for nested property updates would be nice...
     treatment = slim_config.get_treatment(Treatment.EMB)
     treatment.pheno_resistance = {
-        HeterozygousResistance.DOMINANT: config["EMB_pheno_resistance_homozygous_dominant"],
-        HeterozygousResistance.INCOMPLETELY_DOMINANT: config["EMB_pheno_resistance_heterozygous_dominant"],
-        HeterozygousResistance.RECESSIVE: config["EMB_pheno_resistance_homozygous_recessive"]
+        HeterozygousResistance.DOMINANT: config[
+            "EMB_pheno_resistance_homozygous_dominant"
+        ],
+        HeterozygousResistance.INCOMPLETELY_DOMINANT: config[
+            "EMB_pheno_resistance_heterozygous_dominant"
+        ],
+        HeterozygousResistance.RECESSIVE: config[
+            "EMB_pheno_resistance_homozygous_recessive"
+        ],
     }
 
     days = 450
@@ -50,22 +75,22 @@ def trainable(config: dict):
     simulator.reset()
 
     report_df = load_report(slim_config)
-    counts_per_farm = report_df \
-        .groupby("site_name")[["survived_fish", "lice_count", "date"]]\
-        .apply(lambda x: x.reset_index().to_dict())\
+    counts_per_farm = (
+        report_df.groupby("site_name")[["survived_fish", "lice_count", "date"]]
+        .apply(lambda x: x.reset_index().to_dict())
         .to_dict()
+    )
 
     loss = 0.0
-    for _ in range(days):
+    for _ in tqdm.trange(days):
         for agent in simulator.agents:
             action = strategy.predict(None, agent)
-            simulator.step(action) # note: this assumes these two agent lists match...
+            simulator.step(action)  # note: this assumes these two agent lists match...
 
         simulator_pz: SimulatorPZEnv = simulator.unwrapped
 
         last_fish_pop = simulator_pz._fish_pop[-1]
         last_lice_pop = simulator_pz._adult_females_agg[-1]
-
 
         for agent in range(simulator.num_agents):
             agent_name = slim_config.farms[agent].name
@@ -79,24 +104,24 @@ def trainable(config: dict):
                 delta_fish = 0.0
             if np.isnan(delta_lice):
                 delta_lice = 0.0
-            loss += delta_fish ** 2 + delta_lice ** 2
+            loss += delta_fish**2 + delta_lice**2
 
-        tune.report(mean_loss=loss)
-
+    tune.report(mean_loss=loss)
 
 
 search_space = {
-    "fish_mortality_k": tune.uniform(5, 20),
-    "fish_mortality_center": tune.uniform(0, 0.5),
-    "reproduction_eggs_first_extruded": tune.uniform(100, 500),
-    "geno_mutation_rate": tune.loguniform(1e-5, 1e-2),
-    "EMB_pheno_resistance_homozygous_dominant": tune.uniform(0.7, 1.0),
-    "EMB_pheno_resistance_heterozygous_dominant": tune.uniform(0, 1.0),
-    "EMB_pheno_resistance_homozygous_recessive": tune.uniform(0, 0.3),
+    "fish_mortality_k": (5, 20),
+    "fish_mortality_center": (0, 0.5),
+    "reproduction_eggs_first_extruded": (100, 500),
+    # "geno_mutation_rate": tune.loguniform(1e-5, 1e-2),
+    "EMB_pheno_resistance_homozygous_dominant": (0.7, 1.0),
+    "EMB_pheno_resistance_heterozygous_dominant": (0, 1.0),
+    "EMB_pheno_resistance_homozygous_recessive": (0, 0.3),
     # TODO: fish mortality due to EMB
     # TODO: add thermolicer
-    "male_detachment_rate": tune.uniform(0.5, 1.0),
+    "male_detachment_rate": (0.5, 1.0),
 }
+
 
 def main():
     """
@@ -107,22 +132,22 @@ def main():
         mode="min",
     )
     """
-    algo = BayesOptSearch(metric="mean_loss", mode="min")
-    scheduler=None
+    algo = BayesOptSearch(search_space, metric="mean_loss", mode="min")
+    scheduler = None
 
     analysis = tune.run(
         trainable,
         name="SLIM Fitter",
-        config=search_space,
+        # config=search_space,
         scheduler=scheduler,
         search_alg=algo,
-        num_samples=2
+        num_samples=1000,
     )
     best_result = analysis.get_best_logdir("mean_loss", mode="min")
     print(best_result)
 
-if __name__ == "__main__":
-    #print(search_space)
-    #trainable(search_space)
-    main()
 
+if __name__ == "__main__":
+    # print(search_space)
+    # trainable(search_space)
+    main()

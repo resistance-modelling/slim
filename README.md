@@ -20,6 +20,7 @@ This project thus includes the following components:
 
 - [X] a simulator (the core is complete)
 - [X] a visualisation tool
+- [X] (NEW) fitting on official report
 - [ ] policy searching strategies
 - [ ] a game theoretic optimisation framework
 

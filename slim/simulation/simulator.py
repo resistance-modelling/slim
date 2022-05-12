@@ -31,7 +31,7 @@ import sys
 import traceback
 from io import BytesIO
 from pathlib import Path
-from typing import List, Optional, Tuple, Iterator, Union, cast, Final
+from typing import List, Optional, Tuple, Iterator, Union, cast
 
 import lz4.frame
 import numpy as np
@@ -119,7 +119,7 @@ class SimulatorPZEnv(AECEnv):
         """
         super(SimulatorPZEnv).__init__()
         self.cfg = cfg
-        self.cur_day: Final[dt.datetime] = cfg.start_date
+        self.cur_day: dt.datetime = cfg.start_date
         self.organisation = Organisation(cfg)
         self.payoff = 0.0
         self.treatment_no = len(Treatment)

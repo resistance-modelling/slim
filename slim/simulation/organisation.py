@@ -7,6 +7,7 @@ from __future__ import annotations
 __all__ = ["Organisation"]
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 import numpy as np
 import ray
@@ -26,10 +27,10 @@ from .lice_population import (
     geno_config_to_matrix,
 )
 
+
 if TYPE_CHECKING:
     from typing import List, Tuple, Any, Dict, Callable, Optional
     from .config import Config
-    from .farm import GenoDistribByHatchDate
     from slim.types.policies import SAMPLED_ACTIONS, ObservationSpace, SimulatorSpace
     from .lice_population import GenoRates
     import datetime as dt
