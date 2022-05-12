@@ -4,7 +4,7 @@ from collections import Counter, defaultdict
 import datetime as dt
 import json
 import math
-from queue import PriorityQueue
+#from queue import PriorityQueue
 from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict, List
 
 import numpy as np
@@ -16,7 +16,6 @@ from slim.types.treatments import (
     ChemicalTreatment,
     ThermalTreatment,
     Treatment,
-    TREATMENT_NO,
 )
 from slim.simulation.lice_population import (
     GenoDistrib,
@@ -36,7 +35,7 @@ from slim.simulation.lice_population import (
     geno_to_alleles,
 )
 from slim.types.queue import (
-    DamAvailabilityBatch,
+    PriorityQueue,
     EggBatch,
     TravellingEggBatch,
     TreatmentEvent,
@@ -756,8 +755,8 @@ class Cage(LoggableMixin):
         return int(
             np.clip(
                 self.cfg.rng.poisson(prob_matching * females),
-                np.int32(0),
-                np.int32(min(males, females)),
+                np.int64(0),
+                np.int64(min(males, females)),
             )
         )
 
