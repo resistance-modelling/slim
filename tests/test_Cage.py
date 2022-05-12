@@ -43,11 +43,6 @@ class TestCage:
                 == first_cage.lice_population.geno_by_lifestage[stage].gross
             )
 
-    def test_cage_json(self, first_cage):
-        return_str = str(first_cage)
-        imported_cage = json.loads(return_str)
-        assert isinstance(imported_cage, dict)
-
     def test_cage_lice_background_mortality_one_day(self, first_cage):
         dead_lice_dist = first_cage.get_background_lice_mortality()
         dead_lice_dist_np = np.array(list(dead_lice_dist.values()))

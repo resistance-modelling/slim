@@ -1,12 +1,12 @@
 __all__ = ["to_dt", "Config"]
 
 import argparse
-from dataclasses import dataclass
 import datetime as dt
 import json
 import os
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, Dict, Optional, TYPE_CHECKING, Union
+from typing import Tuple, Dict, TYPE_CHECKING, Union
 
 import jsonschema
 import numpy as np

@@ -38,23 +38,19 @@ __all__ = [
     "genorates_to_dict",
 ]
 
-from functools import lru_cache
-from typing import NamedTuple, List, TYPE_CHECKING, Union, Optional
-
-from slim import logger
-
-
 # from enum import IntEnum
 import math
+from functools import lru_cache
 from typing import Dict
+from typing import NamedTuple, List, TYPE_CHECKING, Union
 
 import numpy as np
-from numba import njit as _njit, float64, int64
-from numba.core.types import unicode_type, Array
+from numba import njit as _njit, float64
+from numba.core.types import unicode_type
 from numba.experimental import jitclass
-
 from numba.typed.typeddict import Dict as NumbaDict
 
+from slim import logger
 
 if TYPE_CHECKING:
     from slim.simulation.config import Config
@@ -65,19 +61,6 @@ def njit(*args, **kwargs):
 
 
 # ---------- TYPE DECLARATIONS --------------
-
-"""
-# With Numba Enums are (finally!) efficient
-
-#: A sea lice life stage
-class LifeStage(IntEnum):
-    L1 = 0
-    L2 = 1
-    L3 = 2
-    L4 = 3
-    L5f = 4
-    L5m = 5
-"""
 
 #: The type of a gene
 Gene = str

@@ -3,13 +3,12 @@ from __future__ import annotations
 import functools
 from abc import abstractmethod, ABC
 from enum import Enum
-from typing import Dict, cast, List
+from typing import Dict, List
 
 import numpy as np
 
 # A few extra general types
 from slim.simulation.lice_population import (
-    GenoDistrib,
     GenoTreatmentValue,
     Allele,
     GenoTreatmentDistrib,

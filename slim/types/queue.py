@@ -9,15 +9,14 @@ import datetime as dt
 from dataclasses import dataclass, field, asdict
 from functools import singledispatch
 from heapq import heappush, heappop
-# from queue import PriorityQueue
-
-from typing import Callable, TypeVar, TYPE_CHECKING, Optional, Tuple, List, Dict
+from typing import Callable, TypeVar, TYPE_CHECKING
 
 from slim.types.policies import ObservationSpace
 
+# from queue import PriorityQueue
+
 if TYPE_CHECKING:
-    from slim.simulation.farm import GenoDistribByHatchDate, CageAllocation
-    from slim.simulation.lice_population import GenoDistrib, GenoRates
+    from slim.simulation.lice_population import GenoDistrib
     from slim.types.treatments import Treatment
 
 
@@ -123,8 +122,10 @@ class StepResponse:
     observation_space: ObservationSpace
     loggable: dict  # any extra to log
 
+
 class PriorityQueue:
     """Mutex-free priority queue. Only use where thread-safety is not required!"""
+
     def __init__(self):
         self.queue = []
 

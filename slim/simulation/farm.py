@@ -13,31 +13,27 @@ from __future__ import annotations
 __all__ = ["Farm", "FarmActor"]
 
 import copy
-import json
 import logging
 from collections import Counter, defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
-from mypy_extensions import TypedDict
 import ray
+from mypy_extensions import TypedDict
 from numpy.random import SeedSequence, default_rng
 from ray.util.queue import Queue as RayQueue
 
 from slim import LoggableMixin, logger
 from slim.simulation.cage import Cage
-from slim.simulation.config import Config, FarmConfig
-from slim.JSONEncoders import CustomFarmEncoder
+from slim.simulation.config import Config
 from slim.simulation.lice_population import (
-    GrossLiceDistrib,
     GenoDistrib,
-    GenoDistribDict,
-    GenoRates,
+    GrossLiceDistrib,
     genorates_to_dict,
     empty_geno_from_cfg,
 )
+from slim.types.policies import TREATMENT_NO
 from slim.types.queue import *
-from slim.types.policies import TREATMENT_NO, ObservationSpace
 from slim.types.treatments import Treatment
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
@@ -120,10 +116,6 @@ class Farm(LoggableMixin):
         filtered_vars.update(kwargs)
 
         return filtered_vars
-
-    def __repr__(self):
-        filtered_vars = self.to_json_dict()
-        return json.dumps(filtered_vars, cls=CustomFarmEncoder, indent=4)
 
     def __eq__(self, other):
         if not isinstance(other, Farm):

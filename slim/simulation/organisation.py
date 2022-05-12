@@ -6,41 +6,33 @@ from __future__ import annotations
 
 __all__ = ["Organisation"]
 
-import logging
 from abc import ABC, abstractmethod
-import datetime as dt
-import json
-
-from typing import TYPE_CHECKING
 
 import numpy as np
 import ray
 from numpy.random import SeedSequence
-from ray.util.queue import Queue as RayQueue, Empty
+from ray.util.queue import Queue as RayQueue
 
+from slim.types.policies import no_observation
+from slim.types.queue import *
 from .farm import (
     FarmActor,
     MAX_NUM_CAGES,
     Farm,
 )
-from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import (
     GenoDistrib,
     empty_geno_from_cfg,
     geno_config_to_matrix,
-    GenoRates,
 )
 
-from slim.types.queue import *
-
-from slim.types.policies import no_observation
-
 if TYPE_CHECKING:
-    from typing import Dict
-    from typing import List, Tuple, TYPE_CHECKING, Any, Dict, Callable, Optional
+    from typing import List, Tuple, Any, Dict, Callable, Optional
     from .config import Config
     from .farm import GenoDistribByHatchDate
     from slim.types.policies import SAMPLED_ACTIONS, ObservationSpace, SimulatorSpace
+    from .lice_population import GenoRates
+    import datetime as dt
 
 
 class FarmPool(ABC):
@@ -418,13 +410,5 @@ class Organisation:
             (t - 1) / t
         ).add(total_offsprings.mul_by_scalar(1 / t))
 
-    def to_json(self, **kwargs):
-        json_dict = kwargs.copy()
-        json_dict.update(self.to_json_dict())
-        return json.dumps(json_dict, cls=CustomFarmEncoder, indent=4)
-
     def to_json_dict(self):
         return {"name": self.name}
-
-    def __repr__(self):
-        return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)

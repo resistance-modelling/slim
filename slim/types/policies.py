@@ -6,12 +6,12 @@ Spaces are _not_ containers but rather container descriptions.
 
 """
 import functools
-from typing import List, Union, TypedDict, Dict, Any
+from typing import List, Union, TypedDict, Dict
 
 import numpy as np
+from gym.spaces import Discrete, MultiBinary, Box, Dict as GymDict
 
 from .treatments import TREATMENT_NO
-from gym.spaces import Discrete, MultiBinary, Box, Dict as GymDict
 
 __all__ = [
     "ACTION_SPACE",

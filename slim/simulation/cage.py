@@ -1,22 +1,16 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
 import datetime as dt
-import json
 import math
-#from queue import PriorityQueue
-from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict, List
+from collections import Counter, defaultdict
+
+# from queue import PriorityQueue
+from typing import Union, Optional, Tuple, TYPE_CHECKING, Dict, List
 
 import numpy as np
 
 from slim import logger, LoggableMixin
 from slim.simulation.config import Config
-from slim.types.treatments import (
-    GeneticMechanism,
-    ChemicalTreatment,
-    ThermalTreatment,
-    Treatment,
-)
 from slim.simulation.lice_population import (
     GenoDistrib,
     GrossLiceDistrib,
@@ -26,7 +20,6 @@ from slim.simulation.lice_population import (
     GenoLifeStageDistrib,
     largest_remainder,
     LifeStage,
-    GenoDistribDict,
     empty_geno_from_cfg,
     from_ratios_rng,
     from_ratios,
@@ -41,7 +34,12 @@ from slim.types.queue import (
     TreatmentEvent,
     pop_from_queue,
 )
-from slim.JSONEncoders import CustomFarmEncoder
+from slim.types.treatments import (
+    GeneticMechanism,
+    ChemicalTreatment,
+    ThermalTreatment,
+    Treatment,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from slim.simulation.farm import Farm, GenoDistribByHatchDate
@@ -141,14 +139,6 @@ class Cage(LoggableMixin):
         ]
 
         return filtered_vars
-
-    def __str__(self):
-        """
-        Get a human readable string representation of the cage in json form.
-        :return: a description of the cage
-        """
-
-        return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
     def update(
         self, cur_date: dt.datetime, pressure: int, ext_pressure_ratio: GenoRates

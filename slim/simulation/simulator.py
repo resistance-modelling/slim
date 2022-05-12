@@ -21,30 +21,31 @@ __all__ = [
 ]
 
 import datetime as dt
-from io import BytesIO
+import functools
 import json
 import os
+
+# import dill as pickle
+import pickle
 import sys
 import traceback
+from io import BytesIO
+from pathlib import Path
+from typing import List, Optional, Tuple, Iterator, Union, cast, Final
 
 import lz4.frame
-from pathlib import Path
-from typing import List, Optional, Tuple, Iterator, Union, cast, BinaryIO, Final
-
-#import dill as pickle
-import pickle
+import numpy as np
 import pandas as pd
 import ray
-from ray.exceptions import RayError
 import tqdm
+from gym import spaces
+from pettingzoo import AECEnv
+from pettingzoo.utils import agent_selector, wrappers
+from ray.exceptions import RayError
 
-from slim import logger, LoggableMixin
-from .farm import MAX_NUM_CAGES, MAX_NUM_APPLICATIONS
-from .lice_population import GenoDistrib, from_dict
-from .organisation import Organisation
+from slim import logger
 from slim.types.policies import (
     ACTION_SPACE,
-    CURRENT_TREATMENTS,
     ObservationSpace,
     NO_ACTION,
     TREATMENT_NO,
@@ -53,14 +54,10 @@ from slim.types.policies import (
     FALLOW,
 )
 from slim.types.treatments import Treatment
-
-import functools
-
-import numpy as np
-from gym import spaces
-from pettingzoo import AECEnv
 from .config import Config
-from pettingzoo.utils import agent_selector, wrappers
+from .farm import MAX_NUM_CAGES, MAX_NUM_APPLICATIONS
+from .lice_population import GenoDistrib, from_dict
+from .organisation import Organisation
 
 
 def get_env(cfg: Config) -> wrappers.OrderEnforcingWrapper:
