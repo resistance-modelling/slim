@@ -31,7 +31,8 @@ import lz4.frame
 from pathlib import Path
 from typing import List, Optional, Tuple, Iterator, Union, cast, BinaryIO, Final
 
-import dill as pickle
+#import dill as pickle
+import pickle
 import pandas as pd
 import ray
 from ray.exceptions import RayError
@@ -48,7 +49,8 @@ from slim.types.policies import (
     NO_ACTION,
     TREATMENT_NO,
     no_observation,
-    get_observation_space_schema, FALLOW,
+    get_observation_space_schema,
+    FALLOW,
 )
 from slim.types.treatments import Treatment
 
@@ -193,8 +195,18 @@ class SimulatorPZEnv(AECEnv):
 
             self.observations = self.organisation.get_gym_space
             self.cur_day += dt.timedelta(days=1)
-            self._fish_pop.append({farm: obs["fish_population"].sum() for farm, obs in self.observations.items()})
-            self._adult_females_agg.append({farm: obs["aggregation"].max() for farm, obs in self.observations.items()})
+            self._fish_pop.append(
+                {
+                    farm: obs["fish_population"].sum()
+                    for farm, obs in self.observations.items()
+                }
+            )
+            self._adult_females_agg.append(
+                {
+                    farm: obs["aggregation"].max()
+                    for farm, obs in self.observations.items()
+                }
+            )
         else:
             self._clear_rewards()
         self.agent_selection = self._agent_selector.next()
@@ -226,6 +238,7 @@ class SimulatorPZEnv(AECEnv):
         """
         Get the fish and adult lice populations
         """
+
 
 class BernoullianPolicy:
     """
@@ -279,7 +292,7 @@ class UntreatedPolicy:
     A treatment stub that performs no action.
     """
 
-    def predict(self, **_kwargs):
+    def predict(self, *args, **_kwargs):
         return NO_ACTION
 
 
@@ -303,7 +316,12 @@ class MosaicPolicy:
 
 
 class PilotedPolicy:
-    def __init__(self, cfg: Config, weekly_data: pd.DataFrame, monthly_data_collated: pd.DataFrame):
+    def __init__(
+        self,
+        cfg: Config,
+        weekly_data: pd.DataFrame,
+        monthly_data_collated: pd.DataFrame,
+    ):
         # Now, we need to translate each of these actions into treatment objects
         conversion_map = {
             "Physical": [Treatment.THERMOLICER.value],
@@ -313,14 +331,14 @@ class PilotedPolicy:
             "Bio reduction": [FALLOW],  # TODO: implement thinning (?)
             "Bath & Physical": [Treatment.EMB.value, Treatment.THERMOLICER.value],
             "Physical & Harvesting": [Treatment.THERMOLICER.value, FALLOW],
-            'Environmental': [Treatment.EMB.value],
-            'Treatment / Handling': [Treatment.EMB.value],
-            'Handling': [Treatment.EMB.value],
-            'Gill Health/Treatment losses': [Treatment.EMB.value],
-            'Gill Health/Handling': [Treatment.EMB.value],
-            'Sea lice management / Viral disease': [Treatment.EMB.value],
-            'Handling / Sea lice management': [Treatment.EMB.value],
-            'Sea lice management' 'Gill health related': [Treatment.EMB.value]
+            "Environmental": [Treatment.EMB.value],
+            "Treatment / Handling": [Treatment.EMB.value],
+            "Handling": [Treatment.EMB.value],
+            "Gill Health/Treatment losses": [Treatment.EMB.value],
+            "Gill Health/Handling": [Treatment.EMB.value],
+            "Sea lice management / Viral disease": [Treatment.EMB.value],
+            "Handling / Sea lice management": [Treatment.EMB.value],
+            "Sea lice management" "Gill health related": [Treatment.EMB.value],
         }
 
         self.map_to_action = {}
@@ -330,7 +348,9 @@ class PilotedPolicy:
 
         for farm_idx, farm in enumerate(cfg.farms):
             weekly_data_farm = weekly_data[weekly_data["site_name"] == farm.name]
-            monthly_data_farm = monthly_data_collated[monthly_data_collated["site_name"] == farm.name]
+            monthly_data_farm = monthly_data_collated[
+                monthly_data_collated["site_name"] == farm.name
+            ]
             if len(weekly_data_farm) == 0:
                 data = monthly_data_farm
                 mitigations = data["lice_note"]
@@ -339,14 +359,19 @@ class PilotedPolicy:
                 data = weekly_data_farm
                 mitigations = data["mitigation"]
                 time = data["time"]
-            mitigations = mitigations \
-                .apply(lambda x: conversion_map.get(x, [NO_ACTION]))
-            ops = pd.DataFrame({"time": time.to_list(), "actions": mitigations.to_list()}).set_index("time").to_dict()
+            mitigations = mitigations.apply(
+                lambda x: conversion_map.get(x, [NO_ACTION])
+            )
+            ops = (
+                pd.DataFrame({"time": time.to_list(), "actions": mitigations.to_list()})
+                .set_index("time")
+                .to_dict()
+            )
             self.map_to_action[farm_idx] = ops["actions"]
             self.cur_day_per_farm[farm_idx] = cfg.start_date
 
     def predict(self, _, agent):
-        farm = int(agent[len("farm_"):])
+        farm = int(agent[len("farm_") :])
         date = self.cur_day_per_farm[farm]
         self.cur_day_per_farm[farm] += dt.timedelta(days=1)
         # take the last monday
@@ -381,22 +406,20 @@ class DumpingActor:
                 compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC,
             )
 
-    def _flush(self, buffer: BytesIO, stream):
+    def _flush(self, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
         stream.write(buffer.getvalue())
         buffer.seek(0)
-        buffer.truncate()
+        buffer.truncate(0)
 
-    def _save(self, data: bytes, buffer: BytesIO, stream: BinaryIO):
+    def _save(self, data: bytes, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
         buffer.write(data)
-        if len(buffer.getvalue()) >= (1 << 19):  # ~ 512 KiB
-            self._flush(buffer, stream)
+        # if len(buffer.getvalue()) >= (1 << 19):  # ~ 512 KiB
+        self._flush(buffer, stream)
 
     def dump(self, logs: dict):
         self._save(pickle.dumps(logs), self.log_buffer, self.compressed_stream)
 
     def save_sim(self, sim_state: bytes):
-        # Note: Simulator cannot be serialised by pickle but by dill,
-        # but ray uses (a fork of) pickle internally...
         self._save(sim_state, self.sim_buffer, self.sim_state_stream)
 
     def teardown(self):
@@ -514,21 +537,16 @@ class Simulator:  # pragma: no cover
                 self.cur_day += dt.timedelta(days=1)
 
         except KeyboardInterrupt:
-            env = self.env
-            while not isinstance(env, SimulatorPZEnv):
-                env = env.env
-            env.stop()
+            pass
 
         except RayError:
             traceback.print_exc(file=sys.stderr)
-            env = self.env
-            while not isinstance(env, SimulatorPZEnv):
-                env = env.env
-            env.stop()
 
         finally:
             if not resume:
                 ray.get(serialiser.teardown.remote())
+            env = self.env.unwrapped
+            env.stop()
 
 
 def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
@@ -654,6 +672,7 @@ def reload(
 
     first_time = None
     for idx, (state, time) in enumerate(parse_artifact(path, sim_id, True)):
+        print(time)
         if first_time is None:
             first_time = time
         if resume_after is not None and (time - first_time).days >= resume_after:

@@ -8,7 +8,8 @@ import abc
 import datetime as dt
 from dataclasses import dataclass, field, asdict
 from functools import singledispatch
-from queue import PriorityQueue
+from heapq import heappush, heappop
+# from queue import PriorityQueue
 
 from typing import Callable, TypeVar, TYPE_CHECKING, Optional, Tuple, List, Dict
 
@@ -121,6 +122,23 @@ class StepResponse:
     total_cost: float
     observation_space: ObservationSpace
     loggable: dict  # any extra to log
+
+class PriorityQueue:
+    """Mutex-free priority queue. Only use where thread-safety is not required!"""
+    def __init__(self):
+        self.queue = []
+
+    def qsize(self):
+        return len(self.queue)
+
+    def empty(self):
+        return self.qsize() == 0
+
+    def put(self, item):
+        heappush(self.queue, item)
+
+    def get(self):
+        return heappop(self.queue)
 
 
 EventT = TypeVar("EventT", CageEvent, SamplingEvent)

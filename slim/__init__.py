@@ -60,6 +60,10 @@ def launch():
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("run", help="Run the main simulator.")
     subparsers.add_parser("gui", help="Run the main GUI")
+    subparsers.add_parser("fit", help="Run the fitter on reports")
+    subparsers.add_parser(
+        "optimise", help="(DEPRECATED) run the optimiser on the bernoullian policy"
+    )
 
     x, extra = parser.parse_known_args()
     self_path = Path(__file__).parent
@@ -68,6 +72,10 @@ def launch():
         path = self_path / "SeaLiceMgmt.py"
     elif x.command == "gui":
         path = self_path / "SeaLiceMgmtGUI.py"
+    elif x.command == "fit":
+        path = self_path / "Fitter.py"
+    elif x.command == "optimise":
+        path = self_path / "Optimiser.py"
     else:
         parser.print_help()
         exit(1)
