@@ -3,7 +3,6 @@ A collection of policies.
 """
 
 import datetime as dt
-import abc
 
 from .config import Config
 from slim import logger
@@ -88,7 +87,7 @@ class MosaicPolicy:
 
         agent_id = int(agent[len("farm_") :])
         action = self.last_action[agent_id]
-        self.last_action[agent_id] = (action + 1) % TREATMENT_NO
+        self.last_action[agent_id] = (action + 1) % (TREATMENT_NO-1) # TODO
         return action
 
 

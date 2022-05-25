@@ -49,6 +49,7 @@ CURRENT_TREATMENTS = MultiBinary(TREATMENT_NO + 1)
 class ObservationSpace(TypedDict):
     aggregation: np.ndarray
     fish_population: np.ndarray
+    cleaner_fish: np.ndarray
     reported_aggregation: np.ndarray
     current_treatments: np.ndarray
     allowed_treatments: int
@@ -64,6 +65,7 @@ def get_observation_space_schema(agents: List[str], num_applications: int):
                     low=0, high=20, shape=(1,), dtype=np.float32
                 ),
                 "fish_population": Box(low=0, high=1e6, shape=(20,), dtype=np.int64),
+                "cleaner_fish": Box(low=0, high=1e6, shape=(20,), dtype=np.int64),
                 "current_treatments": CURRENT_TREATMENTS,
                 "allowed_treatments": Discrete(num_applications),
                 "asked_to_treat": MultiBinary(1),  # Yes or no
@@ -86,6 +88,7 @@ def no_observation(ncages) -> ObservationSpace:
         "aggregation": np.zeros((ncages,), dtype=np.float32),
         "reported_aggregation": np.zeros((1,), dtype=np.float32),
         "fish_population": np.zeros((ncages,), dtype=np.int64),
+        "cleaner_fish": np.zeros((ncages,), dtype=np.int64),
         "current_treatments": np.zeros((TREATMENT_NO + 1,), dtype=np.int8),
         "allowed_treatments": 0,
         "asked_to_treat": np.zeros((1,), dtype=np.int8),

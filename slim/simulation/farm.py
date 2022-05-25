@@ -607,6 +607,7 @@ class Farm(LoggableMixin):
         :returns: a Gym space for the agent that controls this farm.
         """
         fish_population = np.array([cage.num_fish for cage in self.cages])
+        cleaner_fish_pop = np.array([cage.num_cleaner for cage in self.cages])
         aggregations = np.array([cage.aggregation_rate for cage in self.cages])
         reported_aggregation = self._get_aggregation_rate()
         current_treatments = self.is_treating
@@ -624,6 +625,10 @@ class Farm(LoggableMixin):
             "fish_population": np.pad(
                 fish_population,
                 (0, MAX_NUM_CAGES - len(fish_population)),
+            ),
+            "cleaner_fish": np.pad(
+                cleaner_fish_pop,
+                (0, MAX_NUM_CAGES - len(cleaner_fish_pop)),
             ),
             "current_treatments": current_treatments_np,
             "allowed_treatments": self.available_treatments,

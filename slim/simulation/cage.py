@@ -236,6 +236,7 @@ class Cage(LoggableMixin):
             delta_avail_dams,
             new_offspring_distrib,
             hatched_arrivals_dist,
+            cleaner_fish_delta
         )
 
         logger.debug("\t\tfinal lice population = %s", self.lice_population)
@@ -280,11 +281,8 @@ class Cage(LoggableMixin):
         self.effective_treatments = new_effective_treatments
 
         treatments = self.effective_treatments
-        if self.num_fish > 0:
+        if self.num_cleaner > 0:
             treatments = treatments + [TreatmentEvent(cur_date, Treatment.CLEANERFISH, 0, cur_date, cur_date)]
-
-        # if len(self.last_effective_treatment) == 0:
-        #    return geno_treatment_distrib
 
         # TODO: this is very fragile
         geno_treatment_distribs = defaultdict(lambda: GenoTreatmentValue(0, []))
@@ -1084,7 +1082,6 @@ class Cage(LoggableMixin):
                 restock = self.num_fish / 100
 
         return math.ceil(restock - (self.num_infected_fish * self.cfg.cleaner_fish.natural_mortality))
-
 
     def promote_population(
         self,
