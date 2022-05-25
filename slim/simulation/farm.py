@@ -273,22 +273,6 @@ class Farm(LoggableMixin):
 
         return True
 
-    def ask_for_treatment(self):
-        """
-        DEPRECATED: This action is a no-op.
-        Ask the farm to perform treatment.
-
-        The farm will thus respond in the following way:
-
-        - choose whether to apply treatment or not (regardless of the actual cage eligibility).
-        - if yes, which treatment to apply (according to internal evaluations, e.g. increased lice resistance).
-
-        The farm is not obliged to tell the organisation whether treatment is being performed.
-        """
-
-        logger.debug("Asking farm %d to treat", self.id_)
-        # self._asked_to_treat = True
-
     def apply_action(self, cur_date: dt.datetime, action: int):
         """Apply an action
 
@@ -760,7 +744,3 @@ class FarmActor:
             )
 
         return to_return
-
-    def ask_for_treatment(self):
-        for farm in self.farms:
-            farm.ask_for_treatment()

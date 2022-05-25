@@ -212,7 +212,7 @@
           },
           "treatment_type": {
             "description": "The type of treatment",
-            "enum": ["chemical", "thermal", "mechanical"]
+            "enum": ["chemical", "thermal", "mechanical", "cleanerfish"]
           },
           "pheno_resistance": {
           "effect_delay": {
@@ -225,7 +225,7 @@
           },
           "price_per_kg": {
             "description": "Cost per kg when applying treatment",
-            "comment": "For EMB, Values taken from wwconfigw.sigmaaldrich.com , rescaled to have a 1kg denominator",
+            "comment": "For EMB, Values taken from www.sigmaaldrich.com , rescaled to have a 1kg denominator",
             "type": "number"
           },
           "price_per_application": {

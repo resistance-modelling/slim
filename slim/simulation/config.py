@@ -17,6 +17,7 @@ from slim.types.treatments import (
     GeneticMechanism,
     EMB,
     Thermolicer,
+    CleanerFish
 )
 
 if TYPE_CHECKING:
@@ -73,6 +74,7 @@ class RuntimeConfig:
         # Treatment constants
         self.emb = EMB(data["treatments"][0])
         self.thermolicer = Thermolicer(data["treatments"][1])
+        self.cleaner_fish = CleanerFish(data["treatments"][2])
 
         # Fish mortality constants
         self.fish_mortality_center: float = data["fish_mortality_center"]
@@ -203,7 +205,7 @@ class Config(RuntimeConfig):
         )
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
-        return [self.emb, self.thermolicer][treatment_type.value]
+        return [self.emb, self.thermolicer, self.cleaner_fish][treatment_type.value]
 
     @staticmethod
     def generate_argparse_from_config(

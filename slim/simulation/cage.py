@@ -110,6 +110,7 @@ class Cage(LoggableMixin):
 
         self.num_fish = cfg.farms[self.farm_id].num_fish
         self.num_infected_fish = self.get_mean_infected_fish()
+        self.num_cleaner = 0
 
         self.hatching_events: PriorityQueue[EggBatch] = PriorityQueue()
         self.arrival_events: PriorityQueue[TravellingEggBatch] = PriorityQueue()
@@ -176,6 +177,8 @@ class Cage(LoggableMixin):
 
         # Egg hatching
         new_offspring_distrib = self.create_offspring(cur_date)
+
+        cleaner_fish_delta = self.get_cleaner_fish_delta(cur_date)
 
         # Lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure, ext_pressure_ratio)
@@ -276,15 +279,19 @@ class Cage(LoggableMixin):
 
         self.effective_treatments = new_effective_treatments
 
+        treatments = self.effective_treatments
+        if self.num_fish > 0:
+            treatments = treatments + [TreatmentEvent(cur_date, Treatment.CLEANERFISH, 0, cur_date, cur_date)]
+
         # if len(self.last_effective_treatment) == 0:
         #    return geno_treatment_distrib
 
         # TODO: this is very fragile
         geno_treatment_distribs = defaultdict(lambda: GenoTreatmentValue(0, []))
+        ave_temp = self.get_temperature(cur_date)
 
-        for treatment in self.effective_treatments:
+        for treatment in treatments:
             treatment_type = treatment.treatment_type
-            ave_temp = self.get_temperature(cur_date)
 
             logger.debug(
                 "\t\ttreating farm %d/cage %d on date %s",
@@ -295,8 +302,9 @@ class Cage(LoggableMixin):
 
             geno_treatment_distrib = self.cfg.get_treatment(
                 treatment_type
-            ).get_lice_treatment_mortality_rate(ave_temp)
+            ).get_lice_treatment_mortality_rate(ave_temp, self)
             # assumption: all treatments act on different genes
+            # TODO: the assumption is correct, but currently the config only uses one gene!
             for k, v in geno_treatment_distrib.items():
                 geno_treatment_distribs[k] = v
 
@@ -1065,6 +1073,19 @@ class Cage(LoggableMixin):
         logger.debug("\t\tLice mortality due to fish mortality: %s", dying_lice_distrib)
         return dying_lice_distrib
 
+    def get_cleaner_fish_delta(self, cur_date: dt.datetime):
+        """
+        Call this function before :meth:`get_lice_treatment_mortality()` !
+        """
+        restock = 0.0
+        for treatment in self.effective_treatments:
+            if treatment.treatment_type == Treatment.CLEANERFISH and treatment.first_application_date == cur_date:
+                # assume restocking of 1% of Nfish
+                restock = self.num_fish / 100
+
+        return math.ceil(restock - (self.num_infected_fish * self.cfg.cleaner_fish.natural_mortality))
+
+
     def promote_population(
         self,
         prev_stage: Union[str, GenoDistrib],
@@ -1113,6 +1134,7 @@ class Cage(LoggableMixin):
         delta_dams_batch: int,
         new_offspring_distrib: GenoDistrib,
         hatched_arrivals_dist: GenoDistrib,
+        cleaner_fish_delta: Optional[int] = 0.0
     ):
         """Update the number of fish and the lice in each life stage
 
@@ -1130,6 +1152,7 @@ class Cage(LoggableMixin):
         :param delta_dams_batch: the genotypes of now-unavailable females in batch events
         :param new_offspring_distrib: the new offspring obtained from hatching and migrations
         :param hatched_arrivals_dist: new offspring obtained from arrivals
+        :param cleaner_fish_delta: new cleaner fish
         """
 
         # Ensure all non-lice-deaths happen
@@ -1182,6 +1205,8 @@ class Cage(LoggableMixin):
 
         # treatment may kill some lice attached to the fish, thus update at the very end
         self.num_infected_fish = self.get_mean_infected_fish()
+
+        self.num_cleaner += cleaner_fish_delta
 
     # TODO: update arrivals dict type
     def update_arrivals(
