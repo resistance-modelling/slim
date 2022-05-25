@@ -13,6 +13,8 @@
     "infection_discount": 0.0001,
     "genetic_learning_rate": 0.01,
     "aggregation_rate_threshold": 2.0,
+    "aggregation_rate_enforcement_limit": 6.0,
+    "aggregation_rate_enforcement_weeks": 4,
     "treatment_strategy": "mosaic",
     "farms": [
         {
@@ -38,7 +40,7 @@
             "treatment_dates": [
             ],
             "max_num_treatments": 10,
-            "sampling_spacing": 14,
+            "sampling_spacing": 7,
             "defection_proba": 0.2
         },
         {

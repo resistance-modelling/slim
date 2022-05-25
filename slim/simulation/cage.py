@@ -677,7 +677,7 @@ class Cage(LoggableMixin):
         """
         Get the average number of infected fish.
 
-        :param \*args: the stages to consider (optional, by default all stages from the third onward are taken into account)
+        :param \\*args: the stages to consider (optional, by default all stages from the third onward are taken into account)
 
         :returns: the number of infected fish
         """

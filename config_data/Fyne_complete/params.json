@@ -13,6 +13,8 @@
     },
     "genetic_learning_rate": 0.001,
     "aggregation_rate_threshold": 2.0,
+    "aggregation_rate_enforcement_limit": 6.0,
+    "aggregation_rate_enforcement_weeks": 4,
     "treatment_strategy": "bernoulli",
     "farms_per_process": 4,
     "farms": [

@@ -24,6 +24,7 @@ __all__ = [
     "ObservationSpace",
     "ObservationSpace",
     "SimulatorSpace",
+    "agent_to_id",
     "get_observation_space_schema",
     "no_observation",
 ]
@@ -89,6 +90,10 @@ def no_observation(ncages) -> ObservationSpace:
         "allowed_treatments": 0,
         "asked_to_treat": np.zeros((1,), dtype=np.int8),
     }
+
+
+def agent_to_id(agent_str: str) -> int:
+    return int(agent_str[len("farm_"):])
 
 
 SimulatorSpace = Dict[str, ObservationSpace]

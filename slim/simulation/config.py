@@ -178,6 +178,12 @@ class Config(RuntimeConfig):
 
         # Other constraints
         self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]
+        self.aggregation_rate_enforcement_limit: float = data[
+            "aggregation_rate_enforcement_limit"
+        ]
+        self.aggregation_rate_enforcement_weeks: int = data[
+            "aggregation_rate_enforcement_weeks"
+        ]
 
         # Policy
         self.treatment_strategy: str = data["treatment_strategy"]

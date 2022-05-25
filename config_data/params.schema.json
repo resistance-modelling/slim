@@ -42,7 +42,15 @@
             "type": "number"
         },
         "aggregation_rate_threshold": {
-            "description": "The allowed aggregation rate at any time",
+            "description": "The allowed aggregation rate before the organisation asks for a treatment",
+            "type": "number"
+        },
+        "aggregation_rate_enforcement_limit": {
+            "description": "The allowed aggregation rate before the regulator asks for a treatment.",
+            "type": "number"
+        },
+        "aggregation_rate_enforcement_weeks": {
+            "description": "The number of times before a regulator's lice count excess is no longer tolerated.",
             "type": "number"
         },
         "treatment_strategy": {
