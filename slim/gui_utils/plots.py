@@ -631,10 +631,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                 self._plotLicePopGross(farm_df, farm_idx, stages)
 
             self._plotAggregationRate(
-                farm_df,
-                farm_idx,
-                stages,
-                report_farm if report_df is not None else None,
+                farm_df, farm_idx, report_farm if report_df is not None else None
             )
 
             self._plotTreatments(farm_df, farm_idx)
@@ -751,11 +748,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self,
         farm_df: Optional[pd.DataFrame],
         farm_idx: int,
-        stages: Dict[str, pd.DataFrame],
         report_farm: Optional[pd.DataFrame],
     ):
-        num_fish = farm_df["num_fish"].to_numpy()  # TODO: recycle this maybe?
-        aggregation_rate = stages["L5f"].to_numpy() / num_fish
+        aggregation_rate = farm_df["aggregation"].apply(lambda x: sum(x) / len(x))
         self.aggregationRatePlot[farm_idx].plot(
             aggregation_rate, pen=self._monocolourPen, name="Expected"
         )

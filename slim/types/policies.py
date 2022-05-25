@@ -93,7 +93,7 @@ def no_observation(ncages) -> ObservationSpace:
 
 
 def agent_to_id(agent_str: str) -> int:
-    return int(agent_str[len("farm_"):])
+    return int(agent_str[len("farm_") :])
 
 
 SimulatorSpace = Dict[str, ObservationSpace]

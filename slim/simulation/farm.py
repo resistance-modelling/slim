@@ -257,6 +257,7 @@ class Farm(LoggableMixin):
                 cage.start_date > day
                 or cage.is_fallowing
                 or cage.is_treated(treatment_type)
+                or cage.aggregation_rate <= 1.0 # we're technically cheating here
             )
         ]
 

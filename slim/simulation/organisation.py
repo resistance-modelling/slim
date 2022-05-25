@@ -6,6 +6,7 @@ from __future__ import annotations
 
 __all__ = ["Organisation"]
 
+import gc
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -175,6 +176,8 @@ class MultiProcFarmPool(FarmPool):
         super().__init__()
         self.cfg = cfg
         self._extra_farm_args = args
+        self._farm_actors: List[FarmActor] = []
+        self._offspring_queues: Dict[int, RayQueue] = {}
 
         if not ray.is_initialized():
             ray_props = {}
@@ -215,8 +218,8 @@ class MultiProcFarmPool(FarmPool):
         nfarms = cfg.nfarms
         farms_per_process = cfg.farms_per_process
 
-        self._farm_actors = []
-        self._offspring_queues = {}
+        self._farm_actors.clear()
+        self._offspring_queues.clear()
 
         if farms_per_process == 1:
             batch_pools = np.arange(0, nfarms).reshape((-1, 1))
@@ -244,15 +247,17 @@ class MultiProcFarmPool(FarmPool):
 
     def stop(self):
         print("Stopping farms")
-        self._farm_actors = []  # out-of-scope actors will be purged
+        self._farm_actors.clear()
+        self._offspring_queues.clear()
+        gc.collect()  # Ensure the processes are deleted gracefully
 
     def reset(self):
         if self.is_running:
             self.stop()
 
         names = [f"farm_{i}" for i in range(self.cfg.nfarms)]
-        self._farm_actors: List[FarmActor] = []
-        self._offspring_queues: Dict[int, RayQueue] = {}
+        self._farm_actors.clear()
+        self._offspring_queues.clear()
         self._gym_space = {
             farm_name: no_observation(MAX_NUM_CAGES) for farm_name in names
         }

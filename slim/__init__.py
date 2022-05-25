@@ -2,9 +2,7 @@ import logging
 
 # one-stop entry point for logging
 from typing import Any, Dict
-import os, sys
-
-import ray
+import sys
 
 import argparse
 import os.path

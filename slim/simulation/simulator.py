@@ -227,11 +227,6 @@ class SimulatorPZEnv(AECEnv):
     def stop(self):
         self.organisation.stop()
 
-    def get_populations(self):
-        """
-        Get the fish and adult lice populations
-        """
-
 
 @ray.remote
 class DumpingActor:
