@@ -307,7 +307,14 @@ class Cage(LoggableMixin):
             # assumption: all treatments act on different genes
             # TODO: the assumption is correct, but currently the config only uses one gene!
             for k, v in geno_treatment_distrib.items():
-                geno_treatment_distribs[k] = v
+                if k in geno_treatment_distribs:
+                    # TODO: not all treatments on the same gene have the same susceptible stages!
+                    prev = geno_treatment_distribs[k]
+                    geno_treatment_distribs[k] = GenoTreatmentValue(
+                        prev.mortality_rate + v.mortality_rate, prev.susceptible_stages
+                    )
+                else:
+                    geno_treatment_distribs[k] = v
 
         return geno_treatment_distribs
 

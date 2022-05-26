@@ -19,7 +19,7 @@ class BernoullianPolicy:
     Perhaps the simplest policy here.
     Never apply treatment except for when asked by the organisation, and in which case whether to apply
     a treatment with a probability :math:`p` or not (:math:`1-p`). In the first case each treatment
-    will be chosen with likelihood :math:`q`.
+    will be chosen with likelihood :math:`1/n` with :math:`n` being the number of available treatments.
     Also culls if the lice count goes beyond a threshold repeatedly (e.g. after 4 weeks).
     See :class:`Config` for details.
     """
@@ -90,7 +90,7 @@ class MosaicPolicy:
 
         agent_id = int(agent[len("farm_") :])
         action = self.last_action[agent_id]
-        self.last_action[agent_id] = (action + 1) % (TREATMENT_NO)
+        self.last_action[agent_id] = (action + 1) % TREATMENT_NO
         return action
 
 
@@ -117,7 +117,8 @@ class PilotedPolicy:
             "Gill Health/Handling": [Treatment.EMB.value],
             "Sea lice management / Viral disease": [Treatment.EMB.value],
             "Handling / Sea lice management": [Treatment.EMB.value],
-            "Sea lice management" "Gill health related": [Treatment.EMB.value],
+            "Sea lice management / Gill health related": [Treatment.EMB.value],
+            "Stocking": [Treatment.CLEANERFISH.value],
         }
 
         self.map_to_action = {}
