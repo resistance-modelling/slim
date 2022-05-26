@@ -178,6 +178,7 @@ class Cage(LoggableMixin):
         # Egg hatching
         new_offspring_distrib = self.create_offspring(cur_date)
 
+        # Cleaner fish
         cleaner_fish_delta = self.get_cleaner_fish_delta(cur_date)
 
         # Lice coming from reservoir
@@ -236,7 +237,7 @@ class Cage(LoggableMixin):
             delta_avail_dams,
             new_offspring_distrib,
             hatched_arrivals_dist,
-            cleaner_fish_delta
+            cleaner_fish_delta,
         )
 
         logger.debug("\t\tfinal lice population = %s", self.lice_population)
@@ -282,7 +283,9 @@ class Cage(LoggableMixin):
 
         treatments = self.effective_treatments
         if self.num_cleaner > 0:
-            treatments = treatments + [TreatmentEvent(cur_date, Treatment.CLEANERFISH, 0, cur_date, cur_date)]
+            treatments = treatments + [
+                TreatmentEvent(cur_date, Treatment.CLEANERFISH, 0, cur_date, cur_date)
+            ]
 
         # TODO: this is very fragile
         geno_treatment_distribs = defaultdict(lambda: GenoTreatmentValue(0, []))
@@ -1076,12 +1079,14 @@ class Cage(LoggableMixin):
         Call this function before :meth:`get_lice_treatment_mortality()` !
         """
         restock = 0.0
-        for treatment in self.effective_treatments:
-            if treatment.treatment_type == Treatment.CLEANERFISH and treatment.first_application_date == cur_date:
-                # assume restocking of 1% of Nfish
-                restock = self.num_fish / 100
+        for treatment in self.current_treatments:
+            if treatment == Treatment.CLEANERFISH.value:
+                # assume restocking of 5% of Nfish
+                restock = self.num_fish * 1 / 100
 
-        return math.ceil(restock - (self.num_infected_fish * self.cfg.cleaner_fish.natural_mortality))
+        return math.ceil(
+            restock - (self.num_cleaner * self.cfg.cleaner_fish.natural_mortality)
+        )
 
     def promote_population(
         self,
@@ -1131,7 +1136,7 @@ class Cage(LoggableMixin):
         delta_dams_batch: int,
         new_offspring_distrib: GenoDistrib,
         hatched_arrivals_dist: GenoDistrib,
-        cleaner_fish_delta: Optional[int] = 0.0
+        cleaner_fish_delta: Optional[int] = 0.0,
     ):
         """Update the number of fish and the lice in each life stage
 

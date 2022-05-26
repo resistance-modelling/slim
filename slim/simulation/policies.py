@@ -82,12 +82,15 @@ class MosaicPolicy:
         self.last_action = [0] * len(cfg.farms)
 
     def predict(self, observation: ObservationSpace, agent: str):
-        if not observation["asked_to_treat"] or observation["aggregation"].mean() <= 2.0:
+        if (
+            not observation["asked_to_treat"]
+            or observation["aggregation"].mean() <= 2.0
+        ):
             return NO_ACTION
 
         agent_id = int(agent[len("farm_") :])
         action = self.last_action[agent_id]
-        self.last_action[agent_id] = (action + 1) % (TREATMENT_NO-1) # TODO
+        self.last_action[agent_id] = (action + 1) % (TREATMENT_NO)
         return action
 
 

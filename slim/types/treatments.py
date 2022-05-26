@@ -213,8 +213,9 @@ class CleanerFish(TreatmentParams):
         for geno in geno_to_alleles(self.gene):
             # TODO: we could optimise this
             trait = self.get_allele_heterozygous_trait(self.gene, geno)
-            susceptibility_factor = 1.0 - self.pheno_resistance[trait]
-            mortality = 1 - math.exp(- susceptibility_factor * cage.num_cleaner / cage.num_fish)
+            mortality = 1 - math.exp(
+                -self.pheno_resistance[trait] * cage.num_cleaner / cage.num_fish
+            )
             geno_treatment_distrib[geno] = GenoTreatmentValue(
                 mortality, self.susceptible_stages
             )

@@ -669,6 +669,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             self.fishPopulationPlots[farm_idx].plot(
                 num_fish, pen=monocolour_pen, name="Simulation output"
             )
+            self.fishPopulationPlots[farm_idx].plot(
+                farm_df["cleaner_fish"].apply(np.sum).to_numpy(), name="Cleaner fish"
+            )
             if report_farm is not None:
                 self.fishPopulationPlots[farm_idx].plot(
                     x=report_farm["date"],
