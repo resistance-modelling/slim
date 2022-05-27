@@ -13,37 +13,46 @@ from gym import spaces
 import numpy as np
 import pandas as pd
 
+# TODO: figure out if I can use StableBaselines' interfaces here
+
 
 class BernoullianPolicy:
     """
-    Perhaps the simplest policy here.
-    Never apply treatment except for when asked by the organisation, and in which case whether to apply
-    a treatment with a probability :math:`p` or not (:math:`1-p`). In the first case each treatment
-    will be chosen with likelihood :math:`1/n` with :math:`n` being the number of available treatments.
-    Also culls if the lice count goes beyond a threshold repeatedly (e.g. after 4 weeks).
-    See :class:`Config` for details.
+    This policy is arguably one of the simplest baselines in SLIM. It implements a bernoullian mechanism
+    to choose when to apply a treatment depending on the current lice aggregation and the organisation's
+    recommendation.
+
+    * if a farm has LC < suggested threshold then no treatment can be applied at any time
+    * if a farm has enforcement threshold >= LC >= suggested threshold AND there is a request to treat then treatment
+      will be applied with probability :math:`p` < 1.
+    * if a farm has LC >= enforcement threshold then treatment is performed with p=1
+
+    The value of :math:`p` is farm-specific.
+
+    Therefore: a farm can either act egoistically (treat only when the situation is bordering illegality)
+    or altruistically (treat at much lower counts).
+    Keep in mind that treatments need to satisfy cage requirements (see :meth:`slim.simulation.farm.Farm.add_treatment`)
+
+    As for the action, each action can be chosen with likelihood :math:`1/n` with :math:`n` being the number of available treatments.
+    See :class:`slim.simulation.config.Config` for details.
     """
 
     def __init__(self, cfg: Config):
-        super().__init__()
         self.proba = [farm_cfg.defection_proba for farm_cfg in cfg.farms]
         n = len(Treatment)
         self.treatment_probas = np.ones(n) / n
-        self.treatment_threshold = cfg.aggregation_rate_threshold
+        self.enforced_threshold = cfg.agg_rate_enforcement_threshold
         self.seed = cfg.seed
         self.reset()
 
     def _predict(self, asked_to_treat, agg_rate: np.ndarray, agent: int):
-        if not asked_to_treat and np.any(agg_rate < self.treatment_threshold):
-            return NO_ACTION
-
+        must_treat = np.any(agg_rate >= self.enforced_threshold)
         p = [self.proba[agent], 1 - self.proba[agent]]
+        want_to_treat = self.rng.choice([False, True], p=p) if asked_to_treat else False
+        logger.debug("Outcome of the vote: %s (was forced: %s)", want_to_treat, must_treat)
 
-        want_to_treat = self.rng.choice([False, True], p=p)
-        logger.debug(f"Outcome of the vote: {want_to_treat}")
-
-        if not want_to_treat:
-            logger.debug("\tFarm {} refuses to treat".format(agent))
+        if not (must_treat or want_to_treat):
+            logger.debug("\tFarm %s refuses to treat", agent)
             return NO_ACTION
 
         picked_treatment = self.rng.choice(

@@ -179,12 +179,12 @@ class Config(RuntimeConfig):
         self.infection_discount: float = data["infection_discount"]
 
         # Other constraints
-        self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]
-        self.aggregation_rate_enforcement_limit: float = data[
-            "aggregation_rate_enforcement_limit"
+        self.agg_rate_suggested_threshold: float = data["agg_rate_suggested_threshold"]
+        self.agg_rate_enforcement_threshold: float = data[
+            "agg_rate_enforcement_threshold"
         ]
-        self.aggregation_rate_enforcement_weeks: int = data[
-            "aggregation_rate_enforcement_weeks"
+        self.agg_rate_enforcement_strikes: int = data[
+            "agg_rate_enforcement_strikes"
         ]
 
         # Policy

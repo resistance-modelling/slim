@@ -102,7 +102,7 @@ class SingleProcFarmPool(FarmPool):
     def __init__(self, cfg: Config, *args):
         super().__init__()
         nfarms = cfg.nfarms
-        self.threshold = cfg.aggregation_rate_threshold
+        self.threshold = cfg.agg_rate_suggested_threshold
         self.cfg = cfg
         self._farms = [Farm(i, cfg, *args) for i in range(nfarms)]
 
@@ -419,9 +419,9 @@ class Organisation:
 
         to_treat, self.to_cull = self.farms.handle_aggregation_rate(
             spaces,
-            self.cfg.aggregation_rate_threshold,
-            self.cfg.aggregation_rate_enforcement_limit,
-            self.cfg.aggregation_rate_enforcement_weeks,
+            self.cfg.agg_rate_suggested_threshold,
+            self.cfg.agg_rate_enforcement_threshold,
+            self.cfg.agg_rate_enforcement_strikes,
         )
 
         for space in spaces.values():

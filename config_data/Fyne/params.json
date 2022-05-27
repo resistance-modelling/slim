@@ -12,9 +12,9 @@
     "gain_per_kg": 4.39,
     "infection_discount": 1e-7,
     "genetic_learning_rate": 0.01,
-    "aggregation_rate_threshold": 2.0,
-    "aggregation_rate_enforcement_limit": 6.0,
-    "aggregation_rate_enforcement_weeks": 4,
+    "agg_rate_suggested_threshold": 2.0,
+    "agg_rate_enforcement_threshold": 6.0,
+    "agg_rate_enforcement_strikes": 4,
     "treatment_strategy": "mosaic",
     "farms": [
         {

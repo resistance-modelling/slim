@@ -221,27 +221,36 @@ class Farm(LoggableMixin):
         :param scheduled_treatments: the dates when to apply treatment
         """
         for scheduled_treatment in scheduled_treatments:
-            self.add_treatment(scheduled_treatment[1], scheduled_treatment[0])
+            self.add_treatment(
+                scheduled_treatment[1], scheduled_treatment[0], force=True
+            )
 
     def fallow(self):
         for cage in self.cages:
             cage.fallow()
 
-    def add_treatment(self, treatment_type: Treatment, day: dt.datetime) -> bool:
+    def add_treatment(
+        self, treatment_type: Treatment, day: dt.datetime, force=False
+    ) -> bool:
         """
         Ask to add a treatment. If a treatment was applied too early or if too many treatments
         have been applied so far the request is rejected.
 
         Note that if **at least** one cage is eligible for treatment and the conditions above
-        are still respected this method will still return True. Eligibility depends
-        on whether the cage has started already or is fallowing - but that may depend on the type
-        of chemical treatment applied. Furthermore, no treatment should be applied on cages that are already
-        undergoing a treatment of the same type. This usually means the actual treatment application period
-        plus a variable delay period. If no cages are available no treatment can be applied and the function returns
-        _False_.
+        are still respected this method will still return True.
+
+        Eligibility depends on the following conditions:
+
+        * the cage should have started by the day treatment is applied
+        * the cage should not be fallowing
+        * the cage should not be treated by that day with that same type of treatment
+        * the lice count should be greater than 1.0 (to prevent spamming)
+
+        If ``force`` is True, the last three constraints will be ignored.
 
         :param treatment_type: the treatment type to apply
         :param day: the day when to start applying the treatment
+        :param force: if True, ignore some eligibility requirement.
         :returns: whether the treatment has been added to at least one cage or not.
         """
 
@@ -249,15 +258,19 @@ class Farm(LoggableMixin):
         if self.available_treatments <= 0:
             return False
 
-        # TODO: no support for treatment combination. See #127
         eligible_cages = [
             cage
             for cage in self.cages
             if not (
                 cage.start_date > day
-                or cage.is_fallowing
-                or cage.is_treated(treatment_type)
-                or cage.aggregation_rate <= 1.0 # we're technically cheating here
+                or (
+                    force
+                    or not (
+                        cage.is_fallowing
+                        and cage.is_treated(treatment_type)
+                        and cage.aggregation_rate < 1.0
+                    )
+                )
             )
         ]
 

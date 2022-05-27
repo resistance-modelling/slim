@@ -17,7 +17,6 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   slim.JSONEncoders
    slim.Optimiser
    slim.SeaLiceMgmt
    slim.SeaLiceMgmtGUI

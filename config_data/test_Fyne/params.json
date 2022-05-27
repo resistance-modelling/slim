@@ -12,9 +12,9 @@
         "Aa": 0.5
     },
     "genetic_learning_rate": 1,
-    "aggregation_rate_threshold": 0.5,
-    "aggregation_rate_enforcement_limit": 6.0,
-    "aggregation_rate_enforcement_weeks": 4,
+    "agg_rate_suggested_threshold": 0.5,
+    "agg_rate_enforcement_threshold": 6.0,
+    "agg_rate_enforcement_strikes": 4,
     "treatment_strategy": "bernoulli",
     "farms": [
         {

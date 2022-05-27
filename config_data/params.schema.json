@@ -41,15 +41,15 @@
             "description": "Dirichlet learning rate",
             "type": "number"
         },
-        "aggregation_rate_threshold": {
+        "agg_rate_suggested_threshold": {
             "description": "The allowed aggregation rate before the organisation asks for a treatment",
             "type": "number"
         },
-        "aggregation_rate_enforcement_limit": {
+        "agg_rate_enforcement_threshold": {
             "description": "The allowed aggregation rate before the regulator asks for a treatment.",
             "type": "number"
         },
-        "aggregation_rate_enforcement_weeks": {
+        "agg_rate_enforcement_strikes": {
             "description": "The number of times before a regulator's lice count excess is no longer tolerated.",
             "type": "number"
         },
