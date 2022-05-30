@@ -261,9 +261,9 @@ class Farm(LoggableMixin):
         eligible_cages = [
             cage
             for cage in self.cages
-            if not (
-                cage.start_date > day
-                or (
+            if (
+                cage.start_date <= day
+                and (
                     force
                     or not (
                         cage.is_fallowing
@@ -282,7 +282,10 @@ class Farm(LoggableMixin):
 
         for cage in eligible_cages:
             cage.treatment_events.put(event)
-        self.available_treatments -= 1
+
+        # Cleaner fish treatments can be applied as many times as possible
+        if treatment_type != Treatment.CLEANERFISH:
+            self.available_treatments -= 1
 
         return True
 

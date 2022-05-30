@@ -464,7 +464,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
         self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(
             exclude_from_averaging=True,
-            title="Cumulated payoff",
+            title="Daily payoff",
             bottom="days",
             left="Payoff",
             force_scientific=True,

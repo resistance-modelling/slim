@@ -677,6 +677,9 @@ class LicePopulation:
 
     Additionally we provide two "virtual" stages ("L5f_busy" and "L5f_free") as read-only
     convenience accessors in place of the verbose `busy_dams` and `available_dams` attributes.
+
+    Note: this class is meant to describe the lice population per cage, but it is well known that
+    the mobile stages are not technically confined to a single cage.
     """
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
@@ -698,7 +701,7 @@ class LicePopulation:
     # Infectious stage: a louse that is physically tethered to the salmon skin
     # Pathogenic stage: a louse that actively harms the salmon.
     # We assume chalimus is a less dangerous stage.
-    infectious_stage = lice_stages[2:]
+    infectious_stages = lice_stages[2:]
     pathogenic_stages = lice_stages[3:]
 
     def __init__(

@@ -626,6 +626,7 @@ class Cage(LoggableMixin):
         return fish_deaths_natural, fish_deaths_from_lice
 
     def compute_eta_aldrin(self, num_fish_in_farm, days):
+        # TODO: this lacks of stochasticity compared to the paper
         return (
             self.cfg.infection_main_delta
             + math.log(num_fish_in_farm / 1e5)
@@ -642,15 +643,16 @@ class Cage(LoggableMixin):
         :returns: a pair (Einf, num_avail_lice)
         """
 
+
         # Based on Aldrin et al.
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease)./
+        # TODO: this has O(c^2) complexity and is not parallelisable. We could likely remove the softmax...
         age_distrib = self.get_stage_ages_distrib("L2")
         num_avail_lice = round(self.lice_population["L2"] * np.sum(age_distrib[1:]))
         if num_avail_lice > 0:
             num_fish_in_farm = self.farm.num_fish
 
-            # TODO: this has O(c^2) complexity
             etas = np.array(
                 [
                     c.compute_eta_aldrin(num_fish_in_farm, days_since_start)
@@ -1048,13 +1050,13 @@ class Cage(LoggableMixin):
         affected_lice_quotas = np.array(
             [
                 self.lice_population[stage] / infecting_lice * affected_lice_gross
-                for stage in LicePopulation.infectious_stage
+                for stage in LicePopulation.infectious_stages
             ]
         )
         affected_lice_np = largest_remainder(affected_lice_quotas)
 
         affected_lice = Counter(
-            dict(zip(LicePopulation.infectious_stage, affected_lice_np.tolist()))
+            dict(zip(LicePopulation.infectious_stages, affected_lice_np.tolist()))
         )
 
         surviving_lice_quotas = np.rint(
@@ -1313,14 +1315,18 @@ class Cage(LoggableMixin):
         3. Dam waiting and treatment queues will be flushed.
         """
 
-        for stage in LicePopulation.pathogenic_stages:
+        for stage in LicePopulation.infectious_stages:
             self.lice_population[stage] = 0
 
         self.num_infected_fish = self.num_fish = 0
         self.treatment_events = PriorityQueue()
+        self.effective_treatments.clear()
 
     @property
     def is_fallowing(self):
+        """
+        True if the cage is fallowing.
+        """
         return self.num_fish == 0
 
     def is_treated(self, treatment_type: Optional[Treatment] = None):

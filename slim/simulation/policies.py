@@ -49,7 +49,7 @@ class BernoullianPolicy:
         must_treat = np.any(agg_rate >= self.enforced_threshold)
         p = [self.proba[agent], 1 - self.proba[agent]]
         want_to_treat = self.rng.choice([False, True], p=p) if asked_to_treat else False
-        logger.debug("Outcome of the vote: %s (was forced: %s)", want_to_treat, must_treat)
+        logger.debug("Outcome of the vote for farm %d: %s (was forced: %s)", agent, want_to_treat, must_treat)
 
         if not (must_treat or want_to_treat):
             logger.debug("\tFarm %s refuses to treat", agent)
@@ -58,6 +58,8 @@ class BernoullianPolicy:
         picked_treatment = self.rng.choice(
             np.arange(TREATMENT_NO), p=self.treatment_probas
         )
+
+        logger.debug("Chosen action: % d", picked_treatment)
         return picked_treatment
 
     def predict(self, observation: ObservationSpace, agent: str):
