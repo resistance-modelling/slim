@@ -13,6 +13,8 @@
     },
     "genetic_learning_rate": 1,
     "agg_rate_suggested_threshold": 2.0,
+    "agg_rate_enforcement_threshold": 6.0,
+    "agg_rate_enforcement_strikes": 4,
     "treatment_strategy": "bernoulli",
     "farms": [
         {

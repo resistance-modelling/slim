@@ -179,7 +179,7 @@ class Cage(LoggableMixin):
         new_offspring_distrib = self.create_offspring(cur_date)
 
         # Cleaner fish
-        cleaner_fish_delta = self.get_cleaner_fish_delta(cur_date)
+        cleaner_fish_delta = self.get_cleaner_fish_delta()
 
         # Lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure, ext_pressure_ratio)
@@ -1083,7 +1083,7 @@ class Cage(LoggableMixin):
         logger.debug("\t\tLice mortality due to fish mortality: %s", dying_lice_distrib)
         return dying_lice_distrib
 
-    def get_cleaner_fish_delta(self, cur_date: dt.datetime):
+    def get_cleaner_fish_delta(self) -> int:
         """
         Call this function before :meth:`get_lice_treatment_mortality()` !
         """
@@ -1093,9 +1093,9 @@ class Cage(LoggableMixin):
                 # assume restocking of 5% of Nfish
                 restock = self.num_fish * 1 / 100
 
-        return math.ceil(
+        return int(math.ceil(
             restock - (self.num_cleaner * self.cfg.cleaner_fish.natural_mortality)
-        )
+        ))
 
     def promote_population(
         self,
@@ -1145,7 +1145,7 @@ class Cage(LoggableMixin):
         delta_dams_batch: int,
         new_offspring_distrib: GenoDistrib,
         hatched_arrivals_dist: GenoDistrib,
-        cleaner_fish_delta: Optional[int] = 0.0,
+        cleaner_fish_delta: int = 0,
     ):
         """Update the number of fish and the lice in each life stage
 
