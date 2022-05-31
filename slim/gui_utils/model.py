@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import datetime as dt
 from typing import List, TYPE_CHECKING, Tuple, Optional
 
+import numpy as np
 from PyQt5.QtCore import QUrl
 from PyQt5.QtGui import QColor
 from PyQt5.QtPositioning import QGeoCoordinate
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
 class SimulatorSingleRunState:
     """State of the single simulator"""
 
-    times: List[dt.datetime]
+    times: np.ndarray[np.timedelta64]
     states_as_df: pd.DataFrame
     report_df: Optional[pd.DataFrame]
     cfg: Config

@@ -123,7 +123,7 @@ if __name__ == "__main__":
         resume = False
 
     if not args.profile:
-        sim.run_model(resume)
+        sim.run_model(resume, quiet=args.quiet)
     else:
         profile_output_path = output_folder / f"profile_{simulation_id}.bin"
         # atexit.register(lambda prof=prof: prof.print_stats(output_unit=1e-3))

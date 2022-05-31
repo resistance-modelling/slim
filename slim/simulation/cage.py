@@ -349,7 +349,7 @@ class Cage(LoggableMixin):
                     dtype=np.int64,
                 )
                 num_susc = np.sum(population_by_stages)
-                num_dead_lice = round(mortality_rate * num_susc)
+                num_dead_lice = int(round(mortality_rate * num_susc))
                 num_dead_lice = min(num_dead_lice, num_susc)
 
                 dead_lice_nums = (

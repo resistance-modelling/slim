@@ -310,14 +310,12 @@ class Simulator:  # pragma: no cover
         self.cur_day = cfg.start_date
         self.payoff = 0.0
 
-    def run_model(self, resume=False):
+    def run_model(self, resume=False, quiet=False):
         """Perform the simulation by running the model.
 
-        :param path: Path to store the results in
-        :param sim_id: Simulation name
-        :param cfg: Configuration object holding parameter information.
-        :param Organisation: the organisation to work on.
-        """
+        :param resume: if True it will resume the simulation
+        :param quiet: if True it will disable tqdm's pretty printing.
+       """
         if not resume:
             logger.info("running simulation, saving to %s", self.output_dir)
         else:
@@ -341,7 +339,7 @@ class Simulator:  # pragma: no cover
 
         try:
             num_days = (self.cfg.end_date - self.cur_day).days
-            for day in tqdm.trange(num_days):
+            for day in tqdm.trange(num_days, disable=quiet):
                 logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
                 for agent in self.env.agents:
                     action = self.policy.predict(self.env.observe(agent), agent)
@@ -474,14 +472,26 @@ def load_artifact(
     path: Path, sim_id: str
 ) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
     """Loads an artifact.
-    Combines :func:`parse_artifact` and :func:`.dump_as_dataframe`
+    Combines :func:`parse_artifact` and :func:`.dump_as_dataframe`, and serialises the dataframe for future use.
+    If the dataframe does not exist or is older than the run it will be regenerated
 
     :param path: the path where the output is
     :param sim_id: the simulation name
 
     :returns: the dataframe to dump
     """
-    return dump_as_dataframe(parse_artifact(path, sim_id))
+    sim_path = _get_simulation_path(path, sim_id)[0]
+    pandas_path = path / f"parsed_{sim_id}.pd.pkl"
+
+    sim_mtime = sim_path.stat().st_mtime
+    if not pandas_path.exists() or pandas_path.stat().st_mtime < sim_mtime:
+        df = dump_as_dataframe(parse_artifact(path, sim_id))
+        with pandas_path.open("wb") as f:
+            pickle.dump(df, f)
+    else:
+        with pandas_path.open("rb") as f:
+            df = pickle.load(f)
+    return df
 
 
 def dump_optimiser_as_pd(states: List[List[Simulator]]):  # pragma: no cover
