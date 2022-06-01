@@ -1018,7 +1018,7 @@ class OptimiserPlotPane(QWidget, LightModeMixin):
 
         penColour = self._colorPalette[0]
         payoff = df["payoff"].map(float).to_numpy()
-        self.payoffPlot.plot(payoff, pen=penColour)
+        self.payoffPlot.plot(payoff.cumsum(), pen=penColour)
 
         for idx, farm in enumerate(self._getUniqueFarms()):
             self.individualProbas[idx].plot(df[farm], pen=penColour)

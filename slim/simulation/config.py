@@ -205,6 +205,7 @@ class Config(RuntimeConfig):
         )
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
+        # TODO: switch to the new treatment_to_class() in treatments.py
         return [self.emb, self.thermolicer, self.cleaner_fish][treatment_type.value]
 
     @staticmethod

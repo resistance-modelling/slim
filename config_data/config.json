@@ -84,7 +84,7 @@
             "treatment_name": "Thermolicer",
             "effect_delay": 1,
             "application_period": 1,
-            "price_per_application": 500,
+            "price_per_application": 1e4,
             "treatment_type": "thermal",
             "gene": "t",
             "quadratic_fish_mortality_coeffs": [

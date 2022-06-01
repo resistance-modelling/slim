@@ -9,7 +9,7 @@ dependencies:
   - pytest-cov=2.12.1
   - mypy=0.910
   - data-science-types=0.2.23
-  - pyqt>=5.9
+  - pyqt>=5.9,<6.0
   - pyqtgraph=0.12.3
   - colorcet=3.0.0
   - jsonschema=3.2.0

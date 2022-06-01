@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 class Treatment(Enum):
     """
     A stub for treatment types
-    TODO: add other treatments here
     """
 
     EMB = 0
@@ -33,6 +32,16 @@ class Treatment(Enum):
 
 
 TREATMENT_NO = len(Treatment)
+
+
+def treatment_to_class(treatment: Treatment):
+    """
+    Get the right treatment class
+
+    :param treatment: a treatment tag
+    :returns: the correct treatment class
+    """
+    return [EMB, Thermolicer, CleanerFish][treatment.value]
 
 
 class GeneticMechanism(Enum):
@@ -55,6 +64,8 @@ class HeterozygousResistance(Enum):
 
 
 TreatmentResistance = Dict[HeterozygousResistance, float]
+
+# TODO: make those classes below singletons...
 
 
 class TreatmentParams(ABC):

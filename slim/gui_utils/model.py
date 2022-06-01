@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class SimulatorSingleRunState:
     """State of the single simulator"""
 
-    times: np.ndarray[np.timedelta64]
+    times: List[dt.datetime]
     states_as_df: pd.DataFrame
     report_df: Optional[pd.DataFrame]
     cfg: Config
