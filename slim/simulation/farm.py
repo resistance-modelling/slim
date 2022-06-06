@@ -46,7 +46,7 @@ LocationTemps = TypedDict(
     "LocationTemps", {"northing": int, "temperatures": List[float]}
 )
 
-MAX_NUM_CAGES = 20
+MAX_NUM_CAGES = 24
 MAX_NUM_APPLICATIONS = 10
 
 
@@ -635,7 +635,7 @@ class Farm(LoggableMixin):
 
         return {
             "aggregation": np.pad(
-                aggregations, (0, MAX_NUM_CAGES - len(aggregations))
+                aggregations, (0, MAX_NUM_CAGES - len(aggregations) + 1)
             ).astype(np.float32),
             "reported_aggregation": np.array([reported_aggregation], dtype=np.float32),
             "fish_population": np.pad(

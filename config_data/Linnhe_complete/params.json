@@ -5,13 +5,13 @@
     "ext_pressure": 150,
     "monthly_cost": 5000.00,
     "gain_per_kg": 4.39,
-    "infection_discount": 0.4,
+    "infection_discount": 1e-7,
     "genetic_ratios": {
         "A": 0.005,
         "a": 0.99,
         "Aa": 0.005
     },
-    "genetic_learning_rate": 1,
+    "genetic_learning_rate": 0.001,
     "agg_rate_suggested_threshold": 2.0,
     "agg_rate_enforcement_threshold": 6.0,
     "agg_rate_enforcement_strikes": 4,
@@ -24,7 +24,7 @@
                 206100,
                 770600
             ],
-            "num_fish": 40000,
+            "num_fish": 200000,
             "start_date": "2015-10-01 00:00:00",
             "cages_start_dates": [
                 "2015-10-01 00:00:00",
@@ -61,7 +61,7 @@
                 201300,
                 764700
             ],
-            "num_fish": 40000,
+            "num_fish": 200000,
             "start_date": "2015-10-01 00:00:00",
             "cages_start_dates": [
                 "2015-10-01 00:00:00",
@@ -102,7 +102,7 @@
                 207900,
                 759500
             ],
-            "num_fish": 40000,
+            "num_fish": 200000,
             "start_date": "2015-10-01 00:00:00",
             "cages_start_dates": [
                 "2015-10-01 00:00:00",
@@ -131,7 +131,7 @@
                 185200,
                 752500
             ],
-            "num_fish": 40000,
+            "num_fish": 200000,
             "start_date": "2015-10-01 00:00:00",
             "cages_start_dates": [
                 "2015-10-01 00:00:00",
@@ -156,7 +156,7 @@
                 192500,
                 749700
             ],
-            "num_fish": 40000,
+            "num_fish": 200000,
             "start_date": "2015-10-01 00:00:00",
             "cages_start_dates": [
                 "2015-10-01 00:00:00",
@@ -183,7 +183,7 @@
                 186500,
                 745300
             ],
-            "num_fish": 40000,
+            "num_fish": 200000,
             "start_date": "2015-10-01 00:00:00",
             "cages_start_dates": [
                 "2015-10-01 00:00:00",
@@ -214,7 +214,7 @@
                 193400,
                 741700
             ],
-            "num_fish": 40000,
+            "num_fish": 200000,
             "start_date": "2015-10-01 00:00:00",
             "cages_start_dates": [
                 "2015-10-01 00:00:00",
@@ -243,9 +243,9 @@
             "ncages": 9,
             "location": [
                 184700,
-                740000
+                7200000
             ],
-            "num_fish": 40000,
+            "num_fish": 200000,
             "start_date": "2015-10-01 00:00:00",
             "cages_start_dates": [
                 "2015-10-01 00:00:00",
@@ -271,7 +271,7 @@
                 186700,
                 734100
             ],
-            "num_fish": 40000,
+            "num_fish": 200000,
             "start_date": "2015-10-01 00:00:00",
             "cages_start_dates": [
                 "2015-10-01 00:00:00",
@@ -297,7 +297,7 @@
                 183500,
                 730700
             ],
-            "num_fish": 40000,
+            "num_fish": 200000,
             "start_date": "2015-10-01 00:00:00",
             "cages_start_dates": [
                 "2015-10-01 00:00:00",
