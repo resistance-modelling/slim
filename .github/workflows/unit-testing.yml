@@ -11,9 +11,10 @@ jobs:
         miniconda-version: "latest"
         auto-update-conda: true
         python-version: "3.8"
+        mamba-version: "0.15"
         environment-file: environment.yml
         activate-environment: slp
-        channels: conda-forge
+        channels: conda-forge,defaults
     - uses: actions/checkout@v1
     - name: Conda info sanity check
       shell: bash -l {0}
@@ -29,7 +30,7 @@ jobs:
       run: |
         pytype --version
         pytype --config pytype_ci.cfg .
-    - name: Install git
+    - name: Install git and make
       shell: bash -l {0}
       run: |
         sudo apt update
