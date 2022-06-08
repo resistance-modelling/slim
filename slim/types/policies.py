@@ -12,6 +12,7 @@ import numpy as np
 from gym.spaces import Discrete, MultiBinary, Box, Dict as GymDict
 
 from .treatments import TREATMENT_NO
+from slim.simulation.farm import MAX_NUM_CAGES
 
 __all__ = [
     "ACTION_SPACE",
@@ -60,12 +61,18 @@ def get_observation_space_schema(agents: List[str], num_applications: int):
     return {
         agent: GymDict(
             {
-                "aggregation": Box(low=0, high=20, shape=(20,), dtype=np.float32),
+                "aggregation": Box(
+                    low=0, high=20, shape=(MAX_NUM_CAGES,), dtype=np.float32
+                ),
                 "reported_aggregation": Box(
                     low=0, high=20, shape=(1,), dtype=np.float32
                 ),
-                "fish_population": Box(low=0, high=1e6, shape=(20,), dtype=np.int64),
-                "cleaner_fish": Box(low=0, high=1e6, shape=(20,), dtype=np.int64),
+                "fish_population": Box(
+                    low=0, high=1e6, shape=(MAX_NUM_CAGES,), dtype=np.int64
+                ),
+                "cleaner_fish": Box(
+                    low=0, high=1e6, shape=(MAX_NUM_CAGES,), dtype=np.int64
+                ),
                 "current_treatments": CURRENT_TREATMENTS,
                 "allowed_treatments": Discrete(num_applications),
                 "asked_to_treat": MultiBinary(1),  # Yes or no

@@ -17,7 +17,7 @@ from slim.types.treatments import (
     GeneticMechanism,
     EMB,
     Thermolicer,
-    CleanerFish
+    CleanerFish,
 )
 
 if TYPE_CHECKING:
@@ -183,9 +183,7 @@ class Config(RuntimeConfig):
         self.agg_rate_enforcement_threshold: float = data[
             "agg_rate_enforcement_threshold"
         ]
-        self.agg_rate_enforcement_strikes: int = data[
-            "agg_rate_enforcement_strikes"
-        ]
+        self.agg_rate_enforcement_strikes: int = data["agg_rate_enforcement_strikes"]
 
         # Policy
         self.treatment_strategy: str = data["treatment_strategy"]

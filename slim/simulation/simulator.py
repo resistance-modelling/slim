@@ -315,7 +315,7 @@ class Simulator:  # pragma: no cover
 
         :param resume: if True it will resume the simulation
         :param quiet: if True it will disable tqdm's pretty printing.
-       """
+        """
         if not resume:
             logger.info("running simulation, saving to %s", self.output_dir)
         else:

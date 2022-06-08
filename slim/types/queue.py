@@ -11,12 +11,12 @@ from functools import singledispatch
 from heapq import heappush, heappop
 from typing import Callable, TypeVar, TYPE_CHECKING, Generic
 
-from slim.types.policies import ObservationSpace
 
 # from queue import PriorityQueue
 
 if TYPE_CHECKING:
     from slim.simulation.lice_population import GenoDistrib
+    from slim.types.policies import ObservationSpace
     from slim.types.treatments import Treatment
 
 

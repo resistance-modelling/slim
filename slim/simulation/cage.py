@@ -643,7 +643,6 @@ class Cage(LoggableMixin):
         :returns: a pair (Einf, num_avail_lice)
         """
 
-
         # Based on Aldrin et al.
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease)./
@@ -1093,9 +1092,11 @@ class Cage(LoggableMixin):
                 # assume restocking of 5% of Nfish
                 restock = self.num_fish * 1 / 100
 
-        return int(math.ceil(
-            restock - (self.num_cleaner * self.cfg.cleaner_fish.natural_mortality)
-        ))
+        return int(
+            math.ceil(
+                restock - (self.num_cleaner * self.cfg.cleaner_fish.natural_mortality)
+            )
+        )
 
     def promote_population(
         self,

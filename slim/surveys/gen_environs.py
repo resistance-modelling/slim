@@ -16,11 +16,7 @@ preamble = {
     "end_date": "2020-01-01 23:59:59",
     "ext_pressure": 100,
     "monthly_cost": 5000.00,
-    "genetic_ratios": {
-        "A": 0.0001,
-        "a": 0.999,
-        "Aa": 0.0009
-    },
+    "genetic_ratios": {"A": 0.0001, "a": 0.999, "Aa": 0.0009},
     "gain_per_kg": 4.39,
     "infection_discount": 1e-7,
     "genetic_learning_rate": 0.01,
@@ -31,41 +27,58 @@ preamble = {
 }
 farm = {
     "ncages": 2,
-    "location": [
-        190300,
-        665300
-    ],
+    "location": [190300, 665300],
     "num_fish": 40000,
     "start_date": "2017-10-01 00:00:00",
     "cages_start_dates": [
         "2017-10-01 00:00:00",
         "2017-10-08 00:00:00",
     ],
-    "treatment_types": [
-        "emb", "thermolicer", "cleanerfish"
-    ],
+    "treatment_types": ["emb", "thermolicer", "cleanerfish"],
     "treatment_dates": [],
     "max_num_treatments": 10,
     "sampling_spacing": 7,
-    "defection_proba": 0.2
+    "defection_proba": 0.2,
 }
 
-temperatures = np.array([[685715,8.2,7.55,7.45,8.25,9.65,11.35,13.15,13.75,13.65,12.85,11.75,9.85],
-                [665300,8.4,7.8,7.7,8.6,9.8,11.65,13.4,13.9,13.9,13.2,12.15,10.2]])
+temperatures = np.array(
+    [
+        [
+            685715,
+            8.2,
+            7.55,
+            7.45,
+            8.25,
+            9.65,
+            11.35,
+            13.15,
+            13.75,
+            13.65,
+            12.85,
+            11.75,
+            9.85,
+        ],
+        [665300, 8.4, 7.8, 7.7, 8.6, 9.8, 11.65, 13.4, 13.9, 13.9, 13.2, 12.15, 10.2],
+    ]
+)
 
 
 def circular_path(N=9, directed=False, circular=False):
     eye = np.eye(N, dtype=np.float64)
-    next_right = np.roll(eye, 1, axis=1) if circular else np.pad(eye, ((0, 0), (1, 0)))[:, :-1]
-    next_down = np.roll(eye, 1, axis=0) if circular else np.pad(eye, ((1, 0), (0, 0)))[:-1, :]
-    
+    next_right = (
+        np.roll(eye, 1, axis=1) if circular else np.pad(eye, ((0, 0), (1, 0)))[:, :-1]
+    )
+    next_down = (
+        np.roll(eye, 1, axis=0) if circular else np.pad(eye, ((1, 0), (0, 0)))[:-1, :]
+    )
+
     movement_matrix = eye + next_right
     if not directed:
         movement_matrix += next_down
-    
+
     prob_matrix = movement_matrix * 1.5e-2
     time_matrix = movement_matrix * 7
-    
+
     farms = [{**farm, "name": f"i"} for i in range(N)]
 
     return prob_matrix, time_matrix, {**preamble, "farms": farms}
@@ -112,6 +125,7 @@ def main():
     np.savetxt(str(temperatures_csv), temperatures, delimiter=",")
     with param_json.open("w") as f:
         json.dump(output[2], f)
+
 
 if __name__ == "__main__":
     main()

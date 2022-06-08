@@ -33,9 +33,8 @@ from slim.simulation.lice_population import (
     genorates_to_dict,
     empty_geno_from_cfg,
 )
-from slim.types.policies import TREATMENT_NO
 from slim.types.queue import *
-from slim.types.treatments import Treatment
+from slim.types.treatments import Treatment, TREATMENT_NO
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
@@ -635,7 +634,7 @@ class Farm(LoggableMixin):
 
         return {
             "aggregation": np.pad(
-                aggregations, (0, MAX_NUM_CAGES - len(aggregations) + 1)
+                aggregations, (0, MAX_NUM_CAGES - len(aggregations))
             ).astype(np.float32),
             "reported_aggregation": np.array([reported_aggregation], dtype=np.float32),
             "fish_population": np.pad(

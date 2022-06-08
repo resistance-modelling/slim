@@ -28,7 +28,7 @@ jobs:
       shell: bash -l {0}
       run: |
         pytype --version
-        pytype --config pytype.cfg .
+        pytype --config pytype_ci.cfg .
     - name: Install git
       shell: bash -l {0}
       run: |
