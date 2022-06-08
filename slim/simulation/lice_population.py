@@ -39,18 +39,29 @@ __all__ = [
 ]
 
 # from enum import IntEnum
-import math
 from functools import lru_cache
+import math
+import os
+import sys
 from typing import Dict
 from typing import NamedTuple, List, TYPE_CHECKING, Union
 
 import numpy as np
+
+# TODO: are we still planning to use numba?
+if (
+    sys.gettrace() is None
+    or sys.gettrace()
+    or os.environ.get("SLIM_ENABLE_NUMBA") != "1"
+):
+    os.environ["NUMBA_DISABLE_JIT"] = "1"
+
 from numba import njit as _njit, float64
 from numba.core.types import unicode_type
 from numba.experimental import jitclass
 from numba.typed.typeddict import Dict as NumbaDict
 
-from slim import logger
+from slim.log import logger
 
 if TYPE_CHECKING:
     from slim.simulation.config import Config

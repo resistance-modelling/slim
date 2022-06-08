@@ -19,6 +19,7 @@ from ray import tune
 # Also: it's a bit tricky to use early stopping in our case...
 from ray.tune.suggest.bayesopt import BayesOptSearch
 
+import slim
 from slim.simulation.simulator import (
     get_env,
     PilotedPolicy,
@@ -154,17 +155,15 @@ def main(environment, logdir=None, num_samples=-1):
 
 
 if __name__ == "__main__":
-    # print(search_space)
-    # trainable(search_space)
 
-    parser = argparse.ArgumentParser("SLIM Fitter")
-    parser.add_argument("environment", help="The environment to use")
+    parser = slim.common_cli_options("SLIM Fitter")
     parser.add_argument(
         "--num_samples",
         help="The number of iterations. -1 = infinite",
         type=int,
         default=-1,
     )
+
     parser.add_argument("--logdir", help="The output logging directory.")
 
     args = parser.parse_args()

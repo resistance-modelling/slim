@@ -9,7 +9,7 @@ from typing import Union, Optional, Tuple, TYPE_CHECKING, Dict, List
 
 import numpy as np
 
-from slim import logger, LoggableMixin
+from slim.log import logger, LoggableMixin
 from slim.simulation.config import Config
 from slim.simulation.lice_population import (
     GenoDistrib,

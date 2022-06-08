@@ -6,7 +6,9 @@ class TestTreatmentType:
         assert isinstance(farm_config.get_treatment(Treatment.EMB), EMB)
         assert isinstance(farm_config.get_treatment(Treatment.THERMOLICER), Thermolicer)
 
+
 # TODO: move the cage EMB mortality test here?
+
 
 class TestThermolicer:
     def test_thermolicer_efficacy(self, farm_config, first_cage_population):

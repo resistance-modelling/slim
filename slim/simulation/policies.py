@@ -5,7 +5,7 @@ A collection of policies.
 import datetime as dt
 
 from .config import Config
-from slim import logger
+from slim.log import logger
 from slim.types.policies import ObservationSpace, TREATMENT_NO, FALLOW, NO_ACTION
 from slim.types.treatments import Treatment
 

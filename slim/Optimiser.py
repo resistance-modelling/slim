@@ -1,6 +1,8 @@
 """
-Entry point for our optimisation framework
+DEPRECATED: use ``Fitter.py`` or ``slim fit``. They also implement MC walks
+but use ray-tuned which is much faster.
 """
+
 
 import argparse
 import json
@@ -12,7 +14,7 @@ import sys
 import numpy as np
 import tqdm
 
-from slim import logger, create_logger
+from slim.log import logger, create_logger
 from slim.simulation.simulator import Simulator
 from slim.simulation.config import Config
 

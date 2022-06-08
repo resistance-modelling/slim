@@ -23,7 +23,7 @@ from mypy_extensions import TypedDict
 from numpy.random import SeedSequence, default_rng
 from ray.util.queue import Queue as RayQueue
 
-from slim import LoggableMixin, logger
+from slim.log import LoggableMixin, logger
 from slim.simulation.cage import Cage
 from slim.simulation.config import Config
 from slim.simulation.lice_population import (

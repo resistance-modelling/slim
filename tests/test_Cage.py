@@ -9,7 +9,12 @@ import numpy as np
 import pytest
 
 from slim.simulation.config import to_dt
-from slim.types.queue import DamAvailabilityBatch, EggBatch, TravellingEggBatch, TreatmentEvent
+from slim.types.queue import (
+    DamAvailabilityBatch,
+    EggBatch,
+    TravellingEggBatch,
+    TreatmentEvent,
+)
 from slim.types.treatments import GeneticMechanism, Treatment, EMB
 from slim.simulation.lice_population import (
     GenoDistrib,
