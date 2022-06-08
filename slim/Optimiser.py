@@ -1,6 +1,8 @@
 """
-Entry point for our optimisation framework
+DEPRECATED: use ``Fitter.py`` or ``slim fit``. They also implement MC walks
+but use ray-tuned which is much faster.
 """
+
 
 import argparse
 import json
