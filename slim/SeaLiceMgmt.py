@@ -11,6 +11,7 @@ import cProfile
 
 import slim
 from slim.log import logger, create_logger
+
 from slim.simulation.simulator import Simulator, reload
 from slim.simulation.config import to_dt
 

@@ -100,10 +100,15 @@ def get_config(parser: argparse.ArgumentParser):
         cfg_schema_path, str(cfg_basename / "params.schema.json")
     )
     config_args = config_parser.parse_args(unknown)
-    config_args.name = simulation_id
 
     return (
-        Config(cfg_path, args.param_dir, **vars(args), **vars(config_args)),
+        Config(
+            cfg_path,
+            args.param_dir,
+            name=simulation_id,
+            **vars(args),
+            **vars(config_args)
+        ),
         args,
         output_folder,
     )
