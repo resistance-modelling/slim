@@ -738,11 +738,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             # get gross arrivals
             pen = {**self._monocolourPen, "color": extra_palette[0]}
             if self.selected_curve.ExtP:
-                arrivals_gross = (
-                    farm_df["arrivals_per_cage"]
-                    .apply(lambda cages: GenoDistrib.batch_sum(cages).gross)
-                    .to_numpy()
-                )
+                arrivals_gross = farm_df["arrivals_per_cage"].to_numpy()
                 self.licePopulationPlots[farm_idx].plot(
                     arrivals_gross, name="Offspring (L1+L2)", pen=pen
                 )
@@ -753,7 +749,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         farm_idx: int,
         report_farm: Optional[pd.DataFrame],
     ):
-        aggregation_rate = farm_df["aggregation"].apply(lambda x: sum(x) / len(x))
+        aggregation_rate = farm_df["aggregation"].values
         self.aggregationRatePlot[farm_idx].plot(
             aggregation_rate, pen=self._monocolourPen, name="Expected"
         )

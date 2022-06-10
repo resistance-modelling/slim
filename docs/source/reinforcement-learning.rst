@@ -71,8 +71,12 @@ For example:
             from slim.simulation.config import Config
             from slim.simulation.simulator import Simulator
 
-            cfg = Config("config_data/config.json", "config_data/Fyne", treatment_strategy="bernoulli")
-            sim = Simulator("output", "Fyne_foobar", cfg)
+            cfg = Config(
+                "config_data/config.json",
+                "config_data/Fyne",
+                name="Fyne_foobar",
+                treatment_strategy="bernoulli")
+            sim = Simulator("output", cfg)
             sim.run_model()
 
 See :ref:`Environment Config` for details.

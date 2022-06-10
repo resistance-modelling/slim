@@ -19,7 +19,6 @@ from slim.types.policies import no_observation, agent_to_id, FALLOW
 from slim.types.queue import *
 from .farm import (
     FarmActor,
-    MAX_NUM_CAGES,
     Farm,
 )
 from .lice_population import (
@@ -259,7 +258,7 @@ class MultiProcFarmPool(FarmPool):
         self._farm_actors.clear()
         self._offspring_queues.clear()
         self._gym_space = {
-            farm_name: no_observation(MAX_NUM_CAGES) for farm_name in names
+            farm_name: no_observation() for farm_name in names
         }
 
     @property

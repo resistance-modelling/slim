@@ -12,7 +12,6 @@ import numpy as np
 from gym.spaces import Discrete, MultiBinary, Box, Dict as GymDict
 
 from .treatments import TREATMENT_NO
-from slim.simulation.farm import MAX_NUM_CAGES
 
 __all__ = [
     "ACTION_SPACE",
@@ -62,16 +61,16 @@ def get_observation_space_schema(agents: List[str], num_applications: int):
         agent: GymDict(
             {
                 "aggregation": Box(
-                    low=0, high=20, shape=(MAX_NUM_CAGES,), dtype=np.float32
+                    low=0, high=20, shape=(1,), dtype=np.float32
                 ),
                 "reported_aggregation": Box(
                     low=0, high=20, shape=(1,), dtype=np.float32
                 ),
                 "fish_population": Box(
-                    low=0, high=1e6, shape=(MAX_NUM_CAGES,), dtype=np.int64
+                    low=0, high=1e8, shape=(1,), dtype=np.int64
                 ),
                 "cleaner_fish": Box(
-                    low=0, high=1e6, shape=(MAX_NUM_CAGES,), dtype=np.int64
+                    low=0, high=1e8, shape=(1,), dtype=np.int64
                 ),
                 "current_treatments": CURRENT_TREATMENTS,
                 "allowed_treatments": Discrete(num_applications),
@@ -83,19 +82,17 @@ def get_observation_space_schema(agents: List[str], num_applications: int):
 
 
 @functools.lru_cache(maxsize=None)
-def no_observation(ncages) -> ObservationSpace:
+def no_observation() -> ObservationSpace:
     """
     Generate an empty observation.
-
-    :param ncages: the number of cages
 
     :returns an empty observation that matches the schema
     """
     return {
-        "aggregation": np.zeros((ncages,), dtype=np.float32),
+        "aggregation": np.zeros((1,), dtype=np.float32),
         "reported_aggregation": np.zeros((1,), dtype=np.float32),
-        "fish_population": np.zeros((ncages,), dtype=np.int64),
-        "cleaner_fish": np.zeros((ncages,), dtype=np.int64),
+        "fish_population": np.zeros((1,), dtype=np.int64),
+        "cleaner_fish": np.zeros((1,), dtype=np.int64),
         "current_treatments": np.zeros((TREATMENT_NO + 1,), dtype=np.int8),
         "allowed_treatments": 0,
         "asked_to_treat": np.zeros((1,), dtype=np.int8),

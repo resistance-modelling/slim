@@ -30,11 +30,6 @@ jobs:
       run: |
         pytype --version
         pytype --config pytype_ci.cfg .
-    - name: Install git and make
-      shell: bash -l {0}
-      run: |
-        sudo apt update
-        sudo apt install -y git curl
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1
       with:

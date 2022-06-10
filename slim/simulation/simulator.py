@@ -20,6 +20,7 @@ __all__ = [
     "UntreatedPolicy",
     "load_artifact",
     "dump_as_dataframe",
+    "get_simulation_path",
     "load_counts",
 ]
 
@@ -52,7 +53,7 @@ from slim.types.policies import (
 from .policies import *
 from slim.types.treatments import Treatment
 from .config import Config
-from .farm import MAX_NUM_CAGES, MAX_NUM_APPLICATIONS
+from .farm import MAX_NUM_APPLICATIONS
 from .lice_population import GenoDistrib, from_dict
 from .organisation import Organisation
 
@@ -150,7 +151,7 @@ class SimulatorPZEnv(AECEnv):
 
     @property
     def no_observation(self):
-        return no_observation(MAX_NUM_CAGES)
+        return no_observation()
 
     def observe(self, agent):
         return self.observations[agent]
@@ -285,10 +286,9 @@ class Simulator:  # pragma: no cover
     snapshots.
     """
 
-    def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
+    def __init__(self, output_dir: Path, cfg: Config):
         self.env = get_env(cfg)
         self.output_dir = output_dir
-        self.sim_id = sim_id
         self.cfg = cfg
 
         strategy = self.cfg.treatment_strategy
@@ -304,13 +304,13 @@ class Simulator:  # pragma: no cover
             with open(strategy, "rb") as f:
                 self.policy = pickle.load(f)
 
-        self.output_dump_path, self.output_dump_pickle = _get_simulation_path(
-            output_dir, sim_id
+        self.output_dump_path, self.output_dump_pickle = get_simulation_path(
+            output_dir, self.cfg
         )
         self.cur_day = cfg.start_date
         self.payoff = 0.0
 
-    def run_model(self, resume=False, quiet=False):
+    def run_model(self, *, resume=False, quiet=False):
         """Perform the simulation by running the model.
 
         :param resume: if True it will resume the simulation
@@ -389,9 +389,17 @@ class Simulator:  # pragma: no cover
             env.stop()
 
 
-def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
+def get_simulation_path(path: Path, other: Union[Config, str]):  # pragma: no-cover
+    """
+    :param path: the output path
+    :param other: either the simulation id or a Config (containing such simulation id)
+
+    :returns: a pair (artifact path, checkpoint path)
+    """
     if not path.is_dir():
         path.mkdir(parents=True, exist_ok=True)
+
+    sim_id = other.name if isinstance(other, Config) else other
 
     return (
         path / f"simulation_data_{sim_id}.pickle.lz4",
@@ -412,7 +420,7 @@ def parse_artifact(
     one per serialised day.
     """
     logger.info("Loading from a dump...")
-    data_file, pickle_file = _get_simulation_path(path, sim_id)
+    data_file, pickle_file = get_simulation_path(path, sim_id)
     path = pickle_file if checkpoint else data_file
     with lz4.frame.open(
         path, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
@@ -451,6 +459,9 @@ def dump_as_dataframe(
         for agent, values in state["farms"].items():
             key = (time, agent)
             farm_pop = values.pop("farm_population")
+            for k, v in values.items():
+                if isinstance(v, np.ndarray) and len(v) == 1:
+                    values[k] = v[0]
             farm_data[key] = {**values, **farm_pop}
 
     dataframe = pd.DataFrame.from_dict(farm_data, orient="index")
@@ -458,7 +469,7 @@ def dump_as_dataframe(
     # extract cumulative geno info regardless of the stage
     def aggregate_geno(data):
         data_to_sum = [from_dict(elem) for elem in data if isinstance(elem, dict)]
-        return GenoDistrib.batch_sum(data_to_sum).to_json_dict()
+        return GenoDistrib.batch_sum(data_to_sum).gross
 
     aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
     dataframe["eggs"] = dataframe["eggs"].apply(lambda x: x.gross)
@@ -470,7 +481,7 @@ def dump_as_dataframe(
 
 def load_artifact(
     path: Path, sim_id: str
-) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
+) -> Tuple[pd.DataFrame, List[dt.datetime], Config]: # pragma: no cover
     """Loads an artifact.
     Combines :func:`parse_artifact` and :func:`.dump_as_dataframe`, and serialises the dataframe for future use.
     If the dataframe does not exist or is older than the run it will be regenerated
@@ -480,7 +491,7 @@ def load_artifact(
 
     :returns: the dataframe to dump
     """
-    sim_path = _get_simulation_path(path, sim_id)[0]
+    sim_path = get_simulation_path(path, sim_id)[0]
     pandas_path = path / f"parsed_{sim_id}.pd.pkl"
 
     sim_mtime = sim_path.stat().st_mtime

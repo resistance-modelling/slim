@@ -45,7 +45,6 @@ LocationTemps = TypedDict(
     "LocationTemps", {"northing": int, "temperatures": List[float]}
 )
 
-MAX_NUM_CAGES = 24
 MAX_NUM_APPLICATIONS = 10
 
 
@@ -621,10 +620,10 @@ class Farm(LoggableMixin):
         """
         :returns: a Gym space for the agent that controls this farm.
         """
-        fish_population = np.array([cage.num_fish for cage in self.cages])
-        cleaner_fish_pop = np.array([cage.num_cleaner for cage in self.cages])
-        aggregations = np.array([cage.aggregation_rate for cage in self.cages])
-        reported_aggregation = self._get_aggregation_rate()
+        fish_population = np.array([cage.num_fish for cage in self.cages]).sum(keepdims=True)
+        cleaner_fish_pop = np.array([cage.num_cleaner for cage in self.cages]).sum(keepdims=True)
+        aggregation = np.array([cage.aggregation_rate for cage in self.cages]).mean(keepdims=True).astype(np.float32)
+        reported_aggregation = np.array([self._get_aggregation_rate()], dtype=np.float32)
         current_treatments = self.is_treating
         current_treatments_np = np.zeros((TREATMENT_NO + 1), dtype=np.int8)
         if len(current_treatments):
@@ -633,18 +632,10 @@ class Farm(LoggableMixin):
         current_treatments_np[-1] = any(cage.is_fallowing for cage in self.cages)
 
         return {
-            "aggregation": np.pad(
-                aggregations, (0, MAX_NUM_CAGES - len(aggregations))
-            ).astype(np.float32),
-            "reported_aggregation": np.array([reported_aggregation], dtype=np.float32),
-            "fish_population": np.pad(
-                fish_population,
-                (0, MAX_NUM_CAGES - len(fish_population)),
-            ),
-            "cleaner_fish": np.pad(
-                cleaner_fish_pop,
-                (0, MAX_NUM_CAGES - len(cleaner_fish_pop)),
-            ),
+            "aggregation": aggregation,
+            "reported_aggregation": reported_aggregation,
+            "fish_population": fish_population,
+            "cleaner_fish": cleaner_fish_pop,
             "current_treatments": current_treatments_np,
             "allowed_treatments": self.available_treatments,
             "asked_to_treat": np.array([0], dtype=np.int8),

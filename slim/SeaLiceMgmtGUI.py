@@ -43,7 +43,7 @@ from slim.simulation.simulator import (
     dump_as_dataframe,
     load_counts,
     reload_from_optimiser,
-    dump_optimiser_as_pd,
+    dump_optimiser_as_pd, load_artifact,
 )
 from slim.simulation.config import Config
 from slim.gui_utils.configuration import ConfigurationPane
@@ -301,8 +301,7 @@ class SimulatorLoadingWorker(QThread):
             sim_name = self.dump_path.name[
                 len("simulation_name_") : -len(".pickle.lz4")
             ]
-            states_times_it = parse_artifact(parent_path, sim_name)
-            states_as_df, times, cfg = dump_as_dataframe(states_times_it)
+            states_as_df, times, cfg = load_artifact(parent_path, sim_name)
             try:
                 report = load_counts(cfg)
             except FileNotFoundError:

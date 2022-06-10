@@ -36,8 +36,9 @@ Run the simulator
             from slim.simulation.config import Config
             from slim.simulation.Simulator import Simulator
 
-            cfg = Config("config_data/config.json", "config_data/Fyne")
-            sim = Simulator("output", "Fyne_foobar", cfg)
+            # Note: if name is not provided the default name in the environment will be used.
+            cfg = Config("config_data/config.json", "config_data/Fyne", name="Loch_Fyne")
+            sim = Simulator("output", cfg)
             sim.run_model()
 
 Runtime Environment

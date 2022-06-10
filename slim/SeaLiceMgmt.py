@@ -70,11 +70,11 @@ if __name__ == "__main__":
     elif args.resume_after is not None:
         sim = reload(output_folder, simulation_id, resume_after=args.resume_after)
     else:
-        sim = Simulator(output_folder, simulation_id, cfg)
+        sim = Simulator(output_folder, cfg)
         resume = False
 
     if not args.profile:
-        sim.run_model(resume, quiet=args.quiet)
+        sim.run_model(resume=resume, quiet=args.quiet)
     else:
         profile_output_path = output_folder / f"profile_{simulation_id}.bin"
         # atexit.register(lambda prof=prof: prof.print_stats(output_unit=1e-3))

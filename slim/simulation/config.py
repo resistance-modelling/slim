@@ -267,8 +267,7 @@ class FarmConfig:
     """Config for individual farm"""
 
     def __init__(self, data: dict):
-        """Create farm configuration
-
+        """
         :param data: Dictionary with farm data
         """
 
