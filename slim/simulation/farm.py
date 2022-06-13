@@ -364,7 +364,7 @@ class Farm(LoggableMixin):
         self.log("\t\tGenerated eggs by farm %d: %s", self.id_, eggs=eggs_log)
         self.log("\t\tPayoff: %f", payoff=(self.get_profit(cur_date) - total_cost))
         self.log("\tNew population: %r", farm_population=self.lice_genomics)
-        self.log("Total fish population: %d", num_fish=self.num_fish)
+        logger.debug("Total fish population: %d", self.num_fish)
         # self._asked_to_treat = False
         self._report_sample(cur_date)
 
@@ -620,10 +620,22 @@ class Farm(LoggableMixin):
         """
         :returns: a Gym space for the agent that controls this farm.
         """
-        fish_population = np.array([cage.num_fish for cage in self.cages]).sum(keepdims=True)
-        cleaner_fish_pop = np.array([cage.num_cleaner for cage in self.cages]).sum(keepdims=True)
-        aggregation = np.array([cage.aggregation_rate for cage in self.cages]).mean(keepdims=True).astype(np.float32)
-        reported_aggregation = np.array([self._get_aggregation_rate()], dtype=np.float32)
+        fish_population = (
+            np.array([cage.num_fish for cage in self.cages])
+            .sum(keepdims=True)
+            .astype(np.int64)
+        )
+        cleaner_fish_pop = np.array([cage.num_cleaner for cage in self.cages]).sum(
+            keepdims=True
+        )
+        aggregation = (
+            np.array([cage.aggregation_rate for cage in self.cages])
+            .mean(keepdims=True)
+            .astype(np.float32)
+        )
+        reported_aggregation = np.array(
+            [self._get_aggregation_rate()], dtype=np.float32
+        )
         current_treatments = self.is_treating
         current_treatments_np = np.zeros((TREATMENT_NO + 1), dtype=np.int8)
         if len(current_treatments):

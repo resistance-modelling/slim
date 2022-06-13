@@ -257,9 +257,7 @@ class MultiProcFarmPool(FarmPool):
         names = [f"farm_{i}" for i in range(self.cfg.nfarms)]
         self._farm_actors.clear()
         self._offspring_queues.clear()
-        self._gym_space = {
-            farm_name: no_observation() for farm_name in names
-        }
+        self._gym_space = {farm_name: no_observation() for farm_name in names}
 
     @property
     def is_running(self):
@@ -446,9 +444,7 @@ class Organisation:
 
     @property
     def get_gym_space(self):
-        return (
-            self._gym_space
-        )  # {f"farm_{i}": space for i, space in self._gym_space.items()}
+        return self._gym_space
 
     def update_offspring_average(self, offspring_per_farm: Dict[int, GenoDistrib]):
         t = self.cfg.reservoir_offspring_average

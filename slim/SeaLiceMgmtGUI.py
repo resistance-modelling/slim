@@ -43,7 +43,8 @@ from slim.simulation.simulator import (
     dump_as_dataframe,
     load_counts,
     reload_from_optimiser,
-    dump_optimiser_as_pd, load_artifact,
+    dump_optimiser_as_pd,
+    load_artifact,
 )
 from slim.simulation.config import Config
 from slim.gui_utils.configuration import ConfigurationPane

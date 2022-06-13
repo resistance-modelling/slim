@@ -33,6 +33,7 @@ import os
 import pickle
 import sys
 import traceback
+from collections import defaultdict
 from io import BytesIO
 from pathlib import Path
 from typing import List, Optional, Tuple, Iterator, Union, cast
@@ -42,6 +43,8 @@ import ray
 import tqdm
 from pettingzoo import AECEnv
 from pettingzoo.utils import agent_selector, wrappers
+import pyarrow as pa
+import pyarrow.parquet as paq
 from ray.exceptions import RayError
 
 from slim.types.policies import (
@@ -233,12 +236,22 @@ class SimulatorPZEnv(AECEnv):
 class DumpingActor:
     """Takes an output log and serialises it"""
 
-    def __init__(self, dump_path: Path, pickled_path: Optional[Path] = None):
+    def __init__(self, output_path: Path, sim_id: str):
+        """
+        :param output_path: the output path
+        :param sim_id: the simulation id of the current simulation
+        """
+
+        self.parquet_path, self.cfg_path, self.checkpoint_path = get_simulation_path(
+            output_path, sim_id
+        )
+
+        self.log_lists = defaultdict(lambda: [])
+
+        """
         self.data_file = dump_path.open(mode="wb")
         self.compressed_stream = lz4.frame.open(
-            self.data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
-        )
-        self.log_buffer = BytesIO()
+        self.data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
 
         if pickled_path:
             self.sim_buffer = BytesIO()
@@ -248,37 +261,97 @@ class DumpingActor:
                 "wb",
                 compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC,
             )
+        """
 
+    """
     def _flush(self, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
         stream.write(buffer.getvalue())
         buffer.seek(0)
         buffer.truncate(0)
+        
 
     def _save(self, data: bytes, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
         buffer.write(data)
         # if len(buffer.getvalue()) >= (1 << 19):  # ~ 512 KiB
         self._flush(buffer, stream)
+    """
+
+    def _dump(self, logs: dict):
+        # Format:
+        # (timestamp, agent, farm_data..., reservoir_ratios)
+
+        timestamp = logs.pop("timestamp")
+
+        for k, v in logs.items():
+            if k == "farms":
+                for agent, farm_value in v.items():
+                    farm_pop = farm_value.pop("farm_population")
+                    for k2, v2 in farm_value.items():
+                        if isinstance(v2, np.ndarray) and len(v2) == 1:
+                            farm_value[k2] = v2[0]
+                    self.log_lists["timestamp"].append(timestamp)
+                    self.log_lists["farm_name"].append(agent)
+                    for farm_k, farm_v in farm_pop.items():
+                        # This breaks down the genes
+                        self.log_lists[farm_k].append(farm_v)
+                    for k2, v2 in farm_value.items():
+                        if k2 == "arrivals_per_cage":
+                            v2 = GenoDistrib.batch_sum(v2).to_json_dict()
+                        elif k2 == "eggs":
+                            v2 = v2.gross
+                        self.log_lists[k2].append(v2)
+            else:
+                self.log_lists[k].append(v)
+
+    def _flush_stream(self, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
+        stream.write(buffer.getvalue())
+        buffer.seek(0)
+        buffer.truncate(0)
+
+    def _flush_dump(self):
+        table = pa.Table.from_pydict(self.log_lists)
+        if not hasattr(self, "_pqwriter"):
+            self._pqwriter = paq.ParquetWriter(
+                str(self.parquet_path),
+                table.schema,
+                compression="zstd",
+                compression_level=11,
+            )
+        self._pqwriter.write_table(table)
+        self.log_lists.clear()
 
     def dump(self, logs: dict):
-        self._save(pickle.dumps(logs), self.log_buffer, self.compressed_stream)
+        self._dump(logs)
+        if len(self.log_lists["timestamp"]) > 40:
+            self._flush_dump()
+
+    def dump_cfg(self, cfg_as_bytes: bytes):
+        # This is available only for bytes to avoid having to serialise/deserialise again via Ray
+        with self.cfg_path.open("wb") as f:
+            f.write(cfg_as_bytes)
 
     def save_sim(self, sim_state: bytes):
         self._save(sim_state, self.sim_buffer, self.sim_state_stream)
 
     def teardown(self):
-        self._flush(self.log_buffer, self.compressed_stream)
-        self.log_buffer.close()
+        self._flush_dump()
+        if hasattr(self, "_pqwriter"):
+            self._pqwriter.close()
+        print("Teardown")
+        """
         self.compressed_stream.close()
         self.data_file.close()
         if hasattr(self, "sim_buffer"):
-            self._flush(self.sim_buffer, self.sim_state_stream)
+            self._flush_stream(self.sim_buffer, self.sim_state_stream)
             self.sim_buffer.close()
             self.sim_state_stream.close()
             self.sim_state_file.close()
+        """
 
 
 class Simulator:  # pragma: no cover
     """
+            print("Closing parquet writer...")
     The main entry point of the simulator.
     This class provides the main loop of the simulation and is typically used by the driver
     when extracting simulation data.
@@ -304,9 +377,6 @@ class Simulator:  # pragma: no cover
             with open(strategy, "rb") as f:
                 self.policy = pickle.load(f)
 
-        self.output_dump_path, self.output_dump_pickle = get_simulation_path(
-            output_dir, self.cfg
-        )
         self.cur_day = cfg.start_date
         self.payoff = 0.0
 
@@ -317,24 +387,20 @@ class Simulator:  # pragma: no cover
         :param quiet: if True it will disable tqdm's pretty printing.
         """
         if not resume:
-            logger.info("running simulation, saving to %s", self.output_dir)
+            logger.info(
+                "running simulation %s, saving to %s", self.cfg.name, self.output_dir
+            )
         else:
-            logger.info("resuming simulation from %s", self.output_dump_pickle)
-
-        # create a file to store the population data from our simulation
-        if resume and not self.output_dump_pickle.exists():
-            logger.warning(
-                f"{self.output_dump_pickle} could not be found! Creating a new log file."
+            logger.info(
+                "resuming simulation (searching %s in %s)",
+                self.cfg.name,
+                self.output_dir,
             )
 
+        # create a file to store the population data from our simulation
         if not resume:
-            if self.cfg.checkpoint_rate:
-                serialiser = DumpingActor.remote(
-                    self.output_dump_path, self.output_dump_pickle
-                )
-            else:
-                serialiser = DumpingActor.remote(self.output_dump_path)
-            serialiser.dump.remote(self.cfg)
+            serialiser = DumpingActor.remote(self.output_dir, self.cfg.name)
+            ray.get(serialiser.dump_cfg.remote(pickle.dumps(self.cfg)))
             self.env.reset()
 
         try:
@@ -394,7 +460,7 @@ def get_simulation_path(path: Path, other: Union[Config, str]):  # pragma: no-co
     :param path: the output path
     :param other: either the simulation id or a Config (containing such simulation id)
 
-    :returns: a pair (artifact path, checkpoint path)
+    :returns: a triple (artifact path, config path, checkpoint path)
     """
     if not path.is_dir():
         path.mkdir(parents=True, exist_ok=True)
@@ -402,7 +468,8 @@ def get_simulation_path(path: Path, other: Union[Config, str]):  # pragma: no-co
     sim_id = other.name if isinstance(other, Config) else other
 
     return (
-        path / f"simulation_data_{sim_id}.pickle.lz4",
+        path / f"simulation_data_{sim_id}.parquet",
+        path / f"config_{sim_id}.pickle",
         path / f"checkpoint_{sim_id}.pickle.lz4",
     )
 
@@ -481,7 +548,7 @@ def dump_as_dataframe(
 
 def load_artifact(
     path: Path, sim_id: str
-) -> Tuple[pd.DataFrame, List[dt.datetime], Config]: # pragma: no cover
+) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:  # pragma: no cover
     """Loads an artifact.
     Combines :func:`parse_artifact` and :func:`.dump_as_dataframe`, and serialises the dataframe for future use.
     If the dataframe does not exist or is older than the run it will be regenerated
@@ -494,14 +561,7 @@ def load_artifact(
     sim_path = get_simulation_path(path, sim_id)[0]
     pandas_path = path / f"parsed_{sim_id}.pd.pkl"
 
-    sim_mtime = sim_path.stat().st_mtime
-    if not pandas_path.exists() or pandas_path.stat().st_mtime < sim_mtime:
-        df = dump_as_dataframe(parse_artifact(path, sim_id))
-        with pandas_path.open("wb") as f:
-            pickle.dump(df, f)
-    else:
-        with pandas_path.open("rb") as f:
-            df = pickle.load(f)
+    df = dump_as_dataframe(parse_artifact(path, sim_id))
     return df
 
 

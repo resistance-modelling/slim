@@ -33,7 +33,8 @@ dependencies:
   # - configspace=0.5.0
   - bayesian-optimization=1.1.0 # Required in the fitting script
   - protobuf<4.0.0
-  - pyspark=3.2.1
+  # - pyspark=3.2.1 # TODO: enable later?
+  - pyarrow=7.0.0
   - pip:
     - convertbng==0.6.36
     # NOTE: the conda package for PyType has a few issues. 1: apparently it tries to pull an

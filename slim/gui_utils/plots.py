@@ -658,7 +658,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
     def _plotFishPop(
         self, farm_df: pd.DataFrame, farm_idx: int, report_farm: Optional[pd.DataFrame]
     ):
-        num_fish = farm_df["num_fish"].to_numpy()
+        num_fish = farm_df["farm_population"].to_numpy()
         monocolour_pen = self._monocolourPen
 
         # TODO: set derivativeMode instead
