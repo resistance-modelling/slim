@@ -277,9 +277,6 @@ class DumpingActor:
     """
 
     def _dump(self, logs: dict):
-        # Format:
-        # (timestamp, agent, farm_data..., reservoir_ratios)
-
         timestamp = logs.pop("timestamp")
 
         for k, v in logs.items():
@@ -303,10 +300,10 @@ class DumpingActor:
             else:
                 self.log_lists[k].append(v)
 
-    def _flush_stream(self, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
-        stream.write(buffer.getvalue())
-        buffer.seek(0)
-        buffer.truncate(0)
+    #def _flush_stream(self, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
+    #    stream.write(buffer.getvalue())
+    #    buffer.seek(0)
+    #    buffer.truncate(0)
 
     def _flush_dump(self):
         table = pa.Table.from_pydict(self.log_lists)
@@ -330,11 +327,12 @@ class DumpingActor:
         with self.cfg_path.open("wb") as f:
             f.write(cfg_as_bytes)
 
-    def save_sim(self, sim_state: bytes):
-        self._save(sim_state, self.sim_buffer, self.sim_state_stream)
+    #def save_sim(self, sim_state: bytes):
+    #    self._save(sim_state, self.sim_buffer, self.sim_state_stream)
 
     def teardown(self):
-        self._flush_dump()
+        if len(self.log_lists["timestamp"]) > 0:
+            self._flush_dump()
         if hasattr(self, "_pqwriter"):
             self._pqwriter.close()
         print("Teardown")
@@ -351,7 +349,6 @@ class DumpingActor:
 
 class Simulator:  # pragma: no cover
     """
-            print("Closing parquet writer...")
     The main entry point of the simulator.
     This class provides the main loop of the simulation and is typically used by the driver
     when extracting simulation data.

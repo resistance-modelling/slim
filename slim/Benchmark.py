@@ -21,7 +21,6 @@ from slim.simulation.config import Config
 from slim.simulation.lice_population import LicePopulation, geno_to_alleles
 from slim.types.treatments import Treatment, treatment_to_class
 
-
 @ray.remote
 def launch(cfg, rng, out_path, **kwargs):
     trials = kwargs.pop("trials")
@@ -38,18 +37,27 @@ def launch(cfg, rng, out_path, **kwargs):
         sim_name = cfg.name = orig_name + str(hash_.digest().hex())
         artifact = get_simulation_path(out_path, cfg)[0]
 
-        if not artifact.exists():
-            print(f"Artifact not yet generated, running {sim_name}")
-            # defection_proba is farm-specific and needs special handling
+        if artifact.exists():
+            # Safety check: check if a run has completed.
+            try:
+                paq.read_table(str(artifact), columns=["timestamp"])
+                print(artifact, " passed the test")
+                continue
+            except ValueError:
+                print(f"{artifact} is corrupted, regenerating...")
+                
+        else:
+            print(f"Generating {sim_name}...")
+        # defection_proba is farm-specific and needs special handling
 
-            defection_proba = kwargs.pop("defection_proba", None)
+        defection_proba = kwargs.pop("defection_proba", None)
 
-            if defection_proba is not None:
-                for farm in cfg.farms:
-                    farm.defection_proba = defection_proba
+        if defection_proba is not None:
+            for farm in cfg.farms:
+                farm.defection_proba = defection_proba
 
-            sim = Simulator(out_path, cfg)
-            sim.run_model(quiet=quiet)
+        sim = Simulator(out_path, cfg)
+        sim.run_model(quiet=quiet)
 
 
 @ray.remote
@@ -301,7 +309,7 @@ def plot_data(cfg: Config, extra: str, output_folder: str):
 def main():
     parser = common_cli_options("SLIM Benchmark tool")
     bench_group = parser.add_argument_group(title="Benchmark-specific options")
-    bench_group.add_argument("--fields", nargs="+")
+    #bench_group.add_argument("--fields", nargs="+")
     bench_group.add_argument(
         "--bench-seed",
         type=int,
@@ -321,7 +329,10 @@ def main():
         required=True,
     )
 
+    bench_group.add_argument("--defection-proba", type=float, help="If using mosaic, the defection probability for each farm")
+
     cfg, args, out_path = get_config(parser)
+    print(cfg.farms_per_process)
     ss = np.random.SeedSequence(args.bench_seed)
     child_seeds = ss.spawn(args.parallel_trials)
 
