@@ -268,7 +268,7 @@ class DumpingActor:
         stream.write(buffer.getvalue())
         buffer.seek(0)
         buffer.truncate(0)
-        
+
 
     def _save(self, data: bytes, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
         buffer.write(data)
@@ -335,7 +335,6 @@ class DumpingActor:
             self._flush_dump()
         if hasattr(self, "_pqwriter"):
             self._pqwriter.close()
-        print("Teardown")
         """
         self.compressed_stream.close()
         self.data_file.close()

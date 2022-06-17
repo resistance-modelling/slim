@@ -15,13 +15,14 @@ __all__ = ["Farm", "FarmActor"]
 import copy
 import logging
 from collections import Counter, defaultdict
+from queue import Queue
 from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 import ray
 from mypy_extensions import TypedDict
 from numpy.random import SeedSequence, default_rng
-from ray.util.queue import Queue as RayQueue
+# from ray.util.queue import Queue as RayQueue
 
 from slim.log import LoggableMixin, logger
 from slim.simulation.cage import Cage
@@ -684,7 +685,6 @@ class FarmActor:
         ids: List[int],
         cfg: Config,
         rng: SeedSequence,
-        allocation_queues: Dict[int, RayQueue],
         initial_lice_pop: Optional[GrossLiceDistrib] = None,
     ):
         # ugly hack: modify the global logger here.
@@ -707,10 +707,18 @@ class FarmActor:
         self.ids = ids
         self.cfg = cfg
         self.farms = [Farm(id_, cfg, initial_lice_pop) for id_ in ids]
-        self.allocation_queues = allocation_queues
+        self.allocation_queue = Queue()
+
+    def register_farm_pool(self, farm_pool: List[FarmActor], batch_pool: np.ndarray):
+        self.farm_pool = farm_pool
+        self.batch_pool = batch_pool
 
     def _select(self, id_):
         return next(farm for farm in self.farms if farm.id_ == id_)
+
+    def _find_in_batch(self, idx):
+        # Gives the farm actor descriptor containing the farm idx
+        return next(i for i, v in enumerate(self.batch_pool) if idx in v)
 
     def _disperse_offspring(
         self, cur_date, eggs_per_farm: List[GenoDistribByHatchDate]
@@ -722,14 +730,18 @@ class FarmActor:
                 if idx in self.ids:
                     self._select(idx).disperse_offspring_v2(eggs, cur_date)
                 else:
-                    self.allocation_queues[idx].put((idx, eggs))
+                    #self.allocation_queues[idx].put((idx, eggs))
+                    self.farm_pool[self._find_in_batch(idx)]._produce.remote(idx, eggs)
 
         # Each farm i will produce an update for the j-th farm, except when i=j
         # thus there are N-1 farms updates to pop every day
         # if batching is enabled the same queues are recycled.
         for i in range(nfarms - 1):
-            farm_id, eggs = self.allocation_queues[self.ids[0]].get()
+            farm_id, eggs = self.allocation_queue.get()
             self._select(farm_id).disperse_offspring_v2(eggs, cur_date)
+
+    def _produce(self, idx, eggs):
+        self.allocation_queue.put((idx, eggs))
 
     def step(
         self,

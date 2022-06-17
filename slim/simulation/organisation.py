@@ -176,7 +176,6 @@ class MultiProcFarmPool(FarmPool):
         self.cfg = cfg
         self._extra_farm_args = args
         self._farm_actors: List[FarmActor] = []
-        self._offspring_queues: Dict[int, RayQueue] = {}
 
         if not ray.is_initialized():
             ray_props = {}
@@ -218,36 +217,33 @@ class MultiProcFarmPool(FarmPool):
         farms_per_process = cfg.farms_per_process
 
         self._farm_actors.clear()
-        self._offspring_queues.clear()
 
         if farms_per_process == 1:
-            batch_pools = np.arange(0, nfarms).reshape((-1, 1))
+            self._batch_pools = np.arange(0, nfarms).reshape((-1, 1))
         else:
-            batch_pools = np.array_split(
+            self._batch_pools = np.array_split(
                 np.arange(0, nfarms), nfarms // farms_per_process
             )
 
-        for pool in batch_pools:
-            q = RayQueue()
-            for id_ in pool:
-                self._offspring_queues[id_] = q
-
-        rngs = SeedSequence(self.cfg.seed).spawn(len(batch_pools))
-        for actor_idx, farm_ids in enumerate(batch_pools):
+        rngs = SeedSequence(self.cfg.seed).spawn(len(self._batch_pools))
+        for actor_idx, farm_ids in enumerate(self._batch_pools):
             self._farm_actors.append(
-                FarmActor.remote(
+                FarmActor.options(max_concurrency=3).remote(
                     farm_ids,
                     cfg,
                     rngs[actor_idx],
-                    self._offspring_queues,
                     *self._extra_farm_args,
                 )
             )
 
+        # Once the dict has been created, broadcast the actor references
+        for farm_actor in self._farm_actors:
+            farm_actor.register_farm_pool.remote(self._farm_actors, self._batch_pools)
+
+
     def stop(self):
         print("Stopping farms")
         self._farm_actors.clear()
-        self._offspring_queues.clear()
         gc.collect()  # Ensure the processes are deleted gracefully
 
     def reset(self):
@@ -256,7 +252,6 @@ class MultiProcFarmPool(FarmPool):
 
         names = [f"farm_{i}" for i in range(self.cfg.nfarms)]
         self._farm_actors.clear()
-        self._offspring_queues.clear()
         self._gym_space = {farm_name: no_observation() for farm_name in names}
 
     @property
