@@ -39,8 +39,7 @@ def launch():
     elif x.command == "optimise":
         path = self_path / "Optimiser.py"
     else:
-        parser.print_help()
-        exit(1)
+        parser.error("Unrecognised command.")
     execv(str(path), ["command"] + extra)
 
 

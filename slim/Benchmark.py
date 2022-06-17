@@ -1,5 +1,6 @@
 __all__ = []
 
+import functools
 from collections import defaultdict
 from pathlib import Path
 import glob
@@ -8,11 +9,11 @@ import hashlib
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import pyarrow.parquet as paq
 import pandas as pd
 import ray
-import scipy.ndimage, scipy.stats
+import scipy.ndimage as ndimage
+import scipy.stats as stats
 
 
 from slim import common_cli_options, get_config
@@ -66,38 +67,66 @@ def load_worker(parquet_path, columns: List[str]):
     return table
 
 
-def load_matrix(cfg: Config, out_path: Path, columns=None):
+@ray.remote
+def _remove_nulls(*tables):
+    return [table for table in tables if table is not None]
+
+
+def get_ci(matrix, ci_confidence=0.95):
+    print("Matrix:", matrix.shape)
+    mean = np.mean(matrix, axis=0)
+    print("Mean: ", mean.shape)
+    n = len(matrix[0])
+
+    se_interval = stats.sem(matrix, axis=0)
+    h = se_interval * stats.t.ppf((1 + ci_confidence) / 2., n - 1)
+    min_interval_ci, max_interval_ci = mean - h, mean + h
+
+    return np.stack([mean, min_interval_ci, max_interval_ci])
+
+
+#@functools.lru_cache(maxsize=1<<25)
+def load_matrix(
+        cfg: Config,
+        out_path: Path,
+        columns=None,
+        preprocess=lambda x: x,
+        ci=True,
+        ci_confidence=0.95
+):
     out_path = out_path / cfg.name
     files = glob.glob(str(out_path / "*.parquet"))
 
-    if columns != None:
+    if columns is not None:
         columns = ["timestamp", "farm_name"] + columns
 
-    tasks: List[pd.DataFrame] = ray.get([load_worker.remote(file, columns) for file in files])
+    tasks: List[pd.DataFrame] = ray.get(_remove_nulls.remote(*[load_worker.remote(file, columns) for file in files]))
+    print(f"A total of {len(tasks)} files were loaded")
     columns = set(tasks[0].columns)
     columns -= {"timestamp", "farm_name"}
 
     results_per_farm = defaultdict(lambda: {})
     # extract group for each dataframe
+
     for df in tasks:
         for farm, sub_df in df.groupby("farm_name"):
             farm_dict = results_per_farm.setdefault(farm, {})
             for column in columns:
                 rows = farm_dict.setdefault(column, [])
-                rows.append(sub_df[column].values)
+                rows.append(preprocess(sub_df[column].values))
 
     for column_groups in results_per_farm.values():
         for column_name, column_rows in column_groups.items():
-            column_groups[column_name] = np.stack(column_rows)
+            matrix = np.stack(column_rows)
+            if ci:
+                column_groups[column_name] = np.stack([*get_ci(matrix, ci_confidence)])
+            else:
+                column_groups[column_name] = matrix
 
     return results_per_farm
 
 
 # now, we need to generate plots...
-
-
-
-
 # TODO: this is largely copied from plots.py but largely simplified due to a (thankfully) better API.
 
 def prepare_ax(ax, farm_name, ylabel="Lice Population", yscale="log", ylim=(1, 1e10), threshold=None, legend=True):
@@ -120,67 +149,6 @@ def prepare_ax(ax, farm_name, ylabel="Lice Population", yscale="log", ylim=(1, 1
         # ax.legend()
 
 
-def get_treatment_regions(
-        first_treatment_time, farm_df: pd.DataFrame
-):
-    # generate treatment regions
-    # treatment markers
-    # cm = pg.colormap.get("Pastel1", source="matplotlib", skipCache=True)
-    # colors = cm.getColors(1)
-    colors = cm.get_cmap("Pastel1")
-
-    regions = []
-    for treatment_idx in range(2):
-        color = colors(treatment_idx, alpha=0.5)
-
-        treatment_days_df = (
-                farm_df[
-                    farm_df["current_treatments"].apply(
-                        lambda l: bool(l[treatment_idx])
-                    )
-                ]["timestamp"]
-                - first_treatment_time
-        )
-        treatment_days = treatment_days_df.apply(lambda x: x.days).to_numpy()
-
-        # Generate treatment regions by looking for the first non-consecutive treatment blocks.
-        # There may be a chance where multiple treatments happen consecutively, on which case
-        # we simply consider them as a unique case.
-        # Note: this algorithm fails when the saving rate is not 1. This is not a problem as
-        # precision is not required here.
-
-        if len(treatment_days) > 0:
-            treatment_ranges = []
-            lo = 0
-            for i in range(1, len(treatment_days)):
-                if treatment_days[i] > treatment_days[i - 1] + 1:
-                    range_ = (treatment_days[lo], treatment_days[i - 1])
-                    # if range_[1] - range_[0] <= 2:
-                    #    range_ = (range_[0] - 5, range_[0] + 5)
-                    treatment_ranges.append(range_)
-                    lo = i
-
-            # since mechanical treatments are applied and effective for only one day we simulate a 10-day padding
-            # This is also useful when the saving rate is not 1
-            range_ = (treatment_days[lo], treatment_days[-1])
-            # if range_[1] - range_[0] <= 2:
-            #    range_ = (range_[0] - 5, range_[0] + 5)
-            treatment_ranges.append(range_)
-
-            regions.extend([(trange, treatment_idx, color) for trange in treatment_ranges])
-    return regions
-
-
-def plot_regions(ax, xs, regions):
-    for region, treatment_idx, color in regions:
-        label = treatment_to_class(Treatment(treatment_idx)).name + " treatment"
-        if region[1] - region[0] <= 2:
-            ax.axvline(region[0], 0, 1e20, linestyle=":", linewidth=3, label=label)
-        else:
-            ax.fill_between(xs, 0, 1e20, where=(region[0] <= xs) & (xs <= region[1]),
-                            color=color, transform=ax.get_xaxis_transform(), label=label)
-
-
 def get_trials(dfs, func, columns):
     total_per_df = []
     for df in dfs:
@@ -188,108 +156,88 @@ def get_trials(dfs, func, columns):
     return pd.concat(total_per_df, axis=1)
 
 
-def ribbon_plot(ax, xs, trials, label="", conf=0.95, conv=7):
-    min_interval = trials.min(axis=1).values
-    max_interval = trials.max(axis=1).values
-    mean_interval = trials.mean(axis=1).values
-
-    se_interval = trials.sem(axis=1).values
-    n = len(trials)
-    h = se_interval * scipy.stats.t.ppf((1 + conf) / 2., n - 1)
-    min_interval_ci, max_interval_ci = mean_interval - h, mean_interval + h
-
-    kernel = np.full((conv,), 1 / conv, )
-
-    min_interval = scipy.ndimage.convolve(min_interval, kernel, mode='nearest')
-    max_interval = scipy.ndimage.convolve(max_interval, kernel, mode='nearest')
-    mean_interval = scipy.ndimage.convolve(mean_interval, kernel, mode='nearest')
+def ribbon_plot(ax, xs, trials, label="", conv=7):
+    kernel = np.zeros((3, conv))
+    kernel[1] = np.full((conv,), 1 / conv)
+    mean_interval, min_interval_ci, max_interval_ci = data = ndimage.convolve(trials, kernel, mode="nearest")
+    print(data.shape)
+    print(mean_interval.shape)
+    print(min_interval_ci.shape)
+    print(max_interval_ci.shape)
 
     ax.plot(mean_interval, linewidth=2.5, label=label)
-    poly = ax.fill_between(xs, min_interval_ci, max_interval_ci, alpha=.3, label=f"{label} {conf:.0%} CI")
+    ax.fill_between(xs, min_interval_ci, max_interval_ci, alpha=.3, label=f"{label} 95% CI")
 
-    ax.fill_between(xs, min_interval, max_interval, alpha=.1, label=label + " 100% CI",
-                    color=poly.get_facecolor())
+    #ax.fill_between(xs, min_interval, max_interval, alpha=.1, label=label + " 100% CI",
+    #                color=poly.get_facecolor())
 
     for trial in trials:
         ax.plot(trial, linewidth=1.0, color='gray', alpha=0.8)
 
 
-def plot_farm(gross_ax, geno_ax, fish_ax, agg_ax, payoff_ax, reservoir_ax):
+# TODO: this is stupid and O(N^2)
+def plot_farm(cfg: Config, output_folder: Path, farm_name: str, gross_ax, geno_ax, fish_ax, agg_ax, payoff_ax, reservoir_ax):
     stages = LicePopulation.lice_stages
     stages_readable = LicePopulation.lice_stages_bio_labels
-    #first_day = farm_df.iloc[0]["timestamp"]
-    # regions = get_treatment_regions(first_day, farm_df)
-    #xs = np.arange(len(farm_df))
-    #alleles = geno_to_alleles(0)
+    alleles = geno_to_alleles(0)
 
-    # total population
-    #def agg(df, stages):
-    #    return sum(df[stage].apply(lambda x: sum(x.values())) for stage in stages)
+    x = ["farm_population"]
 
-    #lice_population
-    total_per_df = get_trials(farm_dfs, agg, stages)
 
-    ribbon_plot(gross_ax, xs, total_per_df, "Overall lice population")
+    xs = np.arange((cfg.end_date - cfg.start_date).days)
+
+    lice_pop = load_matrix(cfg, output_folder, stages,
+                           preprocess=np.vectorize(lambda x: sum(x.values())), ci=False)[farm_name]
+    data = get_ci(sum([lice_pop[stage] for stage in stages]))
+    ribbon_plot(gross_ax, xs, data, "Overall lice population")
     prepare_ax(gross_ax, "Lice population")
 
-    # plot_regions(gross_ax, xs, regions)
-
-    # Per allele
-    def agg(df, col):
-        return df[col[0]]
+    per_allele_pop = load_matrix(cfg, output_folder, alleles)[farm_name]
 
     for allele in alleles:
-        total_per_df = get_trials(farm_dfs, agg, [allele])
-        ribbon_plot(geno_ax, xs, total_per_df, label=allele)
+        ribbon_plot(geno_ax, xs, per_allele_pop[allele] / lice_pop, allele)
 
-    prepare_ax(geno_ax, "By geno", legend=True)
+    prepare_ax(geno_ax, "By geno", legend=True, ylim=(0, 1))
 
     # plot_regions(geno_ax, xs, regions)
 
     # Fish population and aggregation
     def agg(df, col):
         return df[col[0]].apply(lambda x: sum(x) / len(x))
+    fish_pop_agg = load_matrix(cfg, output_folder, ["fish_population", "aggregation", "cleaner_fish"])[farm_name]
+    fish_pop, fish_agg, cleaner_fish = fish_pop_agg["fish_population"], fish_pop_agg["aggregation"], fish_pop_agg["cleaner_fish"]
 
-    farm_population = get_trials(farm_dfs, agg, ["fish_population"])
-    farm_agg = get_trials(farm_dfs, agg, ["aggregation"])
-
-    ribbon_plot(fish_ax, xs, farm_population, label="Fish population")
-    # plot_regions(fish_ax, xs, regions)
+    ribbon_plot(fish_ax, xs, fish_pop, label="Fish population")
+    ribbon_plot(fish_ax, xs, cleaner_fish, label="Cleaner fish population")
+    ribbon_plot(agg_ax, xs, fish_agg, label="Aggregation rate")
 
     prepare_ax(fish_ax, "By fish population", ylabel="Fish population",
                ylim=(0, 200000), yscale="linear")
 
-    ribbon_plot(agg_ax, xs, farm_agg, label="Aggregation")
-    # plot_regions(agg_ax, xs, regions)
-
     prepare_ax(agg_ax, "By lice aggregation",
                ylim=(0, 10), yscale="linear", threshold=6.0)
 
-    # Payoff
-    def agg(df, col):
-        return df[col[0]].cumsum()
-
-    payoff = get_trials(farm_dfs, agg, ["payoff"])
-    ribbon_plot(payoff_ax, xs, payoff, label="Payoff")
+    payoff = load_matrix(cfg, output_folder, ["payoff"], preprocess=lambda row: row.cumsum())[farm_name]["payoff"]
+    ribbon_plot(payoff_ax, xs, payoff.cumsum(), label="Payoff")
     # plot_regions(payoff_ax, xs, regions)
 
     prepare_ax(payoff_ax, "Payoff", "Payoff (pseudo-gbp)", ylim=None, yscale="linear")
 
-    # New eggs (reservoir)
-    def agg(df, col):
-        return pd.DataFrame(list(df[col[0]]))[col[1]]
+    # reservoir = load_matrix(cfg, output_folder, ["new_reservoir_lice"])
+    col = "new_reservoir_lice_ratios"
+    def agg(allele):
+        def _agg(x):
+            return x[allele] / sum(x.values())
+        return _agg
 
-    reservoir = get_trials(farm_dfs, lambda df, col: df[col[0]], ["new_reservoir_lice"])
-    genos = ["a", "A", "Aa"]
-    reservoir_ratios = [get_trials(farm_dfs, agg, ["new_reservoir_lice_ratios", geno]) for geno in genos]
-    for i in range(3):
-        ribbon_plot(reservoir_ax, xs, reservoir_ratios[i], label=genos[i])
-    # plot_regions(reservoir_ax, xs, regions)
+    for allele in alleles:
+        data = load_matrix(cfg, output_folder, [col], preprocess=np.vectorize(agg(allele)))[farm_name][col]
+        ribbon_plot(data, label=allele)
 
     prepare_ax(reservoir_ax, "Reservoir ratios", ylabel="Probabilities", ylim=(0, 1), yscale="linear")
 
 
-def plot_data(cfg: Config, extra: str, output_folder: str):
+def plot_data(cfg: Config, extra: str, output_folder: Path):
     width = 26
     n = cfg.nfarms
 
@@ -297,7 +245,7 @@ def plot_data(cfg: Config, extra: str, output_folder: str):
     for i in range(cfg.nfarms):
         farm_name = cfg.farms[i].name
         fig.suptitle(farm_name, fontsize=30)
-        plot_farm(axs[0][0], axs[0][1], axs[1][0], axs[1][1], axs[2][0], axs[2][1])
+        plot_farm(cfg, output_folder, f"farm_{i}", axs[0][0], axs[0][1], axs[1][0], axs[1][1], axs[2][0], axs[2][1])
         plt.show()
         fig.savefig(f"{output_folder}/{farm_name} {extra}.pdf")
         # fig.clf() does not work as intended...
@@ -306,10 +254,15 @@ def plot_data(cfg: Config, extra: str, output_folder: str):
 
     plt.close(fig)
 
+
 def main():
     parser = common_cli_options("SLIM Benchmark tool")
     bench_group = parser.add_argument_group(title="Benchmark-specific options")
-    #bench_group.add_argument("--fields", nargs="+")
+    bench_group.add_argument(
+        "description",
+        type=str,
+        help="A description to append to all the plots"
+    )
     bench_group.add_argument(
         "--bench-seed",
         type=int,
@@ -320,29 +273,35 @@ def main():
         "--trials",
         type=int,
         help="How many trials to perform during benchmarking",
-        required=True,
     )
     bench_group.add_argument(
         "--parallel-trials",
         type=int,
         help="How many trials to perform in parallel",
-        required=True,
+    )
+    bench_group.add_argument(
+        "--skip",
+        help="(DEBUG) skip simulation running",
+        action="store_true"
     )
 
     bench_group.add_argument("--defection-proba", type=float, help="If using mosaic, the defection probability for each farm")
 
     cfg, args, out_path = get_config(parser)
-    print(cfg.farms_per_process)
-    ss = np.random.SeedSequence(args.bench_seed)
-    child_seeds = ss.spawn(args.parallel_trials)
+    if not args.skip and (args.trials is None or args.parallel_trials is None):
+        parser.error("--trials and --parallel-trials are required unless --skip is set")
 
-    tasks = [
-        launch.remote(cfg, np.random.default_rng(s), out_path, **vars(args))
-        for s in child_seeds
-    ]
-    ray.get(tasks)
+    if not args.skip:
+        ss = np.random.SeedSequence(args.bench_seed)
+        child_seeds = ss.spawn(args.parallel_trials)
+        tasks = [
+            launch.remote(cfg, np.random.default_rng(s), out_path, **vars(args))
+            for s in child_seeds
+        ]
+        ray.get(tasks)
 
-    #plot_data(cfg, out_path)
+    plot_data(cfg, args.description, out_path)
+
 
 if __name__ == "__main__":
     main()
