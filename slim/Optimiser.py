@@ -32,13 +32,14 @@ class Optimiser:
 
     def get_simulator_from_probas(self, probas, out_path: Path, sim_name: str, rng):
         current_cfg = deepcopy(self.starting_cfg)
+        current_cfg.name = sim_name
         for farm, defection_proba in zip(current_cfg.farms, probas):
             farm.defection_proba = defection_proba
 
         current_cfg.seed = rng.integers(1 << 32)
         current_cfg.rng = np.random.default_rng(current_cfg.seed)
 
-        return Simulator(out_path, sim_name, current_cfg)
+        return Simulator(out_path, current_cfg)
 
     def save(self, method, output_path):
         output_path.mkdir(parents=True, exist_ok=True)

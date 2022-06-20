@@ -18,8 +18,6 @@ __all__ = [
     "MosaicPolicy",
     "PilotedPolicy",
     "UntreatedPolicy",
-    "load_artifact",
-    "dump_as_dataframe",
     "get_simulation_path",
     "load_counts",
 ]
@@ -236,7 +234,7 @@ class SimulatorPZEnv(AECEnv):
 class DumpingActor:
     """Takes an output log and serialises it"""
 
-    def __init__(self, output_path: Path, sim_id: str):
+    def __init__(self, output_path: Path, sim_id: str, checkpointing=False):
         """
         :param output_path: the output path
         :param sim_id: the simulation id of the current simulation
@@ -248,33 +246,20 @@ class DumpingActor:
 
         self.log_lists = defaultdict(lambda: [])
 
-        """
-        self.data_file = dump_path.open(mode="wb")
-        self.compressed_stream = lz4.frame.open(
-        self.data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
-
-        if pickled_path:
-            self.sim_buffer = BytesIO()
-            self.sim_state_file = pickled_path.open(mode="wb")
+        if checkpointing:
+            self.sim_state_file = self.checkpoint_path.open(mode="wb")
             self.sim_state_stream = lz4.frame.open(
                 self.sim_state_file,
                 "wb",
                 compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC,
             )
+
+    def save_sim(self, data: bytes):
+        """Dump a checkpoint
+
+        :param data: checkpointed data (already pickled into bytes)
         """
-
-    """
-    def _flush(self, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
-        stream.write(buffer.getvalue())
-        buffer.seek(0)
-        buffer.truncate(0)
-
-
-    def _save(self, data: bytes, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
-        buffer.write(data)
-        # if len(buffer.getvalue()) >= (1 << 19):  # ~ 512 KiB
-        self._flush(buffer, stream)
-    """
+        self.sim_state_stream.write(data)
 
     def _dump(self, logs: dict):
         timestamp = logs.pop("timestamp")
@@ -318,32 +303,30 @@ class DumpingActor:
         self.log_lists.clear()
 
     def dump(self, logs: dict):
+        """
+        Dump daily data.
+        """
         self._dump(logs)
         if len(self.log_lists["timestamp"]) > 40:
             self._flush_dump()
 
     def dump_cfg(self, cfg_as_bytes: bytes):
+        """
+        Save the configuration. This should be called before serialising the dump.
+        """
         # This is available only for bytes to avoid having to serialise/deserialise again via Ray
         with self.cfg_path.open("wb") as f:
             f.write(cfg_as_bytes)
-
-    #def save_sim(self, sim_state: bytes):
-    #    self._save(sim_state, self.sim_buffer, self.sim_state_stream)
 
     def teardown(self):
         if len(self.log_lists["timestamp"]) > 0:
             self._flush_dump()
         if hasattr(self, "_pqwriter"):
             self._pqwriter.close()
-        """
-        self.compressed_stream.close()
-        self.data_file.close()
-        if hasattr(self, "sim_buffer"):
-            self._flush_stream(self.sim_buffer, self.sim_state_stream)
-            self.sim_buffer.close()
+
+        if hasattr(self, "sim_state_stream"):
             self.sim_state_stream.close()
             self.sim_state_file.close()
-        """
 
 
 class Simulator:  # pragma: no cover
@@ -472,7 +455,7 @@ def get_simulation_path(path: Path, other: Union[Config, str]):  # pragma: no-co
 
 def parse_artifact(
     path: Path, sim_id: str, checkpoint=False
-) -> Iterator[Union[dict, Config, Simulator]]:  # pragma: no cover
+) -> Tuple[pd.DataFrame, Config]:  # pragma: no cover
     """Reload a simulator.
 
     :param path: the folder containing the artifact
@@ -483,82 +466,29 @@ def parse_artifact(
     one per serialised day.
     """
     logger.info("Loading from a dump...")
-    data_file, pickle_file = get_simulation_path(path, sim_id)
-    path = pickle_file if checkpoint else data_file
+    data_file, cfg_path, pickle_file = get_simulation_path(path, sim_id)
+    with cfg_path.open("rb") as f:
+        cfg = pickle.load(f)
+    return paq.read_table(data_file).to_pandas(), cfg
+
+
+def load_checkpoint(path, sim_id):
+    """
+    :param path: the folder containing the artifact
+    :param sim_id: the simulation id
+    """
+
+    logger.info("Loading from a dump...")
+    _, __, pickle_file = get_simulation_path(path, sim_id)
+
     with lz4.frame.open(
-        path, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
+        pickle_file, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
     ) as fp:
         while True:
             try:
                 yield pickle.load(fp)
             except EOFError:
                 break
-
-
-def dump_as_dataframe(
-    states_times_it: Iterator[Union[dict, Config]],
-) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:  # pragma: no cover
-    """
-    Convert a dump into a pandas dataframe
-
-    Format: index is (timestamp, farm)
-    Columns are: "L1" ... "L5f" (nested dict for now...), "a", "A", "Aa" (ints)
-
-    :param states_times_it: a list of states
-    :returns: a pair (dataframe, times)
-    """
-
-    farm_data = {}
-    times = []
-    cfg = None
-    for state in states_times_it:
-        if isinstance(state, Config):
-            cfg = state
-            continue
-
-        time = state["timestamp"]
-        times.append(time)
-
-        for agent, values in state["farms"].items():
-            key = (time, agent)
-            farm_pop = values.pop("farm_population")
-            for k, v in values.items():
-                if isinstance(v, np.ndarray) and len(v) == 1:
-                    values[k] = v[0]
-            farm_data[key] = {**values, **farm_pop}
-
-    dataframe = pd.DataFrame.from_dict(farm_data, orient="index")
-
-    # extract cumulative geno info regardless of the stage
-    def aggregate_geno(data):
-        data_to_sum = [from_dict(elem) for elem in data if isinstance(elem, dict)]
-        return GenoDistrib.batch_sum(data_to_sum).gross
-
-    aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
-    dataframe["eggs"] = dataframe["eggs"].apply(lambda x: x.gross)
-
-    dataframe = dataframe.join(aggregate_geno_info)
-
-    return dataframe.rename_axis(("timestamp", "farm_id")), times, cast(Config, cfg)
-
-
-def load_artifact(
-    path: Path, sim_id: str
-) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:  # pragma: no cover
-    """Loads an artifact.
-    Combines :func:`parse_artifact` and :func:`.dump_as_dataframe`, and serialises the dataframe for future use.
-    If the dataframe does not exist or is older than the run it will be regenerated
-
-    :param path: the path where the output is
-    :param sim_id: the simulation name
-
-    :returns: the dataframe to dump
-    """
-    sim_path = get_simulation_path(path, sim_id)[0]
-    pandas_path = path / f"parsed_{sim_id}.pd.pkl"
-
-    df = dump_as_dataframe(parse_artifact(path, sim_id))
-    return df
 
 
 def dump_optimiser_as_pd(states: List[List[Simulator]]):  # pragma: no cover

@@ -1,6 +1,7 @@
 __all__ = []
 
 import functools
+import logging
 from collections import defaultdict
 from pathlib import Path
 import glob
@@ -9,6 +10,7 @@ import hashlib
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pyarrow as pa
 import pyarrow.parquet as paq
 import pandas as pd
 import ray
@@ -17,6 +19,7 @@ import scipy.stats as stats
 
 
 from slim import common_cli_options, get_config
+from slim.log import logger
 from slim.simulation.simulator import get_simulation_path, Simulator
 from slim.simulation.config import Config
 from slim.simulation.lice_population import LicePopulation, geno_to_alleles
@@ -42,13 +45,13 @@ def launch(cfg, rng, out_path, **kwargs):
             # Safety check: check if a run has completed.
             try:
                 paq.read_table(str(artifact), columns=["timestamp"])
-                print(artifact, " passed the test")
+                logger.info(artifact, " passed the test")
                 continue
             except ValueError:
-                print(f"{artifact} is corrupted, regenerating...")
-                
+                logger.info(f"{artifact} is corrupted, regenerating...")
+
         else:
-            print(f"Generating {sim_name}...")
+            logger.info(f"Generating {sim_name}...")
         # defection_proba is farm-specific and needs special handling
 
         defection_proba = kwargs.pop("defection_proba", None)
@@ -63,8 +66,11 @@ def launch(cfg, rng, out_path, **kwargs):
 
 @ray.remote
 def load_worker(parquet_path, columns: List[str]):
-    table = paq.read_table(parquet_path, columns=columns).to_pandas()
-    return table
+    try:
+        table = paq.read_table(parquet_path, columns=columns).to_pandas()
+        return table
+    except pa.lib.ArrowInvalid:
+        return None
 
 
 @ray.remote
@@ -73,9 +79,7 @@ def _remove_nulls(*tables):
 
 
 def get_ci(matrix, ci_confidence=0.95):
-    print("Matrix:", matrix.shape)
     mean = np.mean(matrix, axis=0)
-    print("Mean: ", mean.shape)
     n = len(matrix[0])
 
     se_interval = stats.sem(matrix, axis=0)
@@ -85,20 +89,20 @@ def get_ci(matrix, ci_confidence=0.95):
     return np.stack([mean, min_interval_ci, max_interval_ci])
 
 
-#@functools.lru_cache(maxsize=1<<25)
+@functools.lru_cache(maxsize=1<<25)
 def load_matrix(
-        cfg: Config,
-        out_path: Path,
-        columns=None,
-        preprocess=lambda x: x,
-        ci=True,
-        ci_confidence=0.95
+    cfg: Config,
+    out_path: Path,
+    columns=None,
+    preprocess=lambda x: x,
+    ci=True,
+    ci_confidence=0.95
 ):
     out_path = out_path / cfg.name
     files = glob.glob(str(out_path / "*.parquet"))
 
     if columns is not None:
-        columns = ["timestamp", "farm_name"] + columns
+        columns = ["timestamp", "farm_name"] + list(columns)
 
     tasks: List[pd.DataFrame] = ray.get(_remove_nulls.remote(*[load_worker.remote(file, columns) for file in files]))
     print(f"A total of {len(tasks)} files were loaded")
@@ -160,10 +164,6 @@ def ribbon_plot(ax, xs, trials, label="", conv=7):
     kernel = np.zeros((3, conv))
     kernel[1] = np.full((conv,), 1 / conv)
     mean_interval, min_interval_ci, max_interval_ci = data = ndimage.convolve(trials, kernel, mode="nearest")
-    print(data.shape)
-    print(mean_interval.shape)
-    print(min_interval_ci.shape)
-    print(max_interval_ci.shape)
 
     ax.plot(mean_interval, linewidth=2.5, label=label)
     ax.fill_between(xs, min_interval_ci, max_interval_ci, alpha=.3, label=f"{label} 95% CI")
@@ -177,34 +177,37 @@ def ribbon_plot(ax, xs, trials, label="", conv=7):
 
 # TODO: this is stupid and O(N^2)
 def plot_farm(cfg: Config, output_folder: Path, farm_name: str, gross_ax, geno_ax, fish_ax, agg_ax, payoff_ax, reservoir_ax):
-    stages = LicePopulation.lice_stages
+    stages = tuple(LicePopulation.lice_stages)
     stages_readable = LicePopulation.lice_stages_bio_labels
     alleles = geno_to_alleles(0)
 
-    x = ["farm_population"]
-
-
     xs = np.arange((cfg.end_date - cfg.start_date).days)
-
     lice_pop = load_matrix(cfg, output_folder, stages,
                            preprocess=np.vectorize(lambda x: sum(x.values())), ci=False)[farm_name]
     data = get_ci(sum([lice_pop[stage] for stage in stages]))
     ribbon_plot(gross_ax, xs, data, "Overall lice population")
     prepare_ax(gross_ax, "Lice population")
 
-    per_allele_pop = load_matrix(cfg, output_folder, alleles)[farm_name]
+    def agg(x, allele):
+        return x[allele]
 
     for allele in alleles:
-        ribbon_plot(geno_ax, xs, per_allele_pop[allele] / lice_pop, allele)
+        per_allele_pop = load_matrix(
+            cfg,
+            output_folder,
+            stages,
+            preprocess=np.vectorize(lambda x: agg(x, allele=allele)),
+            ci=False
+        )[farm_name]
+        normalised = sum(per_allele_pop[stage] for stage in stages) / (sum(lice_pop[stage] for stage in stages))
+        ribbon_plot(geno_ax, xs, get_ci(normalised), allele)
 
-    prepare_ax(geno_ax, "By geno", legend=True, ylim=(0, 1))
+    prepare_ax(geno_ax, "By geno", legend=True, yscale="linear", ylim=(0, 1))
 
     # plot_regions(geno_ax, xs, regions)
 
     # Fish population and aggregation
-    def agg(df, col):
-        return df[col[0]].apply(lambda x: sum(x) / len(x))
-    fish_pop_agg = load_matrix(cfg, output_folder, ["fish_population", "aggregation", "cleaner_fish"])[farm_name]
+    fish_pop_agg = load_matrix(cfg, output_folder, ("fish_population", "aggregation", "cleaner_fish"))[farm_name]
     fish_pop, fish_agg, cleaner_fish = fish_pop_agg["fish_population"], fish_pop_agg["aggregation"], fish_pop_agg["cleaner_fish"]
 
     ribbon_plot(fish_ax, xs, fish_pop, label="Fish population")
@@ -217,36 +220,37 @@ def plot_farm(cfg: Config, output_folder: Path, farm_name: str, gross_ax, geno_a
     prepare_ax(agg_ax, "By lice aggregation",
                ylim=(0, 10), yscale="linear", threshold=6.0)
 
-    payoff = load_matrix(cfg, output_folder, ["payoff"], preprocess=lambda row: row.cumsum())[farm_name]["payoff"]
-    ribbon_plot(payoff_ax, xs, payoff.cumsum(), label="Payoff")
+    payoff = load_matrix(cfg, output_folder, ("payoff",), preprocess=lambda row: row.cumsum())[farm_name]["payoff"]
+    ribbon_plot(payoff_ax, xs, payoff.cumsum(axis=1), label="Payoff")
     # plot_regions(payoff_ax, xs, regions)
 
     prepare_ax(payoff_ax, "Payoff", "Payoff (pseudo-gbp)", ylim=None, yscale="linear")
 
     # reservoir = load_matrix(cfg, output_folder, ["new_reservoir_lice"])
     col = "new_reservoir_lice_ratios"
+
     def agg(allele):
         def _agg(x):
             return x[allele] / sum(x.values())
         return _agg
 
     for allele in alleles:
-        data = load_matrix(cfg, output_folder, [col], preprocess=np.vectorize(agg(allele)))[farm_name][col]
-        ribbon_plot(data, label=allele)
+        data = load_matrix(cfg, output_folder, (col,), preprocess=np.vectorize(agg(allele)))[farm_name][col]
+        ribbon_plot(reservoir_ax, xs, data, label=allele)
 
     prepare_ax(reservoir_ax, "Reservoir ratios", ylabel="Probabilities", ylim=(0, 1), yscale="linear")
 
 
 def plot_data(cfg: Config, extra: str, output_folder: Path):
     width = 26
-    n = cfg.nfarms
 
+    logger.info("This function is quite slow. It could be optimised although we do not need to for now")
     fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(width, 12 / 16 * width))
     for i in range(cfg.nfarms):
         farm_name = cfg.farms[i].name
         fig.suptitle(farm_name, fontsize=30)
         plot_farm(cfg, output_folder, f"farm_{i}", axs[0][0], axs[0][1], axs[1][0], axs[1][1], axs[2][0], axs[2][1])
-        plt.show()
+        logger.info(f"Generating plot to {output_folder}/{farm_name} {extra}.pdf")
         fig.savefig(f"{output_folder}/{farm_name} {extra}.pdf")
         # fig.clf() does not work as intended...
         for ax in axs.flatten():

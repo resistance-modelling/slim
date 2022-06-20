@@ -606,7 +606,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         df = self.state.states_as_df.reset_index()
 
         for farm_idx, farm_name in enumerate(farm_list):
-            farm_df = df[df["farm_id"] == farm_name]
+            farm_df = df[df["farm_name"] == farm_name]
 
             # Report info
             farm_geo_name = self._farmNames[farm_idx]
@@ -658,7 +658,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
     def _plotFishPop(
         self, farm_df: pd.DataFrame, farm_idx: int, report_farm: Optional[pd.DataFrame]
     ):
-        num_fish = farm_df["farm_population"].to_numpy()
+        num_fish = farm_df["fish_population"].to_numpy()
         monocolour_pen = self._monocolourPen
 
         # TODO: set derivativeMode instead

@@ -21,8 +21,10 @@ Before filing a new bug please check if your issue belongs to the
 """
 
 import sys
+from datetime import timedelta
 from pathlib import Path
 
+import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtWidgets, QtCore
 from PyQt5.QtCore import QThread, pyqtSignal, QSettings
@@ -40,11 +42,9 @@ from PyQt5.QtWidgets import (
 from slim.simulation.simulator import (
     Simulator,
     parse_artifact,
-    dump_as_dataframe,
     load_counts,
     reload_from_optimiser,
     dump_optimiser_as_pd,
-    load_artifact,
 )
 from slim.simulation.config import Config
 from slim.gui_utils.configuration import ConfigurationPane
@@ -240,7 +240,7 @@ class Window(QMainWindow):
 
     def openSimulatorDump(self):
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Load a dump", "", "Pickle file (*.pickle.lz4)"
+            self, "Load a dump", "", "Parquet file (*.parquet)"
         )
 
         if filename:
@@ -300,9 +300,12 @@ class SimulatorLoadingWorker(QThread):
         try:
             parent_path = self.dump_path.parent
             sim_name = self.dump_path.name[
-                len("simulation_name_") : -len(".pickle.lz4")
+                len("simulation_name_") : -len(".parquet")
             ]
-            states_as_df, times, cfg = load_artifact(parent_path, sim_name)
+            states_as_df, cfg = parse_artifact(parent_path, sim_name)
+
+            # TODO: This is ugly and makes no sense nowadays
+            times = [cfg.start_date + timedelta(days=i) for i in range((cfg.end_date - cfg.start_date).days)]
             try:
                 report = load_counts(cfg)
             except FileNotFoundError:
