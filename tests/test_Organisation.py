@@ -18,10 +18,6 @@ class TestOrganisation:
         assert organisation.name == "Loch Fyne ACME Ltd."
         assert len(organisation.farms) == 2
 
-    def test_json(self, organisation):
-        json_str = organisation.to_json()
-        assert isinstance(json.loads(json_str), dict)
-
     def test_step(self, organisation):
         day = organisation.cfg.start_date
         limit = 10

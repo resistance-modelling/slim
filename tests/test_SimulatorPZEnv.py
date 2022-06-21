@@ -1,5 +1,9 @@
 import datetime
+
+import pytest
 from pettingzoo.test import api_test
+
+from slim.simulation.policies import UntreatedPolicy
 from slim.types.policies import NO_ACTION
 
 
@@ -43,3 +47,11 @@ class TestSimulatorEnv:
         first_farm.fallow()
         space = first_farm.get_gym_space()
         assert space["current_treatments"][-1]
+
+    @pytest.mark.parametrize("num_days", [10, 100, 300])
+    def test_sim_runs(self, sim_env_unwrapped, num_days):
+        policy = UntreatedPolicy()
+        for day in range(num_days):
+            for agent in sim_env_unwrapped.agents:
+                action = policy.predict(sim_env_unwrapped.observe(agent), agent)
+                sim_env_unwrapped.step(action)

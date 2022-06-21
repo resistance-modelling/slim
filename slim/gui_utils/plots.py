@@ -464,7 +464,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
 
         self.payoffPlot = self.pqgPlotContainer.addSmoothedPlot(
             exclude_from_averaging=True,
-            title="Cumulated payoff",
+            title="Daily payoff",
             bottom="days",
             left="Payoff",
             force_scientific=True,
@@ -606,7 +606,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         df = self.state.states_as_df.reset_index()
 
         for farm_idx, farm_name in enumerate(farm_list):
-            farm_df = df[df["farm_id"] == farm_name]
+            farm_df = df[df["farm_name"] == farm_name]
 
             # Report info
             farm_geo_name = self._farmNames[farm_idx]
@@ -631,10 +631,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
                 self._plotLicePopGross(farm_df, farm_idx, stages)
 
             self._plotAggregationRate(
-                farm_df,
-                farm_idx,
-                stages,
-                report_farm if report_df is not None else None,
+                farm_df, farm_idx, report_farm if report_df is not None else None
             )
 
             self._plotTreatments(farm_df, farm_idx)
@@ -661,7 +658,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
     def _plotFishPop(
         self, farm_df: pd.DataFrame, farm_idx: int, report_farm: Optional[pd.DataFrame]
     ):
-        num_fish = farm_df["num_fish"].to_numpy()
+        num_fish = farm_df["fish_population"].to_numpy()
         monocolour_pen = self._monocolourPen
 
         # TODO: set derivativeMode instead
@@ -671,6 +668,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         else:
             self.fishPopulationPlots[farm_idx].plot(
                 num_fish, pen=monocolour_pen, name="Simulation output"
+            )
+            self.fishPopulationPlots[farm_idx].plot(
+                farm_df["cleaner_fish"].apply(np.sum).to_numpy(), name="Cleaner fish"
             )
             if report_farm is not None:
                 self.fishPopulationPlots[farm_idx].plot(
@@ -738,11 +738,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             # get gross arrivals
             pen = {**self._monocolourPen, "color": extra_palette[0]}
             if self.selected_curve.ExtP:
-                arrivals_gross = (
-                    farm_df["arrivals_per_cage"]
-                    .apply(lambda cages: GenoDistrib.batch_sum(cages).gross)
-                    .to_numpy()
-                )
+                arrivals_gross = farm_df["arrivals_per_cage"].to_numpy()
                 self.licePopulationPlots[farm_idx].plot(
                     arrivals_gross, name="Offspring (L1+L2)", pen=pen
                 )
@@ -751,11 +747,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         self,
         farm_df: Optional[pd.DataFrame],
         farm_idx: int,
-        stages: Dict[str, pd.DataFrame],
         report_farm: Optional[pd.DataFrame],
     ):
-        num_fish = farm_df["num_fish"].to_numpy()  # TODO: recycle this maybe?
-        aggregation_rate = stages["L5f"].to_numpy() / num_fish
+        aggregation_rate = farm_df["aggregation"].values
         self.aggregationRatePlot[farm_idx].plot(
             aggregation_rate, pen=self._monocolourPen, name="Expected"
         )
@@ -1020,7 +1014,7 @@ class OptimiserPlotPane(QWidget, LightModeMixin):
 
         penColour = self._colorPalette[0]
         payoff = df["payoff"].map(float).to_numpy()
-        self.payoffPlot.plot(payoff, pen=penColour)
+        self.payoffPlot.plot(payoff.cumsum(), pen=penColour)
 
         for idx, farm in enumerate(self._getUniqueFarms()):
             self.individualProbas[idx].plot(df[farm], pen=penColour)

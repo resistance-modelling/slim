@@ -38,23 +38,30 @@ __all__ = [
     "genorates_to_dict",
 ]
 
-from functools import lru_cache
-from typing import NamedTuple, List, TYPE_CHECKING, Union, Optional
-
-from slim import logger
-
-
 # from enum import IntEnum
+from functools import lru_cache
 import math
+import os
+import sys
 from typing import Dict
+from typing import NamedTuple, List, TYPE_CHECKING, Union
 
 import numpy as np
-from numba import njit as _njit, float64, int64
-from numba.core.types import unicode_type, Array
-from numba.experimental import jitclass
 
+# TODO: are we still planning to use numba?
+if (
+    sys.gettrace() is None
+    or sys.gettrace()
+    or os.environ.get("SLIM_ENABLE_NUMBA") != "1"
+):
+    os.environ["NUMBA_DISABLE_JIT"] = "1"
+
+from numba import njit as _njit, float64
+from numba.core.types import unicode_type
+from numba.experimental import jitclass
 from numba.typed.typeddict import Dict as NumbaDict
 
+from slim.log import logger
 
 if TYPE_CHECKING:
     from slim.simulation.config import Config
@@ -65,19 +72,6 @@ def njit(*args, **kwargs):
 
 
 # ---------- TYPE DECLARATIONS --------------
-
-"""
-# With Numba Enums are (finally!) efficient
-
-#: A sea lice life stage
-class LifeStage(IntEnum):
-    L1 = 0
-    L2 = 1
-    L3 = 2
-    L4 = 3
-    L5f = 4
-    L5m = 5
-"""
 
 #: The type of a gene
 Gene = str
@@ -694,6 +688,9 @@ class LicePopulation:
 
     Additionally we provide two "virtual" stages ("L5f_busy" and "L5f_free") as read-only
     convenience accessors in place of the verbose `busy_dams` and `available_dams` attributes.
+
+    Note: this class is meant to describe the lice population per cage, but it is well known that
+    the mobile stages are not technically confined to a single cage.
     """
 
     lice_stages = ["L1", "L2", "L3", "L4", "L5f", "L5m"]
@@ -715,7 +712,7 @@ class LicePopulation:
     # Infectious stage: a louse that is physically tethered to the salmon skin
     # Pathogenic stage: a louse that actively harms the salmon.
     # We assume chalimus is a less dangerous stage.
-    infectious_stage = lice_stages[2:]
+    infectious_stages = lice_stages[2:]
     pathogenic_stages = lice_stages[3:]
 
     def __init__(

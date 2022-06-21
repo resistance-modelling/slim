@@ -6,44 +6,40 @@ from __future__ import annotations
 
 __all__ = ["Organisation"]
 
-import logging
+import gc
 from abc import ABC, abstractmethod
-import datetime as dt
-import json
-
 from typing import TYPE_CHECKING
 
 import numpy as np
 import ray
 from numpy.random import SeedSequence
-from ray.util.queue import Queue as RayQueue, Empty
+from ray.util.queue import Queue as RayQueue
 
+from slim.types.policies import no_observation, agent_to_id, FALLOW
+from slim.types.queue import *
 from .farm import (
     FarmActor,
-    MAX_NUM_CAGES,
     Farm,
 )
-from slim.JSONEncoders import CustomFarmEncoder
 from .lice_population import (
     GenoDistrib,
     empty_geno_from_cfg,
     geno_config_to_matrix,
-    GenoRates,
 )
 
-from slim.types.queue import *
-
-from slim.types.policies import no_observation
 
 if TYPE_CHECKING:
-    from typing import Dict
-    from typing import List, Tuple, TYPE_CHECKING, Any, Dict, Callable, Optional
+    from typing import List, Tuple, Any, Dict, Callable, Optional
     from .config import Config
-    from .farm import GenoDistribByHatchDate
     from slim.types.policies import SAMPLED_ACTIONS, ObservationSpace, SimulatorSpace
+    from .lice_population import GenoRates
+    import datetime as dt
 
 
 class FarmPool(ABC):
+    def __init__(self):
+        self.reported_aggregations = {}
+
     @abstractmethod
     def start(self):
         pass
@@ -62,20 +58,50 @@ class FarmPool(ABC):
     ):
         pass
 
-    def handle_aggregation_rate(self, spaces: SimulatorSpace, threshold: float) -> bool:
-        to_broadcast = False
-        for space in spaces.values():
-            if space["reported_aggregation"].item() >= threshold:
-                to_broadcast = True
+    def handle_aggregation_rate(
+        self, spaces: SimulatorSpace, threshold: float, limit: float, weeks: int
+    ) -> Tuple[bool, List[str]]:
+        """
+        Handle the aggregation rate of the specific cages. This has two functions:
+        - suggest all farmers to apply a treatment
+        - force a fallowing to non-compliant farms
 
-        return to_broadcast
+        This implements a simplified approach to the Scottish's CoGP Plan.
+        The algorithm is the following:
+
+        - if (lice count of a farm f >= org_aggregation_threshold):
+            recommend treatment to everyone
+        - if (lice count of a farm f) >= cogp_aggregation_threshold
+            count as a strike
+        - if S strikes have been reached for a farm f:
+            enforce culling on farm f
+
+        :returns:
+        """
+        to_broadcast = False
+        to_cull = []
+        for farm, space in spaces.items():
+            aggregation = space["reported_aggregation"].item()
+            if aggregation >= threshold:
+                to_broadcast = True
+            past_counts = self.reported_aggregations.setdefault(farm, [])
+            if aggregation > 0:
+                past_counts.append(aggregation)
+            if len(past_counts) >= weeks and all(
+                count >= limit for count in past_counts[-weeks:]
+            ):
+                to_cull.append(farm)
+                past_counts.clear()
+
+        return to_broadcast, to_cull
 
 
 class SingleProcFarmPool(FarmPool):
     # A single-process farm pool. Useful for debugging
     def __init__(self, cfg: Config, *args):
+        super().__init__()
         nfarms = cfg.nfarms
-        self.threshold = cfg.aggregation_rate_threshold
+        self.threshold = cfg.agg_rate_suggested_threshold
         self.cfg = cfg
         self._farms = [Farm(i, cfg, *args) for i in range(nfarms)]
 
@@ -146,8 +172,10 @@ class SingleProcFarmPool(FarmPool):
 class MultiProcFarmPool(FarmPool):
     # A multi-process farm pool.
     def __init__(self, cfg: Config, *args, **kwargs):
+        super().__init__()
         self.cfg = cfg
         self._extra_farm_args = args
+        self._farm_actors: List[FarmActor] = []
 
         if not ray.is_initialized():
             ray_props = {}
@@ -188,47 +216,42 @@ class MultiProcFarmPool(FarmPool):
         nfarms = cfg.nfarms
         farms_per_process = cfg.farms_per_process
 
-        self._farm_actors = []
-        self._offspring_queues = {}
+        self._farm_actors.clear()
 
         if farms_per_process == 1:
-            batch_pools = np.arange(0, nfarms).reshape((-1, 1))
+            self._batch_pools = np.arange(0, nfarms).reshape((-1, 1))
         else:
-            batch_pools = np.array_split(
+            self._batch_pools = np.array_split(
                 np.arange(0, nfarms), nfarms // farms_per_process
             )
 
-        for pool in batch_pools:
-            q = RayQueue()
-            for id_ in pool:
-                self._offspring_queues[id_] = q
-
-        rngs = SeedSequence(self.cfg.seed).spawn(len(batch_pools))
-        for actor_idx, farm_ids in enumerate(batch_pools):
+        rngs = SeedSequence(self.cfg.seed).spawn(len(self._batch_pools))
+        for actor_idx, farm_ids in enumerate(self._batch_pools):
             self._farm_actors.append(
-                FarmActor.options(name=f"FarmActor-{actor_idx}").remote(
+                FarmActor.options(max_concurrency=3).remote(
                     farm_ids,
                     cfg,
                     rngs[actor_idx],
-                    self._offspring_queues,
                     *self._extra_farm_args,
                 )
             )
 
+        # Once the dict has been created, broadcast the actor references
+        for farm_actor in self._farm_actors:
+            farm_actor.register_farm_pool.remote(self._farm_actors, self._batch_pools)
+
     def stop(self):
         print("Stopping farms")
-        self._farm_actors = []  # out-of-scope actors will be purged
+        self._farm_actors.clear()
+        gc.collect()  # Ensure the processes are deleted gracefully
 
     def reset(self):
         if self.is_running:
             self.stop()
 
         names = [f"farm_{i}" for i in range(self.cfg.nfarms)]
-        self._farm_actors: List[FarmActor] = []
-        self._offspring_queues: Dict[int, RayQueue] = {}
-        self._gym_space = {
-            farm_name: no_observation(MAX_NUM_CAGES) for farm_name in names
-        }
+        self._farm_actors.clear()
+        self._gym_space = {farm_name: no_observation() for farm_name in names}
 
     @property
     def is_running(self):
@@ -372,6 +395,11 @@ class Organisation:
         :returns: the cumulated reward from all the farm updates, and logs generated by all the farms
         """
 
+        for farm in self.to_cull:
+            actions[agent_to_id(farm)] = FALLOW
+
+        self.to_cull = []
+
         offspring_per_farm, payoffs, logs = self.farms.step(
             cur_date, actions, *self.get_external_pressure()
         )
@@ -380,9 +408,13 @@ class Organisation:
         self.update_offspring_average(offspring_per_farm)
         self.update_genetic_ratios(self.averaged_offspring)
 
-        to_treat = self.farms.handle_aggregation_rate(
-            spaces, self.cfg.aggregation_rate_threshold
+        to_treat, self.to_cull = self.farms.handle_aggregation_rate(
+            spaces,
+            self.cfg.agg_rate_suggested_threshold,
+            self.cfg.agg_rate_enforcement_threshold,
+            self.cfg.agg_rate_enforcement_strikes,
         )
+
         for space in spaces.values():
             space["asked_to_treat"] = np.array([int(to_treat)], dtype=np.int8)
 
@@ -399,15 +431,14 @@ class Organisation:
             self.cfg.initial_genetic_ratios
         )
         self.averaged_offspring = empty_geno_from_cfg(self.cfg)
+        self.to_cull = []
 
     def stop(self):
         self.farms.stop()
 
     @property
     def get_gym_space(self):
-        return (
-            self._gym_space
-        )  # {f"farm_{i}": space for i, space in self._gym_space.items()}
+        return self._gym_space
 
     def update_offspring_average(self, offspring_per_farm: Dict[int, GenoDistrib]):
         t = self.cfg.reservoir_offspring_average
@@ -418,13 +449,5 @@ class Organisation:
             (t - 1) / t
         ).add(total_offsprings.mul_by_scalar(1 / t))
 
-    def to_json(self, **kwargs):
-        json_dict = kwargs.copy()
-        json_dict.update(self.to_json_dict())
-        return json.dumps(json_dict, cls=CustomFarmEncoder, indent=4)
-
     def to_json_dict(self):
         return {"name": self.name}
-
-    def __repr__(self):
-        return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)

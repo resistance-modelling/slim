@@ -41,17 +41,21 @@
             "description": "Dirichlet learning rate",
             "type": "number"
         },
-        "aggregation_rate_threshold": {
-            "description": "The allowed aggregation rate at any time",
+        "agg_rate_suggested_threshold": {
+            "description": "The allowed aggregation rate before the organisation asks for a treatment",
+            "type": "number"
+        },
+        "agg_rate_enforcement_threshold": {
+            "description": "The allowed aggregation rate before the regulator asks for a treatment.",
+            "type": "number"
+        },
+        "agg_rate_enforcement_strikes": {
+            "description": "The number of times before a regulator's lice count excess is no longer tolerated.",
             "type": "number"
         },
         "treatment_strategy": {
             "description": "Which treatment strategy to apply. Used during standalone simulation",
-            "enum": [
-                "untreated",
-                "bernoulli",
-                "mosaic"
-            ]
+            "type": "string"
         },
         "farms_per_process": {
             "description": "Number of farms per Ray actor during batch updates. Defaults to ``nfarms`` (i.e. effectively disables multiprocessing)",

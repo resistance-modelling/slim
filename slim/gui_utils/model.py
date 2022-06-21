@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import datetime as dt
 from typing import List, TYPE_CHECKING, Tuple, Optional
 
+import numpy as np
 from PyQt5.QtCore import QUrl
 from PyQt5.QtGui import QColor
 from PyQt5.QtPositioning import QGeoCoordinate

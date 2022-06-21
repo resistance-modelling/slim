@@ -10,10 +10,12 @@
         "Aa": 0.0009
     },
     "gain_per_kg": 4.39,
-    "infection_discount": 0.0001,
+    "infection_discount": 1e-7,
     "genetic_learning_rate": 0.01,
-    "aggregation_rate_threshold": 2.0,
-    "treatment_strategy": "mosaic",
+    "agg_rate_suggested_threshold": 2.0,
+    "agg_rate_enforcement_threshold": 6.0,
+    "agg_rate_enforcement_strikes": 4,
+    "treatment_strategy": "bernoulli",
     "farms": [
         {
             "name": "Tarbert South",
@@ -38,7 +40,7 @@
             "treatment_dates": [
             ],
             "max_num_treatments": 10,
-            "sampling_spacing": 14,
+            "sampling_spacing": 7,
             "defection_proba": 0.2
         },
         {

@@ -6,12 +6,12 @@ Spaces are _not_ containers but rather container descriptions.
 
 """
 import functools
-from typing import List, Union, TypedDict, Dict, Any
+from typing import List, Union, TypedDict, Dict
 
 import numpy as np
+from gym.spaces import Discrete, MultiBinary, Box, Dict as GymDict
 
 from .treatments import TREATMENT_NO
-from gym.spaces import Discrete, MultiBinary, Box, Dict as GymDict
 
 __all__ = [
     "ACTION_SPACE",
@@ -24,6 +24,7 @@ __all__ = [
     "ObservationSpace",
     "ObservationSpace",
     "SimulatorSpace",
+    "agent_to_id",
     "get_observation_space_schema",
     "no_observation",
 ]
@@ -48,6 +49,7 @@ CURRENT_TREATMENTS = MultiBinary(TREATMENT_NO + 1)
 class ObservationSpace(TypedDict):
     aggregation: np.ndarray
     fish_population: np.ndarray
+    cleaner_fish: np.ndarray
     reported_aggregation: np.ndarray
     current_treatments: np.ndarray
     allowed_treatments: int
@@ -58,11 +60,12 @@ def get_observation_space_schema(agents: List[str], num_applications: int):
     return {
         agent: GymDict(
             {
-                "aggregation": Box(low=0, high=20, shape=(20,), dtype=np.float32),
+                "aggregation": Box(low=0, high=20, shape=(1,), dtype=np.float32),
                 "reported_aggregation": Box(
                     low=0, high=20, shape=(1,), dtype=np.float32
                 ),
-                "fish_population": Box(low=0, high=1e6, shape=(20,), dtype=np.int64),
+                "fish_population": Box(low=0, high=1e8, shape=(1,), dtype=np.int64),
+                "cleaner_fish": Box(low=0, high=1e8, shape=(1,), dtype=np.int64),
                 "current_treatments": CURRENT_TREATMENTS,
                 "allowed_treatments": Discrete(num_applications),
                 "asked_to_treat": MultiBinary(1),  # Yes or no
@@ -73,22 +76,25 @@ def get_observation_space_schema(agents: List[str], num_applications: int):
 
 
 @functools.lru_cache(maxsize=None)
-def no_observation(ncages) -> ObservationSpace:
+def no_observation() -> ObservationSpace:
     """
     Generate an empty observation.
-
-    :param ncages: the number of cages
 
     :returns an empty observation that matches the schema
     """
     return {
-        "aggregation": np.zeros((ncages,), dtype=np.float32),
+        "aggregation": np.zeros((1,), dtype=np.float32),
         "reported_aggregation": np.zeros((1,), dtype=np.float32),
-        "fish_population": np.zeros((ncages,), dtype=np.int64),
+        "fish_population": np.zeros((1,), dtype=np.int64),
+        "cleaner_fish": np.zeros((1,), dtype=np.int64),
         "current_treatments": np.zeros((TREATMENT_NO + 1,), dtype=np.int8),
         "allowed_treatments": 0,
         "asked_to_treat": np.zeros((1,), dtype=np.int8),
     }
+
+
+def agent_to_id(agent_str: str) -> int:
+    return int(agent_str[len("farm_") :])
 
 
 SimulatorSpace = Dict[str, ObservationSpace]

@@ -13,32 +13,30 @@ from __future__ import annotations
 __all__ = ["Farm", "FarmActor"]
 
 import copy
-import json
 import logging
 from collections import Counter, defaultdict
-from typing import Dict, List, Optional, Tuple
+from queue import Queue
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
-from mypy_extensions import TypedDict
 import ray
+from mypy_extensions import TypedDict
 from numpy.random import SeedSequence, default_rng
-from ray.util.queue import Queue as RayQueue
 
-from slim import LoggableMixin, logger
+# from ray.util.queue import Queue as RayQueue
+
+from slim.log import LoggableMixin, logger
 from slim.simulation.cage import Cage
-from slim.simulation.config import Config, FarmConfig
-from slim.JSONEncoders import CustomFarmEncoder
+from slim.simulation.config import Config
 from slim.simulation.lice_population import (
-    GrossLiceDistrib,
     GenoDistrib,
-    GenoDistribDict,
     GenoRates,
+    GrossLiceDistrib,
     genorates_to_dict,
     empty_geno_from_cfg,
 )
 from slim.types.queue import *
-from slim.types.policies import TREATMENT_NO, ObservationSpace
-from slim.types.treatments import Treatment
+from slim.types.treatments import Treatment, TREATMENT_NO
 
 GenoDistribByHatchDate = Dict[dt.datetime, GenoDistrib]
 CageAllocation = List[GenoDistribByHatchDate]
@@ -49,7 +47,6 @@ LocationTemps = TypedDict(
     "LocationTemps", {"northing": int, "temperatures": List[float]}
 )
 
-MAX_NUM_CAGES = 20
 MAX_NUM_APPLICATIONS = 10
 
 
@@ -120,10 +117,6 @@ class Farm(LoggableMixin):
         filtered_vars.update(kwargs)
 
         return filtered_vars
-
-    def __repr__(self):
-        filtered_vars = self.to_json_dict()
-        return json.dumps(filtered_vars, cls=CustomFarmEncoder, indent=4)
 
     def __eq__(self, other):
         if not isinstance(other, Farm):
@@ -228,27 +221,36 @@ class Farm(LoggableMixin):
         :param scheduled_treatments: the dates when to apply treatment
         """
         for scheduled_treatment in scheduled_treatments:
-            self.add_treatment(scheduled_treatment[1], scheduled_treatment[0])
+            self.add_treatment(
+                scheduled_treatment[1], scheduled_treatment[0], force=True
+            )
 
     def fallow(self):
         for cage in self.cages:
             cage.fallow()
 
-    def add_treatment(self, treatment_type: Treatment, day: dt.datetime) -> bool:
+    def add_treatment(
+        self, treatment_type: Treatment, day: dt.datetime, force=False
+    ) -> bool:
         """
         Ask to add a treatment. If a treatment was applied too early or if too many treatments
         have been applied so far the request is rejected.
 
         Note that if **at least** one cage is eligible for treatment and the conditions above
-        are still respected this method will still return True. Eligibility depends
-        on whether the cage has started already or is fallowing - but that may depend on the type
-        of chemical treatment applied. Furthermore, no treatment should be applied on cages that are already
-        undergoing a treatment of the same type. This usually means the actual treatment application period
-        plus a variable delay period. If no cages are available no treatment can be applied and the function returns
-        _False_.
+        are still respected this method will still return True.
+
+        Eligibility depends on the following conditions:
+
+        * the cage should have started by the day treatment is applied
+        * the cage should not be fallowing
+        * the cage should not be treated by that day with that same type of treatment
+        * the lice count should be greater than 1.0 (to prevent spamming)
+
+        If ``force`` is True, the last three constraints will be ignored.
 
         :param treatment_type: the treatment type to apply
         :param day: the day when to start applying the treatment
+        :param force: if True, ignore some eligibility requirement.
         :returns: whether the treatment has been added to at least one cage or not.
         """
 
@@ -256,14 +258,19 @@ class Farm(LoggableMixin):
         if self.available_treatments <= 0:
             return False
 
-        # TODO: no support for treatment combination. See #127
         eligible_cages = [
             cage
             for cage in self.cages
-            if not (
-                cage.start_date > day
-                or cage.is_fallowing
-                or cage.is_treated(treatment_type)
+            if (
+                cage.start_date <= day
+                and (
+                    force
+                    or not (
+                        cage.is_fallowing
+                        and cage.is_treated(treatment_type)
+                        and cage.aggregation_rate < 1.0
+                    )
+                )
             )
         ]
 
@@ -275,25 +282,12 @@ class Farm(LoggableMixin):
 
         for cage in eligible_cages:
             cage.treatment_events.put(event)
-        self.available_treatments -= 1
+
+        # Cleaner fish treatments can be applied as many times as possible
+        if treatment_type != Treatment.CLEANERFISH:
+            self.available_treatments -= 1
 
         return True
-
-    def ask_for_treatment(self):
-        """
-        DEPRECATED: This action is a no-op.
-        Ask the farm to perform treatment.
-
-        The farm will thus respond in the following way:
-
-        - choose whether to apply treatment or not (regardless of the actual cage eligibility).
-        - if yes, which treatment to apply (according to internal evaluations, e.g. increased lice resistance).
-
-        The farm is not obliged to tell the organisation whether treatment is being performed.
-        """
-
-        logger.debug("Asking farm %d to treat", self.id_)
-        # self._asked_to_treat = True
 
     def apply_action(self, cur_date: dt.datetime, action: int):
         """Apply an action
@@ -372,7 +366,7 @@ class Farm(LoggableMixin):
         self.log("\t\tGenerated eggs by farm %d: %s", self.id_, eggs=eggs_log)
         self.log("\t\tPayoff: %f", payoff=(self.get_profit(cur_date) - total_cost))
         self.log("\tNew population: %r", farm_population=self.lice_genomics)
-        self.log("Total fish population: %d", num_fish=self.num_fish)
+        logger.debug("Total fish population: %d", self.num_fish)
         # self._asked_to_treat = False
         self._report_sample(cur_date)
 
@@ -628,9 +622,22 @@ class Farm(LoggableMixin):
         """
         :returns: a Gym space for the agent that controls this farm.
         """
-        fish_population = np.array([cage.num_fish for cage in self.cages])
-        aggregations = np.array([cage.aggregation_rate for cage in self.cages])
-        reported_aggregation = self._get_aggregation_rate()
+        fish_population = (
+            np.array([cage.num_fish for cage in self.cages])
+            .sum(keepdims=True)
+            .astype(np.int64)
+        )
+        cleaner_fish_pop = np.array([cage.num_cleaner for cage in self.cages]).sum(
+            keepdims=True
+        )
+        aggregation = (
+            np.array([cage.aggregation_rate for cage in self.cages])
+            .mean(keepdims=True)
+            .astype(np.float32)
+        )
+        reported_aggregation = np.array(
+            [self._get_aggregation_rate()], dtype=np.float32
+        )
         current_treatments = self.is_treating
         current_treatments_np = np.zeros((TREATMENT_NO + 1), dtype=np.int8)
         if len(current_treatments):
@@ -639,14 +646,10 @@ class Farm(LoggableMixin):
         current_treatments_np[-1] = any(cage.is_fallowing for cage in self.cages)
 
         return {
-            "aggregation": np.pad(
-                aggregations, (0, MAX_NUM_CAGES - len(aggregations))
-            ).astype(np.float32),
-            "reported_aggregation": np.array([reported_aggregation], dtype=np.float32),
-            "fish_population": np.pad(
-                fish_population,
-                (0, MAX_NUM_CAGES - len(fish_population)),
-            ),
+            "aggregation": aggregation,
+            "reported_aggregation": reported_aggregation,
+            "fish_population": fish_population,
+            "cleaner_fish": cleaner_fish_pop,
             "current_treatments": current_treatments_np,
             "allowed_treatments": self.available_treatments,
             "asked_to_treat": np.array([0], dtype=np.int8),
@@ -683,7 +686,6 @@ class FarmActor:
         ids: List[int],
         cfg: Config,
         rng: SeedSequence,
-        allocation_queues: Dict[int, RayQueue],
         initial_lice_pop: Optional[GrossLiceDistrib] = None,
     ):
         # ugly hack: modify the global logger here.
@@ -706,10 +708,20 @@ class FarmActor:
         self.ids = ids
         self.cfg = cfg
         self.farms = [Farm(id_, cfg, initial_lice_pop) for id_ in ids]
-        self.allocation_queues = allocation_queues
+        self.allocation_queue = Queue()
+        self._batch_pool: np.ndarray = np.array([])
+        self._farm_pool: List[FarmActor] = []
+
+    def register_farm_pool(self, farm_pool: List[FarmActor], batch_pool: np.ndarray):
+        self._farm_pool = farm_pool
+        self._batch_pool = batch_pool
 
     def _select(self, id_):
         return next(farm for farm in self.farms if farm.id_ == id_)
+
+    def _find_in_batch(self, idx):
+        # Gives the farm actor descriptor containing the farm idx
+        return next(i for i, v in enumerate(self._batch_pool) if idx in v)
 
     def _disperse_offspring(
         self, cur_date, eggs_per_farm: List[GenoDistribByHatchDate]
@@ -721,14 +733,17 @@ class FarmActor:
                 if idx in self.ids:
                     self._select(idx).disperse_offspring_v2(eggs, cur_date)
                 else:
-                    self.allocation_queues[idx].put((idx, eggs))
+                    self._farm_pool[self._find_in_batch(idx)]._produce.remote(idx, eggs)
 
         # Each farm i will produce an update for the j-th farm, except when i=j
         # thus there are N-1 farms updates to pop every day
         # if batching is enabled the same queues are recycled.
         for i in range(nfarms - 1):
-            farm_id, eggs = self.allocation_queues[self.ids[0]].get()
+            farm_id, eggs = self.allocation_queue.get()
             self._select(farm_id).disperse_offspring_v2(eggs, cur_date)
+
+    def _produce(self, idx, eggs):
+        self.allocation_queue.put((idx, eggs))
 
     def step(
         self,
@@ -767,6 +782,10 @@ class FarmActor:
 
         return to_return
 
-    def ask_for_treatment(self):
-        for farm in self.farms:
-            farm.ask_for_treatment()
+    def checkpoint(self):
+        """
+        Access the internal farms
+
+        Warning: this is an expensive operation. Tread with care...
+        """
+        return self.__dict__.copy()

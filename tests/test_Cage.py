@@ -9,7 +9,12 @@ import numpy as np
 import pytest
 
 from slim.simulation.config import to_dt
-from slim.types.queue import DamAvailabilityBatch, EggBatch, TravellingEggBatch
+from slim.types.queue import (
+    DamAvailabilityBatch,
+    EggBatch,
+    TravellingEggBatch,
+    TreatmentEvent,
+)
 from slim.types.treatments import GeneticMechanism, Treatment, EMB
 from slim.simulation.lice_population import (
     GenoDistrib,
@@ -42,11 +47,6 @@ class TestCage:
                 first_cage.lice_population[stage]
                 == first_cage.lice_population.geno_by_lifestage[stage].gross
             )
-
-    def test_cage_json(self, first_cage):
-        return_str = str(first_cage)
-        imported_cage = json.loads(return_str)
-        assert isinstance(imported_cage, dict)
 
     def test_cage_lice_background_mortality_one_day(self, first_cage):
         dead_lice_dist = first_cage.get_background_lice_mortality()
@@ -977,11 +977,34 @@ class TestCage:
         assert current_population < population_before
         assert cost > 0
 
+    def test_cleaner_fish_restocking(self, first_cage, first_farm, cur_day):
+        assert first_cage.num_cleaner == 0
+        first_farm.add_treatment(Treatment.CLEANERFISH, cur_day, True)
+        first_cage.get_lice_treatment_mortality(cur_day)
+        restock = first_cage.get_cleaner_fish_delta()
+        assert 0 < restock < first_cage.num_fish
+
+        first_cage.num_cleaner = restock
+
+        # Test the next day there is indeed a mortality
+        first_cage.get_lice_treatment_mortality(cur_day + dt.timedelta(days=3))
+        delta = first_cage.get_cleaner_fish_delta()
+        assert 0 < -delta < restock
+
+    def test_cleaner_fish_mortality(self, first_cage, cur_day):
+        first_cage.num_cleaner = 200
+        mortality, cost = first_cage.get_lice_treatment_mortality(cur_day)
+        assert mortality["L3"].gross == 0
+        assert mortality["L4"].gross != 0
+        assert (mortality["L5f"] + mortality["L5m"]).gross != 0
+
     def test_fallowing(self, first_cage):
         assert not first_cage.is_fallowing
         first_cage.fallow()
         assert first_cage.num_fish == 0
         assert first_cage.num_infected_fish == 0
+        for stage in LicePopulation.infectious_stages:
+            assert first_cage.lice_population[stage] == 0
         assert first_cage.is_fallowing
 
     def test_update_dying_busy_dams(

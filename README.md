@@ -20,6 +20,7 @@ This project thus includes the following components:
 
 - [X] a simulator (the core is complete)
 - [X] a visualisation tool
+- [X] (NEW) fitting on official report
 - [ ] policy searching strategies
 - [ ] a game theoretic optimisation framework
 
@@ -33,22 +34,30 @@ git clone https://github.com/resistance-modelling/slim slim-master
 cd slim-master
 # make sure conda is installed and the command is available at this point
 conda env update
+# This will make the slim module globally available.
+pip install -e .
 ```
 
 ## Usage
 
-To run the model run the following from the root folder:
+**NEW**: you can launch the simulation with just `slim`.
 
-```python -m slim.SeaLiceMgmt output_folder/simulation_name simulation_params_directory```
+To run the model you have to provide a configuration and an artifact output folder.
+
+```
+slim run output_folder/simulation_name simulation_params_directory```
+```
 
 For example:
-```python -m slim.SeaLiceMgmt out/0 config_data/Fyne```
+```slim run out/0 config_data/Fyne```
+
+Note that `slim run` is just a short hand for `python -m slim.SeaLiceMgmt`, which will be kept for compatibility.
 
 ### GUI
 We also provide a GUI for debugging and visualisation. Its support is still heavily experimental so please
 use with caution.
 
-You can launch it via `python -m slim.SeaLiceMgmtGUI` and provide your run data (generated via the `--save-rate` option mentioned
+You can launch it via `slim gui` and provide your run data (generated via the `--save-rate` option mentioned
 above) from the given menu.
 
 Please check our [quickstart](https://slim.readthedocs.io/en/stable/getting-started.html) guide for more information.

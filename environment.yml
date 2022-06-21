@@ -2,14 +2,14 @@ name: slp
 channels:
   - conda-forge
 dependencies:
-  - python>=3.8
+  - python<3.9,>=3.8
   - pandas=1.2.4
   - scipy>=1.6
   - pytest=6.2.4
   - pytest-cov=2.12.1
   - mypy=0.910
   - data-science-types=0.2.23
-  - pyqt>=5.9
+  - pyqt>=5.9,<6.0
   - pyqtgraph=0.12.3
   - colorcet=3.0.0
   - jsonschema=3.2.0
@@ -23,18 +23,26 @@ dependencies:
   - scikit-learn=1.0.1
   - sphinx-tabs=3.2.0
   - sphinx_rtd_theme=1.0.0
-  - dill=0.3.4
   - lz4=3.1.10
   - pip=21.1.3
-  - sphinx-jsonschema=1.17.2
-  - beautifulsoup4=4.10.0
+  - sphinx-jsonschema=1.17.2 # Required for doc building
+  - beautifulsoup4=4.10.0 # Required for surveys
   - wget=1.20.3
   - numba=0.54.1
+  # - hpbandster=0.7.4 # Required in the fitting script
+  # - configspace=0.5.0
+  - bayesian-optimization=1.1.0 # Required in the fitting script
+  - protobuf<4.0.0
+  # - pyspark=3.2.1 # TODO: enable later?
+  - pyarrow=7.0.0
   - pip:
     - convertbng==0.6.36
+    # NOTE: the conda package for PyType has a few issues. 1: apparently it tries to pull an
+    # old version of ninja with breaking changes; 2: there are a few undetected errors in the 2020 version
+    # compared to the 2021 one. Unfortunately there is no clear changelog across versions :(
     - pytype==2022.04.26
     - ninja==1.10.2
     - tabula-py==2.3.0
     - pettingzoo==1.15.0
     - stable-baselines==2.10.2
-    - ray==1.11.0
+    - ray==1.12.0

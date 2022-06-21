@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import functools
+import math
 from abc import abstractmethod, ABC
 from enum import Enum
-from typing import Dict, cast, List
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 import numpy as np
 
 # A few extra general types
 from slim.simulation.lice_population import (
-    GenoDistrib,
     GenoTreatmentValue,
     Allele,
     GenoTreatmentDistrib,
@@ -17,18 +17,31 @@ from slim.simulation.lice_population import (
     geno_to_alleles,
 )
 
+if TYPE_CHECKING:
+    from ..simulation.cage import Cage
+
 
 class Treatment(Enum):
     """
     A stub for treatment types
-    TODO: add other treatments here
     """
 
     EMB = 0
     THERMOLICER = 1
+    CLEANERFISH = 2
 
 
 TREATMENT_NO = len(Treatment)
+
+
+def treatment_to_class(treatment: Treatment):
+    """
+    Get the right treatment class
+
+    :param treatment: a treatment tag
+    :returns: the correct treatment class
+    """
+    return [EMB, Thermolicer, CleanerFish][treatment.value]
 
 
 class GeneticMechanism(Enum):
@@ -51,6 +64,8 @@ class HeterozygousResistance(Enum):
 
 
 TreatmentResistance = Dict[HeterozygousResistance, float]
+
+# TODO: make those classes below singletons...
 
 
 class TreatmentParams(ABC):
@@ -124,12 +139,13 @@ class TreatmentParams(ABC):
 
     @abstractmethod
     def get_lice_treatment_mortality_rate(
-        self, temperature: float
+        self, temperature: float, cage: Cage
     ) -> GenoTreatmentDistrib:
         """
         Calculate the mortality rates of this treatment
 
         :param temperature: the water temperature
+        :param cage: the calling cage
 
         :returns: the mortality rates, arranged by geno.
         """
@@ -184,6 +200,40 @@ class ThermalTreatment(TreatmentParams):
         # self.exposure_length: float = payload["efficacy"]
 
 
+class CleanerFish(TreatmentParams):
+    """Cleaner Fish (lump/wrasse) treatment."""
+
+    name = "Cleaner Fish"
+    susceptible_stages = ["L4", "L5m", "L5f"]
+
+    def __init__(self, payload):
+        super().__init__(payload)
+        self.pheno_resistance = self.parse_pheno_resistance(payload["pheno_resistance"])
+        self.price_per_application: float = payload["price_per_application"]
+        self.natural_mortality: float = payload["natural_mortality"]
+
+    @functools.lru_cache
+    def delay(self, _):
+        return 1  # effects noticeable the next day
+
+    def get_lice_treatment_mortality_rate(
+        self, _temperature, cage: Cage
+    ) -> GenoTreatmentDistrib:
+        geno_treatment_distrib = {}
+
+        for geno in geno_to_alleles(self.gene):
+            # TODO: we could optimise this
+            trait = self.get_allele_heterozygous_trait(self.gene, geno)
+            mortality = 1 - math.exp(
+                -self.pheno_resistance[trait] * cage.num_cleaner / cage.num_fish
+            )
+            geno_treatment_distrib[geno] = GenoTreatmentValue(
+                mortality, self.susceptible_stages
+            )
+
+        return geno_treatment_distrib
+
+
 class EMB(ChemicalTreatment):
     """Emamectin Benzoate"""
 
@@ -193,7 +243,7 @@ class EMB(ChemicalTreatment):
     def delay(self, average_temperature: float):
         return self.durability_temp_ratio / average_temperature
 
-    def get_lice_treatment_mortality_rate(self, _temperature=None):
+    def get_lice_treatment_mortality_rate(self, _temperature=None, _cage=None):
         geno_treatment_distrib = {}
 
         for geno in geno_to_alleles(self.gene):
@@ -216,7 +266,7 @@ class Thermolicer(ThermalTreatment):
         return 1  # effects noticeable the next day
 
     def get_lice_treatment_mortality_rate(
-        self, temperature: float
+        self, temperature: float, _cage=None
     ) -> GenoTreatmentDistrib:
         if temperature >= 12:
             efficacy = 0.8

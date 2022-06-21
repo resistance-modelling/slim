@@ -15,47 +15,51 @@ __all__ = [
     "Simulator",
     "SimulatorPZEnv",
     "BernoullianPolicy",
-    "load_artifact",
-    "dump_as_dataframe",
+    "MosaicPolicy",
+    "UntreatedPolicy",
+    "get_simulation_path",
     "load_counts",
 ]
 
 import datetime as dt
+import functools
 import json
 import os
-from io import BytesIO
+
+# import dill as pickle
+import pickle
+import sys
+import traceback
+from collections import defaultdict
+from pathlib import Path
+from typing import List, Optional, Tuple, Union, Iterator
 
 import lz4.frame
-from pathlib import Path
-from typing import List, Optional, Tuple, Iterator, Union, cast, BinaryIO
-
-import dill as pickle
+import numpy as np
 import pandas as pd
 import ray
 import tqdm
+from gym import spaces
+from pettingzoo import AECEnv
+from pettingzoo.utils import agent_selector, wrappers
+import pyarrow as pa
+import pyarrow.parquet as paq
+from ray.exceptions import RayError
 
-from slim import logger, LoggableMixin
-from .farm import MAX_NUM_CAGES, MAX_NUM_APPLICATIONS
-from .lice_population import GenoDistrib, from_dict
-from .organisation import Organisation
 from slim.types.policies import (
     ACTION_SPACE,
-    CURRENT_TREATMENTS,
-    ObservationSpace,
-    NO_ACTION,
-    TREATMENT_NO,
     no_observation,
     get_observation_space_schema,
 )
+
+from slim.log import logger
+from .policies import *
 from slim.types.treatments import Treatment
-
-import functools
-
-import numpy as np
-from gym import spaces
-from pettingzoo import AECEnv
+from slim.types.policies import NO_ACTION
 from .config import Config
-from pettingzoo.utils import agent_selector, wrappers
+from .farm import MAX_NUM_APPLICATIONS
+from .lice_population import GenoDistrib, from_dict
+from .organisation import Organisation
 
 
 def get_env(cfg: Config) -> wrappers.OrderEnforcingWrapper:
@@ -117,7 +121,7 @@ class SimulatorPZEnv(AECEnv):
         """
         super(SimulatorPZEnv).__init__()
         self.cfg = cfg
-        self.cur_day = cfg.start_date
+        self.cur_day: dt.datetime = cfg.start_date
         self.organisation = Organisation(cfg)
         self.payoff = 0.0
         self.treatment_no = len(Treatment)
@@ -131,6 +135,12 @@ class SimulatorPZEnv(AECEnv):
             self.agents, MAX_NUM_APPLICATIONS
         )
 
+        self._fish_pop = []
+        self._adult_females_agg = []
+
+    def __cur_day(self):
+        return self.cur_day
+
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
         return self._observation_spaces[agent]
@@ -141,12 +151,11 @@ class SimulatorPZEnv(AECEnv):
 
     def render(self, mode="human"):
         # TODO: could we invoke pyqt from here?
-
         pass
 
     @property
     def no_observation(self):
-        return no_observation(MAX_NUM_CAGES)
+        return no_observation()
 
     def observe(self, agent):
         return self.observations[agent]
@@ -177,12 +186,25 @@ class SimulatorPZEnv(AECEnv):
 
             payoffs, logs = self.organisation.step(self.cur_day, actions)
             self.last_logs = logs
+
             id_to_gym = {i: f"farm_{i}" for i in range(len(self.possible_agents))}
 
             self.rewards = {id_to_gym[i]: payoff for i, payoff in payoffs.items()}
 
             self.observations = self.organisation.get_gym_space
             self.cur_day += dt.timedelta(days=1)
+            self._fish_pop.append(
+                {
+                    farm: obs["fish_population"].sum()
+                    for farm, obs in self.observations.items()
+                }
+            )
+            self._adult_females_agg.append(
+                {
+                    farm: obs["aggregation"].max()
+                    for farm, obs in self.observations.items()
+                }
+            )
         else:
             self._clear_rewards()
         self.agent_selection = self._agent_selector.next()
@@ -204,130 +226,108 @@ class SimulatorPZEnv(AECEnv):
         self.agent_selection = self._agent_selector.next()
         self._chosen_actions = {agent: -1 for agent in self.agents}
 
+        self._fish_pop = []
+        self._adult_females_agg = []
+
     def stop(self):
         self.organisation.stop()
-
-
-class BernoullianPolicy:
-    """
-    Perhaps the simplest policy here.
-    Never apply treatment except for when asked by the organisation, and in which case whether to apply
-    a treatment with a probability :math:`p` or not (:math:`1-p`). In the first case each treatment
-    will be chosen with likelihood :math:`q`.
-    """
-
-    def __init__(self, cfg: Config):
-        super().__init__()
-        self.proba = [farm_cfg.defection_proba for farm_cfg in cfg.farms]
-        n = len(Treatment)
-        self.treatment_probas = np.ones(n) / n
-        self.treatment_threshold = cfg.aggregation_rate_threshold
-        self.seed = cfg.seed
-        self.reset()
-
-    def _predict(self, asked_to_treat, agg_rate: np.ndarray, agent: int):
-        if not asked_to_treat and np.any(agg_rate < self.treatment_threshold):
-            return NO_ACTION
-
-        p = [self.proba[agent], 1 - self.proba[agent]]
-
-        want_to_treat = self.rng.choice([False, True], p=p)
-        logger.debug(f"Outcome of the vote: {want_to_treat}")
-
-        if not want_to_treat:
-            logger.debug("\tFarm {} refuses to treat".format(agent))
-            return NO_ACTION
-
-        picked_treatment = self.rng.choice(
-            np.arange(TREATMENT_NO), p=self.treatment_probas
-        )
-        return picked_treatment
-
-    def predict(self, observation: ObservationSpace, agent: str):
-        if isinstance(observation, spaces.Box):
-            raise NotImplementedError("Only dict spaces are supported for now")
-
-        agent_id = int(agent[len("farm_") :])
-        asked_to_treat = bool(observation["asked_to_treat"])
-        return self._predict(asked_to_treat, observation["aggregation"], agent_id)
-
-    def reset(self):
-        self.rng = np.random.default_rng(self.seed)
-
-
-class UntreatedPolicy:
-    """
-    A treatment stub that performs no action.
-    """
-
-    def predict(self, **_kwargs):
-        return NO_ACTION
-
-
-class MosaicPolicy:
-    """
-    A simple treatment: as soon as farms receive treatment the farmers apply treatment.
-    Treatments are selected in rotation
-    """
-
-    def __init__(self, cfg: Config):
-        self.last_action = [0] * len(cfg.farms)
-
-    def predict(self, observation: ObservationSpace, agent: str):
-        if not observation["asked_to_treat"]:
-            return NO_ACTION
-
-        agent_id = int(agent[len("farm_") :])
-        action = self.last_action[agent_id]
-        self.last_action[agent_id] = (action + 1) % TREATMENT_NO
-        return action
 
 
 @ray.remote
 class DumpingActor:
     """Takes an output log and serialises it"""
 
-    def __init__(self, dump_path: Path, pickled_path: Optional[Path] = None):
-        self.data_file = dump_path.open(mode="wb")
-        self.compressed_stream = lz4.frame.open(
-            self.data_file, "wb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
-        )
-        self.log_buffer = BytesIO()
+    def __init__(self, output_path: Path, sim_id: str, checkpointing=False):
+        """
+        :param output_path: the output path
+        :param sim_id: the simulation id of the current simulation
+        """
 
-        if pickled_path:
-            self.sim_buffer = BytesIO()
-            self.sim_state_file = pickled_path.open(mode="wb")
+        self.parquet_path, self.cfg_path, self.checkpoint_path = get_simulation_path(
+            output_path, sim_id
+        )
+
+        self.log_lists = defaultdict(lambda: [])
+
+        if checkpointing:
+            self.sim_state_file = self.checkpoint_path.open(mode="wb")
             self.sim_state_stream = lz4.frame.open(
                 self.sim_state_file,
                 "wb",
                 compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC,
             )
 
-    def _flush(self, buffer: BytesIO, stream):
-        stream.write(buffer.getvalue())
-        buffer.truncate()
+    def save_sim(self, data: bytes):
+        """Dump a checkpoint
 
-    def _save(self, data: bytes, buffer: BytesIO, stream: BinaryIO):
-        buffer.write(data)
-        if len(data) >= (1 << 19):  # ~ 512 KiB
-            self._flush(buffer, stream)
+        :param data: checkpointed data (already pickled into bytes)
+        """
+        self.sim_state_stream.write(data)
+
+    def _dump(self, logs: dict):
+        timestamp = logs.pop("timestamp")
+
+        for k, v in logs.items():
+            if k == "farms":
+                for agent, farm_value in v.items():
+                    farm_pop = farm_value.pop("farm_population")
+                    for k2, v2 in farm_value.items():
+                        if isinstance(v2, np.ndarray) and len(v2) == 1:
+                            farm_value[k2] = v2[0]
+                    self.log_lists["timestamp"].append(timestamp)
+                    self.log_lists["farm_name"].append(agent)
+                    for farm_k, farm_v in farm_pop.items():
+                        # This breaks down the genes
+                        self.log_lists[farm_k].append(farm_v)
+                    for k2, v2 in farm_value.items():
+                        if k2 == "arrivals_per_cage":
+                            v2 = GenoDistrib.batch_sum(v2).to_json_dict()
+                        elif k2 == "eggs":
+                            v2 = v2.gross
+                        self.log_lists[k2].append(v2)
+            else:
+                self.log_lists[k].append(v)
+
+    # def _flush_stream(self, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
+    #    stream.write(buffer.getvalue())
+    #    buffer.seek(0)
+    #    buffer.truncate(0)
+
+    def _flush_dump(self):
+        table = pa.Table.from_pydict(self.log_lists)
+        if not hasattr(self, "_pqwriter"):
+            self._pqwriter = paq.ParquetWriter(
+                str(self.parquet_path),
+                table.schema,
+                compression="zstd",
+                compression_level=11,
+            )
+        self._pqwriter.write_table(table)
+        self.log_lists.clear()
 
     def dump(self, logs: dict):
-        self._save(pickle.dumps(logs), self.log_buffer, self.data_file)
+        """
+        Dump daily data.
+        """
+        self._dump(logs)
+        if len(self.log_lists["timestamp"]) > 40:
+            self._flush_dump()
 
-    def save_sim(self, sim_state: bytes):
-        # Note: Simulator cannot be serialised by pickle but by dill,
-        # but ray uses (a fork of) pickle internally...
-        self._save(sim_state, self.sim_buffer, self.sim_state_stream)
+    def dump_cfg(self, cfg_as_bytes: bytes):
+        """
+        Save the configuration. This should be called before serialising the dump.
+        """
+        # This is available only for bytes to avoid having to serialise/deserialise again via Ray
+        with self.cfg_path.open("wb") as f:
+            f.write(cfg_as_bytes)
 
     def teardown(self):
-        self._flush(self.log_buffer, self.compressed_stream)
-        self.log_buffer.close()
-        self.compressed_stream.close()
-        self.data_file.close()
-        if hasattr(self, "sim_buffer"):
-            self._flush(self.sim_buffer, self.sim_state_stream)
-            self.sim_buffer.close()
+        if len(self.log_lists["timestamp"]) > 0:
+            self._flush_dump()
+        if hasattr(self, "_pqwriter"):
+            self._pqwriter.close()
+
+        if hasattr(self, "sim_state_stream"):
             self.sim_state_stream.close()
             self.sim_state_file.close()
 
@@ -341,10 +341,9 @@ class Simulator:  # pragma: no cover
     snapshots.
     """
 
-    def __init__(self, output_dir: Path, sim_id: str, cfg: Config):
+    def __init__(self, output_dir: Path, cfg: Config):
         self.env = get_env(cfg)
         self.output_dir = output_dir
-        self.sim_id = sim_id
         self.cfg = cfg
 
         strategy = self.cfg.treatment_strategy
@@ -357,46 +356,38 @@ class Simulator:  # pragma: no cover
         elif strategy == "mosaic":
             self.policy = MosaicPolicy(self.cfg)
         else:
-            raise ValueError("Unsupported strategy")
+            with open(strategy, "rb") as f:
+                self.policy = pickle.load(f)
 
-        self.output_dump_path, self.output_dump_pickle = _get_simulation_path(
-            output_dir, sim_id
-        )
         self.cur_day = cfg.start_date
         self.payoff = 0.0
 
-    def run_model(self, resume=False):
+    def run_model(self, *, resume=False, quiet=False):
         """Perform the simulation by running the model.
 
-        :param path: Path to store the results in
-        :param sim_id: Simulation name
-        :param cfg: Configuration object holding parameter information.
-        :param Organisation: the organisation to work on.
+        :param resume: if True it will resume the simulation
+        :param quiet: if True it will disable tqdm's pretty printing.
         """
         if not resume:
-            logger.info("running simulation, saving to %s", self.output_dir)
+            logger.info(
+                "running simulation %s, saving to %s", self.cfg.name, self.output_dir
+            )
         else:
-            logger.info("resuming simulation from %s", self.output_dump_pickle)
-
-        # create a file to store the population data from our simulation
-        if resume and not self.output_dump_pickle.exists():
-            logger.warning(
-                f"{self.output_dump_pickle} could not be found! Creating a new log file."
+            logger.info(
+                "resuming simulation (searching %s in %s)",
+                self.cfg.name,
+                self.output_dir,
             )
 
+        # create a file to store the population data from our simulation
         if not resume:
-            if self.cfg.checkpoint_rate:
-                serialiser = DumpingActor.remote(
-                    self.output_dump_path, self.output_dump_pickle
-                )
-            else:
-                serialiser = DumpingActor.remote(self.output_dump_path)
-            serialiser.dump.remote(self.cfg)
+            serialiser = DumpingActor.remote(self.output_dir, self.cfg.name)
+            ray.get(serialiser.dump_cfg.remote(pickle.dumps(self.cfg)))
             self.env.reset()
 
         try:
             num_days = (self.cfg.end_date - self.cur_day).days
-            for day in tqdm.trange(num_days):
+            for day in tqdm.trange(num_days, disable=quiet):
                 logger.debug("Current date = %s (%d / %d)", self.cur_day, day, num_days)
                 for agent in self.env.agents:
                     action = self.policy.predict(self.env.observe(agent), agent)
@@ -434,29 +425,40 @@ class Simulator:  # pragma: no cover
                 self.cur_day += dt.timedelta(days=1)
 
         except KeyboardInterrupt:
-            env = self.env
-            while not isinstance(env, SimulatorPZEnv):
-                env = env.env
-            env.stop()
+            pass
+
+        except RayError:
+            traceback.print_exc(file=sys.stderr)
 
         finally:
             if not resume:
-                serialiser.teardown.remote()
+                ray.get(serialiser.teardown.remote())
+            env = self.env.unwrapped
+            env.stop()
 
 
-def _get_simulation_path(path: Path, sim_id: str):  # pragma: no-cover
+def get_simulation_path(path: Path, other: Union[Config, str]):  # pragma: no-cover
+    """
+    :param path: the output path
+    :param other: either the simulation id or a Config (containing such simulation id)
+
+    :returns: a triple (artifact path, config path, checkpoint path)
+    """
     if not path.is_dir():
         path.mkdir(parents=True, exist_ok=True)
 
+    sim_id = other.name if isinstance(other, Config) else other
+
     return (
-        path / f"simulation_data_{sim_id}.pickle.lz4",
+        path / f"simulation_data_{sim_id}.parquet",
+        path / f"config_{sim_id}.pickle",
         path / f"checkpoint_{sim_id}.pickle.lz4",
     )
 
 
 def parse_artifact(
     path: Path, sim_id: str, checkpoint=False
-) -> Iterator[Union[dict, Config, Simulator]]:  # pragma: no cover
+) -> Tuple[pd.DataFrame, Config]:  # pragma: no cover
     """Reload a simulator.
 
     :param path: the folder containing the artifact
@@ -467,74 +469,29 @@ def parse_artifact(
     one per serialised day.
     """
     logger.info("Loading from a dump...")
-    data_file, pickle_file = _get_simulation_path(path, sim_id)
-    path = pickle_file if checkpoint else data_file
+    data_file, cfg_path, pickle_file = get_simulation_path(path, sim_id)
+    with cfg_path.open("rb") as f:
+        cfg = pickle.load(f)
+    return paq.read_table(data_file).to_pandas(), cfg
+
+
+def load_checkpoint(path, sim_id) -> Iterator[dict]:
+    """
+    :param path: the folder containing the artifact
+    :param sim_id: the simulation id
+    """
+
+    logger.info("Loading from a dump...")
+    _, __, pickle_file = get_simulation_path(path, sim_id)
+
     with lz4.frame.open(
-        path, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
+        pickle_file, "rb", compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC
     ) as fp:
         while True:
             try:
                 yield pickle.load(fp)
             except EOFError:
                 break
-
-
-def dump_as_dataframe(
-    states_times_it: Iterator[Union[dict, Config]],
-) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:  # pragma: no cover
-    """
-    Convert a dump into a pandas dataframe
-
-    Format: index is (timestamp, farm)
-    Columns are: "L1" ... "L5f" (nested dict for now...), "a", "A", "Aa" (ints)
-
-    :param states_times_it: a list of states
-    :returns: a pair (dataframe, times)
-    """
-
-    farm_data = {}
-    times = []
-    cfg = None
-    for state in states_times_it:
-        if isinstance(state, Config):
-            cfg = state
-            continue
-
-        time = state["timestamp"]
-        times.append(time)
-
-        for agent, values in state["farms"].items():
-            key = (time, agent)
-            farm_pop = values.pop("farm_population")
-            farm_data[key] = {**values, **farm_pop}
-
-    dataframe = pd.DataFrame.from_dict(farm_data, orient="index")
-
-    # extract cumulative geno info regardless of the stage
-    def aggregate_geno(data):
-        data_to_sum = [from_dict(elem) for elem in data if isinstance(elem, dict)]
-        return GenoDistrib.batch_sum(data_to_sum).to_json_dict()
-
-    aggregate_geno_info = dataframe.apply(aggregate_geno, axis=1).apply(pd.Series)
-    dataframe["eggs"] = dataframe["eggs"].apply(lambda x: x.gross)
-
-    dataframe = dataframe.join(aggregate_geno_info)
-
-    return dataframe.rename_axis(("timestamp", "farm_id")), times, cast(Config, cfg)
-
-
-def load_artifact(
-    path: Path, sim_id: str
-) -> Tuple[pd.DataFrame, List[dt.datetime], Config]:
-    """Loads an artifact.
-    Combines :func:`parse_artifact` and :func:`.dump_as_dataframe`
-
-    :param path: the path where the output is
-    :param sim_id: the simulation name
-
-    :returns: the dataframe to dump
-    """
-    return dump_as_dataframe(parse_artifact(path, sim_id))
 
 
 def dump_optimiser_as_pd(states: List[List[Simulator]]):  # pragma: no cover
@@ -567,6 +524,7 @@ def reload(
 
     first_time = None
     for idx, (state, time) in enumerate(parse_artifact(path, sim_id, True)):
+        print(time)
         if first_time is None:
             first_time = time
         if resume_after is not None and (time - first_time).days >= resume_after:

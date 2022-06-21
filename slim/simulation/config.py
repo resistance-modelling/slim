@@ -1,12 +1,12 @@
 __all__ = ["to_dt", "Config"]
 
 import argparse
-from dataclasses import dataclass
 import datetime as dt
 import json
 import os
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, Dict, Optional, TYPE_CHECKING, Union
+from typing import Tuple, Dict, TYPE_CHECKING, Union
 
 import jsonschema
 import numpy as np
@@ -17,6 +17,7 @@ from slim.types.treatments import (
     GeneticMechanism,
     EMB,
     Thermolicer,
+    CleanerFish,
 )
 
 if TYPE_CHECKING:
@@ -73,6 +74,7 @@ class RuntimeConfig:
         # Treatment constants
         self.emb = EMB(data["treatments"][0])
         self.thermolicer = Thermolicer(data["treatments"][1])
+        self.cleaner_fish = CleanerFish(data["treatments"][2])
 
         # Fish mortality constants
         self.fish_mortality_center: float = data["fish_mortality_center"]
@@ -141,9 +143,9 @@ class Config(RuntimeConfig):
         """
 
         # driver-specific settings
-        self.save_rate = kwargs.pop("save_rate", 0)
+        self.save_rate = kwargs.pop("save_rate", 1)
         self.checkpoint_rate = kwargs.pop("checkpoint_rate", 0)
-        self.farms_per_process = kwargs.pop("farms_per_process", -1)
+        self.farms_per_process = kwargs.pop("farms_per_process", 1)
         if self.farms_per_process is None:
             self.farms_per_process = -1
 
@@ -177,7 +179,11 @@ class Config(RuntimeConfig):
         self.infection_discount: float = data["infection_discount"]
 
         # Other constraints
-        self.aggregation_rate_threshold: float = data["aggregation_rate_threshold"]
+        self.agg_rate_suggested_threshold: float = data["agg_rate_suggested_threshold"]
+        self.agg_rate_enforcement_threshold: float = data[
+            "agg_rate_enforcement_threshold"
+        ]
+        self.agg_rate_enforcement_strikes: int = data["agg_rate_enforcement_strikes"]
 
         # Policy
         self.treatment_strategy: str = data["treatment_strategy"]
@@ -197,7 +203,8 @@ class Config(RuntimeConfig):
         )
 
     def get_treatment(self, treatment_type: Treatment) -> TreatmentParams:
-        return [self.emb, self.thermolicer][treatment_type.value]
+        # TODO: switch to the new treatment_to_class() in treatments.py
+        return [self.emb, self.thermolicer, self.cleaner_fish][treatment_type.value]
 
     @staticmethod
     def generate_argparse_from_config(
@@ -260,8 +267,7 @@ class FarmConfig:
     """Config for individual farm"""
 
     def __init__(self, data: dict):
-        """Create farm configuration
-
+        """
         :param data: Dictionary with farm data
         """
 

@@ -11,9 +11,10 @@ jobs:
         miniconda-version: "latest"
         auto-update-conda: true
         python-version: "3.8"
+        mamba-version: "0.15"
         environment-file: environment.yml
         activate-environment: slp
-        channels: conda-forge
+        channels: conda-forge,defaults
     - uses: actions/checkout@v1
     - name: Conda info sanity check
       shell: bash -l {0}
@@ -26,17 +27,9 @@ jobs:
 
     - name: Type-check
       shell: bash -l {0}
-      # NOTE: the conda package for PyType has a few issues. 1: apparently it tries to pull an
-      # old version of ninja with breaking changes; 2: there are a few undetected errors in the 2020 version
-      # compared to the 2021 one. Unfortunately there is no clear changelog across versions :(
       run: |
         pytype --version
-        pytype --config pytype.cfg .
-    - name: Install git
-      shell: bash -l {0}
-      run: |
-        sudo apt update
-        sudo apt install -y git curl
+        pytype --config pytype_ci.cfg .
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1
       with:

@@ -1,3 +1,5 @@
+#!/bin/env python
+
 """
 This script provides the GUI of this project.
 
@@ -6,6 +8,7 @@ For a list of features check `this <https://github.com/resistance-modelling/slim
 The GUI is based on PyQt5 with PyQtgraphs so please make sure those are installed before launching the script.
 
 To launch the script, from the root folder: ``python -m slim.SeaLiceMgmtGUI``.
+Or simply ``slim run`` if slim has been installed with pip.
 
 Known bugs:
 
@@ -18,8 +21,10 @@ Before filing a new bug please check if your issue belongs to the
 """
 
 import sys
+from datetime import timedelta
 from pathlib import Path
 
+import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtWidgets, QtCore
 from PyQt5.QtCore import QThread, pyqtSignal, QSettings
@@ -37,7 +42,6 @@ from PyQt5.QtWidgets import (
 from slim.simulation.simulator import (
     Simulator,
     parse_artifact,
-    dump_as_dataframe,
     load_counts,
     reload_from_optimiser,
     dump_optimiser_as_pd,
@@ -236,7 +240,7 @@ class Window(QMainWindow):
 
     def openSimulatorDump(self):
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Load a dump", "", "Pickle file (*.pickle.lz4)"
+            self, "Load a dump", "", "Parquet file (*.parquet)"
         )
 
         if filename:
@@ -295,11 +299,14 @@ class SimulatorLoadingWorker(QThread):
     def run(self):
         try:
             parent_path = self.dump_path.parent
-            sim_name = self.dump_path.name[
-                len("simulation_name_") : -len(".pickle.lz4")
+            sim_name = self.dump_path.name[len("simulation_name_") : -len(".parquet")]
+            states_as_df, cfg = parse_artifact(parent_path, sim_name)
+
+            # TODO: This is ugly and makes no sense nowadays
+            times = [
+                cfg.start_date + timedelta(days=i)
+                for i in range((cfg.end_date - cfg.start_date).days)
             ]
-            states_times_it = parse_artifact(parent_path, sim_name)
-            states_as_df, times, cfg = dump_as_dataframe(states_times_it)
             try:
                 report = load_counts(cfg)
             except FileNotFoundError:

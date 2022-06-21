@@ -67,9 +67,9 @@
             "treatment_type": "chemical",
             "gene": "a",
             "pheno_resistance": {
-                "dominant": 0.95,
-                "incompletely_dominant": 0.85,
-                "recessive": 0.05
+                "dominant": 0.8,
+                "incompletely_dominant": 0.8,
+                "recessive": 0.001
             },
             "quadratic_fish_mortality_coeffs": [
                 0.0,
@@ -84,7 +84,7 @@
             "treatment_name": "Thermolicer",
             "effect_delay": 1,
             "application_period": 1,
-            "price_per_application": 500,
+            "price_per_application": 1e4,
             "treatment_type": "thermal",
             "gene": "t",
             "quadratic_fish_mortality_coeffs": [
@@ -95,6 +95,21 @@
                 -0.02541716,
                 -0.05129551
             ]
+        },
+        {
+            "treatment_name": "Cleaner Fish",
+            "treatment_type": "cleanerfish",
+            "effect_delay": 1,
+            "application_period": 1,
+            "price_per_application": 500,
+            "gene": "a",
+            "pheno_resistance": {
+                "dominant": 0.823,
+                "incompletely_dominant": 0.823,
+                "recessive": 0.823
+            },
+            "quadratic_fish_mortality_coeffs": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "natural_mortality": 0.028
         }
     ]
 }

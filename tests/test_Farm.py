@@ -9,8 +9,6 @@ from slim.simulation.cage import Cage
 from slim.simulation.config import to_dt
 from slim.types.treatments import Treatment
 
-# from slim.types.queue import SampleCommand
-
 
 class TestFarm:
     def test_farm_loads_params(self, first_farm):
@@ -26,11 +24,6 @@ class TestFarm:
         assert isinstance(farm_str, str)
         assert len(farm_str) > 0
         assert "id: 0" in farm_str
-
-    def test_farm_repr(self, first_farm):
-        farm_repr = repr(first_farm)
-        loaded_farm_data = json.loads(farm_repr)
-        assert isinstance(loaded_farm_data, dict)
 
     def test_year_temperatures(self, first_farm):
         tarbert = first_farm.cfg.loch_temperatures[1][1:]

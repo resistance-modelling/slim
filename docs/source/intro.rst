@@ -46,12 +46,15 @@ Overall, this project offers the following tools:
 
 * A simulator (See :py:mod:`slim.SeaLiceMgmt`)
 * A visualisation tool based on PyQt5 (See :py:mod:`slim.SeaLiceMgmtGUI`)
-* A strategy optimiser (See :py:mod:`slim.Optimiser`)
+* A (deprecated) strategy optimiser (See :py:mod:`slim.Optimiser`)
+* A benchmark tool (See :py:mod:`slim.Benchmark`)
+* A fitter for reports (See :py:mod:`slim.Fitter`)
 
 There are thus two designed workflows:
 
-1. Use the simulator to generate a *session dump*, then run the GUI to visualise such data.
-2. Use the strategy optimiser to obtain the best treatment parameters (more on this later), save the resulting configuration artifact.
+1. Use the simulator to generate a run artifact, then run the GUI to visualise such data.
+2. Use the fitter to perform a fit on recorded behaviour
+3. Find an optimal strategy for a given configuration.
 
 The simulator is typically executed as a standalone command, but it provides a relatively easy Python API for
 embedding purposes.

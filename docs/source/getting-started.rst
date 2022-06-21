@@ -12,18 +12,17 @@ Run the simulator
 
         The easiest way to run SLIM is via the command line.
 
-        The main script you'll need to run is SeaLiceMgmt. The general way to launch
-        it is the following:
+        In general, launching SLIM is as easy as the following:
 
         .. code-block:: bash
 
-            python -m slim.SeaLiceMgmt output_folder/simulation_name simulation_params_directory
+            slim run output_folder/simulation_name simulation_params_directory
 
         For example:
 
         .. code-block:: bash
 
-            python -m slim.SeaLiceMgmt output/Loch_Fyne config_data/Fyne
+            slim run output/Loch_Fyne config_data/Fyne
 
     .. group-tab:: Python
 
@@ -37,14 +36,15 @@ Run the simulator
             from slim.simulation.config import Config
             from slim.simulation.Simulator import Simulator
 
-            cfg = Config("config_data/config.json", "config_data/Fyne")
-            sim = Simulator("output", "Fyne_foobar", cfg)
+            # Note: if name is not provided the default name in the environment will be used.
+            cfg = Config("config_data/config.json", "config_data/Fyne", name="Loch_Fyne")
+            sim = Simulator("output", cfg)
             sim.run_model()
 
 Runtime Environment
 *******************
 
-An *environmental setup* consists of a subfolder containing three files:
+An *environmental setup* consists of a folder containing three files:
 
 - ``params.json`` with simulation parameters specific to the organisation;
 - ``interfarm_time.csv`` with travel time of sea lice between any two given farms (as a dense CSV matrix);
@@ -54,7 +54,7 @@ Optionally, an environment may contain a CSV report (called ``report.csv``) of r
 If present, they will be imported by the GUI.
 To see how to generate those reports, check :file:`slim/surveys/scraper.py`.
 
-See ``config_data/Fyne`` for examples.
+See `config_data/Fyne` for examples.
 
 Additionally, global simulation constants are provided inside ``config_data/config.json``.
 
@@ -83,7 +83,7 @@ Parameter Override
         In general, for  each key in the format ``a_b_c`` an automatic parameter in the format ``--a-b-c`` will be generated.
         For example:
 
-        ``python -m slim.SeaLiceMgmt out/0 config_data/Fyne --seed=0 --genetic-mechanism=discrete``
+        ``slim run out/0 config_data/Fyne --seed=0 --genetic-mechanism=discrete``
 
         For now, nested and list properties are not yet supported.
 
@@ -121,7 +121,7 @@ By default, SLIM generates some artifacts ready to be digested by our visualiser
 
 There are two possible types of artifacts:
 
-* output logs, saved as ``simulation_data_${NAME}.pickle.lz4``.
+* output logs, saved as ``simulation_data_${NAME}.parquet``.
 * serialised internal states (also known as *dump* ), saved as ``checkpoint_${NAME}.pickle.lz4``.
 
 In the majority of cases, you do not need to care about dumping and will probably stop reading now.
@@ -143,17 +143,17 @@ The second is available for debugging purposes and has been historically used as
 
         To generate a dump every ``n`` days add the ``--checkpoint-rate=n`` option. For example:
 
-        ``python -m slim.SeaLiceMgmt outputs/sim_1 config_data/Fyne --checkpoint-rate=1"``
+        ``slim run outputs/sim_1 config_data/Fyne --checkpoint-rate=1"``
 
         This will save the output every day.
 
         To *resume* a session one can instead pass the `--resume` parameter. Via CLI:
 
-        ``python -m slim.SeaLiceMgmt outputs/sim_1 config_data/Fyne --resume="2017-12-05 00:00:00"``
+        ``slim run outputs/sim_1 config_data/Fyne --resume="2017-12-05 00:00:00"``
 
         If you only know ``n`` days have elapsed since the start use the `--resume-after=n` option. For example:
 
-        ``python -m slim.SeaLiceMgmt outputs/sim_1 config_data/Fyne --resume-after=365``
+        ``slim run outputs/sim_1 config_data/Fyne --resume-after=365``
 
     .. group-tab:: Python
 
@@ -198,16 +198,12 @@ The second is available for debugging purposes and has been historically used as
 Multiprocessing
 """""""""""""""
 
-.. note::
+Multiprocessing is enabled by default. By default, it will allocate one process per farm.
+To change this, you can set ``farms_per_process=N`` in the ``Config`` or by passing
+``--farms-per-process=N`` in the CLI. ``N`` represents the maximum number of farms in a single process.
+The lower, the better (if you can afford it). If N=-1, multiprocessing is disabled.
 
-   The support for multiprocessing is still experimental. Head to :ref:`Multiprocessing` for details.
-
-To enable multiprocessing, you need to know how many farms you are going to simulate and how much parallelism you
-wish to achieve. For example, if simulating an environment with 8 agents in an octa-core system, it is stafe to allocate
-one farm per process. Therefore, you can pass the ``--farms-per-process=1`` option.
-The lower is better (if your system supports it) but 0 (the default) enables *single-process mode*.
-
-
+Note that when running the simulator an extra process is always created to dump the process output.
 
 Run the GUI
 ***********
@@ -215,8 +211,4 @@ Run the GUI
 We also provide a GUI for debugging and visualisation. Its support is still heavily experimental so please
 use with caution.
 
-To run the GUI you need to launch :py:mod:`slim.SeaLiceMgmtGUI`, for example via:
-```python -m slim.SeaLiceMgmtGUI``` and provide your artifact data.
-
-.. warning::
-   Do not try to parse a dump. While this has historically been the case, it will no longer work.
+To run the GUI simply launch ``slim gui`` and provide your artifact data from the menu.

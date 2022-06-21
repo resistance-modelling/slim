@@ -1,23 +1,16 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
 import datetime as dt
-import json
 import math
-from queue import PriorityQueue
-from typing import Union, Optional, Tuple, cast, TYPE_CHECKING, Dict, List
+from collections import Counter, defaultdict
+
+# from queue import PriorityQueue
+from typing import Union, Optional, Tuple, TYPE_CHECKING, Dict, List
 
 import numpy as np
 
-from slim import logger, LoggableMixin
+from slim.log import logger, LoggableMixin
 from slim.simulation.config import Config
-from slim.types.treatments import (
-    GeneticMechanism,
-    ChemicalTreatment,
-    ThermalTreatment,
-    Treatment,
-    TREATMENT_NO,
-)
 from slim.simulation.lice_population import (
     GenoDistrib,
     GrossLiceDistrib,
@@ -27,7 +20,6 @@ from slim.simulation.lice_population import (
     GenoLifeStageDistrib,
     largest_remainder,
     LifeStage,
-    GenoDistribDict,
     empty_geno_from_cfg,
     from_ratios_rng,
     from_ratios,
@@ -36,13 +28,18 @@ from slim.simulation.lice_population import (
     geno_to_alleles,
 )
 from slim.types.queue import (
-    DamAvailabilityBatch,
+    PriorityQueue,
     EggBatch,
     TravellingEggBatch,
     TreatmentEvent,
     pop_from_queue,
 )
-from slim.JSONEncoders import CustomFarmEncoder
+from slim.types.treatments import (
+    GeneticMechanism,
+    ChemicalTreatment,
+    ThermalTreatment,
+    Treatment,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from slim.simulation.farm import Farm, GenoDistribByHatchDate
@@ -113,6 +110,7 @@ class Cage(LoggableMixin):
 
         self.num_fish = cfg.farms[self.farm_id].num_fish
         self.num_infected_fish = self.get_mean_infected_fish()
+        self.num_cleaner = 0
 
         self.hatching_events: PriorityQueue[EggBatch] = PriorityQueue()
         self.arrival_events: PriorityQueue[TravellingEggBatch] = PriorityQueue()
@@ -142,14 +140,6 @@ class Cage(LoggableMixin):
         ]
 
         return filtered_vars
-
-    def __str__(self):
-        """
-        Get a human readable string representation of the cage in json form.
-        :return: a description of the cage
-        """
-
-        return json.dumps(self.to_json_dict(), cls=CustomFarmEncoder, indent=4)
 
     def update(
         self, cur_date: dt.datetime, pressure: int, ext_pressure_ratio: GenoRates
@@ -187,6 +177,9 @@ class Cage(LoggableMixin):
 
         # Egg hatching
         new_offspring_distrib = self.create_offspring(cur_date)
+
+        # Cleaner fish
+        cleaner_fish_delta = self.get_cleaner_fish_delta()
 
         # Lice coming from reservoir
         lice_from_reservoir = self.get_reservoir_lice(pressure, ext_pressure_ratio)
@@ -244,6 +237,7 @@ class Cage(LoggableMixin):
             delta_avail_dams,
             new_offspring_distrib,
             hatched_arrivals_dist,
+            cleaner_fish_delta,
         )
 
         logger.debug("\t\tfinal lice population = %s", self.lice_population)
@@ -287,15 +281,18 @@ class Cage(LoggableMixin):
 
         self.effective_treatments = new_effective_treatments
 
-        # if len(self.last_effective_treatment) == 0:
-        #    return geno_treatment_distrib
+        treatments = self.effective_treatments
+        if self.num_cleaner > 0:
+            treatments = treatments + [
+                TreatmentEvent(cur_date, Treatment.CLEANERFISH, 0, cur_date, cur_date)
+            ]
 
         # TODO: this is very fragile
         geno_treatment_distribs = defaultdict(lambda: GenoTreatmentValue(0, []))
+        ave_temp = self.get_temperature(cur_date)
 
-        for treatment in self.effective_treatments:
+        for treatment in treatments:
             treatment_type = treatment.treatment_type
-            ave_temp = self.get_temperature(cur_date)
 
             logger.debug(
                 "\t\ttreating farm %d/cage %d on date %s",
@@ -306,10 +303,18 @@ class Cage(LoggableMixin):
 
             geno_treatment_distrib = self.cfg.get_treatment(
                 treatment_type
-            ).get_lice_treatment_mortality_rate(ave_temp)
+            ).get_lice_treatment_mortality_rate(ave_temp, self)
             # assumption: all treatments act on different genes
+            # TODO: the assumption is correct, but currently the config only uses one gene!
             for k, v in geno_treatment_distrib.items():
-                geno_treatment_distribs[k] = v
+                if k in geno_treatment_distribs:
+                    # TODO: not all treatments on the same gene have the same susceptible stages!
+                    prev = geno_treatment_distribs[k]
+                    geno_treatment_distribs[k] = GenoTreatmentValue(
+                        prev.mortality_rate + v.mortality_rate, prev.susceptible_stages
+                    )
+                else:
+                    geno_treatment_distribs[k] = v
 
         return geno_treatment_distribs
 
@@ -344,7 +349,7 @@ class Cage(LoggableMixin):
                     dtype=np.int64,
                 )
                 num_susc = np.sum(population_by_stages)
-                num_dead_lice = round(mortality_rate * num_susc)
+                num_dead_lice = int(round(mortality_rate * num_susc))
                 num_dead_lice = min(num_dead_lice, num_susc)
 
                 dead_lice_nums = (
@@ -621,6 +626,7 @@ class Cage(LoggableMixin):
         return fish_deaths_natural, fish_deaths_from_lice
 
     def compute_eta_aldrin(self, num_fish_in_farm, days):
+        # TODO: this lacks of stochasticity compared to the paper
         return (
             self.cfg.infection_main_delta
             + math.log(num_fish_in_farm / 1e5)
@@ -640,12 +646,12 @@ class Cage(LoggableMixin):
         # Based on Aldrin et al.
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
         # but at what point does the distribution mean decrease)./
+        # TODO: this has O(c^2) complexity and is not parallelisable. We could likely remove the softmax...
         age_distrib = self.get_stage_ages_distrib("L2")
         num_avail_lice = round(self.lice_population["L2"] * np.sum(age_distrib[1:]))
         if num_avail_lice > 0:
             num_fish_in_farm = self.farm.num_fish
 
-            # TODO: this has O(c^2) complexity
             etas = np.array(
                 [
                     c.compute_eta_aldrin(num_fish_in_farm, days_since_start)
@@ -688,7 +694,7 @@ class Cage(LoggableMixin):
         """
         Get the average number of infected fish.
 
-        :param \*args: the stages to consider (optional, by default all stages from the third onward are taken into account)
+        :param \\*args: the stages to consider (optional, by default all stages from the third onward are taken into account)
 
         :returns: the number of infected fish
         """
@@ -756,8 +762,8 @@ class Cage(LoggableMixin):
         return int(
             np.clip(
                 self.cfg.rng.poisson(prob_matching * females),
-                np.int32(0),
-                np.int32(min(males, females)),
+                np.int64(0),
+                np.int64(min(males, females)),
             )
         )
 
@@ -1043,13 +1049,13 @@ class Cage(LoggableMixin):
         affected_lice_quotas = np.array(
             [
                 self.lice_population[stage] / infecting_lice * affected_lice_gross
-                for stage in LicePopulation.infectious_stage
+                for stage in LicePopulation.infectious_stages
             ]
         )
         affected_lice_np = largest_remainder(affected_lice_quotas)
 
         affected_lice = Counter(
-            dict(zip(LicePopulation.infectious_stage, affected_lice_np.tolist()))
+            dict(zip(LicePopulation.infectious_stages, affected_lice_np.tolist()))
         )
 
         surviving_lice_quotas = np.rint(
@@ -1075,6 +1081,22 @@ class Cage(LoggableMixin):
         dying_lice_distrib = {k: int(v) for k, v in dying_lice.items() if v > 0}
         logger.debug("\t\tLice mortality due to fish mortality: %s", dying_lice_distrib)
         return dying_lice_distrib
+
+    def get_cleaner_fish_delta(self) -> int:
+        """
+        Call this function before :meth:`get_lice_treatment_mortality()` !
+        """
+        restock = 0.0
+        for treatment in self.current_treatments:
+            if treatment == Treatment.CLEANERFISH.value:
+                # assume restocking of 5% of Nfish
+                restock = self.num_fish * 1 / 100
+
+        return int(
+            math.ceil(
+                restock - (self.num_cleaner * self.cfg.cleaner_fish.natural_mortality)
+            )
+        )
 
     def promote_population(
         self,
@@ -1124,6 +1146,7 @@ class Cage(LoggableMixin):
         delta_dams_batch: int,
         new_offspring_distrib: GenoDistrib,
         hatched_arrivals_dist: GenoDistrib,
+        cleaner_fish_delta: int = 0,
     ):
         """Update the number of fish and the lice in each life stage
 
@@ -1141,6 +1164,7 @@ class Cage(LoggableMixin):
         :param delta_dams_batch: the genotypes of now-unavailable females in batch events
         :param new_offspring_distrib: the new offspring obtained from hatching and migrations
         :param hatched_arrivals_dist: new offspring obtained from arrivals
+        :param cleaner_fish_delta: new cleaner fish
         """
 
         # Ensure all non-lice-deaths happen
@@ -1193,6 +1217,8 @@ class Cage(LoggableMixin):
 
         # treatment may kill some lice attached to the fish, thus update at the very end
         self.num_infected_fish = self.get_mean_infected_fish()
+
+        self.num_cleaner += cleaner_fish_delta
 
     # TODO: update arrivals dict type
     def update_arrivals(
@@ -1290,14 +1316,18 @@ class Cage(LoggableMixin):
         3. Dam waiting and treatment queues will be flushed.
         """
 
-        for stage in LicePopulation.pathogenic_stages:
+        for stage in LicePopulation.infectious_stages:
             self.lice_population[stage] = 0
 
         self.num_infected_fish = self.num_fish = 0
         self.treatment_events = PriorityQueue()
+        self.effective_treatments.clear()
 
     @property
     def is_fallowing(self):
+        """
+        True if the cage is fallowing.
+        """
         return self.num_fish == 0
 
     def is_treated(self, treatment_type: Optional[Treatment] = None):

@@ -8,15 +8,15 @@ import abc
 import datetime as dt
 from dataclasses import dataclass, field, asdict
 from functools import singledispatch
-from queue import PriorityQueue
+from heapq import heappush, heappop
+from typing import Callable, TypeVar, TYPE_CHECKING, Generic
 
-from typing import Callable, TypeVar, TYPE_CHECKING, Optional, Tuple, List, Dict
 
-from slim.types.policies import ObservationSpace
+# from queue import PriorityQueue
 
 if TYPE_CHECKING:
-    from slim.simulation.farm import GenoDistribByHatchDate, CageAllocation
-    from slim.simulation.lice_population import GenoDistrib, GenoRates
+    from slim.simulation.lice_population import GenoDistrib
+    from slim.types.policies import ObservationSpace
     from slim.types.treatments import Treatment
 
 
@@ -121,6 +121,28 @@ class StepResponse:
     total_cost: float
     observation_space: ObservationSpace
     loggable: dict  # any extra to log
+
+
+T = TypeVar("T")
+
+
+class PriorityQueue(Generic[T]):
+    """Mutex-free priority queue. Only use where thread-safety is not required!"""
+
+    def __init__(self):
+        self.queue = []
+
+    def qsize(self):
+        return len(self.queue)
+
+    def empty(self):
+        return self.qsize() == 0
+
+    def put(self, item):
+        heappush(self.queue, item)
+
+    def get(self):
+        return heappop(self.queue)
 
 
 EventT = TypeVar("EventT", CageEvent, SamplingEvent)
