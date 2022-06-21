@@ -54,7 +54,7 @@ Optionally, an environment may contain a CSV report (called ``report.csv``) of r
 If present, they will be imported by the GUI.
 To see how to generate those reports, check :file:`slim/surveys/scraper.py`.
 
-See :dir:`config_data/Fyne` for examples.
+See `config_data/Fyne` for examples.
 
 Additionally, global simulation constants are provided inside ``config_data/config.json``.
 
@@ -121,7 +121,7 @@ By default, SLIM generates some artifacts ready to be digested by our visualiser
 
 There are two possible types of artifacts:
 
-* output logs, saved as ``simulation_data_${NAME}.pickle.lz4``.
+* output logs, saved as ``simulation_data_${NAME}.parquet``.
 * serialised internal states (also known as *dump* ), saved as ``checkpoint_${NAME}.pickle.lz4``.
 
 In the majority of cases, you do not need to care about dumping and will probably stop reading now.
@@ -198,16 +198,12 @@ The second is available for debugging purposes and has been historically used as
 Multiprocessing
 """""""""""""""
 
-.. note::
+Multiprocessing is enabled by default. By default, it will allocate one process per farm.
+To change this, you can set ``farms_per_process=N`` in the ``Config`` or by passing
+``--farms-per-process=N`` in the CLI. ``N`` represents the maximum number of farms in a single process.
+The lower, the better (if you can afford it). If N=-1, multiprocessing is disabled.
 
-   The support for multiprocessing is still experimental. Head to :ref:`Multiprocessing` for details.
-
-To enable multiprocessing, you need to know how many farms you are going to simulate and how much parallelism you
-wish to achieve. For example, if simulating an environment with 8 agents in an octa-core system, it is stafe to allocate
-one farm per process. Therefore, you can pass the ``--farms-per-process=1`` option.
-The lower is better (if your system supports it) but 0 (the default) enables *single-process mode*.
-
-
+Note that when running the simulator an extra process is always created to dump the process output.
 
 Run the GUI
 ***********
@@ -216,6 +212,3 @@ We also provide a GUI for debugging and visualisation. Its support is still heav
 use with caution.
 
 To run the GUI simply launch ``slim gui`` and provide your artifact data from the menu.
-
-.. warning::
-   Do not try to parse a dump. While this has historically been the case, it will no longer work.

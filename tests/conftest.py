@@ -34,8 +34,7 @@ from slim.simulation.lice_population import (
 # TODO: make parallel test cases that use this fixture
 @pytest.fixture(scope="session")
 def run_destroy():
-    # async actors cannot use local mode
-    ray.init(local_mode=False, num_cpus=1, num_gpus=0)
+    ray.init(local_mode=True, num_cpus=1, num_gpus=0)
     yield
     ray.shutdown()
 

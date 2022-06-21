@@ -16,7 +16,6 @@ __all__ = [
     "SimulatorPZEnv",
     "BernoullianPolicy",
     "MosaicPolicy",
-    "PilotedPolicy",
     "UntreatedPolicy",
     "get_simulation_path",
     "load_counts",
@@ -32,13 +31,15 @@ import pickle
 import sys
 import traceback
 from collections import defaultdict
-from io import BytesIO
 from pathlib import Path
-from typing import List, Optional, Tuple, Iterator, Union, cast
+from typing import List, Optional, Tuple, Union, Iterator
 
 import lz4.frame
+import numpy as np
+import pandas as pd
 import ray
 import tqdm
+from gym import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import agent_selector, wrappers
 import pyarrow as pa
@@ -51,8 +52,10 @@ from slim.types.policies import (
     get_observation_space_schema,
 )
 
+from slim.log import logger
 from .policies import *
 from slim.types.treatments import Treatment
+from slim.types.policies import NO_ACTION
 from .config import Config
 from .farm import MAX_NUM_APPLICATIONS
 from .lice_population import GenoDistrib, from_dict
@@ -472,7 +475,7 @@ def parse_artifact(
     return paq.read_table(data_file).to_pandas(), cfg
 
 
-def load_checkpoint(path, sim_id):
+def load_checkpoint(path, sim_id) -> Iterator[dict]:
     """
     :param path: the folder containing the artifact
     :param sim_id: the simulation id

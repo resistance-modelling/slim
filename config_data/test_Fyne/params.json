@@ -16,6 +16,7 @@
     "agg_rate_enforcement_threshold": 6.0,
     "agg_rate_enforcement_strikes": 4,
     "treatment_strategy": "bernoulli",
+    "farms_per_process": -1,
     "farms": [
         {
             "name": "Tarbert",
