@@ -102,12 +102,7 @@ def get_config(parser: argparse.ArgumentParser):
     config_args.name = simulation_id
 
     return (
-        Config(
-            cfg_path,
-            args.param_dir,
-            **vars(args),
-            **vars(config_args)
-        ),
+        Config(cfg_path, args.param_dir, **vars(args), **vars(config_args)),
         args,
         output_folder,
     )

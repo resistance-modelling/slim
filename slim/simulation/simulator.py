@@ -285,7 +285,7 @@ class DumpingActor:
             else:
                 self.log_lists[k].append(v)
 
-    #def _flush_stream(self, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
+    # def _flush_stream(self, buffer: BytesIO, stream: lz4.frame.LZ4FrameFile):
     #    stream.write(buffer.getvalue())
     #    buffer.seek(0)
     #    buffer.truncate(0)

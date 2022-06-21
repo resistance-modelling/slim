@@ -299,13 +299,14 @@ class SimulatorLoadingWorker(QThread):
     def run(self):
         try:
             parent_path = self.dump_path.parent
-            sim_name = self.dump_path.name[
-                len("simulation_name_") : -len(".parquet")
-            ]
+            sim_name = self.dump_path.name[len("simulation_name_") : -len(".parquet")]
             states_as_df, cfg = parse_artifact(parent_path, sim_name)
 
             # TODO: This is ugly and makes no sense nowadays
-            times = [cfg.start_date + timedelta(days=i) for i in range((cfg.end_date - cfg.start_date).days)]
+            times = [
+                cfg.start_date + timedelta(days=i)
+                for i in range((cfg.end_date - cfg.start_date).days)
+            ]
             try:
                 report = load_counts(cfg)
             except FileNotFoundError:

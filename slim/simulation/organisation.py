@@ -240,7 +240,6 @@ class MultiProcFarmPool(FarmPool):
         for farm_actor in self._farm_actors:
             farm_actor.register_farm_pool.remote(self._farm_actors, self._batch_pools)
 
-
     def stop(self):
         print("Stopping farms")
         self._farm_actors.clear()

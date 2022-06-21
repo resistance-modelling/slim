@@ -23,7 +23,7 @@ copyright = "2021-2022, Anthony O' Hare, Enrico Trombetta, Jessica Enright"
 author = "Anthony O' Hare, Enrico Trombetta, Jessica Enright"
 
 # The full version, including alpha/beta/rc tags
-release = "0.3.0"
+release = "0.4.0"
 
 
 # -- General configuration ---------------------------------------------------

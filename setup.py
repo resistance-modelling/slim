@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="slim",
-    version="0.3.1",
+    version="0.4.0",
     packages=["slim", "slim.types", "slim.gui_utils", "slim.simulation"],
     url="https://github.com/resistance-modelling/slim",
     license="MIT",
