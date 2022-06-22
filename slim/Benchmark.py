@@ -1,3 +1,5 @@
+#!/bin/env python
+
 __all__ = []
 
 import functools
