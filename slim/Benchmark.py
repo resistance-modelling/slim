@@ -4,6 +4,7 @@ __all__ = []
 
 import functools
 import logging
+import traceback
 from collections import defaultdict
 from pathlib import Path
 import glob
@@ -105,14 +106,13 @@ def load_matrix(
     files = glob.glob(str(out_path / "*.parquet"))
 
     if columns is not None:
-        columns = ["timestamp", "farm_name"] + list(columns)
+        columns = ["farm_name"] + list(columns)
 
     tasks: List[pd.DataFrame] = ray.get(
         _remove_nulls.remote(*[load_worker.remote(file, columns) for file in files])
     )
-    print(f"A total of {len(tasks)} files were loaded")
     columns = set(tasks[0].columns)
-    columns -= {"timestamp", "farm_name"}
+    columns -= {"farm_name"}
 
     results_per_farm = defaultdict(lambda: {})
     # extract group for each dataframe
@@ -195,89 +195,118 @@ def ribbon_plot(ax, xs, trials, label="", conv=7):
         ax.plot(trial, linewidth=1.0, color="gray", alpha=0.8)
 
 
-# TODO: this is stupid and O(N^2)
-def plot_farm(
-    cfg: Config,
-    output_folder: Path,
-    farm_name: str,
-    gross_ax,
-    geno_ax,
-    fish_ax,
-    agg_ax,
-    payoff_ax,
-    reservoir_ax,
-):
-    stages = tuple(LicePopulation.lice_stages)
-    stages_readable = LicePopulation.lice_stages_bio_labels
-    alleles = geno_to_alleles(0)
-
-    xs = np.arange((cfg.end_date - cfg.start_date).days)
-    lice_pop = load_matrix(
+def get_lice_pop(cfg, output_folder, stages):
+    return load_matrix(
         cfg,
         output_folder,
         stages,
         preprocess=np.vectorize(lambda x: sum(x.values())),
         ci=False,
-    )[farm_name]
-    data = get_ci(sum([lice_pop[stage] for stage in stages]))
-    ribbon_plot(gross_ax, xs, data, "Overall lice population")
-    prepare_ax(gross_ax, "Lice population")
+    )
+
+
+def plot_pop(cfg: Config, axs, ax_idx, xs, output_folder):
+    stages = tuple(LicePopulation.lice_stages)
+    #stages_readable = LicePopulation.lice_stages_bio_labels
+    #alleles = geno_to_alleles(0)
+
+    lice_pop = get_lice_pop(cfg, output_folder, stages)
+
+    for i in range(cfg.nfarms):
+        farm_name = f"farm_{i}"
+        lice_pop_farm = lice_pop[farm_name]
+        data = get_ci(sum([lice_pop_farm[stage] for stage in stages]))
+        gross_ax = axs[farm_name][1][ax_idx]
+
+        ribbon_plot(gross_ax, xs, data, "Overall lice population")
+        prepare_ax(gross_ax, "Lice population")
+
+
+def plot_geno(cfg, axs, ax_idx, xs, output_folder):
+    stages = tuple(LicePopulation.lice_stages)
+    alleles = geno_to_alleles(0)
+
+    lice_pop = get_lice_pop(cfg, output_folder, stages)
 
     def agg(x, allele):
         return x[allele]
 
-    for allele in alleles:
-        per_allele_pop = load_matrix(
+    per_allele_pop = {
+        allele: load_matrix(
             cfg,
             output_folder,
             stages,
             preprocess=np.vectorize(lambda x: agg(x, allele=allele)),
-            ci=False,
-        )[farm_name]
-        normalised = sum(per_allele_pop[stage] for stage in stages) / (
-            sum(lice_pop[stage] for stage in stages)
-        )
-        ribbon_plot(geno_ax, xs, get_ci(normalised), allele)
+            ci=False
+        ) for allele in alleles
+    }
 
-    prepare_ax(geno_ax, "By geno", legend=True, yscale="linear", ylim=(0, 1))
+    for i in range(cfg.nfarms):
+        farm_name = f"farm_{i}"
+        for allele in alleles:
+            per_allele_pop_farm = per_allele_pop[allele][farm_name]
+            lice_pop_farm = lice_pop[farm_name]
+            normalised = sum(per_allele_pop_farm[stage] for stage in stages) / (
+                sum(lice_pop_farm[stage] for stage in stages)
+            )
+            geno_ax = axs[farm_name][1][ax_idx]
+            ribbon_plot(geno_ax, xs, get_ci(normalised), allele)
+            prepare_ax(geno_ax, "By geno", legend=True, yscale="linear", ylim=(0, 1))
 
-    # plot_regions(geno_ax, xs, regions)
 
-    # Fish population and aggregation
+def plot_fish_agg(cfg, axs, fish_ax_idx, agg_ax_idx, xs, output_folder):
     fish_pop_agg = load_matrix(
         cfg, output_folder, ("fish_population", "aggregation", "cleaner_fish")
-    )[farm_name]
-    fish_pop, fish_agg, cleaner_fish = (
-        fish_pop_agg["fish_population"],
-        fish_pop_agg["aggregation"],
-        fish_pop_agg["cleaner_fish"],
     )
+    for i in range(cfg.nfarms):
+        farm_name = f"farm_{i}"
+        fish_pop_agg_farm = fish_pop_agg[farm_name]
+        # Fish population and aggregation
+        fish_pop, fish_agg, cleaner_fish = (
+            fish_pop_agg_farm["fish_population"],
+            fish_pop_agg_farm["aggregation"],
+            fish_pop_agg_farm["cleaner_fish"],
+        )
 
-    ribbon_plot(fish_ax, xs, fish_pop, label="Fish population")
-    ribbon_plot(fish_ax, xs, cleaner_fish, label="Cleaner fish population")
-    ribbon_plot(agg_ax, xs, fish_agg, label="Aggregation rate")
+        fish_ax = axs[farm_name][1][fish_ax_idx]
+        agg_ax = axs[farm_name][1][agg_ax_idx]
 
-    prepare_ax(
-        fish_ax,
-        "By fish population",
-        ylabel="Fish population",
-        ylim=(0, 200000),
-        yscale="linear",
-    )
+        ribbon_plot(fish_ax, xs, fish_pop, label="Fish population")
+        ribbon_plot(fish_ax, xs, cleaner_fish, label="Cleaner fish population")
+        ribbon_plot(agg_ax, xs, fish_agg, label="Aggregation rate")
 
-    prepare_ax(
-        agg_ax, "By lice aggregation", ylim=(0, 10), yscale="linear", threshold=6.0
-    )
+        prepare_ax(
+            fish_ax,
+            "By fish population",
+            ylabel="Fish population",
+            ylim=None,  # Jess will not like this but not all farms are the same...
+            yscale="linear",
+        )
 
+        prepare_ax(
+            agg_ax, "By lice aggregation", ylim=(0, 10), yscale="linear", threshold=6.0
+        )
+
+
+def plot_payoff(cfg, axs, ax_idx, xs, output_folder):
     payoff = load_matrix(
         cfg, output_folder, ("payoff",), preprocess=lambda row: row.cumsum()
-    )[farm_name]["payoff"]
-    ribbon_plot(payoff_ax, xs, payoff.cumsum(axis=1), label="Payoff")
-    # plot_regions(payoff_ax, xs, regions)
+    )
 
-    prepare_ax(payoff_ax, "Payoff", "Payoff (pseudo-gbp)", ylim=None, yscale="linear")
+    for i in range(cfg.nfarms):
+        farm_name = f"farm_{i}"
+        payoff_farm = payoff[farm_name]["payoff"]
 
-    # reservoir = load_matrix(cfg, output_folder, ["new_reservoir_lice"])
+        payoff_ax = axs[farm_name][1][ax_idx]
+
+        ribbon_plot(payoff_ax, xs, payoff_farm.cumsum(axis=1), label="Payoff")
+        # plot_regions(payoff_ax, xs, regions)
+
+        prepare_ax(payoff_ax, "Payoff", "Payoff (pseudo-gbp)", ylim=None, yscale="linear")
+
+
+def plot_reservoir(cfg, axs, ax_idx, xs, output_folder):
+    alleles = geno_to_alleles(0)
     col = "new_reservoir_lice_ratios"
 
     def agg(allele):
@@ -286,47 +315,55 @@ def plot_farm(
 
         return _agg
 
-    for allele in alleles:
-        data = load_matrix(
-            cfg, output_folder, (col,), preprocess=np.vectorize(agg(allele))
-        )[farm_name][col]
-        ribbon_plot(reservoir_ax, xs, data, label=allele)
+    data = {
+        allele:
+            load_matrix(
+            cfg, output_folder, (col,), preprocess=np.vectorize(agg(allele)))
+         for allele in alleles
+    }
+    # reservoir = load_matrix(cfg, output_folder, ["new_reservoir_lice"])
 
-    prepare_ax(
-        reservoir_ax,
-        "Reservoir ratios",
-        ylabel="Probabilities",
-        ylim=(0, 1),
-        yscale="linear",
-    )
+    for i in range(cfg.nfarms):
+        farm_name = f"farm_{i}"
+        reservoir_ax = axs[farm_name][1][ax_idx]
+
+        for allele in alleles:
+            data_farm = data[allele][farm_name][col]
+
+            ribbon_plot(reservoir_ax, xs, data_farm, label=allele)
+
+        prepare_ax(
+            reservoir_ax,
+            "Reservoir ratios",
+            ylabel="Probabilities",
+            ylim=(0, 1),
+            yscale="linear",
+        )
 
 
 def plot_data(cfg: Config, extra: str, output_folder: Path):
     width = 26
 
-    logger.info(
-        "This function is quite slow. It could be optimised although we do not need to for now"
-    )
-    fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(width, 12 / 16 * width))
+    ax_dict = {
+        f"farm_{i}": plt.subplots(nrows=3, ncols=2, figsize=(width, 12 / 16 * width))
+        for i in range(cfg.nfarms)
+    }
+    xs = np.arange((cfg.end_date - cfg.start_date).days)
+
+    # Basically plot the same parameter for all the farms
+    plot_pop(cfg, ax_dict, (0,0), xs, output_folder)
+    plot_geno(cfg, ax_dict, (0,1), xs, output_folder)
+    plot_fish_agg(cfg, ax_dict, (1, 0), (1, 1), xs, output_folder)
+    plot_payoff(cfg, ax_dict, (2, 0), xs, output_folder)
+    plot_reservoir(cfg, ax_dict, (2, 1), xs, output_folder)
+
     for i in range(cfg.nfarms):
+        farm_id = f"farm_{i}"
         farm_name = cfg.farms[i].name
+
+        fig, _ = ax_dict[farm_id]
         fig.suptitle(farm_name, fontsize=30)
-        plot_farm(
-            cfg,
-            output_folder,
-            f"farm_{i}",
-            axs[0][0],
-            axs[0][1],
-            axs[1][0],
-            axs[1][1],
-            axs[2][0],
-            axs[2][1],
-        )
-        logger.info(f"Generating plot to {output_folder}/{farm_name} {extra}.pdf")
         fig.savefig(f"{output_folder}/{farm_name} {extra}.pdf")
-        # fig.clf() does not work as intended...
-        for ax in axs.flatten():
-            ax.cla()
 
     plt.close(fig)
 
