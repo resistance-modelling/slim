@@ -48,7 +48,8 @@ if __name__ == "__main__":
         "--checkpoint-rate",
         help="(DEBUG) Interval to dump the simulation state. Allowed in single-process mode only.",
         type=int,
-        required=False,
+        required=False
+,
     )
 
     cfg, args, output_folder = slim.get_config(parser)

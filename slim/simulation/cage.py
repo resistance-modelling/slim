@@ -475,11 +475,12 @@ class Cage(LoggableMixin):
                 return 0
             max_dev_time = self.cfg.stage_age_evolutions[stage]
             ages_distrib = self.get_stage_ages_distrib(stage, temp_c)
+            # TODO:
             # let us sample from 1000 lice
-            ages = self.cfg.rng.choice(np.arange(max_dev_time), 1000, p=ages_distrib)
-
-            evolution_rates = self._dev_rates(del_p, del_m10, del_s, temp_c, ages)
-            average_rates = np.mean(evolution_rates)
+            evolution_rates = self._dev_rates(
+                del_p, del_m10, del_s, temp_c, np.arange(max_dev_time)
+            )
+            average_rates = np.mean(ages_distrib.dot(evolution_rates))
 
             return round(
                 num_lice * average_rates
@@ -636,22 +637,37 @@ class Cage(LoggableMixin):
 
     def get_infection_rates(self, days_since_start) -> Tuple[float, int]:
         """
-        Compute the number of lice that can infect and what their infection rate (number per fish) is
+        Compute the number of lice that can infect and what their infection rate (number per fish) is.
+
+        Compared to Aldrin et al. we do not calculate a softmax across cage rates as this would cause multiprocessing
+        issues. We still perform
 
         :param days_since_start: days since the cage has opened
 
         :returns: a pair (Einf, num_avail_lice)
         """
 
-        # Based on Aldrin et al.
+        # Based on Aldrin et al., but we do not consider a softmax betwwe
         # Perhaps we can have a distribution which can change per day (the mean/median increaseѕ?
-        # but at what point does the distribution mean decrease)./
-        # TODO: this has O(c^2) complexity and is not parallelisable. We could likely remove the softmax...
+        # but at what point does the distribution mean decrease).
         age_distrib = self.get_stage_ages_distrib("L2")
         num_avail_lice = round(self.lice_population["L2"] * np.sum(age_distrib[1:]))
         if num_avail_lice > 0:
             num_fish_in_farm = self.farm.num_fish
 
+            eta = (
+                self.cfg.infection_main_delta
+                + math.log(num_fish_in_farm / 1e5)
+                + self.cfg.infection_weight_delta
+                * (
+                    math.log(self.average_fish_mass(days_since_start) / 1e3)
+                    - self.cfg.delta_expectation_weight_log
+                )
+            )
+
+            Einf = math.exp(eta) / (1 + math.exp(eta))
+
+            """
             etas = np.array(
                 [
                     c.compute_eta_aldrin(num_fish_in_farm, days_since_start)
@@ -659,6 +675,7 @@ class Cage(LoggableMixin):
                 ]
             )
             Einf = math.exp(etas[self.id]) / (1 + np.sum(np.exp(etas)))
+            """
 
             return Einf, num_avail_lice
 

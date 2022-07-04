@@ -286,7 +286,7 @@ class TestCage:
         assert rate > 0
         assert avail_lice > 0
 
-        assert 0.015 <= rate <= 0.020
+        assert 0.015 <= rate <= 0.025
         assert avail_lice == 360
 
     def test_get_infected_fish_no_infection(self, first_cage):
