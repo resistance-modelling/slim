@@ -103,7 +103,7 @@ def load_matrix(
     ci_confidence=0.95,
 ):
     out_path = out_path / cfg.name
-    files = glob.glob(str(out_path / "*.parquet"))
+    files = glob.glob(str(out_path / "*.parquet"))[:120]
 
     if columns is not None:
         columns = ["farm_name"] + list(columns)
@@ -147,9 +147,10 @@ def prepare_ax(
     ylim=(1, 1e10),
     threshold=None,
     legend=True,
+    grid=True
 ):
     ax.set_title(farm_name, fontsize=18)
-    ax.grid(True, axis="y")
+    ax.grid(grid, axis="y")
     if ylim:
         ax.set_ylim(*ylim)
     ax.set_yscale(yscale)
@@ -176,23 +177,17 @@ def get_trials(dfs, func, columns):
     return pd.concat(total_per_df, axis=1)
 
 
-def ribbon_plot(ax, xs, trials, label="", conv=7):
+def ribbon_plot(ax, xs, trials, label="", conv=7, color=None):
     kernel = np.zeros((3, conv))
     kernel[1] = np.full((conv,), 1 / conv)
-    mean_interval, min_interval_ci, max_interval_ci = data = ndimage.convolve(
+    mean_interval, min_interval_ci, max_interval_ci = ndimage.convolve(
         trials, kernel, mode="nearest"
     )
 
-    ax.plot(mean_interval, linewidth=2.5, label=label)
+    plotted_line = ax.plot(mean_interval, linewidth=2.5, label=label, color=color)[0]
     ax.fill_between(
-        xs, min_interval_ci, max_interval_ci, alpha=0.3, label=f"{label} 95% CI"
+        xs, min_interval_ci, max_interval_ci, alpha=0.3, label=f"{label} 95% CI", color=plotted_line.get_color()
     )
-
-    # ax.fill_between(xs, min_interval, max_interval, alpha=.1, label=label + " 100% CI",
-    #                color=poly.get_facecolor())
-
-    for trial in trials:
-        ax.plot(trial, linewidth=1.0, color="gray", alpha=0.8)
 
 
 def get_lice_pop(cfg, output_folder, stages):
@@ -269,10 +264,13 @@ def plot_fish_agg(cfg, axs, fish_ax_idx, agg_ax_idx, xs, output_folder):
         )
 
         fish_ax = axs[farm_name][1][fish_ax_idx]
+        cleaner_fish_ax = fish_ax.twinx()
+        cleaner_fish_ax.set_ylabel("Cleaner fish population")
+        cleaner_fish_ax.tick_params(axis='y')
         agg_ax = axs[farm_name][1][agg_ax_idx]
 
         ribbon_plot(fish_ax, xs, fish_pop, label="Fish population")
-        ribbon_plot(fish_ax, xs, cleaner_fish, label="Cleaner fish population")
+        ribbon_plot(cleaner_fish_ax, xs, cleaner_fish, label="Cleaner fish population", color="brown")
         ribbon_plot(agg_ax, xs, fish_agg, label="Aggregation rate")
 
         prepare_ax(
@@ -281,7 +279,20 @@ def plot_fish_agg(cfg, axs, fish_ax_idx, agg_ax_idx, xs, output_folder):
             ylabel="Fish population",
             ylim=None,  # Jess will not like this but not all farms are the same...
             yscale="linear",
+            legend=False
         )
+        prepare_ax(
+            cleaner_fish_ax,
+            "",
+            ylabel="Cleaner fish population",
+            ylim=None,
+            yscale="linear",
+            grid=False,
+            legend=False
+        )
+
+        fish_ax.legend()
+        cleaner_fish_ax.legend()
 
         prepare_ax(
             agg_ax, "By lice aggregation", ylim=(0, 10), yscale="linear", threshold=6.0
@@ -364,6 +375,8 @@ def plot_data(cfg: Config, extra: str, output_folder: Path):
         fig, _ = ax_dict[farm_id]
         fig.suptitle(farm_name, fontsize=30)
         fig.savefig(f"{output_folder}/{farm_name} {extra}.pdf")
+        fig.savefig(f"{output_folder}/{farm_name} {extra}.png")
+        fig.savefig(f"{output_folder}/{farm_name} {extra}.svg")
 
     plt.close(fig)
 
