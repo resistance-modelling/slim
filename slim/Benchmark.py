@@ -3,8 +3,7 @@
 __all__ = []
 
 import functools
-import logging
-import traceback
+import math
 from collections import defaultdict
 from pathlib import Path
 import glob
@@ -19,14 +18,13 @@ import pandas as pd
 import ray
 import scipy.ndimage as ndimage
 import scipy.stats as stats
-
+from tqdm import tqdm
 
 from slim import common_cli_options, get_config
 from slim.log import logger
 from slim.simulation.simulator import get_simulation_path, Simulator
 from slim.simulation.config import Config
 from slim.simulation.lice_population import LicePopulation, geno_to_alleles
-from slim.types.treatments import Treatment, treatment_to_class
 
 
 @ray.remote
@@ -82,18 +80,28 @@ def _remove_nulls(*tables):
     return [table for table in tables if table is not None]
 
 
-def get_ci(matrix, ci_confidence=0.95):
+def get_ci(matrix, ci_confidence=0.95, method="clip"):
     mean = np.mean(matrix, axis=0)
     n = len(matrix[0])
+    trial_no =len(matrix)
 
-    se_interval = stats.sem(matrix, axis=0)
-    h = se_interval * stats.t.ppf((1 + ci_confidence) / 2.0, n - 1)
-    min_interval_ci, max_interval_ci = mean - h, mean + h
+    if method == "clip":
+        min_pos = int(trial_no * (1 - ci_confidence) / 2)
+        max_pos = trial_no - min_pos - 1
+
+        matrix.partition(-max_pos, axis=0)
+        matrix.partition(-min_pos, axis=0)
+        #values = np.partition(values, -max_pos, axis=1)
+        min_interval_ci = matrix[-max_pos, :]
+        max_interval_ci = matrix[-min_pos, :]
+
+    else:
+        se_interval = stats.sem(matrix, axis=0)
+        h = se_interval * stats.t.ppf((1 + ci_confidence) / 2.0, n - 1)
+        min_interval_ci, max_interval_ci = mean - h, mean + h
 
     return np.stack([mean, min_interval_ci, max_interval_ci])
 
-
-@functools.lru_cache(maxsize=1 << 25)
 def load_matrix(
     cfg: Config,
     out_path: Path,
@@ -103,7 +111,7 @@ def load_matrix(
     ci_confidence=0.95,
 ):
     out_path = out_path / cfg.name
-    files = glob.glob(str(out_path / "*.parquet"))[:120]
+    files = glob.glob(str(out_path / "*.parquet"))
 
     if columns is not None:
         columns = ["farm_name"] + list(columns)
@@ -117,7 +125,7 @@ def load_matrix(
     results_per_farm = defaultdict(lambda: {})
     # extract group for each dataframe
 
-    for df in tasks:
+    for df in tqdm(tasks):
         for farm, sub_df in df.groupby("farm_name"):
             farm_dict = results_per_farm.setdefault(farm, {})
             for column in columns:
@@ -410,7 +418,7 @@ def main():
     bench_group.add_argument(
         "--defection-proba",
         type=float,
-        help="If using mosaic, the defection probability for each farm",
+        help="If using bernoulli, the defection probability for each farm",
     )
 
     cfg, args, out_path = get_config(parser)
@@ -420,6 +428,7 @@ def main():
     if not args.skip:
         ss = np.random.SeedSequence(args.bench_seed)
         child_seeds = ss.spawn(args.parallel_trials)
+        args.trials = math.ceil(args.trials / args.parallel_trials)
         tasks = [
             launch.remote(cfg, np.random.default_rng(s), out_path, **vars(args))
             for s in child_seeds
