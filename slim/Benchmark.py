@@ -2,6 +2,7 @@
 
 __all__ = []
 
+import datetime
 import functools
 import math
 from collections import defaultdict
@@ -25,10 +26,11 @@ from slim.log import logger
 from slim.simulation.simulator import get_simulation_path, Simulator
 from slim.simulation.config import Config
 from slim.simulation.lice_population import LicePopulation, geno_to_alleles
+from slim.types.treatments import Treatment
 
 
 @ray.remote
-def launch(cfg, rng, out_path, **kwargs):
+def launch(cfg: Config, rng, out_path, **kwargs):
     trials = kwargs.pop("trials")
     quiet = kwargs.pop("quiet", False)
     orig_name = cfg.name
@@ -57,10 +59,26 @@ def launch(cfg, rng, out_path, **kwargs):
         # defection_proba is farm-specific and needs special handling
 
         defection_proba = kwargs.pop("defection_proba", None)
+        recurrent_treatment_type = kwargs.pop("recurrent_treatment_type")
+        recurrent_treatment_freq = kwargs.pop("recurrent_treatment_frequency")
 
         if defection_proba is not None:
             for farm in cfg.farms:
                 farm.defection_proba = defection_proba
+
+        if not (recurrent_treatment_type is None or recurrent_treatment_freq is None):
+            sim_start = cfg.start_date
+            duration = (cfg.end_date - sim_start).days
+            treatment_dict = {
+                "emb": Treatment.EMB,
+                "thermolicer": Treatment.THERMOLICER,
+                "cleanerfish": Treatment.CLEANERFISH
+            }
+            treatment = treatment_dict[recurrent_treatment_type]
+            num_events = math.ceil(duration / recurrent_treatment_freq)
+            for farm in cfg.farms:
+                farm.treatment_dates = [(sim_start + datetime.timedelta(days=i*recurrent_treatment_freq), treatment)
+                                        for i in range(num_events)]
 
         sim = Simulator(out_path, cfg)
         sim.run_model(quiet=quiet)
@@ -419,6 +437,18 @@ def main():
         "--defection-proba",
         type=float,
         help="If using bernoulli, the defection probability for each farm",
+    )
+
+    bench_group.add_argument(
+        "--recurrent-treatment-type",
+        type=str,
+        help="Create regular treatments of the specified type"
+    )
+
+    bench_group.add_argument(
+        "--recurrent-treatment-frequency",
+        type=int,
+        help="Frequency of the treatments in days"
     )
 
     cfg, args, out_path = get_config(parser)
