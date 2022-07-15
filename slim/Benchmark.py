@@ -37,6 +37,10 @@ def launch(cfg: Config, rng, out_path, **kwargs):
     out_path = out_path / cfg.name
     hash_ = hashlib.sha256()
 
+    defection_proba = kwargs.get("defection_proba")
+    recurrent_treatment_type = kwargs.get("recurrent_treatment_type")
+    recurrent_treatment_freq = kwargs.get("recurrent_treatment_frequency")
+
     for t in range(trials):
         extra_args = kwargs.copy()
         extra_args["seed"] = rng.random()
@@ -57,10 +61,6 @@ def launch(cfg: Config, rng, out_path, **kwargs):
         else:
             logger.info(f"Generating {sim_name}...")
         # defection_proba is farm-specific and needs special handling
-
-        defection_proba = kwargs.pop("defection_proba", None)
-        recurrent_treatment_type = kwargs.pop("recurrent_treatment_type")
-        recurrent_treatment_freq = kwargs.pop("recurrent_treatment_frequency")
 
         if defection_proba is not None:
             for farm in cfg.farms:
