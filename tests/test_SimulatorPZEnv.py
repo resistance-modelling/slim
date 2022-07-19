@@ -31,7 +31,7 @@ class TestSimulatorEnv:
     def test_gym_space_farm(self, first_farm, first_cage, cur_day):
         space = first_farm.get_gym_space()
         assert not space["current_treatments"][0]
-        assert space["allowed_treatments"] == 7
+        assert space["allowed_treatments"] == 10  # TODO: a policy would actually decrease this
 
         first_farm.apply_action(cur_day, 0)
         first_farm.apply_action(cur_day + datetime.timedelta(days=1), 1)
@@ -42,7 +42,7 @@ class TestSimulatorEnv:
         space = first_farm.get_gym_space()
         assert space["current_treatments"][0]
         assert space["current_treatments"][1]
-        assert space["allowed_treatments"] == 5
+        assert space["allowed_treatments"] == 8
 
         first_farm.fallow()
         space = first_farm.get_gym_space()

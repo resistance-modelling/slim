@@ -16,8 +16,7 @@ class TestFarm:
         assert len(first_farm.cages) == 6
         assert first_farm.loc_x == 190300
         assert first_farm.loc_y == 665300
-        # accounts for pre-sceduled treaments, but only when applicable
-        assert first_farm.available_treatments == 7
+        assert first_farm.available_treatments == 10
 
     def test_farm_str(self, first_farm):
         farm_str = str(first_farm)
@@ -292,12 +291,13 @@ class TestFarm:
         treatment_step_size = dt.timedelta(days=50)
         cur_day = first_farm.farm_cfg.treatment_dates[-1][0] + treatment_step_size
 
-        for i in range(7):
+        for i in range(10):
             assert first_farm.add_treatment(Treatment.EMB, cur_day)
             assert (
                 first_cage.treatment_events.qsize() == 3 + i + 1
             )  # the first treatment cannot be applied
-            assert first_farm.available_treatments == 7 - i - 1
+            # Test treatments are not counted, unless add_treatment is called
+            assert first_farm.available_treatments == 10 - i - 1
             cur_day += treatment_step_size
 
         assert not first_farm.add_treatment(Treatment.EMB, cur_day)

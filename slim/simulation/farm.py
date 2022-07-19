@@ -47,7 +47,7 @@ LocationTemps = TypedDict(
     "LocationTemps", {"northing": int, "temperatures": List[float]}
 )
 
-MAX_NUM_APPLICATIONS = 10
+MAX_NUM_APPLICATIONS = 24
 
 
 class Farm(LoggableMixin):
@@ -97,7 +97,7 @@ class Farm(LoggableMixin):
         # Queues
         self.__sampling_events: PriorityQueue[SamplingEvent] = PriorityQueue()
 
-        self.generate_sampling_events()
+        self._generate_sampling_events()
 
     def __str__(self):
         """
@@ -202,7 +202,7 @@ class Farm(LoggableMixin):
             cur_date + dt.timedelta(days=application_period),
         )
 
-    def generate_sampling_events(self):
+    def _generate_sampling_events(self):
         spacing = self.farm_cfg.sampling_spacing
         start_date = self.farm_cfg.farm_start
         end_date = self.cfg.end_date
@@ -284,7 +284,7 @@ class Farm(LoggableMixin):
             cage.treatment_events.put(event)
 
         # Cleaner fish treatments can be applied as many times as possible
-        if treatment_type != Treatment.CLEANERFISH:
+        if treatment_type != Treatment.CLEANERFISH and not force:
             self.available_treatments -= 1
 
         return True

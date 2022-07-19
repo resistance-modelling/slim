@@ -67,7 +67,7 @@ def launch(cfg: Config, rng, out_path, **kwargs):
                 farm.defection_proba = defection_proba
 
         if not (recurrent_treatment_type is None or recurrent_treatment_freq is None):
-            sim_start = cfg.start_date
+            sim_start = cfg.start_date + datetime.timedelta(days=100)
             duration = (cfg.end_date - sim_start).days
             treatment_dict = {
                 "emb": Treatment.EMB,
@@ -76,9 +76,11 @@ def launch(cfg: Config, rng, out_path, **kwargs):
             }
             treatment = treatment_dict[recurrent_treatment_type]
             num_events = math.ceil(duration / recurrent_treatment_freq)
+            print(num_events, recurrent_treatment_freq)
             for farm in cfg.farms:
                 farm.treatment_dates = [(sim_start + datetime.timedelta(days=i*recurrent_treatment_freq), treatment)
                                         for i in range(num_events)]
+                print(farm.treatment_dates)
 
         sim = Simulator(out_path, cfg)
         sim.run_model(quiet=quiet)
@@ -465,7 +467,7 @@ def main():
         ]
         ray.get(tasks)
 
-    plot_data(cfg, args.description, out_path)
+    #plot_data(cfg, args.description, out_path)
 
 
 if __name__ == "__main__":
