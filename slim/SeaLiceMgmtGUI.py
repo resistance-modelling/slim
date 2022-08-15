@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 
 """
 This script provides the GUI of this project.
@@ -279,7 +279,7 @@ class Window(QMainWindow):
             "About SLIM",
             """
                           GUI for the Sea Lice sIMulator.
-                          
+
                           For more details see https://github.com/resistance-modelling/slim
                           """,
         )

@@ -2,7 +2,7 @@
 A collection of policies.
 """
 
-__all__ = ["BernoullianPolicy", "MosaicPolicy", "UntreatedPolicy"]
+__all__ = ["BernoullianPolicy", "MosaicPolicy", "UntreatedPolicy", "PilotedPolicy"]
 
 import datetime as dt
 
