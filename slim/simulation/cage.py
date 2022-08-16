@@ -254,6 +254,12 @@ class Cage(LoggableMixin):
         return egg_distrib, hatch_date, cost
 
     def get_temperature(self, cur_date: dt.datetime) -> float:
+        """Get the cage temperature at this farm and day
+
+        :param cur_date: the current day
+
+        :returns: the temperature (in °C)
+        """
         cur_month = cur_date.month
         return self.farm.year_temperatures[cur_month - 1]
 
@@ -626,7 +632,7 @@ class Cage(LoggableMixin):
 
         return fish_deaths_natural, fish_deaths_from_lice
 
-    def compute_eta_aldrin(self, num_fish_in_farm, days):
+    def _compute_eta_aldrin(self, num_fish_in_farm, days):
         # TODO: this lacks of stochasticity compared to the paper
         return (
             self.cfg.infection_main_delta
@@ -701,6 +707,12 @@ class Cage(LoggableMixin):
         return min(inf_events, num_avail_lice)
 
     def get_infecting_population(self, *args) -> int:
+        """
+        Get the number of lice infecting a population.
+
+        :param \\*args: consider the given stages as infecting (default: CH to AM/AF)
+        :returns: gross number of infecting lice
+        """
         if args is None or len(args) == 0:
             infective_stages = ["L3", "L4", "L5m", "L5f"]
         else:
@@ -885,7 +897,7 @@ class Cage(LoggableMixin):
 
         Maternal-only inheritance - all eggs have mother's genotype.
 
-        :param dam: the genomics of the dams
+        :param dams: the genomics of the dams
         :param number_eggs: the number of eggs produced
         :return: genomics distribution of eggs produced
         """
@@ -1237,7 +1249,6 @@ class Cage(LoggableMixin):
 
         self.num_cleaner += cleaner_fish_delta
 
-    # TODO: update arrivals dict type
     def update_arrivals(
         self, arrivals_dict: GenoDistribByHatchDate, arrival_date: dt.datetime
     ):
@@ -1289,6 +1300,7 @@ class Cage(LoggableMixin):
         Average fish mass.
 
         :params days: number of elapsed days
+
         :returns: the average fish mass (in grams).
         """
         smolt_params = self.cfg.smolt_mass_params
@@ -1365,6 +1377,7 @@ class Cage(LoggableMixin):
 
     @property
     def current_treatments(self):
+        """:returns: a list of current treatments"""
         idxs = []
         for event in self.effective_treatments:
             idxs.append(event.treatment_type.value)
@@ -1373,7 +1386,7 @@ class Cage(LoggableMixin):
     @property
     def aggregation_rate(self):
         """The aggregation rate is the number of lice over the total number of fish.
-        Elsewhere it is referred to as infection rate, but here "infection rate" only refers to host fish.
+        Elsewhere, it is referred to as infection rate, but here "infection rate" only refers to host fish.
 
         :returns: the aggregation rate"""
         return self.lice_population["L5f"] / self.num_fish if self.num_fish > 0 else 0.0
