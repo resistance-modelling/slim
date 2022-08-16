@@ -54,7 +54,9 @@ def farm_config():
     if not path.exists():
         path = Path.cwd().parent / "config_data"
 
-    return Config(str(path / "config.json"), str(path / "test_Fyne"), farms_per_process=-1)
+    return Config(
+        str(path / "config.json"), str(path / "test_Fyne"), farms_per_process=-1
+    )
 
 
 @pytest.fixture

@@ -63,14 +63,20 @@ def launch(cfg: Config, rng, out_path, **kwargs):
             treatment_dict = {
                 "emb": Treatment.EMB,
                 "thermolicer": Treatment.THERMOLICER,
-                "cleanerfish": Treatment.CLEANERFISH
+                "cleanerfish": Treatment.CLEANERFISH,
             }
             treatment = treatment_dict[recurrent_treatment_type]
             num_events = math.ceil(duration / recurrent_treatment_freq)
             print(num_events, recurrent_treatment_freq)
             for farm in cfg.farms:
-                farm.treatment_dates = [(sim_start + datetime.timedelta(days=i*recurrent_treatment_freq), treatment)
-                                        for i in range(num_events)]
+                farm.treatment_dates = [
+                    (
+                        sim_start
+                        + datetime.timedelta(days=i * recurrent_treatment_freq),
+                        treatment,
+                    )
+                    for i in range(num_events)
+                ]
                 print(farm.treatment_dates)
 
         sim = Simulator(out_path, cfg)
@@ -93,13 +99,13 @@ def main():
         "--trials",
         type=int,
         help="How many trials to perform during benchmarking",
-        required=True
+        required=True,
     )
     bench_group.add_argument(
         "--parallel-trials",
         type=int,
         help="How many trials to perform in parallel",
-        required=True
+        required=True,
     )
 
     bench_group.add_argument(
@@ -111,13 +117,13 @@ def main():
     bench_group.add_argument(
         "--recurrent-treatment-type",
         type=str,
-        help="Create regular treatments of the specified type"
+        help="Create regular treatments of the specified type",
     )
 
     bench_group.add_argument(
         "--recurrent-treatment-frequency",
         type=int,
-        help="Frequency of the treatments in days"
+        help="Frequency of the treatments in days",
     )
 
     cfg, args, out_path = get_config(parser)
