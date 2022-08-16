@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This script will perform a grid experiment on a number of sites with
+# different treatment policies and other hyperparameters. Modify the script as
+# you wish.
+
 # List of experiments to try upon
 EXPERIMENTS=(Fyne_complete Linnhe_complete clique cycle bipath)
 
@@ -20,9 +24,10 @@ TREATMENT_TYPES=(emb thermolicer cleanerfish)
 
 TREATMENT_FREQ=(30 60)
 
+# 1 to disable logging, 0 to keep enabled
 _BENCH_COMMAND="slim benchmark"
 
-_OPTIONS="--trials=$NTRIALS --parallel-trials=$NPAR"
+_OPTIONS="--trials=$NTRIALS --parallel-trials=$NPAR --quiet"
 
 bernoulli () {
 	$_BENCH_COMMAND $OUTPUT_FOLDER/$1_bernoulli $2 $1_bernoulli \
