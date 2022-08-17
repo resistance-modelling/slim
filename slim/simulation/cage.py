@@ -1,10 +1,18 @@
+"""
+Cages contain almost all of the modelling logic in SLIM. They model single cages (aka pens) of
+salmon and lice. In contrast to literature we only assume eggs to be floating between cages.
+
+This module is not meant for external use, and should be relatively self-contained.
+"""
+
 from __future__ import annotations
+
+__all__ = ["Cage"]
 
 import datetime as dt
 import math
 from collections import Counter, defaultdict
 
-# from queue import PriorityQueue
 from typing import Union, Optional, Tuple, TYPE_CHECKING, Dict, List
 
 import numpy as np
@@ -49,7 +57,13 @@ OptionalEggBatch = Optional[EggBatch]
 
 class Cage(LoggableMixin):
     """
-    Fish cages contain the fish.
+    The class that contains fish and lice and deals with all their lifecycle logic.
+
+    Avoid instantiating this class directly. Usually a cage belongs to an instance of
+    :class:`Farm` which will deal with cage-to-farm lice movements.
+
+    In general, making a cage step resolves to calling the :meth:`update` method every
+    day.
     """
 
     def __init__(
@@ -60,8 +74,6 @@ class Cage(LoggableMixin):
         initial_lice_pop: Optional[GrossLiceDistrib] = None,
     ):
         """
-        Create a cage on a farm.
-
         :param cage_id: the label (id) of the cage within the farm
         :param cfg: the farm configuration
         :param farm: a Farm object

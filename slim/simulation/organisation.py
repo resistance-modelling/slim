@@ -37,6 +37,19 @@ if TYPE_CHECKING:
 
 
 class FarmPool(ABC):
+    """
+    While farms do not move lice back and forth with other farms themselves, they delegate
+    movements to farm pools.
+
+    Farm pools are, as the name says, collection of farms that
+    can transmit new lice eggs or freshly hatched lice between them.
+
+    In practice, this means all the caller has to do is set up a farm pool, perform an update
+    and collect the daily payoffs/new lice. Note that farm pools do not own policies and require
+    the organisation to instruct them on the actions to perform.
+
+    This is an abstract class with two main implementers. See their definition for details.
+    """
     def __init__(self):
         self.reported_aggregations = {}
 
@@ -97,6 +110,9 @@ class FarmPool(ABC):
 
 
 class SingleProcFarmPool(FarmPool):
+    """
+    A single process foarm pool. 
+    """
     # A single-process farm pool. Useful for debugging
     def __init__(self, cfg: Config, *args):
         super().__init__()
@@ -170,6 +186,11 @@ class SingleProcFarmPool(FarmPool):
 
 
 class MultiProcFarmPool(FarmPool):
+    """
+    A multi-processing farm pool.
+
+    Internally
+    """
     # A multi-process farm pool.
     def __init__(self, cfg: Config, *args, **kwargs):
         super().__init__()
@@ -424,6 +445,11 @@ class Organisation:
         return payoffs, logs
 
     def reset(self):
+        """
+        Reset a simulation. This implies stopping the current
+        farms and bringing them back to the original state before the first stepping
+        has occurred.
+        """
         self.farms.reset()
 
         self.genetic_ratios = geno_config_to_matrix(self.cfg.initial_genetic_ratios)
@@ -434,10 +460,17 @@ class Organisation:
         self.to_cull = []
 
     def stop(self):
+        """
+        Stop the simulation. This will kill any standing farm actor (if any). It is not
+        allowed to resume a simulation after a stop() has occurred.
+        """
         self.farms.stop()
 
     @property
     def get_gym_space(self):
+        """
+        Get the gym space
+        """
         return self._gym_space
 
     def update_offspring_average(self, offspring_per_farm: Dict[int, GenoDistrib]):

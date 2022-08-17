@@ -19,6 +19,8 @@ from slim.simulation.config import Config
 from slim.types.treatments import Treatment
 
 
+__all__ = ["main"]
+
 @ray.remote
 def launch(cfg: Config, rng, out_path, **kwargs):
     trials = kwargs.pop("trials")
@@ -84,6 +86,9 @@ def launch(cfg: Config, rng, out_path, **kwargs):
 
 
 def main():
+    """
+    Main entry point of the benchmark script.
+    """
     parser = common_cli_options("SLIM Benchmark tool")
     bench_group = parser.add_argument_group(title="Benchmark-specific options")
     bench_group.add_argument(
