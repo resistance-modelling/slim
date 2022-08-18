@@ -1,5 +1,11 @@
 """
-A collection of policies.
+This module defines policies (also known as treatment regimes). A policy is an algorithm that prescribes
+farmers' behaviour given their input (a Gym state).
+
+A number of policies are defined here: Bernoullian, Mosaic, Untreated and Piloted.
+
+The interface has been kept generic enough so that a number of policies can be implemented, including
+Machine/Deep ones.
 """
 
 __all__ = ["BernoullianPolicy", "MosaicPolicy", "UntreatedPolicy", "PilotedPolicy"]
@@ -113,6 +119,10 @@ class MosaicPolicy:
 
 
 class PilotedPolicy:
+    """
+    Scrape the policy from official reports. Requires using the scraper notebook under `surveys/` .
+    """
+
     def __init__(
         self,
         cfg: Config,

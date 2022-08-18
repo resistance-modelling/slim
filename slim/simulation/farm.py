@@ -256,6 +256,9 @@ class Farm(LoggableMixin):
             )
 
     def fallow(self):
+        """
+        Fallow the entire farm. This will in turn fallow all the cages in the farm.
+        """
         for cage in self.cages:
             cage.fallow()
 
@@ -862,11 +865,3 @@ class FarmActor:
             )
 
         return to_return
-
-    def checkpoint(self):
-        """
-        Access the internal farms
-
-        Warning: this is an expensive operation. Tread with care...
-        """
-        return self.__dict__.copy()
