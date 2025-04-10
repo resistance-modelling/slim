@@ -1,0 +1,268 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "http://slim-project/config.json.schema",
+  "title": "RuntimeConfig",
+  "type": "object",
+  "properties": {
+    "seed": {
+      "description": "Global seed to use in the simulations",
+      "type": "integer"
+    },
+    "stage_age_evolutions": {
+      "description": "Stage-age average evolution times (in days)",
+      "source": "Taken from the maximums in Heuch et al. (2001)",
+      "type": "object",
+      "properties": {
+        "L1": {
+          "type": "number"
+        },
+        "L2": {
+          "type": "number"
+        },
+        "L3": {
+          "type": "number"
+        },
+        "L4": {
+          "type": "number"
+        },
+        "L5f": {
+          "type": "number"
+        }
+      }
+    },
+    "delta_p": {
+      "description": "Weibull power transformation constant for each development stage",
+      "comment": "L0's value is taken from Stien et al. (2005) as beta_2, while the others are taken from Aldrin et al. (2017)",
+      "type": "object",
+      "properties": {
+        "L0": {
+          "type": "number"
+        },
+        "L1": {
+          "type": "number"
+        },
+        "L3": {
+          "type": "number"
+        },
+        "L4": {
+          "type": "number"
+        }
+      }
+    },
+    "delta_s": {
+      "description": "Weibull shape transformation constant for each development stage",
+      "type": "object",
+      "properties": {
+        "L1": {
+          "type": "number"
+        },
+        "L3": {
+          "type": "number"
+        },
+        "L4": {
+          "type": "number"
+        }
+      }
+    },
+    "delta_m10": {
+      "description": "10 °C median development time",
+      "comment": "L0's value is taken from Stien et al. (2005) as beta_1, while the others are taken from Aldrin et al. (2017)",
+      "type": "object",
+      "properties": {
+        "L0": {
+          "type": "number"
+        },
+        "L1": {
+          "type": "number"
+        },
+        "L3": {
+          "type": "number"
+        },
+        "L4": {
+          "type": "number"
+        }
+      }
+    },
+    "lice_development_rates": {
+      "description": "Lice development rates from the ith stage to the next",
+      "comment": "Stien et al. (2005), in turn from Tucker et al. (2002)",
+        "properties": {
+        "L1": {
+          "type": "number"
+        },
+        "L": {
+          "type": "number"
+        },
+        "L4": {
+          "type": "number"
+        }
+      }
+    },
+    "infection_main_delta": {
+      "description": "Infection expectation",
+      "comment": "Aldrin et al., 2017",
+      "type": "number"
+    },
+    "infection_weight_delta": {
+      "description": "Infection regression coefficient",
+      "comment": "Aldrin et al., 2017",
+      "type": "number"
+    },
+    "delta_expectation_weight_log": {
+      "description": "Log-expectation of fish weight",
+      "type": "number"
+    },
+    "fish_mortality_center": {
+      "description": "Fish mortality sigmoid center",
+      "source": "Vollset (2019) (standard value - see Appendix)",
+      "type": "number"
+    },
+    "fish_mortality_k": {
+      "description": "Fish mortality sigmoid steepness",
+      "source": "Vollset (2019) (standard value - see Appendix)",
+      "type": "number"
+    },
+    "background_lice_mortality_rates": {
+      "description": "Background lice mortality rates per stage",
+      "type": "object",
+      "properties": {
+        "L1": {
+          "type": "number",
+          "description": "Aldrin et al., 2017"
+        },
+        "L2": {
+          "type": "number",
+          "description": "Tucker et al., 2002"
+        },
+        "L3": {
+          "type": "number",
+          "description": "Stien et al., 2005"
+        },
+        "L4": {
+          "type": "number",
+          "description": "Stien et al., 2005"
+        },
+        "L5f": {
+          "type": "number",
+          "description": "Stien et al., 2005"
+        }
+      }
+    },
+    "reproduction_eggs_first_extruded": {
+      "description": "Initial number of viable eggs after the first extrusion",
+      "comment": "Aldrin et al., 2017",
+      "type": "number"
+    },
+    "reproduction_age_dependence": {
+      "description": "Exponential coefficient on viable eggs depending on age",
+      "type": "number"
+    },
+    "dam_unavailability": {
+      "description": "Female unavailability time after mating (in days)",
+      "type": "integer"
+    },
+    "smolt_mass_params": {
+      "description": "Sigmoid parameters that pilot the average smolt-to-adult average weight development",
+      "comment": "FAO - http://www.fao.org/fishery/affris/species-profiles/atlantic-salmon/growth/en/ . See figure 5. These constants were manually fitted on the given figure.",
+      "type": "object",
+      "properties": {
+        "max_mass": {
+          "type": "number"
+        },
+        "skewness": {
+          "type": "number"
+        },
+        "x_shift": {
+          "type": "number"
+        }
+      }
+    },
+    "initial_genetic_ratios": {
+      "description": "Genetic ratios of lice population",
+      "type": "object"
+    },
+    "reservoir_offspring_integration_ratio": {
+      "description": "The ratio of offspring coming being expelled from the external pressure to make available in the reservoir",
+      "comment": "Simple model devised by Debby, modified to include a bayesian mutation ratio",
+      "type": "number"
+    },
+    "reservoir_offspring_average": {
+      "description": "The length of the rolling average to consider in the external pressure calculation",
+      "comment": "integer"
+    },
+    "geno_mutation_rate": {
+      "description": "Mutation rate, as in number of individual mutation events that can happen out of the number of offsprings. For example, 1e-5 is one mutation every 10,000 extruded eggs",
+      "type": "number"
+    },
+    "genetic_mechanism": {"description": "Genetic mechanism to use"},
+    "male_detachment_rate": {
+      "description": "Rate at which an adult male detaches from a dying fish and survives",
+      "comment": "TODO: dummy value.",
+      "type": "number"
+    },
+    "treatments": {
+      "description": "Parameters related to specific treatments",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "treatment_name": {
+            "description": "The name of the treatment",
+            "type": "string"
+          },
+          "treatment_type": {
+            "description": "The type of treatment",
+            "enum": ["chemical", "thermal", "mechanical", "cleanerfish"]
+          },
+          "pheno_resistance": {
+          "effect_delay": {
+            "description": "Delay between application and observation of noticeable effects of the Emamectin Benzoate (in days)",
+            "type": "number"
+          },
+          "durability_temp_ratio": {
+            "description": "Ratio between durability and current sea temperature (unit: days / °C)",
+            "type": "number"
+          },
+          "price_per_kg": {
+            "description": "Cost per kg when applying treatment",
+            "comment": "For EMB, Values taken from www.sigmaaldrich.com , rescaled to have a 1kg denominator",
+            "type": "number"
+          },
+          "price_per_application": {
+            "description": "Cost per application when applying treatment",
+            "comment": "TODO: for the thermolicer this is completely baseless",
+            "type": "number"
+          },
+          "application_period": {
+            "description": "For how long to apply the treatment (in days)",
+            "type": "number"
+          },
+            "description": "Lookup table to translate between genotype.",
+            "type": "object",
+            "parameters": {
+              "dominant": {
+                "type": "number"
+              },
+              "incompletely_dominant": {
+                "type": "number"
+              },
+              "recessive": {
+                "type": "number"
+              }
+            }
+          },
+          "quadratic_fish_mortality_coeffs": {
+            "description": "Fitted quadratic regression coefficients from Overton et al.",
+            "comment": "The values were found by the overton_treatment_mortalities.py script.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "minProperties": 22
+}

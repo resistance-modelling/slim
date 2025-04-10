@@ -93,10 +93,13 @@ def get_config(parser: argparse.ArgumentParser):
 
     cfg_basename = Path(args.param_dir).parent
     cfg_path = str(cfg_basename / "config.json")
-    cfg_schema_path = str(cfg_basename / "config.schema.json")
+    #cfg_schema_path = str(cfg_basename / "config.schema.json")
+    cfg_schema_path = Path(__file__).parent / "schemas" / "config.schema.json"
+
+    params_schema_path = Path(__file__).parent / "schemas" / "params.schema.json"
 
     config_parser = Config.generate_argparse_from_config(
-        cfg_schema_path, str(cfg_basename / "params.schema.json")
+        cfg_schema_path, params_schema_path
     )
     config_args = config_parser.parse_args(unknown)
     config_args.name = simulation_id

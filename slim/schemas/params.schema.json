@@ -1,0 +1,171 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "http://slim-project/config.json.schema",
+    "title": "FarmConfig",
+    "type": "object",
+    "properties": {
+        "name": {
+            "description": "Organisation name",
+            "type": "string"
+        },
+        "start_date": {
+            "description": "Simulation start date",
+            "type": "string"
+        },
+        "end_date": {
+            "description": "Simulation end date",
+            "type": "string"
+        },
+        "ext_pressure": {
+            "description": "Sealice per day per cage/farm arriving from wildlife. Note that this value has been determined experimentally in the original code.",
+            "type": "integer"
+        },
+        "monthly_cost": {
+            "description": "Fixed infrastructure cost (per 28 activity day)",
+            "type": "number"
+        },
+        "gain_per_kg": {
+            "description": "Selling rate for fish kg (in GBP)",
+            "comment": "Source: NASDAQ Salmon Index, last updated 6/08/21, with a corresponding NOK-GBP currency conversion",
+            "type": "number"
+        },
+        "infection_discount": {
+            "description": "Negative cost of infection, defined as lice / fish kg.",
+            "type": "number"
+        },
+        "genetic_ratios": {
+            "description": "The initial genotype ratio distribution",
+            "type": "object"
+        },
+        "genetic_learning_rate": {
+            "description": "Dirichlet learning rate",
+            "type": "number"
+        },
+        "agg_rate_suggested_threshold": {
+            "description": "The allowed aggregation rate before the organisation asks for a treatment",
+            "type": "number"
+        },
+        "agg_rate_enforcement_threshold": {
+            "description": "The allowed aggregation rate before the regulator asks for a treatment.",
+            "type": "number"
+        },
+        "agg_rate_enforcement_strikes": {
+            "description": "The number of times before a regulator's lice count excess is no longer tolerated.",
+            "type": "number"
+        },
+        "treatment_strategy": {
+            "description": "Which treatment strategy to apply. Used during standalone simulation",
+            "type": "string"
+        },
+        "farms_per_process": {
+            "description": "Number of farms per Ray actor during batch updates. Defaults to ``nfarms`` (i.e. effectively disables multiprocessing)",
+            "type": "number"
+        },
+        "farms": {
+            "type": "array",
+            "description": "Farm-specific configuration",
+            "title": "FarmConfig",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "description": "Farm name",
+                        "type": "string"
+                    },
+                    "ncages": {
+                        "description": "Number of cages on the farm",
+                        "type": "integer"
+                    },
+                    "location": {
+                        "description": "Location of the farm (in northing and easthing)",
+                        "type": "array",
+                        "items": {
+                            "type": "number",
+                            "minLength": 2,
+                            "maxLength": 2
+                        }
+                    },
+                    "num_fish": {
+                        "description": "Starting number of fish. We assume this to be constant across all cages",
+                        "type": "integer"
+                    },
+                    "start_date": {
+                        "description": "Start date of simulation of the farm",
+                        "type": "string"
+                    },
+                    "cages_start_dates": {
+                        "description": "Start dates for individual cages. This is discouraged",
+                        "type": "array",
+                        "item": {
+                            "type": "string"
+                        }
+                    },
+                    "treatment_types": {
+                        "description": "Available treatments at this site",
+                        "type": "array",
+                        "item": {
+                            "enum": [
+                                "emb",
+                                "thermolicer"
+                            ]
+                        }
+                    },
+                    "treatment_dates": {
+                        "description": "Treatment dates for each cage. If not provided the farm will apply treatments only when asked to, or depending on the chosen strategy",
+                        "type": "array",
+                        "item": {
+                            "type": "object",
+                            "properties": {
+                                "date": {
+                                    "type": "string"
+                                },
+                                "treatment_type": {
+                                    "type": "string"
+                                },
+                                "required": ["date"]
+                            }
+                        }
+                    },
+                    "max_num_treatments": {
+                        "description": "Maximum number of treatments allowed within one year",
+                        "type": "integer"
+                    },
+                    "sampling_spacing": {
+                        "description": "Time distance (in days) between fish samplings",
+                        "type": "integer"
+                    },
+                    "defection_proba": {
+                        "description": "Probability to defect and not apply treatment contemporarily with the other farms",
+                        "type": "number"
+                    }
+                },
+                "required": [
+                    "ncages",
+                    "location",
+                    "num_fish",
+                    "cages_start_dates",
+                    "treatment_types",
+                    "treatment_dates",
+                    "max_num_treatments",
+                    "sampling_spacing",
+                    "defection_proba"
+                ],
+                "additionalProperties": false
+            }
+        }
+    },
+    "additionalProperties": false,
+    "required": [
+        "name",
+        "start_date",
+        "end_date",
+        "ext_pressure",
+        "monthly_cost",
+        "gain_per_kg",
+        "infection_discount",
+        "genetic_ratios",
+        "genetic_learning_rate",
+        "treatment_strategy",
+        "farms"
+    ]
+}
