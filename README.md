@@ -26,10 +26,34 @@ This project thus includes the following components:
 
 ## Installation
 
+We recommend using a virtual environment to run slim. For version 3.12 we commend using a virtual environment, for
+older versions, conda may be a better choice.
+
+### Virtual Environment
+
+Python has the ability to create lightweight “virtual environments”, each with their own independent 
+set of Python packages installed in their site directories. 
+When used from within a virtual environment, common installation tools such as pip will install Python packages into a virtual environment,
+allowing us to specify versions of libraries to use.
+
+To create a virtual environment and configure it for use with slim:
+```bash
+python3 -m venv --without-pip <path_to_virtual_env>
+source <path_to_virtual_env>/bin/activate
+python3 -m pip install -r requirements.txt
+```
+where <path_to_virtual_env> is the name of your envoironment, e.g. slim_env, and 
+the --without-pip command creates an environment without copying pip (which can make 
+a bloated virtual environment).
+
+
+
+### Conda 
+
 Details on required packages and versions can be found in ```environment.yml``` which can be used to create a
 [conda](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) environment for the project.
 
-```bash
+```
 git clone https://github.com/resistance-modelling/slim slim-master
 cd slim-master
 # make sure conda is installed and the command is available at this point
@@ -40,25 +64,46 @@ pip install -e .
 
 ## Usage
 
-**NEW**: you can launch the simulation with just `slim`.
-
-To run the model you have to provide a configuration and an artifact output folder.
+Running slim on the command line is simply
 
 ```
-slim run output_folder/simulation_name simulation_params_directory```
+python3 -m slim output_folder/simulation_name simulation_params_directory```
 ```
 
 For example:
 ```slim run out/0 config_data/Fyne```
 
-Note that `slim run` is just a short hand for `python -m slim.SeaLiceMgmt`, which will be kept for compatibility.
+This will create 2 files; simulation_data_<simulation_name>.parquet that contains the results of the simulation
+and a .pickle file can can be used for restarting the simulation
+
+The configuration data directory requires config.json, params.json that define 
+the details of the simulations parameters and the farms, and their management.
+
+The configuration data directory also needs the following data files;
+interfarm_prob.csv, interfarm_time.csv, report.csv,  temperatures.csv.
+
+
+When you are finished the simulation, you can `deactivate` the environment via
+```
+deactivate 
+```
+
+To use the virtual environment in the future, you can do so via
+```aiignore
+source <path_to_virtual_env>/bin/activate
+```
 
 ### GUI
+
 We also provide a GUI for debugging and visualisation. Its support is still heavily experimental so please
 use with caution.
 
-You can launch it via `slim gui` and provide your run data (generated via the `--save-rate` option mentioned
-above) from the given menu.
+You can launch it via
+
+```
+python3 -m slim output_folder/simulation_name simulation_params_directory
+```
+
 
 Please check our [quickstart](https://slim.readthedocs.io/en/stable/getting-started.html) guide for more information.
 

@@ -210,7 +210,7 @@ class SimulatorPZEnv(AECEnv):
         self.agent_selection = self._agent_selector.next()
         self._accumulate_rewards()
 
-    def reset(self):
+    def reset(self, seed: int | None = None, options: dict | None = None,):
         self.organisation.reset()
         self.organisation = Organisation(self.cfg)
         # Gym/PZ assume the agents are a dict
@@ -383,7 +383,7 @@ class Simulator:  # pragma: no cover
         if not resume:
             serialiser = DumpingActor.remote(self.output_dir, self.cfg.name)
             ray.get(serialiser.dump_cfg.remote(pickle.dumps(self.cfg)))
-            self.env.reset()
+            self.env.reset(seed=self.cfg.seed)
 
         try:
             num_days = (self.cfg.end_date - self.cur_day).days

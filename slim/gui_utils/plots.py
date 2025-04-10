@@ -7,7 +7,7 @@ from __future__ import annotations
 import datetime as dt
 from math import floor
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING, List, Dict
+from typing import Optional, TYPE_CHECKING, List#, Dict
 
 import numpy as np
 import pandas as pd
@@ -33,14 +33,14 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 from colorcet import glasbey_light, glasbey_dark
-from matplotlib.cm import get_cmap
+#from matplotlib.cm import get_cmap
 from pyqtgraph import LinearRegionItem, PlotItem, GraphicsLayoutWidget, mkBrush, mkColor
 from pyqtgraph.exporters import ImageExporter, SVGExporter
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem
 
 from slim.simulation.lice_population import (
     LicePopulation,
-    GenoDistrib,
+#    GenoDistrib,
     geno_to_idx,
     geno_to_alleles,
 )
@@ -85,7 +85,7 @@ class SmoothedPlotItemWrap:
 
         # set font size
         tick_font = QtGui.QFont()
-        tick_font.setPixelSize(18)
+        #tick_font.setPixelSize(6)
         self.plot_item.getAxis("bottom").tickFont = tick_font
         self.plot_item.getAxis("left").tickFont = tick_font
 
@@ -143,8 +143,11 @@ class SmoothedPlotItemWrap:
             x = self.default_x_axis
 
         x = [(day - self.default_x_axis[0]).days for day in x]
+        # TODO - x and y can be different lengths when show fish mortality rates is selected.
         return self.plot_item.plot(
             x=x,
+            # TODO Check if y is a dictionary with alleles as the key, if it is then we need to do something different
+            # this causes an error when the 'Show offspring distribution' is clicked.
             y=scipy.ndimage.convolve(y / self.average_factor, kernel, mode="nearest"),
             **_kwargs,
         )
@@ -165,7 +168,8 @@ class SmoothedPlotItemWrap:
         self.setXRange(0, max_x)
         self.vb.setLimits(xMin=0, xMax=max_x)
 
-    def heightForWidth(self, width):
+    @staticmethod
+    def heightForWidth(width):
         return int(width * 1.5)
 
     def __getattr__(self, item):
@@ -614,7 +618,7 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             if report_df is not None:
                 report_farm = report_df[report_df["site_name"] == farm_geo_name]
 
-            stages = farm_df[LicePopulation.lice_stages].applymap(
+            stages = farm_df[LicePopulation.lice_stages].map(
                 lambda geno_data: sum(geno_data.values())
             )
 
@@ -635,25 +639,25 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             )
 
             self._plotTreatments(farm_df, farm_idx)
-        # END FARM PLOTTING
+            # END FARM PLOTTING
 
-        # because of the leaky scope, this is going to be something
-        self._plotPayoff(farm_df)
+            # because of the leaky scope, this is going to be something
+            self._plotPayoff(farm_df)
 
-        self._plotExternalPressure(farm_df)
-        for plot in self.licePopulationPlots:
-            plot.setLogMode(False, True)
+            self._plotExternalPressure(farm_df)
+            for plot in self.licePopulationPlots:
+                plot.setLogMode(False, True)
 
-        # keep ranges consistent
-        for plot in (
-            self.licePopulationPlots
-            + self.fishPopulationPlots
-            + self.aggregationRatePlot
-        ):
-            plot.vb.setLimits(yMin=0)
+            # keep ranges consistent
+            for plot in (
+                self.licePopulationPlots
+                + self.fishPopulationPlots
+                + self.aggregationRatePlot
+            ):
+                plot.vb.setLimits(yMin=0)
 
-        for plot in self.extPressureRatioPlots:
-            plot.vb.setLimits(yMin=0, yMax=1)
+            for plot in self.extPressureRatioPlots:
+                plot.vb.setLimits(yMin=0, yMax=1)
 
     def _plotFishPop(
         self, farm_df: pd.DataFrame, farm_idx: int, report_farm: Optional[pd.DataFrame]
@@ -687,6 +691,8 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
         )
         allele_labels_bio = self._getBioAlleleNames()
 
+        # TODO - the farm_df has no allele field (it is in the L1, L2 etc fields), this causes an error when
+        # 'Show detailed Allele Information' is ticked.
         allele_data = {allele: farm_df[allele].to_numpy() for allele in allele_names}
 
         for style, (allele_name, stage_value) in enumerate(allele_data.items(), 1):
@@ -935,8 +941,9 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             svg_exporter = SVGExporter(plot)
             path = Path(dir) / f"{self.state.sim_name}_{name}"
             # TODO: svg does not work?
-            png_exporter.parameters()["width"] = 1200
-            # svg_exporter.parameters()["width"] = 1200
+            png_exporter.parameters()["width"] = 2400
+            png_exporter.parameters()["height"] = 1600
+            #svg_exporter.parameters()["width"] = 1200
             png_exporter.export(str(path) + ".png")
             svg_exporter.export(str(path) + ".svg")
 
@@ -947,9 +954,10 @@ class SingleRunPlotPane(LightModeMixin, QWidget):
             exportPlot(fish_plot.plot_item, f"fish_{idx}")
         for idx, aggregation_plot in enumerate(self.aggregationRatePlot):
             exportPlot(aggregation_plot.plot_item, f"aggregation_{idx}")
+        for idx, extPressureRatio_plot in enumerate(self.extPressureRatioPlots):
+            exportPlot(extPressureRatio_plot.plot_item, f"extPressureRatio_{idx}")
 
         exportPlot(self.payoffPlot.plot_item, "payoff")
-        exportPlot(self.extPressureRatios.plot_item, "extpressure")
 
         QMessageBox.information(
             self, "Success", "The images have been generated with success!"
