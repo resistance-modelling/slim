@@ -1,15 +1,22 @@
 """
-A Farm is a fundamental agent in this simulation. It has a number of functions:
+Farms are the fundamental agents in SLIM. They cover a number of roles, including
 
 - controlling individual cages
 - managing its own finances
 - choose whether to cooperate with other farms belonging to the same organisation
 
+This module thus exports :class:`Farm` but also its ray-friendly version :class:`FarmActor` .
+The latter merely serves the purpose of keeping the object alive in an async loop running on
+a separate process in multithreaded simulations.
+
+
+Note FarmActor's documentation cannot generated on sphinx. See https://github.com/ray-project/ray/issues/2658
+
+Please check out its documentation on the corresponding module code.
 """
 
 from __future__ import annotations
 
-# FarmActor won't show up. See https://github.com/ray-project/ray/issues/2658
 __all__ = ["Farm", "FarmActor"]
 
 import copy
@@ -54,6 +61,30 @@ class Farm(LoggableMixin):
     """
     Define a salmon farm containing salmon cages. Over time the salmon in the cages grow and are
     subjected to external infestation pressure from sea lice.
+    A Farm will also provide a constrained Gym space, available with :meth:`get_gym_space`,
+    with limited information (by design) for policy usage.
+
+    It's usually preferrable to not instantiate this class directy but rather spawn its farm pool or the organisation
+    as farms are required to communicate with each other.
+
+    A farm should be used in two ways:
+
+    **New way**
+
+    * :meth:`apply_action` -> apply an action; this will enque the action to be performed during
+      the next update cycle;
+    * :meth:`update` -> update the internal state;
+    * :meth:`disperse_offspring_v2` -> split the offspring into a list of **cage**-specific allocations.
+
+    **Old way (deprecated, only used in single-threaded mode)**
+
+    * :meth:`apply_action` 
+    * :meth:`update`
+    * :meth:`disperse_offspring` -> split the offspring into a **farm**-specific list of allocations
+    * :meth:`update_arrivals` -> make the lice (offspring or newborn) enter the farm.
+
+
+    Note: only after dispersing it is safe to check to farm space.
     """
 
     def __init__(
@@ -63,8 +94,6 @@ class Farm(LoggableMixin):
         initial_lice_pop: Optional[GrossLiceDistrib] = None,
     ):
         """
-        Create a farm.
-
         :param id_: the id of the farm.
         :param cfg: the farm configuration
         :param initial_lice_pop: if provided, overrides default generated lice population
@@ -161,6 +190,7 @@ class Farm(LoggableMixin):
         www.seatemperature.org
 
         :param temperatures: the array of temperatures from January till december. The expected shape is :math:`(2, n)`.
+
         :returns: the estimated temperature at this farm location.
         """
 
@@ -226,6 +256,9 @@ class Farm(LoggableMixin):
             )
 
     def fallow(self):
+        """
+        Fallow the entire farm. This will in turn fallow all the cages in the farm.
+        """
         for cage in self.cages:
             cage.fallow()
 
@@ -557,6 +590,11 @@ class Farm(LoggableMixin):
         return arrivals_per_cage, arrival_date
 
     def update_arrivals(self, arrivals: DispersedOffspring):
+        """
+        DEPRECATED: only use in single-threaded scenarios.
+
+        :param arrivals: the offspring coming to this lice
+        """
         # DEPRECATED
         arrivals_per_cage = arrivals[0]
         arrival_time = arrivals[1]
@@ -678,7 +716,34 @@ class Farm(LoggableMixin):
 @ray.remote
 class FarmActor:
     """
-    A Ray-based wrapper for farms.
+    A Ray-based wrapper for farms. When a FarmActor is instantiated, a new process will be
+    started and kept alive with its own separate process space containing a number of :class:`Farm`
+    objects
+
+    Usage: instantiate all your farm actors will all the farms, register all your farm pools (required
+    for lock-free dispersion), then just call step for each day.
+
+    >>> # Spawn 2 farm actors, each managing two farms each
+    >>> farm_ids = [0, 1, 2, 3]
+    >>> cfg = Config(...) ; rngs = np.random.SeedSequence(0).spawn(2)
+    >>> farm_actors = [FarmActor.remote(farm_ids[:2], rngs[0]),
+    >>>                FarmActor.remote(farm_ids[2:], rngs[1])]
+    >>> ray.get(farm_actors[0].register_farm_pool.remote(farm_actors))
+    >>> ray.get(farm_actors[1].register_farm_pool.remote(farm_actors))
+    >>> # now you can simply iterate for every day of your simulation
+    >>> for day in range(T):
+    >>>     res1, res2 = ray.get([farm_actors[i].step.remote(...) for i in range(2)]
+    >>>     # res1 will be a StepResponse object
+
+    Users are recommended to use a multi-processing farm pool rather than using this directly.
+
+    **Implementation details**:
+
+    * Ray Queues are expensive thus we opted for a lock-less, async-based approach;
+      due to ray's limitations you cannot use FarmActors in local mode.
+    * Each actor uses a producer/consumer approach: each farm actor will produce as many
+      batches as the number of actors, and will be produced directly to the recipient
+      space. If a farm crashes synchronisation issues may arise due to starvation.
     """
 
     def __init__(
@@ -688,6 +753,12 @@ class FarmActor:
         rng: SeedSequence,
         initial_lice_pop: Optional[GrossLiceDistrib] = None,
     ):
+        """
+        :param ids: the farm ids to spawn
+        :param cfg: the configuration (farm info will be taken from here)
+        :param rng: a rng. Make sure no two actors share the same RNG
+        :param initial_lice_pop: Initial farm configuration (optional)
+        """
         # ugly hack: modify the global logger here.
         # Because this runs on a separate memory space the logger will not be affected.
         # NOTE: This is undocumented.
@@ -713,6 +784,12 @@ class FarmActor:
         self._farm_pool: List[FarmActor] = []
 
     def register_farm_pool(self, farm_pool: List[FarmActor], batch_pool: np.ndarray):
+        """
+        Register the farm pool. You **must** call this method before stepping.
+
+        :param farm_pool: a list of :class:`FarmActor`
+        :param batch_pool: an array of farm ids owned for each actor.
+        """
         self._farm_pool = farm_pool
         self._batch_pool = batch_pool
 
@@ -749,6 +826,13 @@ class FarmActor:
         self,
         payload: Dict[int, Tuple[dt.datetime, int, int, GenoRates]],
     ) -> Dict[int, StepResponse]:
+        """
+        Step the simulation for this farm.
+
+        :param payload: a dictionary (farm_id -> (cur_day, action, ext_influx, genetic ratios))
+
+        :returns: a :class:`StepResponse` with the new gym space.
+        """
         temp = {}
         to_return = {}
         eggs_per_farm = []
@@ -781,11 +865,3 @@ class FarmActor:
             )
 
         return to_return
-
-    def checkpoint(self):
-        """
-        Access the internal farms
-
-        Warning: this is an expensive operation. Tread with care...
-        """
-        return self.__dict__.copy()

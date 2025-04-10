@@ -1,11 +1,16 @@
 """
+The main entry point of the simulation.
+
 This module provides two important classes:
 
-* a :class:`Simulator` class for standalone runs;
-* a :func:`get_env` method to generate a Simulator
+* a :class:`SimulatorPZEnv` class that implements all of the game-theoretic logic (policy turning).
+* a :func:`get_env` method that wraps :class:`SimulatorPZEnv` with extra assertions.
+* a :class:`Simulator` class for standalone runs; this will perform automatic stepping for each day,
+  artifact saving and error management so you do not have to.
 
-The former is a simple wrapper for the latter so that calling code does not have
-to worry about stepping or manually instantiating a policy.
+In the large majority of cases you may just want to import :class:`Simulator` in your code.
+
+A few other functions are provided for testing purposes.
 """
 
 from __future__ import annotations
@@ -14,9 +19,6 @@ __all__ = [
     "get_env",
     "Simulator",
     "SimulatorPZEnv",
-    "BernoullianPolicy",
-    "MosaicPolicy",
-    "UntreatedPolicy",
     "get_simulation_path",
     "load_counts",
 ]
@@ -81,7 +83,7 @@ def get_env(cfg: Config) -> wrappers.OrderEnforcingWrapper:
 
 class SimulatorPZEnv(AECEnv):
     """
-    The PettingZoo environment. This implements the basic API that any policy expects.
+    A PettingZoo environment. This implements the basic API that any policy expects.
 
     If you simply want to launch a simulation please just use the :class:`Simulator` class.
     Also consider using the :func:`get_env` helper rather than using this class directly.
@@ -335,10 +337,14 @@ class DumpingActor:
 class Simulator:  # pragma: no cover
     """
     The main entry point of the simulator.
+
     This class provides the main loop of the simulation and is typically used by the driver
     when extracting simulation data.
+
     Furthermore, the class allows the user to perform experience replays by resuming
     snapshots.
+
+    See the :ref:`Getting Started` guide for details.
     """
 
     def __init__(self, output_dir: Path, cfg: Config):

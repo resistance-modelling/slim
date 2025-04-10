@@ -135,7 +135,7 @@ class TestGenoDistrib:
 
     def test_truncate(self):
         distrib = from_dict({"Aa": -2000, "a": -10, "A": -2})
-        distrib.truncate_negatives()
+        distrib._truncate_negatives()
         assert distrib == {"A": 0, "a": 0, "Aa": 0}
 
     def test_from_dict(self):

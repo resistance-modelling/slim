@@ -1,10 +1,20 @@
 """
-This module provides the main entry point to any simulation task.
+This module provides an implementation for :class:`Organisation` and farm pooling. For simulation
+purposes :class:`Organisation` is the only class you may need.
+
+An organisation here oversees farmers and serves coordination purposes, better
+described in its class documentation. It also provides (limited) chances for collaboration
+and manages the external pressure. However, much of the lice dispersion logic is indeed handled
+by farm pools.
+
+A farm pool is a collection of farms or farm actors (if using multithreading). In a farm pool
+dispersion is applied at every step, and serves as an abstraction tool for the Organisation so
+that to decouple from the multiprocessing/synchronisation logic.
 """
 
 from __future__ import annotations
 
-__all__ = ["Organisation"]
+__all__ = ["FarmPool", "SingleProcFarmPool", "MultiProcFarmPool", "Organisation"]
 
 import gc
 from abc import ABC, abstractmethod
@@ -37,15 +47,34 @@ if TYPE_CHECKING:
 
 
 class FarmPool(ABC):
+    """
+    While farms do not move lice back and forth with other farms themselves, they delegate
+    movements to farm pools.
+
+    Farm pools are, as the name says, collection of farms that
+    can transmit new lice eggs or freshly hatched lice between them.
+
+    In practice, this means all the caller has to do is set up a farm pool, perform an update
+    and collect the daily payoffs/new lice. Note that farm pools do not own policies and require
+    the organisation to instruct them on the actions to perform.
+
+    This is an abstract class with two main implementers. See their definition for details.
+    You usually do not need to instantiate either directly as the Organisation class will automatically
+    pick the correct one depending on your configuration.
+    """
     def __init__(self):
         self.reported_aggregations = {}
 
     @abstractmethod
     def start(self):
+        """
+        Start the pool. This function should be called before stepping.
+        """
         pass
 
     @abstractmethod
     def stop(self):
+        """Stop the pool. This function should be called before deallocation"""
         pass
 
     @abstractmethod
@@ -55,7 +84,17 @@ class FarmPool(ABC):
         actions: SAMPLED_ACTIONS,
         ext_influx: int,
         ext_pressure: GenoRates,
-    ):
+    ) -> Tuple[Dict[int, GenoDistrib], Dict[int, float], Dict[int, Any]]:
+        """
+        Step through the pool. This will update the internal farms and coalesce results
+        into dictionaries of farm outputs.
+
+        :param cur_date: the current date.
+        :param actions: the list of sampled actions
+        :param ext_influx: the number of incoming lice
+
+        :returns: a tuple (total offspring per farm, payoff per farm, extra logs per farm)
+        """
         pass
 
     def handle_aggregation_rate(
@@ -76,7 +115,7 @@ class FarmPool(ABC):
         - if S strikes have been reached for a farm f:
             enforce culling on farm f
 
-        :returns:
+        :returns: a pair (should broadcast a message?, should cull the ith farm?)
         """
         to_broadcast = False
         to_cull = []
@@ -97,6 +136,9 @@ class FarmPool(ABC):
 
 
 class SingleProcFarmPool(FarmPool):
+    """
+    A single process foarm pool. 
+    """
     # A single-process farm pool. Useful for debugging
     def __init__(self, cfg: Config, *args):
         super().__init__()
@@ -124,7 +166,7 @@ class SingleProcFarmPool(FarmPool):
         actions: SAMPLED_ACTIONS,
         ext_influx: int,
         ext_pressure: GenoRates,
-    ):
+    ) -> Tuple[Dict[int, GenoDistrib], Dict[int, float], Dict[int, Any]]:
         for farm, action in zip(self._farms, actions):
             farm.apply_action(cur_date, action)
 
@@ -170,6 +212,14 @@ class SingleProcFarmPool(FarmPool):
 
 
 class MultiProcFarmPool(FarmPool):
+    """
+    A multi-processing farm pool.
+
+    Internally a multi-processing pool will spawn a number of FarmActor and deal
+    with lice dispersion without introducing locksteps or barriers. In this mode
+    farms are not accessible to the main thread, meaning there is no subscript operator
+    to access underlying farms. 
+    """
     # A multi-process farm pool.
     def __init__(self, cfg: Config, *args, **kwargs):
         super().__init__()
@@ -315,6 +365,13 @@ class Organisation:
     their farms about their statuses. An organisation can recommend farms to apply treatment
     if one of those has surpassed critical levels (see :meth:`handle_farm_messages`).
 
+    Furthermore, the organisation handles the external pressure. Depending on the number of produced
+    eggs and their genotype the external pressure will dynamically evolve. The mechanism is discussed
+    in :ref:`External Pressure`.
+
+    The organisation will also spawn the right farm pool depending on whether the configuration has
+    enabled multiprocessing (i.e. if cfg.farms_per_process is neither -1 nor equal to the farm number).
+    
     Ultimately, farm updates are used to recompute the external pressure.
     """
 
@@ -424,6 +481,11 @@ class Organisation:
         return payoffs, logs
 
     def reset(self):
+        """
+        Reset a simulation. This implies stopping the current
+        farms and bringing them back to the original state before the first stepping
+        has occurred.
+        """
         self.farms.reset()
 
         self.genetic_ratios = geno_config_to_matrix(self.cfg.initial_genetic_ratios)
@@ -434,13 +496,29 @@ class Organisation:
         self.to_cull = []
 
     def stop(self):
+        """
+        Stop the simulation. This will kill any standing farm actor (if any). It is not
+        allowed to resume a simulation after a stop() has occurred.
+        """
         self.farms.stop()
 
     @property
     def get_gym_space(self):
+        """
+        Get the gym space.
+        """
         return self._gym_space
 
     def update_offspring_average(self, offspring_per_farm: Dict[int, GenoDistrib]):
+        """ DO NOT CALL THIS DIRECTLY! It is only exposed for testing purposes.
+
+        Alter the external pressure by updating the rolling average of offsprings
+        in the last :math:`\\tau` days (controlled by ``Config.reservoir_offspring_average`` )
+
+        Internally, we use a simple weighted average to store the average offpsring.
+        """
+
+
         t = self.cfg.reservoir_offspring_average
 
         total_offsprings = GenoDistrib.batch_sum(list(offspring_per_farm.values()))

@@ -347,15 +347,21 @@ class GenoDistrib:
         self._gross = float(population)
 
     @property
-    def gross(self):
+    def gross(self) -> float:
+        """:returns: the gross population, i.e. the total number of lice irrespectively of the genotype"""
         return self._gross
 
     @property
-    def num_genes(self):
+    def num_genes(self) -> int:
+        """:returns: the number of genes in the distribution"""
         return len(self._store)
 
     def copy(self):
-        """Create a copy"""
+        """
+        Creates a deep copy of this distribution. As a result, modifications in the original distribution
+        will not affect the new copy.
+
+        :returns: a deep copy of the distribution."""
         new_geno = GenoDistrib(self._default_probs, False)
         new_geno._store = self._store.copy()
         new_geno._gross = self.gross
@@ -369,15 +375,23 @@ class GenoDistrib:
         return res
 
     def iadd(self, other):
-        """Inplace add operation between GenoDistrib and GenoDistrib"""
+        """Inplace add operation between GenoDistrib and GenoDistrib
+
+        :param other: the GenoDistrib addend
+        """
         self._store += other._store
         self._gross += other.gross
 
     def iadd_scalar(self, other: float):
+        """Inplace add operation between GenoDstrib and a scalar.
+
+        :param: other: the scalar addend.
+        """
         self.set(self.gross + other)
 
     def __iadd__(self, other):
         """Overloaded inplace add operator.
+
         Note: available only when the JIT is disabled.
         """
 
@@ -495,7 +509,7 @@ class GenoDistrib:
 
     def to_json_dict(self) -> GenoDistribSerialisable:
         """
-        Get a JSON representation of the different genotypes.
+        :returns: a JSON-friendly python representation of the different genotypes
         """
         return genorates_to_dict(self._store)
 
@@ -531,7 +545,7 @@ class GenoDistrib:
 
         return res
 
-    def truncate_negatives(self):
+    def _truncate_negatives(self):
         self._store = np.maximum(self._store, 0.0)
         self._gross = np.sum(self._store[0])
 
@@ -797,6 +811,7 @@ class LicePopulation:
 
     @property
     def busy_dams(self) -> GenoDistrib:
+        """Returns the proportion of working busy dams."""
         # Little's law
         l5f = self.geno_by_lifestage["L5f"]
         return l5f.normalise_to(
@@ -823,7 +838,7 @@ class LicePopulation:
 
     def remove_negatives(self):
         for distrib in self.geno_by_lifestage.values():
-            distrib.truncate_negatives()
+            distrib._truncate_negatives()
 
     @staticmethod
     def get_empty_geno_distrib(cfg: Config) -> GenoLifeStageDistrib:
@@ -837,12 +852,14 @@ class LicePopulation:
         return self.to_json_dict() == other
 
     def values(self):
+        """:returns: a list of GenoDistrib sorted by stage"""
         return [int(geno.gross) for geno in self.geno_by_lifestage.values()]
 
     def is_positive(self):
         return all(geno.is_positive() for geno in self.geno_by_lifestage.values())
 
     def copy(self):
+        """:returns: a deep copy of the distribution."""
         return LicePopulation(
             self.geno_by_lifestage,
             self.genetic_ratios.copy(),
