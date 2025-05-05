@@ -67,7 +67,7 @@ pip install -e .
 Running slim on the command line is simply
 
 ```
-python3 -m slim output_folder/simulation_name simulation_params_directory```
+python3 -m slim.SeaLiceMgmt output_folder/simulation_name simulation_params_directory```
 ```
 
 For example:
@@ -101,7 +101,7 @@ use with caution.
 You can launch it via
 
 ```
-python3 -m slim output_folder/simulation_name simulation_params_directory
+python3 -m slim.SeaLiceMgmtGUI output_folder/simulation_name simulation_params_directory
 ```
 
 
