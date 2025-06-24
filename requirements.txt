@@ -35,7 +35,7 @@ six==1.17.0
 tqdm==4.67.1
 typing_extensions==4.13.1
 tzdata==2025.2
-urllib3==2.3.0
+urllib3==2.5.0
 
 colorcet~=3.1.0
 PyQt5~=5.15.11
