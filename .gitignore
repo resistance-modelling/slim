@@ -17,7 +17,11 @@ lice_counts*.txt
 # outputs
 *.bin
 *.pickle.*
+*.pickle
+*.parquet
 
+# uv specific files
+uv.lock
 
 # Testing
 .pytest_cache/
