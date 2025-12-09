@@ -27,7 +27,7 @@ pyarrow==19.0.1
 python-dateutil==2.9.0.post0
 pytz==2025.2
 PyYAML==6.0.2
-ray==2.44.1
+ray==2.52.1
 referencing==0.36.2
 requests==2.32.4
 rpds-py==0.24.0
@@ -35,7 +35,7 @@ six==1.17.0
 tqdm==4.67.1
 typing_extensions==4.13.1
 tzdata==2025.2
-urllib3==2.5.0
+urllib3==2.6.0
 
 colorcet~=3.1.0
 PyQt5~=5.15.11
