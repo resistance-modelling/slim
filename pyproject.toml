@@ -54,7 +54,7 @@ dependencies = [
     "pytz==2025.2",
     "pyyaml==6.0.2",
     "qtconsole~=5.6.1",
-    "ray==2.44.1",
+    "ray==2.52.1",
     "referencing==0.36.2",
     "requests==2.32.4",
     "rpds-py==0.24.0",
@@ -65,7 +65,7 @@ dependencies = [
     "tqdm==4.67.1",
     "typing-extensions==4.13.1",
     "tzdata==2025.2",
-    "urllib3==2.5.0",
+    "urllib3==2.6.0",
 ]
 
 [project.urls]
