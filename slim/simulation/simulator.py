@@ -376,7 +376,7 @@ class Simulator:  # pragma: no cover
         """
         if not resume:
             logger.info(
-                "running simulation %s, saving to %s", self.cfg.name, self.output_dir
+                "running simulation <%s>, saving to %s", self.cfg.name, self.output_dir
             )
         else:
             logger.info(
@@ -457,7 +457,7 @@ def get_simulation_path(path: Path, other: Union[Config, str]):  # pragma: no-co
 
     return (
         path / f"simulation_data_{sim_id}.parquet",
-        path / f"config_{sim_id}.pickle",
+        path / f"simulation_{sim_id}.pickle",
         path / f"checkpoint_{sim_id}.pickle.lz4",
     )
 
