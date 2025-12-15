@@ -52,8 +52,8 @@ class TestCage:
         dead_lice_dist = first_cage.get_background_lice_mortality()
         dead_lice_dist_np = np.array(list(dead_lice_dist.values()))
         expected_dead_lice = np.array([26, 0, 0, 2, 0, 1])
-        assert np.alltrue(dead_lice_dist_np >= 0.0)
-        assert np.alltrue(np.isclose(dead_lice_dist_np, expected_dead_lice))
+        assert np.all(dead_lice_dist_np >= 0.0)
+        assert np.all(np.isclose(dead_lice_dist_np, expected_dead_lice))
 
     def test_cage_update_lice_treatment_mortality_no_effect(
         self, first_farm, first_cage

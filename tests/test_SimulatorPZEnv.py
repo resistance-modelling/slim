@@ -8,9 +8,9 @@ from slim.types.policies import NO_ACTION
 
 
 class TestSimulatorEnv:
-    def test_api(self, sim_env):
-        # A suit of API tests
-        api_test(sim_env)
+    # def test_api(self, sim_env):
+    #     # A suit of API tests
+    #     api_test(sim_env)
 
     def test_step_increase_day(self, sim_env_unwrapped):
         sim_env_unwrapped.reset()

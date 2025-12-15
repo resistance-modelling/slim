@@ -17,7 +17,7 @@ from slim.log import logger
 from slim.types.policies import ObservationSpace, TREATMENT_NO, FALLOW, NO_ACTION
 from slim.types.treatments import Treatment
 
-from gym import spaces
+from gymnasium import spaces
 import numpy as np
 import pandas as pd
 

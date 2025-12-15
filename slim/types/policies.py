@@ -9,7 +9,7 @@ import functools
 from typing import List, Union, TypedDict, Dict
 
 import numpy as np
-from gym.spaces import Discrete, MultiBinary, Box, Dict as GymDict
+from gymnasium.spaces import Discrete, MultiBinary, Box, Space, Dict as GymDict
 
 from .treatments import TREATMENT_NO
 
@@ -46,7 +46,7 @@ SAMPLED_ACTIONS = Union[List[ActionType], np.ndarray]
 CURRENT_TREATMENTS = MultiBinary(TREATMENT_NO + 1)
 
 
-class ObservationSpace(TypedDict):
+class ObservationSpace(Space):
     aggregation: np.ndarray
     fish_population: np.ndarray
     cleaner_fish: np.ndarray
@@ -57,22 +57,40 @@ class ObservationSpace(TypedDict):
 
 
 def get_observation_space_schema(agents: List[str], num_applications: int):
-    return {
-        agent: GymDict(
-            {
-                "aggregation": Box(low=0, high=20, shape=(1,), dtype=np.float32),
-                "reported_aggregation": Box(
-                    low=0, high=20, shape=(1,), dtype=np.float32
-                ),
-                "fish_population": Box(low=0, high=1e8, shape=(1,), dtype=np.int64),
-                "cleaner_fish": Box(low=0, high=1e8, shape=(1,), dtype=np.int64),
-                "current_treatments": CURRENT_TREATMENTS,
-                "allowed_treatments": Discrete(num_applications),
-                "asked_to_treat": MultiBinary(1),  # Yes or no
-            }
-        )
-        for agent in agents
-    }
+    single_obs_space = GymDict({
+        "aggregation": Box(low=0, high=20, shape=(1,), dtype=np.float32),
+        "reported_aggregation": Box(low=0, high=20, shape=(1,), dtype=np.float32),
+        "fish_population": Box(low=0, high=1e8, shape=(1,), dtype=np.int64),
+        "cleaner_fish": Box(low=0, high=1e8, shape=(1,), dtype=np.int64),
+        "current_treatments": CURRENT_TREATMENTS,
+        "allowed_treatments": Discrete(num_applications),
+        "asked_to_treat": MultiBinary(1),  # Yes or no
+    })
+
+    observation = GymDict({"observation": single_obs_space})
+
+    # Return the same observation space for each agent
+    return {agent: observation for agent in agents}
+
+
+    # return {
+    #     agent: GymDict(
+    #         {
+    #             "observation": GymDict({
+    #             "aggregation": Box(low=0, high=20, shape=(1,), dtype=np.float32),
+    #             "reported_aggregation": Box(
+    #                 low=0, high=20, shape=(1,), dtype=np.float32
+    #             ),
+    #             "fish_population": Box(low=0, high=1e8, shape=(1,), dtype=np.int64),
+    #             "cleaner_fish": Box(low=0, high=1e8, shape=(1,), dtype=np.int64),
+    #             "current_treatments": CURRENT_TREATMENTS,
+    #             "allowed_treatments": Discrete(num_applications),
+    #             "asked_to_treat": MultiBinary(1),  # Yes or no
+    #             })
+    #         }
+    #     )
+    #     for agent in agents
+    # }
 
 
 @functools.lru_cache(maxsize=None)

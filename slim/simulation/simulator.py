@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 import ray
 import tqdm
-from gym import spaces
+from gymnasium import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import agent_selector, wrappers
 import pyarrow as pa
@@ -60,7 +60,7 @@ from slim.types.treatments import Treatment
 from slim.types.policies import NO_ACTION
 from .config import Config
 from .farm import MAX_NUM_APPLICATIONS
-from .lice_population import GenoDistrib, from_dict
+from .lice_population import GenoDistrib
 from .organisation import Organisation
 
 
@@ -122,6 +122,7 @@ class SimulatorPZEnv(AECEnv):
         :param cfg: the config to use
         """
         super(SimulatorPZEnv).__init__()
+        self.observations = None
         self.cfg = cfg
         self.cur_day: dt.datetime = cfg.start_date
         self.organisation = Organisation(cfg)
@@ -169,8 +170,9 @@ class SimulatorPZEnv(AECEnv):
             # handles stepping an agent which is already done
             # accepts a None action for the one agent, and moves the agent_selection to
             # the next done agent,  or if there are no more done agents, to the next live agent
-            self.dones[agent] = True
-        if self.dones[agent]:
+            self.truncations[agent] = True
+            self.terminations[agent] = False
+        if self.terminations[agent] or self.truncations[agent]:
             return self._was_done_step(action)
 
         # the agent which stepped last had its _cumulative_rewards accounted for
@@ -219,7 +221,8 @@ class SimulatorPZEnv(AECEnv):
         self.possible_agents = [f"farm_{i}" for i in range(self.cfg.nfarms)]
         self.agents = self.possible_agents[:]
         self.rewards = {agent: 0 for agent in self.agents}
-        self.dones = {agent: False for agent in self.agents}
+        self.terminations = {agent: False for agent in self.agents}
+        self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
         self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self.observations = {agent: self.no_observation for agent in self.agents}
