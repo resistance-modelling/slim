@@ -5,7 +5,7 @@ charset-normalizer==3.4.1
 click==8.1.8
 cloudpickle==3.1.1
 Farama-Notifications==0.0.4
-filelock==3.18.0
+filelock==3.20.1
 frozenlist==1.5.0
 gym==0.26.2
 gym-notices==0.0.8
