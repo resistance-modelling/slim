@@ -63,7 +63,7 @@ dependencies = [
     "tqdm==4.67.1",
     "typing-extensions==4.13.1",
     "tzdata==2025.2",
-    "urllib3==2.6.0",
+    "urllib3==2.6.3",
 ]
 
 [project.urls]
