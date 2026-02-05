@@ -43,7 +43,7 @@ dependencies = [
     "pandas==2.2.3",
     "pandas-stubs~=2.2.3",
     "pettingzoo==1.24.3",
-    "protobuf==6.31.1",
+    "protobuf==6.33.5",
     "pyarrow==19.0.1",
     "pyqt5~=5.15.11",
     "pyqtgraph~=0.13.7",
